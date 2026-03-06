@@ -1,0 +1,49 @@
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="mdi mdi-map-marker-radius"></i> {{ panel_title|default:"Location" }}
+        </h5>
+        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#{{ map_id }}-modal" title="Expand map">
+            <i class="mdi mdi-arrow-expand-all"></i>
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div id="{{ map_id }}" style="height: 300px;"></div>
+    </div>
+</div>
+
+<!-- Fullscreen modal -->
+<div class="modal fade" id="{{ map_id }}-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="mdi mdi-map-marker-radius"></i> {{ panel_title|default:"Location" }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="{{ map_id }}-expanded" style="height: 100%;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ geo_data|json_script:data_id }}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var data = JSON.parse(document.getElementById('{{ data_id }}').textContent);
+    initGeoMap('{{ map_id }}', data);
+
+    var modalEl = document.getElementById('{{ map_id }}-modal');
+    modalEl.addEventListener('shown.bs.modal', function() {
+        var expanded = document.getElementById('{{ map_id }}-expanded');
+        if (expanded._leafletMap) {
+            expanded._leafletMap.invalidateSize();
+        } else {
+            initGeoMap('{{ map_id }}-expanded', data);
+        }
+    });
+});
+</script>
