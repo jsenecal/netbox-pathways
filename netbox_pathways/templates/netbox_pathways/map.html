@@ -1,7 +1,9 @@
-{% extends 'netbox_pathways/base.html' %}
+{% extends 'base/layout.html' %}
 {% load static %}
 
-{% block pathways_content %}
+{% block title %}Infrastructure Map{% endblock %}
+
+{% block content %}
 <div class="card">
     <div class="card-header">
         <h3 class="card-title">Infrastructure Map</h3>
@@ -60,7 +62,8 @@
 </div>
 {% endblock %}
 
-{% block pathways_javascript %}
+{% block javascript %}
+{{ block.super }}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="{% static 'netbox_pathways/js/pathways-map.js' %}"></script>

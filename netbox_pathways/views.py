@@ -1,8 +1,12 @@
 from django.db.models import Q
+from extras.ui.panels import CustomFieldsPanel, TagsPanel
+from netbox.ui import layout
+from netbox.ui.panels import CommentsPanel, ObjectsTablePanel
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filters, forms, models, tables
+from .ui import panels
 
 # --- Structure ---
 
@@ -14,13 +18,22 @@ class StructureListView(generic.ObjectListView):
 
 class StructureView(generic.ObjectView):
     queryset = models.Structure.objects.all()
-
-    def get_extra_context(self, request, instance):
-        return {
-            'pathways_in': instance.pathways_in.select_related('start_structure'),
-            'pathways_out': instance.pathways_out.select_related('end_structure'),
-            'conduit_banks': instance.conduit_banks.all(),
-        }
+    layout = layout.SimpleLayout(
+        left_panels=[
+            panels.StructurePanel(),
+            TagsPanel(),
+            CustomFieldsPanel(),
+            CommentsPanel(),
+        ],
+        right_panels=[],
+        bottom_panels=[
+            ObjectsTablePanel(
+                model='netbox_pathways.ConduitBank',
+                title='Conduit Banks',
+                filters={'structure_id': lambda ctx: ctx['object'].pk},
+            ),
+        ],
+    )
 
 
 class StructureEditView(generic.ObjectEditView):
@@ -91,23 +104,14 @@ class PathwayListView(generic.ObjectListView):
 
 class PathwayView(generic.ObjectView):
     queryset = models.Pathway.objects.all()
-
-    def get_extra_context(self, request, instance):
-        cable_segments = instance.cable_segments.select_related('cable')
-        specific = instance
-        if instance.pathway_type == 'conduit':
-            specific = instance.conduit
-        elif instance.pathway_type == 'aerial':
-            specific = instance.aerialspan
-        elif instance.pathway_type == 'direct_buried':
-            specific = instance.directburied
-        elif instance.pathway_type == 'innerduct':
-            specific = instance.innerduct
-        return {
-            'cable_segments': cable_segments,
-            'utilization': instance.utilization_percentage,
-            'specific_instance': specific,
-        }
+    layout = layout.SimpleLayout(
+        left_panels=[
+            panels.PathwayPanel(),
+            TagsPanel(),
+            CustomFieldsPanel(),
+            CommentsPanel(),
+        ],
+    )
 
 
 # --- Conduit ---
@@ -120,13 +124,26 @@ class ConduitListView(generic.ObjectListView):
 
 class ConduitView(generic.ObjectView):
     queryset = models.Conduit.objects.all()
-
-    def get_extra_context(self, request, instance):
-        return {
-            'cable_segments': instance.cable_segments.select_related('cable'),
-            'innerducts': instance.innerducts.all(),
-            'utilization': instance.utilization_percentage,
-        }
+    layout = layout.SimpleLayout(
+        left_panels=[
+            panels.ConduitPanel(),
+            TagsPanel(),
+            CustomFieldsPanel(),
+            CommentsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                model='netbox_pathways.Innerduct',
+                title='Innerducts',
+                filters={'parent_conduit_id': lambda ctx: ctx['object'].pk},
+            ),
+            ObjectsTablePanel(
+                model='netbox_pathways.CableSegment',
+                title='Cable Segments',
+                filters={'pathway_id': lambda ctx: ctx['object'].pk},
+            ),
+        ],
+    )
 
 
 class ConduitEditView(generic.ObjectEditView):
@@ -180,12 +197,21 @@ class AerialSpanListView(generic.ObjectListView):
 
 class AerialSpanView(generic.ObjectView):
     queryset = models.AerialSpan.objects.all()
-
-    def get_extra_context(self, request, instance):
-        return {
-            'cable_segments': instance.cable_segments.select_related('cable'),
-            'utilization': instance.utilization_percentage,
-        }
+    layout = layout.SimpleLayout(
+        left_panels=[
+            panels.AerialSpanPanel(),
+            TagsPanel(),
+            CustomFieldsPanel(),
+            CommentsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                model='netbox_pathways.CableSegment',
+                title='Cable Segments',
+                filters={'pathway_id': lambda ctx: ctx['object'].pk},
+            ),
+        ],
+    )
 
 
 class AerialSpanEditView(generic.ObjectEditView):
@@ -224,12 +250,21 @@ class DirectBuriedListView(generic.ObjectListView):
 
 class DirectBuriedView(generic.ObjectView):
     queryset = models.DirectBuried.objects.all()
-
-    def get_extra_context(self, request, instance):
-        return {
-            'cable_segments': instance.cable_segments.select_related('cable'),
-            'utilization': instance.utilization_percentage,
-        }
+    layout = layout.SimpleLayout(
+        left_panels=[
+            panels.DirectBuriedPanel(),
+            TagsPanel(),
+            CustomFieldsPanel(),
+            CommentsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                model='netbox_pathways.CableSegment',
+                title='Cable Segments',
+                filters={'pathway_id': lambda ctx: ctx['object'].pk},
+            ),
+        ],
+    )
 
 
 class DirectBuriedEditView(generic.ObjectEditView):
@@ -251,13 +286,21 @@ class InnerductListView(generic.ObjectListView):
 
 class InnerductView(generic.ObjectView):
     queryset = models.Innerduct.objects.all()
-
-    def get_extra_context(self, request, instance):
-        return {
-            'cable_segments': instance.cable_segments.select_related('cable'),
-            'utilization': instance.utilization_percentage,
-            'parent_conduit': instance.parent_conduit,
-        }
+    layout = layout.SimpleLayout(
+        left_panels=[
+            panels.InnerductPanel(),
+            TagsPanel(),
+            CustomFieldsPanel(),
+            CommentsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                model='netbox_pathways.CableSegment',
+                title='Cable Segments',
+                filters={'pathway_id': lambda ctx: ctx['object'].pk},
+            ),
+        ],
+    )
 
 
 class InnerductEditView(generic.ObjectEditView):
@@ -279,14 +322,21 @@ class ConduitBankListView(generic.ObjectListView):
 
 class ConduitBankView(generic.ObjectView):
     queryset = models.ConduitBank.objects.all()
-
-    def get_extra_context(self, request, instance):
-        conduits = instance.conduits.all()
-        return {
-            'conduits': conduits,
-            'conduit_count': conduits.count(),
-            'utilization': f"{conduits.count()}/{instance.total_conduits}",
-        }
+    layout = layout.SimpleLayout(
+        left_panels=[
+            panels.ConduitBankPanel(),
+            TagsPanel(),
+            CustomFieldsPanel(),
+            CommentsPanel(),
+        ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                model='netbox_pathways.Conduit',
+                title='Conduits',
+                filters={'conduit_bank_id': lambda ctx: ctx['object'].pk},
+            ),
+        ],
+    )
 
 
 class ConduitBankEditView(generic.ObjectEditView):
@@ -325,14 +375,14 @@ class ConduitJunctionListView(generic.ObjectListView):
 
 class ConduitJunctionView(generic.ObjectView):
     queryset = models.ConduitJunction.objects.all()
-
-    def get_extra_context(self, request, instance):
-        return {
-            'trunk_conduit': instance.trunk_conduit,
-            'branch_conduit': instance.branch_conduit,
-            'location': instance.location,
-            'position_percent': f"{instance.position_on_trunk * 100:.1f}%",
-        }
+    layout = layout.SimpleLayout(
+        left_panels=[
+            panels.ConduitJunctionPanel(),
+            TagsPanel(),
+            CustomFieldsPanel(),
+            CommentsPanel(),
+        ],
+    )
 
 
 class ConduitJunctionEditView(generic.ObjectEditView):
@@ -354,6 +404,14 @@ class CableSegmentListView(generic.ObjectListView):
 
 class CableSegmentView(generic.ObjectView):
     queryset = models.CableSegment.objects.all()
+    layout = layout.SimpleLayout(
+        left_panels=[
+            panels.CableSegmentPanel(),
+            TagsPanel(),
+            CustomFieldsPanel(),
+            CommentsPanel(),
+        ],
+    )
 
 
 class CableSegmentEditView(generic.ObjectEditView):
