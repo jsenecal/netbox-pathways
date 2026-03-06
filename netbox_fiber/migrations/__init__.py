@@ -1,0 +1,1 @@
+# Migrations directory for netbox_fiber plugin

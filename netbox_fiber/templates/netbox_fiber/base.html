@@ -1,0 +1,16 @@
+{% extends 'base/layout.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-md-12">
+            {% block fiber_content %}{% endblock %}
+        </div>
+    </div>
+{% endblock %}
+
+{% block javascript %}
+    {{ block.super }}
+    {% block fiber_javascript %}{% endblock %}
+{% endblock %}
