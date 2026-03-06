@@ -28,7 +28,9 @@ classifiers = [
     'Programming Language :: Python :: 3.13',
 ]
 
-dependencies = []
+dependencies = [
+    "djangorestframework-gis>=1.2.0",
+]
 
 [project.optional-dependencies]
 dev = [

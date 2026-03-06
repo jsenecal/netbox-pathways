@@ -17,6 +17,10 @@ class NetBoxPathwaysConfig(PluginConfig):
         'map_center_lon': -73.5673,
         'map_zoom': 10,
     }
+    django_apps = [
+        'django.contrib.gis',
+        'rest_framework_gis',
+    ]
 
 
 config = NetBoxPathwaysConfig
