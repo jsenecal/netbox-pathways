@@ -1,0 +1,131 @@
+{% extends 'base/layout.html' %}
+
+{% block title %}Pull Sheet: {{ cable }}{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0">Pull Sheet</h3>
+        <button onclick="window.print()" class="btn btn-sm btn-secondary d-print-none">
+            <i class="mdi mdi-printer"></i> Print
+        </button>
+    </div>
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <strong>Cable:</strong> {{ cable.label|default:"—" }}
+            </div>
+            <div class="col-md-4">
+                <strong>Type:</strong> {{ cable.get_type_display|default:"—" }}
+            </div>
+            <div class="col-md-4">
+                <strong>Status:</strong> {{ cable.get_status_display|default:"—" }}
+            </div>
+        </div>
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <strong>Cable Length:</strong> {{ cable.length|default:"—" }}{% if cable.length %} {{ cable.get_length_unit_display }}{% endif %}
+            </div>
+            <div class="col-md-4">
+                <strong>Color:</strong>
+                {% if cable.color %}
+                <span style="display:inline-block;width:14px;height:14px;background:#{{ cable.color }};border:1px solid #999;vertical-align:middle;"></span>
+                #{{ cable.color }}
+                {% else %}—{% endif %}
+            </div>
+            <div class="col-md-4">
+                <strong>Description:</strong> {{ cable.description|default:"—" }}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">
+        <h4 class="card-title mb-0">Route — {{ segment_count }} Segment{{ segment_count|pluralize }}</h4>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th style="width:5%">#</th>
+                    <th style="width:20%">Pathway</th>
+                    <th style="width:10%">Type</th>
+                    <th style="width:17%">From</th>
+                    <th style="width:17%">To</th>
+                    <th style="width:10%">Length</th>
+                    <th style="width:10%">Slack</th>
+                    <th style="width:11%">Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for segment in segments %}
+                <tr>
+                    <td>{{ segment.sequence }}</td>
+                    <td>
+                        {% if segment.pathway %}
+                        <a href="{{ segment.pathway.get_absolute_url }}">{{ segment.pathway.name }}</a>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if segment.pathway %}
+                        {{ segment.pathway.get_pathway_type_display }}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if segment.pathway %}
+                            {% with ep=segment.pathway.start_endpoint %}
+                            {% if ep %}{{ ep }}{% else %}—{% endif %}
+                            {% endwith %}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if segment.pathway %}
+                            {% with ep=segment.pathway.end_endpoint %}
+                            {% if ep %}{{ ep }}{% else %}—{% endif %}
+                            {% endwith %}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if segment.pathway and segment.pathway.length %}
+                        {{ segment.pathway.length }} m
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if segment.slack_length %}
+                        {{ segment.slack_length }} m
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if segment.comments %}
+                        <span title="{{ segment.comments }}">{{ segment.comments|truncatewords:5 }}</span>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center text-muted">No pathway segments assigned to this cable.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if segments %}
+    <div class="card-footer">
+        <div class="row">
+            <div class="col-md-4">
+                <strong>Total Pathway Length:</strong> {{ total_pathway_length }} m
+            </div>
+            <div class="col-md-4">
+                <strong>Total Slack:</strong> {{ total_slack }} m
+            </div>
+            <div class="col-md-4">
+                <strong>Estimated Pull Length:</strong> {{ total_pathway_length|floatformat:1 }} m + {{ total_slack|floatformat:1 }} m slack
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

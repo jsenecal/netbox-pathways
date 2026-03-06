@@ -92,6 +92,11 @@ menu_items = (
         ),
     ),
     PluginMenuItem(
+        link='plugins:netbox_pathways:pullsheet_list',
+        link_text='Pull Sheets',
+        permissions=['netbox_pathways.view_cablesegment'],
+    ),
+    PluginMenuItem(
         link='plugins:netbox_pathways:cablesegment_list',
         link_text='Cable Segments',
         permissions=['netbox_pathways.view_cablesegment'],

@@ -84,6 +84,10 @@ urlpatterns = [
     path('cable-segments/<int:pk>/edit/', views.CableSegmentEditView.as_view(), name='cablesegment_edit'),
     path('cable-segments/<int:pk>/delete/', views.CableSegmentDeleteView.as_view(), name='cablesegment_delete'),
 
+    # Pull Sheets
+    path('pull-sheets/', views.PullSheetListView.as_view(), name='pullsheet_list'),
+    path('pull-sheets/<int:cable_pk>/', views.PullSheetDetailView.as_view(), name='pullsheet_detail'),
+
     # Map
     path('map/', views.MapView.as_view(), name='map'),
 ]

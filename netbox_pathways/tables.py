@@ -1,4 +1,5 @@
 import django_tables2 as tables
+from dcim.models import Cable
 from netbox.tables import NetBoxTable, columns
 
 from .models import (
@@ -216,6 +217,26 @@ class CableSegmentTable(NetBoxTable):
             'slack_length', 'actions',
         )
         default_columns = ('cable', 'pathway', 'sequence', 'slack_length')
+
+
+class PullSheetCableTable(NetBoxTable):
+    label = tables.Column(linkify=True)
+    segment_count = tables.Column(
+        verbose_name='Segments',
+        accessor='pathway_segments__count',
+        orderable=False,
+    )
+    pull_sheet = tables.TemplateColumn(
+        template_code='<a href="{% url \'plugins:netbox_pathways:pullsheet_detail\' cable_pk=record.pk %}" '
+                      'class="btn btn-sm btn-primary">View Pull Sheet</a>',
+        verbose_name='Pull Sheet',
+        orderable=False,
+    )
+
+    class Meta(NetBoxTable.Meta):
+        model = Cable
+        fields = ('pk', 'id', 'label', 'type', 'status', 'length', 'segment_count', 'pull_sheet')
+        default_columns = ('label', 'type', 'status', 'length', 'segment_count', 'pull_sheet')
 
 
 class PathwayLocationTable(NetBoxTable):

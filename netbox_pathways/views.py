@@ -1,4 +1,7 @@
-from django.db.models import Q
+from dcim.models import Cable
+from django.db.models import Q, Sum
+from django.shortcuts import get_object_or_404, render
+from django.views import View
 from extras.ui.panels import CustomFieldsPanel, TagsPanel
 from netbox.ui import layout
 from netbox.ui.panels import CommentsPanel, ObjectsTablePanel
@@ -523,3 +526,47 @@ class MapView(generic.ObjectListView):
             'map_center_lon': request.GET.get('lon', -73.5673),
             'map_zoom': request.GET.get('zoom', 10),
         }
+
+
+# --- Pull Sheet ---
+
+class PullSheetListView(generic.ObjectListView):
+    """Lists cables that have pathway segments routed, for pull sheet selection."""
+    queryset = Cable.objects.filter(pathway_segments__isnull=False).distinct()
+    table = tables.PullSheetCableTable
+    template_name = 'netbox_pathways/pullsheet_list.html'
+
+    def get_extra_context(self, request):
+        return {'title': 'Pull Sheets'}
+
+
+class PullSheetDetailView(View):
+    """Renders a pull sheet for a specific cable."""
+
+    def get(self, request, cable_pk):
+        cable = get_object_or_404(Cable, pk=cable_pk)
+        segments = (
+            models.CableSegment.objects
+            .filter(cable=cable)
+            .select_related(
+                'pathway',
+                'pathway__start_structure',
+                'pathway__end_structure',
+                'pathway__start_location',
+                'pathway__end_location',
+            )
+            .order_by('sequence')
+        )
+
+        totals = segments.aggregate(
+            total_pathway_length=Sum('pathway__length'),
+            total_slack=Sum('slack_length'),
+        )
+
+        return render(request, 'netbox_pathways/pullsheet_detail.html', {
+            'cable': cable,
+            'segments': segments,
+            'segment_count': segments.count(),
+            'total_pathway_length': totals['total_pathway_length'] or 0,
+            'total_slack': totals['total_slack'] or 0,
+        })
