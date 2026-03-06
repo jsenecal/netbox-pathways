@@ -1,0 +1,41 @@
+site_name: NetBox Pathways
+site_description: Physical cable plant infrastructure documentation plugin for NetBox
+repo_url: https://github.com/jsenecal/netbox-pathways
+repo_name: jsenecal/netbox-pathways
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: blue
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - toc.integrate
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: installation.md
+    - Configuration: configuration.md
+  - User Guide:
+    - Models: models.md
+    - Pull Sheets: pull-sheets.md
+    - Map View: map.md
+  - GIS Integration:
+    - GeoJSON API: geojson-api.md
+    - QGIS Integration: qgis.md
+  - REST API: rest-api.md
+  - Development: development.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true

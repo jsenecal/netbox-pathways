@@ -41,6 +41,10 @@ dev = [
     "pytest-cov>=3.0.0",
     "ruff",
 ]
+docs = [
+    "mkdocs>=1.5",
+    "mkdocs-material>=9.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/jsenecal/netbox-pathways"

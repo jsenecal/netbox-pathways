@@ -1,0 +1,184 @@
+# Development
+
+## DevContainer Setup
+
+The recommended development environment uses VS Code DevContainers.
+
+### Components
+
+| Service | Image | Purpose |
+|---------|-------|---------|
+| App | `ghcr.io/netbox-community/netbox:v4.5.3-4.0.0` | NetBox with the plugin in editable mode |
+| Database | `postgis/postgis:16-3.4` | PostgreSQL 16 with PostGIS 3.4 |
+| Redis | `redis:7-alpine` | Cache and task queue |
+
+### Getting Started
+
+1. Clone the repository:
+
+    ```bash
+    git clone https://github.com/jsenecal/netbox-pathways.git
+    cd netbox-pathways
+    ```
+
+2. Open in VS Code with the DevContainers extension installed
+3. VS Code will prompt to "Reopen in Container" — accept
+4. The container builds and installs the plugin in editable mode (`pip install -e .`)
+
+### Running the Dev Server
+
+Inside the container:
+
+```bash
+cd /opt/netbox/netbox
+python manage.py runserver 0.0.0.0:8000
+```
+
+### Running Migrations
+
+```bash
+cd /opt/netbox/netbox
+python manage.py makemigrations netbox_pathways
+python manage.py migrate
+```
+
+## Project Structure
+
+```
+netbox-pathways/
+├── netbox_pathways/
+│   ├── __init__.py              # PluginConfig
+│   ├── models.py                # All models (Structure, Pathway subtypes, etc.)
+│   ├── choices.py               # ChoiceSet classes
+│   ├── views.py                 # All views (CRUD, map, pull sheets)
+│   ├── forms.py                 # NetBoxModelForm subclasses
+│   ├── tables.py                # django-tables2 table classes
+│   ├── filters.py               # NetBoxModelFilterSet subclasses
+│   ├── urls.py                  # URL patterns
+│   ├── navigation.py            # Plugin menu items
+│   ├── search.py                # Global search indexes
+│   ├── admin.py                 # Django admin registrations
+│   ├── ui/
+│   │   ├── __init__.py
+│   │   └── panels.py            # ObjectAttributesPanel subclasses
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── serializers.py       # DRF serializers
+│   │   ├── views.py             # DRF viewsets
+│   │   ├── urls.py              # API router
+│   │   └── geo.py               # GeoJSON serializers and viewsets
+│   ├── management/
+│   │   └── commands/
+│   │       └── generate_qgis_project.py
+│   ├── migrations/
+│   ├── templates/
+│   │   └── netbox_pathways/
+│   │       ├── map.html
+│   │       ├── pullsheet_list.html
+│   │       └── pullsheet_detail.html
+│   └── static/
+│       └── netbox_pathways/
+│           ├── css/pathways-map.css
+│           ├── js/pathways-map.js
+│           └── qgis/
+│               ├── structures.qml
+│               └── pathways.qml
+├── docs/                        # mkdocs documentation
+├── pyproject.toml
+├── mkdocs.yml
+└── README.md
+```
+
+## Architecture
+
+### Model Inheritance
+
+Pathway subtypes use Django Multi-Table Inheritance (MTI):
+
+```
+Pathway (base)
+├── Conduit
+├── AerialSpan
+├── DirectBuried
+└── Innerduct
+```
+
+Each subtype has its own database table with a `pathway_ptr` FK to the base `Pathway` table. The `pathway_type` field is auto-set on save.
+
+### View System
+
+Detail views use NetBox 4.5's layout system:
+
+```python
+class ConduitView(generic.ObjectView):
+    queryset = models.Conduit.objects.all()
+    layout = layout.SimpleLayout(
+        left_panels=[
+            panels.ConduitPanel(),  # ObjectAttributesPanel subclass
+            TagsPanel(),
+            CustomFieldsPanel(),
+            CommentsPanel(),
+        ],
+    )
+```
+
+No custom per-model HTML templates are needed for detail views — the layout system renders panels declaratively.
+
+List views use NetBox's built-in `generic/object_list.html` template.
+
+### GeoJSON API
+
+GeoJSON endpoints use `djangorestframework-gis` `GeoFeatureModelSerializer`:
+
+```python
+class StructureGeoSerializer(GeoFeatureModelSerializer):
+    class Meta:
+        model = models.Structure
+        geo_field = 'location'
+        fields = ['id', 'name', 'structure_type', ...]
+```
+
+These produce standard GeoJSON FeatureCollections that any GIS client can consume.
+
+## Linting
+
+```bash
+ruff check netbox_pathways/
+ruff check --fix netbox_pathways/  # auto-fix
+```
+
+Configuration is in `pyproject.toml` under `[tool.ruff]`.
+
+## Testing
+
+```bash
+cd /opt/netbox/netbox
+python -m pytest --pyargs netbox_pathways
+```
+
+Test configuration is in `pyproject.toml` under `[tool.pytest.ini_options]`.
+
+## Building Documentation
+
+```bash
+mkdocs serve     # Local preview at http://localhost:8000
+mkdocs build     # Build static site to site/
+```
+
+## Commit Message Format
+
+```
+topic(subtopic): description
+```
+
+**Topics:** `feat`, `fix`, `refactor`, `chore`, `docs`, `linting`, `tests`
+
+Examples:
+
+- `feat(models): add Structure and Pathway models`
+- `fix(views): correct conduit bank queryset`
+- `docs(readme): update installation instructions`
+
+## Git Hooks
+
+A `commit-msg` hook rejects commit messages containing code attribution lines (e.g., `Co-Authored-By:`, `Generated by/with`). Do not include attribution lines in commit messages.
