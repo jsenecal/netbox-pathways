@@ -1,4 +1,4 @@
-from dcim.models import Cable, Site
+from dcim.models import Cable, Location, Site
 from django.contrib.gis.db import models
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -83,6 +83,12 @@ class Pathway(NetBoxModel):
     end_structure = models.ForeignKey(
         Structure, on_delete=models.CASCADE, null=True, blank=True, related_name='pathways_in',
     )
+    start_location = models.ForeignKey(
+        Location, on_delete=models.SET_NULL, null=True, blank=True, related_name='pathways_out',
+    )
+    end_location = models.ForeignKey(
+        Location, on_delete=models.SET_NULL, null=True, blank=True, related_name='pathways_in',
+    )
     length = models.FloatField(null=True, blank=True, help_text="Total length in meters")
     cable_count = models.PositiveIntegerField(default=0, help_text="Number of cables currently in pathway")
     max_cable_count = models.PositiveIntegerField(default=1, help_text="Maximum number of cables")
@@ -96,10 +102,20 @@ class Pathway(NetBoxModel):
             models.Index(fields=['start_structure', 'end_structure']),
         ]
 
+    @property
+    def start_endpoint(self):
+        return self.start_structure or self.start_location
+
+    @property
+    def end_endpoint(self):
+        return self.end_structure or self.end_location
+
     def __str__(self):
         parts = [self.name]
-        if self.start_structure and self.end_structure:
-            parts.append(f"{self.start_structure.name} \u2192 {self.end_structure.name}")
+        start = self.start_endpoint
+        end = self.end_endpoint
+        if start and end:
+            parts.append(f"{start} \u2192 {end}")
         return ": ".join(parts)
 
     def get_absolute_url(self):
@@ -155,17 +171,17 @@ class Conduit(Pathway):
 
     def clean(self):
         super().clean()
-        start_valid = bool(self.start_structure or self.start_junction)
-        end_valid = bool(self.end_structure or self.end_junction)
+        start_options = sum(bool(x) for x in [self.start_structure, self.start_location, self.start_junction])
+        end_options = sum(bool(x) for x in [self.end_structure, self.end_location, self.end_junction])
 
-        if not start_valid:
-            raise ValidationError("Conduit must have a start point (structure or junction)")
-        if not end_valid:
-            raise ValidationError("Conduit must have an end point (structure or junction)")
-        if self.start_structure and self.start_junction:
-            raise ValidationError("Cannot have both structure and junction at start")
-        if self.end_structure and self.end_junction:
-            raise ValidationError("Cannot have both structure and junction at end")
+        if start_options == 0:
+            raise ValidationError("Conduit must have a start point (structure, location, or junction)")
+        if start_options > 1:
+            raise ValidationError("Conduit start must be exactly one of: structure, location, or junction")
+        if end_options == 0:
+            raise ValidationError("Conduit must have an end point (structure, location, or junction)")
+        if end_options > 1:
+            raise ValidationError("Conduit end must be exactly one of: structure, location, or junction")
 
     def save(self, *args, **kwargs):
         self.pathway_type = 'conduit'
@@ -216,9 +232,13 @@ class Innerduct(Pathway):
 
     def save(self, *args, **kwargs):
         self.pathway_type = 'innerduct'
-        if self.parent_conduit and not self.start_structure_id:
+        if self.parent_conduit and not any([
+            self.start_structure_id, self.start_location_id,
+        ]):
             self.start_structure = self.parent_conduit.start_structure
             self.end_structure = self.parent_conduit.end_structure
+            self.start_location = self.parent_conduit.start_location
+            self.end_location = self.parent_conduit.end_location
         super().save(*args, **kwargs)
 
 
@@ -265,6 +285,40 @@ class ConduitJunction(NetBoxModel):
         if self.trunk_conduit and self.trunk_conduit.path:
             return self.trunk_conduit.path.interpolate(self.position_on_trunk, normalized=True)
         return None
+
+
+class PathwayLocation(NetBoxModel):
+    """
+    Records that a pathway passes through a specific location or site along its length.
+    Ordered waypoints between the start and end endpoints.
+    """
+    pathway = models.ForeignKey(
+        Pathway, on_delete=models.CASCADE, related_name='waypoints',
+    )
+    site = models.ForeignKey(
+        Site, on_delete=models.CASCADE, null=True, blank=True, related_name='pathway_waypoints',
+    )
+    location = models.ForeignKey(
+        Location, on_delete=models.CASCADE, null=True, blank=True, related_name='pathway_waypoints',
+    )
+    sequence = models.PositiveIntegerField(default=0, help_text="Order along the pathway")
+    comments = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['pathway', 'sequence']
+        unique_together = [['pathway', 'sequence']]
+
+    def __str__(self):
+        point = self.location or self.site
+        return f"{self.pathway.name} @ {point} (seq {self.sequence})"
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_pathways:pathwaylocation', args=[self.pk])
+
+    def clean(self):
+        super().clean()
+        if not self.site and not self.location:
+            raise ValidationError("At least one of site or location is required")
 
 
 class CableSegment(NetBoxModel):

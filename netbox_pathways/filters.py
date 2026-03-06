@@ -1,5 +1,5 @@
 import django_filters
-from dcim.models import Cable, Site
+from dcim.models import Cable, Location, Site
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
 
@@ -12,6 +12,7 @@ from .models import (
     DirectBuried,
     Innerduct,
     Pathway,
+    PathwayLocation,
     Structure,
 )
 
@@ -51,6 +52,14 @@ class PathwayFilterSet(NetBoxModelFilterSet):
         field_name='end_structure', queryset=Structure.objects.all(),
         label='End Structure (ID)',
     )
+    start_location_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='start_location', queryset=Location.objects.all(),
+        label='Start Location (ID)',
+    )
+    end_location_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='end_location', queryset=Location.objects.all(),
+        label='End Location (ID)',
+    )
 
     class Meta:
         model = Pathway
@@ -73,6 +82,14 @@ class ConduitFilterSet(NetBoxModelFilterSet):
     end_structure_id = django_filters.ModelMultipleChoiceFilter(
         field_name='end_structure', queryset=Structure.objects.all(),
         label='End Structure (ID)',
+    )
+    start_location_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='start_location', queryset=Location.objects.all(),
+        label='Start Location (ID)',
+    )
+    end_location_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='end_location', queryset=Location.objects.all(),
+        label='End Location (ID)',
     )
     conduit_bank_id = django_filters.ModelMultipleChoiceFilter(
         field_name='conduit_bank', queryset=ConduitBank.objects.all(),
@@ -101,6 +118,14 @@ class AerialSpanFilterSet(NetBoxModelFilterSet):
         field_name='end_structure', queryset=Structure.objects.all(),
         label='End Structure (ID)',
     )
+    start_location_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='start_location', queryset=Location.objects.all(),
+        label='Start Location (ID)',
+    )
+    end_location_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='end_location', queryset=Location.objects.all(),
+        label='End Location (ID)',
+    )
 
     class Meta:
         model = AerialSpan
@@ -122,6 +147,14 @@ class DirectBuriedFilterSet(NetBoxModelFilterSet):
     end_structure_id = django_filters.ModelMultipleChoiceFilter(
         field_name='end_structure', queryset=Structure.objects.all(),
         label='End Structure (ID)',
+    )
+    start_location_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='start_location', queryset=Location.objects.all(),
+        label='Start Location (ID)',
+    )
+    end_location_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='end_location', queryset=Location.objects.all(),
+        label='End Location (ID)',
     )
 
     class Meta:
@@ -208,6 +241,30 @@ class CableSegmentFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = CableSegment
+        fields = ['id', 'sequence']
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(comments__icontains=value))
+
+
+class PathwayLocationFilterSet(NetBoxModelFilterSet):
+    pathway_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='pathway', queryset=Pathway.objects.all(),
+        label='Pathway (ID)',
+    )
+    site_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='site', queryset=Site.objects.all(),
+        label='Site (ID)',
+    )
+    location_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='location', queryset=Location.objects.all(),
+        label='Location (ID)',
+    )
+
+    class Meta:
+        model = PathwayLocation
         fields = ['id', 'sequence']
 
     def search(self, queryset, name, value):

@@ -52,6 +52,12 @@ class ConduitJunctionViewSet(NetBoxModelViewSet):
     filterset_class = filters.ConduitJunctionFilterSet
 
 
+class PathwayLocationViewSet(NetBoxModelViewSet):
+    queryset = models.PathwayLocation.objects.all()
+    serializer_class = serializers.PathwayLocationSerializer
+    filterset_class = filters.PathwayLocationFilterSet
+
+
 class CableSegmentViewSet(NetBoxModelViewSet):
     queryset = models.CableSegment.objects.all()
     serializer_class = serializers.CableSegmentSerializer

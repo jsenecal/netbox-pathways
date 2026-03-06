@@ -111,6 +111,13 @@ class PathwayView(generic.ObjectView):
             CustomFieldsPanel(),
             CommentsPanel(),
         ],
+        bottom_panels=[
+            ObjectsTablePanel(
+                model='netbox_pathways.PathwayLocation',
+                title='Waypoints',
+                filters={'pathway_id': lambda ctx: ctx['object'].pk},
+            ),
+        ],
     )
 
 
@@ -431,6 +438,35 @@ class CableSegmentBulkImportView(generic.BulkImportView):
 class CableSegmentBulkDeleteView(generic.BulkDeleteView):
     queryset = models.CableSegment.objects.all()
     table = tables.CableSegmentTable
+
+
+# --- Pathway Location ---
+
+class PathwayLocationListView(generic.ObjectListView):
+    queryset = models.PathwayLocation.objects.all()
+    table = tables.PathwayLocationTable
+    filterset = filters.PathwayLocationFilterSet
+
+
+class PathwayLocationView(generic.ObjectView):
+    queryset = models.PathwayLocation.objects.all()
+    layout = layout.SimpleLayout(
+        left_panels=[
+            panels.PathwayLocationPanel(),
+            TagsPanel(),
+            CustomFieldsPanel(),
+            CommentsPanel(),
+        ],
+    )
+
+
+class PathwayLocationEditView(generic.ObjectEditView):
+    queryset = models.PathwayLocation.objects.all()
+    form = forms.PathwayLocationForm
+
+
+class PathwayLocationDeleteView(generic.ObjectDeleteView):
+    queryset = models.PathwayLocation.objects.all()
 
 
 # --- Map View ---

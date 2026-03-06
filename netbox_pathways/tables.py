@@ -10,6 +10,7 @@ from .models import (
     DirectBuried,
     Innerduct,
     Pathway,
+    PathwayLocation,
     Structure,
 )
 
@@ -34,6 +35,8 @@ class PathwayTable(NetBoxTable):
     pathway_type = columns.ChoiceFieldColumn()
     start_structure = tables.Column(linkify=True)
     end_structure = tables.Column(linkify=True)
+    start_location = tables.Column(linkify=True)
+    end_location = tables.Column(linkify=True)
     utilization = tables.TemplateColumn(
         template_code='{{ record.cable_count }}/{{ record.max_cable_count }}',
         verbose_name='Cable Usage',
@@ -45,7 +48,8 @@ class PathwayTable(NetBoxTable):
         model = Pathway
         fields = (
             'pk', 'id', 'name', 'pathway_type',
-            'start_structure', 'end_structure', 'length',
+            'start_structure', 'end_structure',
+            'start_location', 'end_location', 'length',
             'utilization', 'installation_date', 'actions',
         )
         default_columns = (
@@ -58,6 +62,8 @@ class ConduitTable(NetBoxTable):
     material = columns.ChoiceFieldColumn()
     start_structure = tables.Column(linkify=True)
     end_structure = tables.Column(linkify=True)
+    start_location = tables.Column(linkify=True)
+    end_location = tables.Column(linkify=True)
     conduit_bank = tables.Column(linkify=True)
     utilization = tables.TemplateColumn(
         template_code='{{ record.cable_count }}/{{ record.max_cable_count }}',
@@ -71,6 +77,7 @@ class ConduitTable(NetBoxTable):
         fields = (
             'pk', 'id', 'name', 'material',
             'start_structure', 'end_structure',
+            'start_location', 'end_location',
             'conduit_bank', 'bank_position',
             'length', 'utilization', 'installation_date', 'actions',
         )
@@ -85,6 +92,8 @@ class AerialSpanTable(NetBoxTable):
     aerial_type = columns.ChoiceFieldColumn()
     start_structure = tables.Column(linkify=True)
     end_structure = tables.Column(linkify=True)
+    start_location = tables.Column(linkify=True)
+    end_location = tables.Column(linkify=True)
     utilization = tables.TemplateColumn(
         template_code='{{ record.cable_count }}/{{ record.max_cable_count }}',
         verbose_name='Cable Usage',
@@ -97,6 +106,7 @@ class AerialSpanTable(NetBoxTable):
         fields = (
             'pk', 'id', 'name', 'aerial_type',
             'start_structure', 'end_structure',
+            'start_location', 'end_location',
             'attachment_height', 'length',
             'utilization', 'installation_date', 'actions',
         )
@@ -109,6 +119,8 @@ class DirectBuriedTable(NetBoxTable):
     name = tables.Column(linkify=True)
     start_structure = tables.Column(linkify=True)
     end_structure = tables.Column(linkify=True)
+    start_location = tables.Column(linkify=True)
+    end_location = tables.Column(linkify=True)
     utilization = tables.TemplateColumn(
         template_code='{{ record.cable_count }}/{{ record.max_cable_count }}',
         verbose_name='Cable Usage',
@@ -121,6 +133,7 @@ class DirectBuriedTable(NetBoxTable):
         fields = (
             'pk', 'id', 'name',
             'start_structure', 'end_structure',
+            'start_location', 'end_location',
             'burial_depth', 'warning_tape', 'tracer_wire',
             'length', 'utilization', 'installation_date', 'actions',
         )
@@ -203,3 +216,17 @@ class CableSegmentTable(NetBoxTable):
             'slack_length', 'actions',
         )
         default_columns = ('cable', 'pathway', 'sequence', 'slack_length')
+
+
+class PathwayLocationTable(NetBoxTable):
+    pathway = tables.Column(linkify=True)
+    site = tables.Column(linkify=True)
+    location = tables.Column(linkify=True)
+    actions = columns.ActionsColumn(actions=('edit', 'delete'))
+
+    class Meta(NetBoxTable.Meta):
+        model = PathwayLocation
+        fields = (
+            'pk', 'id', 'pathway', 'site', 'location', 'sequence', 'actions',
+        )
+        default_columns = ('pathway', 'site', 'location', 'sequence')

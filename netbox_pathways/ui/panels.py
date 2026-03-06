@@ -18,6 +18,8 @@ class PathwayPanel(ObjectAttributesPanel):
     pathway_type = attrs.ChoiceAttr('pathway_type', label=_('Type'))
     start_structure = attrs.RelatedObjectAttr('start_structure', linkify=True, label=_('Start structure'))
     end_structure = attrs.RelatedObjectAttr('end_structure', linkify=True, label=_('End structure'))
+    start_location = attrs.RelatedObjectAttr('start_location', linkify=True, label=_('Start location'))
+    end_location = attrs.RelatedObjectAttr('end_location', linkify=True, label=_('End location'))
     length = attrs.NumericAttr('length', label=_('Length (m)'))
     cable_count = attrs.NumericAttr('cable_count', label=_('Cable count'))
     max_cable_count = attrs.NumericAttr('max_cable_count', label=_('Max cables'))
@@ -29,6 +31,8 @@ class ConduitPanel(ObjectAttributesPanel):
     material = attrs.ChoiceAttr('material', label=_('Material'))
     start_structure = attrs.RelatedObjectAttr('start_structure', linkify=True, label=_('Start structure'))
     end_structure = attrs.RelatedObjectAttr('end_structure', linkify=True, label=_('End structure'))
+    start_location = attrs.RelatedObjectAttr('start_location', linkify=True, label=_('Start location'))
+    end_location = attrs.RelatedObjectAttr('end_location', linkify=True, label=_('End location'))
     conduit_bank = attrs.RelatedObjectAttr('conduit_bank', linkify=True, label=_('Conduit bank'))
     bank_position = attrs.TextAttr('bank_position', label=_('Bank position'))
     inner_diameter = attrs.NumericAttr('inner_diameter', label=_('Inner diameter (mm)'))
@@ -45,6 +49,8 @@ class AerialSpanPanel(ObjectAttributesPanel):
     aerial_type = attrs.ChoiceAttr('aerial_type', label=_('Aerial type'))
     start_structure = attrs.RelatedObjectAttr('start_structure', linkify=True, label=_('Start structure'))
     end_structure = attrs.RelatedObjectAttr('end_structure', linkify=True, label=_('End structure'))
+    start_location = attrs.RelatedObjectAttr('start_location', linkify=True, label=_('Start location'))
+    end_location = attrs.RelatedObjectAttr('end_location', linkify=True, label=_('End location'))
     attachment_height = attrs.NumericAttr('attachment_height', label=_('Attachment height (m)'))
     sag = attrs.NumericAttr('sag', label=_('Sag (m)'))
     messenger_size = attrs.TextAttr('messenger_size', label=_('Messenger size'))
@@ -60,6 +66,8 @@ class DirectBuriedPanel(ObjectAttributesPanel):
     name = attrs.TextAttr('name', label=_('Name'))
     start_structure = attrs.RelatedObjectAttr('start_structure', linkify=True, label=_('Start structure'))
     end_structure = attrs.RelatedObjectAttr('end_structure', linkify=True, label=_('End structure'))
+    start_location = attrs.RelatedObjectAttr('start_location', linkify=True, label=_('Start location'))
+    end_location = attrs.RelatedObjectAttr('end_location', linkify=True, label=_('End location'))
     burial_depth = attrs.NumericAttr('burial_depth', label=_('Burial depth (m)'))
     warning_tape = attrs.BooleanAttr('warning_tape', label=_('Warning tape'))
     tracer_wire = attrs.BooleanAttr('tracer_wire', label=_('Tracer wire'))
@@ -97,6 +105,13 @@ class ConduitJunctionPanel(ObjectAttributesPanel):
     branch_conduit = attrs.RelatedObjectAttr('branch_conduit', linkify=True, label=_('Branch conduit'))
     towards_structure = attrs.RelatedObjectAttr('towards_structure', linkify=True, label=_('Towards structure'))
     position_on_trunk = attrs.NumericAttr('position_on_trunk', label=_('Position on trunk'))
+
+
+class PathwayLocationPanel(ObjectAttributesPanel):
+    pathway = attrs.RelatedObjectAttr('pathway', linkify=True, label=_('Pathway'))
+    site = attrs.RelatedObjectAttr('site', linkify=True, label=_('Site'))
+    location = attrs.RelatedObjectAttr('location', linkify=True, label=_('Location'))
+    sequence = attrs.NumericAttr('sequence', label=_('Sequence'))
 
 
 class CableSegmentPanel(ObjectAttributesPanel):

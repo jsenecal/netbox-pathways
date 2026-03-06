@@ -1,4 +1,4 @@
-from dcim.models import Cable, Site
+from dcim.models import Cable, Location, Site
 from django import forms
 from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelForm, NetBoxModelImportForm
 from utilities.forms.fields import CSVModelChoiceField, DynamicModelChoiceField
@@ -12,6 +12,7 @@ from .models import (
     DirectBuried,
     Innerduct,
     Pathway,
+    PathwayLocation,
     Structure,
 )
 
@@ -57,13 +58,16 @@ class StructureBulkEditForm(NetBoxModelBulkEditForm):
 # --- Pathway (base) ---
 
 class PathwayForm(NetBoxModelForm):
-    start_structure = DynamicModelChoiceField(queryset=Structure.objects.all())
-    end_structure = DynamicModelChoiceField(queryset=Structure.objects.all())
+    start_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
+    end_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
+    start_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
+    end_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
 
     class Meta:
         model = Pathway
         fields = [
             'name', 'path', 'start_structure', 'end_structure',
+            'start_location', 'end_location',
             'length', 'cable_count', 'max_cable_count',
             'installation_date', 'comments', 'tags',
         ]
@@ -77,6 +81,8 @@ class PathwayForm(NetBoxModelForm):
 class ConduitForm(NetBoxModelForm):
     start_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
     end_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
+    start_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
+    end_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
     conduit_bank = DynamicModelChoiceField(queryset=ConduitBank.objects.all(), required=False)
     start_junction = DynamicModelChoiceField(queryset=ConduitJunction.objects.all(), required=False)
     end_junction = DynamicModelChoiceField(queryset=ConduitJunction.objects.all(), required=False)
@@ -85,6 +91,7 @@ class ConduitForm(NetBoxModelForm):
         model = Conduit
         fields = [
             'name', 'material', 'path', 'start_structure', 'end_structure',
+            'start_location', 'end_location',
             'start_junction', 'end_junction',
             'inner_diameter', 'outer_diameter', 'depth',
             'conduit_bank', 'bank_position',
@@ -128,13 +135,16 @@ class ConduitBulkEditForm(NetBoxModelBulkEditForm):
 # --- Aerial Span ---
 
 class AerialSpanForm(NetBoxModelForm):
-    start_structure = DynamicModelChoiceField(queryset=Structure.objects.all())
-    end_structure = DynamicModelChoiceField(queryset=Structure.objects.all())
+    start_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
+    end_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
+    start_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
+    end_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
 
     class Meta:
         model = AerialSpan
         fields = [
             'name', 'aerial_type', 'path', 'start_structure', 'end_structure',
+            'start_location', 'end_location',
             'attachment_height', 'sag', 'messenger_size',
             'wind_loading', 'ice_loading',
             'length', 'cable_count', 'max_cable_count',
@@ -179,13 +189,16 @@ class AerialSpanBulkEditForm(NetBoxModelBulkEditForm):
 # --- Direct Buried ---
 
 class DirectBuriedForm(NetBoxModelForm):
-    start_structure = DynamicModelChoiceField(queryset=Structure.objects.all())
-    end_structure = DynamicModelChoiceField(queryset=Structure.objects.all())
+    start_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
+    end_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
+    start_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
+    end_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
 
     class Meta:
         model = DirectBuried
         fields = [
             'name', 'path', 'start_structure', 'end_structure',
+            'start_location', 'end_location',
             'burial_depth', 'warning_tape', 'tracer_wire', 'armor_type',
             'length', 'cable_count', 'max_cable_count',
             'installation_date', 'comments', 'tags',
@@ -207,12 +220,21 @@ class InnerductForm(NetBoxModelForm):
         queryset=Structure.objects.all(), required=False,
         help_text="Leave blank to inherit from parent conduit",
     )
+    start_location = DynamicModelChoiceField(
+        queryset=Location.objects.all(), required=False,
+        help_text="Leave blank to inherit from parent conduit",
+    )
+    end_location = DynamicModelChoiceField(
+        queryset=Location.objects.all(), required=False,
+        help_text="Leave blank to inherit from parent conduit",
+    )
 
     class Meta:
         model = Innerduct
         fields = [
             'name', 'parent_conduit', 'size', 'color', 'position',
             'path', 'start_structure', 'end_structure',
+            'start_location', 'end_location',
             'length', 'cable_count', 'max_cable_count',
             'installation_date', 'comments', 'tags',
         ]
@@ -302,4 +324,18 @@ class CableSegmentImportForm(NetBoxModelImportForm):
         model = CableSegment
         fields = [
             'cable', 'pathway', 'sequence', 'slack_length', 'comments',
+        ]
+
+
+# --- Pathway Location ---
+
+class PathwayLocationForm(NetBoxModelForm):
+    pathway = DynamicModelChoiceField(queryset=Pathway.objects.all())
+    site = DynamicModelChoiceField(queryset=Site.objects.all(), required=False)
+    location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
+
+    class Meta:
+        model = PathwayLocation
+        fields = [
+            'pathway', 'site', 'location', 'sequence', 'comments', 'tags',
         ]

@@ -10,6 +10,7 @@ from ..models import (
     DirectBuried,
     Innerduct,
     Pathway,
+    PathwayLocation,
     Structure,
 )
 
@@ -53,7 +54,8 @@ class PathwaySerializer(NetBoxModelSerializer):
         model = Pathway
         fields = [
             'id', 'url', 'display', 'name', 'pathway_type', 'path',
-            'start_structure', 'end_structure', 'length',
+            'start_structure', 'end_structure',
+            'start_location', 'end_location', 'length',
             'cable_count', 'max_cable_count', 'installation_date',
             'comments', 'tags', 'created', 'last_updated',
         ]
@@ -70,6 +72,7 @@ class ConduitSerializer(NetBoxModelSerializer):
         fields = [
             'id', 'url', 'display', 'name', 'pathway_type', 'path',
             'start_structure', 'end_structure',
+            'start_location', 'end_location',
             'material', 'inner_diameter', 'outer_diameter', 'depth',
             'conduit_bank', 'bank_position',
             'start_junction', 'end_junction',
@@ -89,6 +92,7 @@ class AerialSpanSerializer(NetBoxModelSerializer):
         fields = [
             'id', 'url', 'display', 'name', 'pathway_type', 'path',
             'start_structure', 'end_structure',
+            'start_location', 'end_location',
             'aerial_type', 'attachment_height', 'sag',
             'messenger_size', 'wind_loading', 'ice_loading',
             'length', 'cable_count', 'max_cable_count',
@@ -107,6 +111,7 @@ class DirectBuriedSerializer(NetBoxModelSerializer):
         fields = [
             'id', 'url', 'display', 'name', 'pathway_type', 'path',
             'start_structure', 'end_structure',
+            'start_location', 'end_location',
             'burial_depth', 'warning_tape', 'tracer_wire', 'armor_type',
             'length', 'cable_count', 'max_cable_count',
             'installation_date', 'comments', 'tags', 'created', 'last_updated',
@@ -124,6 +129,7 @@ class InnerductSerializer(NetBoxModelSerializer):
         fields = [
             'id', 'url', 'display', 'name', 'pathway_type', 'path',
             'start_structure', 'end_structure',
+            'start_location', 'end_location',
             'parent_conduit', 'size', 'color', 'position',
             'length', 'cable_count', 'max_cable_count',
             'installation_date', 'comments', 'tags', 'created', 'last_updated',
@@ -145,6 +151,20 @@ class ConduitJunctionSerializer(NetBoxModelSerializer):
             'comments', 'tags', 'created', 'last_updated',
         ]
         brief_fields = ('id', 'url', 'display', 'name')
+
+
+class PathwayLocationSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(
+        view_name='plugins-api:netbox_pathways-api:pathwaylocation-detail',
+    )
+
+    class Meta:
+        model = PathwayLocation
+        fields = [
+            'id', 'url', 'display', 'pathway', 'site', 'location',
+            'sequence', 'comments', 'tags', 'created', 'last_updated',
+        ]
+        brief_fields = ('id', 'url', 'display', 'pathway', 'sequence')
 
 
 class CableSegmentSerializer(NetBoxModelSerializer):

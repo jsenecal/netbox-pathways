@@ -68,6 +68,13 @@ urlpatterns = [
     path('junctions/<int:pk>/edit/', views.ConduitJunctionEditView.as_view(), name='conduitjunction_edit'),
     path('junctions/<int:pk>/delete/', views.ConduitJunctionDeleteView.as_view(), name='conduitjunction_delete'),
 
+    # Pathway Locations (waypoints)
+    path('pathway-locations/', views.PathwayLocationListView.as_view(), name='pathwaylocation_list'),
+    path('pathway-locations/add/', views.PathwayLocationEditView.as_view(), name='pathwaylocation_add'),
+    path('pathway-locations/<int:pk>/', views.PathwayLocationView.as_view(), name='pathwaylocation'),
+    path('pathway-locations/<int:pk>/edit/', views.PathwayLocationEditView.as_view(), name='pathwaylocation_edit'),
+    path('pathway-locations/<int:pk>/delete/', views.PathwayLocationDeleteView.as_view(), name='pathwaylocation_delete'),
+
     # Cable Segments
     path('cable-segments/', views.CableSegmentListView.as_view(), name='cablesegment_list'),
     path('cable-segments/add/', views.CableSegmentEditView.as_view(), name='cablesegment_add'),

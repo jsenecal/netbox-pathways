@@ -9,6 +9,7 @@ from .models import (
     ConduitJunction,
     DirectBuried,
     Innerduct,
+    PathwayLocation,
     Structure,
 )
 
@@ -64,6 +65,14 @@ class ConduitJunctionAdmin(admin.ModelAdmin):
     list_display = ['name', 'trunk_conduit', 'branch_conduit', 'position_on_trunk']
     search_fields = ['name']
     ordering = ['name']
+
+
+@admin.register(PathwayLocation)
+class PathwayLocationAdmin(admin.ModelAdmin):
+    list_display = ['pathway', 'site', 'location', 'sequence']
+    list_filter = ['site']
+    search_fields = ['pathway__name']
+    ordering = ['pathway', 'sequence']
 
 
 @admin.register(CableSegment)

@@ -1,6 +1,13 @@
 from netbox.api.routers import NetBoxRouter
 
 from . import views
+from .geo import (
+    AerialSpanGeoViewSet,
+    ConduitGeoViewSet,
+    DirectBuriedGeoViewSet,
+    PathwayGeoViewSet,
+    StructureGeoViewSet,
+)
 
 router = NetBoxRouter()
 router.register('structures', views.StructureViewSet)
@@ -11,6 +18,14 @@ router.register('aerial-spans', views.AerialSpanViewSet)
 router.register('direct-buried', views.DirectBuriedViewSet)
 router.register('innerducts', views.InnerductViewSet)
 router.register('junctions', views.ConduitJunctionViewSet)
+router.register('pathway-locations', views.PathwayLocationViewSet)
 router.register('cable-segments', views.CableSegmentViewSet)
+
+# GeoJSON endpoints for QGIS / GIS client consumption
+router.register('geo/structures', StructureGeoViewSet, basename='geo-structure')
+router.register('geo/pathways', PathwayGeoViewSet, basename='geo-pathway')
+router.register('geo/conduits', ConduitGeoViewSet, basename='geo-conduit')
+router.register('geo/aerial-spans', AerialSpanGeoViewSet, basename='geo-aerialspan')
+router.register('geo/direct-buried', DirectBuriedGeoViewSet, basename='geo-directburied')
 
 urlpatterns = router.urls

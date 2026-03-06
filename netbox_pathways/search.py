@@ -76,6 +76,15 @@ class ConduitJunctionIndex(SearchIndex):
 
 
 @register_search
+class PathwayLocationIndex(SearchIndex):
+    model = models.PathwayLocation
+    fields = (
+        ('comments', 5000),
+    )
+    display_attrs = ('pathway', 'site', 'location', 'sequence')
+
+
+@register_search
 class CableSegmentIndex(SearchIndex):
     model = models.CableSegment
     fields = (
