@@ -49,7 +49,7 @@ class ConduitBank(NetBoxModel):
     """
     name = models.CharField(max_length=100, unique=True)
     structure = models.ForeignKey(
-        Structure, on_delete=models.CASCADE, related_name='conduit_banks',
+        Structure, on_delete=models.PROTECT, related_name='conduit_banks',
     )
     configuration = models.CharField(
         max_length=50, choices=ConduitBankConfigChoices, blank=True,
@@ -78,10 +78,10 @@ class Pathway(NetBoxModel):
     pathway_type = models.CharField(max_length=50, choices=PathwayTypeChoices, editable=False)
     path = models.LineStringField(srid=4326, help_text="Geographic path")
     start_structure = models.ForeignKey(
-        Structure, on_delete=models.CASCADE, null=True, blank=True, related_name='pathways_out',
+        Structure, on_delete=models.PROTECT, null=True, blank=True, related_name='pathways_out',
     )
     end_structure = models.ForeignKey(
-        Structure, on_delete=models.CASCADE, null=True, blank=True, related_name='pathways_in',
+        Structure, on_delete=models.PROTECT, null=True, blank=True, related_name='pathways_in',
     )
     start_location = models.ForeignKey(
         Location, on_delete=models.SET_NULL, null=True, blank=True, related_name='pathways_out',
@@ -251,7 +251,7 @@ class ConduitJunction(NetBoxModel):
         Conduit, on_delete=models.CASCADE, related_name='junction_as_branch',
     )
     towards_structure = models.ForeignKey(
-        Structure, on_delete=models.CASCADE, help_text="Which end of trunk the junction faces",
+        Structure, on_delete=models.PROTECT, help_text="Which end of trunk the junction faces",
     )
     position_on_trunk = models.FloatField(
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
@@ -296,10 +296,10 @@ class PathwayLocation(NetBoxModel):
         Pathway, on_delete=models.CASCADE, related_name='waypoints',
     )
     site = models.ForeignKey(
-        Site, on_delete=models.CASCADE, null=True, blank=True, related_name='pathway_waypoints',
+        Site, on_delete=models.PROTECT, null=True, blank=True, related_name='pathway_waypoints',
     )
     location = models.ForeignKey(
-        Location, on_delete=models.CASCADE, null=True, blank=True, related_name='pathway_waypoints',
+        Location, on_delete=models.PROTECT, null=True, blank=True, related_name='pathway_waypoints',
     )
     sequence = models.PositiveIntegerField(default=0, help_text="Order along the pathway")
     comments = models.TextField(blank=True)

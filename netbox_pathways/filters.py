@@ -3,6 +3,14 @@ from dcim.models import Cable, Location, Site
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
 
+from .choices import (
+    AerialTypeChoices,
+    ConduitBankConfigChoices,
+    ConduitMaterialChoices,
+    EncasementTypeChoices,
+    PathwayTypeChoices,
+    StructureTypeChoices,
+)
 from .models import (
     AerialSpan,
     CableSegment,
@@ -25,7 +33,7 @@ class StructureFilterSet(NetBoxModelFilterSet):
         field_name='site__name', queryset=Site.objects.all(),
         to_field_name='name', label='Site (name)',
     )
-    structure_type = django_filters.MultipleChoiceFilter(choices=[])
+    structure_type = django_filters.MultipleChoiceFilter(choices=StructureTypeChoices)
     owner = django_filters.CharFilter(lookup_expr='icontains')
 
     class Meta:
@@ -43,7 +51,7 @@ class StructureFilterSet(NetBoxModelFilterSet):
 
 
 class PathwayFilterSet(NetBoxModelFilterSet):
-    pathway_type = django_filters.MultipleChoiceFilter(choices=[])
+    pathway_type = django_filters.MultipleChoiceFilter(choices=PathwayTypeChoices)
     start_structure_id = django_filters.ModelMultipleChoiceFilter(
         field_name='start_structure', queryset=Structure.objects.all(),
         label='Start Structure (ID)',
@@ -74,7 +82,7 @@ class PathwayFilterSet(NetBoxModelFilterSet):
 
 
 class ConduitFilterSet(NetBoxModelFilterSet):
-    material = django_filters.MultipleChoiceFilter(choices=[])
+    material = django_filters.MultipleChoiceFilter(choices=ConduitMaterialChoices)
     start_structure_id = django_filters.ModelMultipleChoiceFilter(
         field_name='start_structure', queryset=Structure.objects.all(),
         label='Start Structure (ID)',
@@ -109,7 +117,7 @@ class ConduitFilterSet(NetBoxModelFilterSet):
 
 
 class AerialSpanFilterSet(NetBoxModelFilterSet):
-    aerial_type = django_filters.MultipleChoiceFilter(choices=[])
+    aerial_type = django_filters.MultipleChoiceFilter(choices=AerialTypeChoices)
     start_structure_id = django_filters.ModelMultipleChoiceFilter(
         field_name='start_structure', queryset=Structure.objects.all(),
         label='Start Structure (ID)',
@@ -192,8 +200,8 @@ class ConduitBankFilterSet(NetBoxModelFilterSet):
         field_name='structure', queryset=Structure.objects.all(),
         label='Structure (ID)',
     )
-    configuration = django_filters.MultipleChoiceFilter(choices=[])
-    encasement_type = django_filters.MultipleChoiceFilter(choices=[])
+    configuration = django_filters.MultipleChoiceFilter(choices=ConduitBankConfigChoices)
+    encasement_type = django_filters.MultipleChoiceFilter(choices=EncasementTypeChoices)
 
     class Meta:
         model = ConduitBank

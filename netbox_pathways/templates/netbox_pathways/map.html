@@ -67,12 +67,14 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="{% static 'netbox_pathways/js/pathways-map.js' %}"></script>
+{{ structures_geojson|json_script:"structures-data" }}
+{{ pathways_geojson|json_script:"pathways-data" }}
 <script>
     const mapConfig = {
         center: [{{ map_center_lat }}, {{ map_center_lon }}],
         zoom: {{ map_zoom }},
-        structures: {{ structures_geojson|safe|default:"[]" }},
-        pathways: {{ pathways_geojson|safe|default:"[]" }}
+        structures: JSON.parse(document.getElementById('structures-data').textContent),
+        pathways: JSON.parse(document.getElementById('pathways-data').textContent)
     };
 
     document.addEventListener('DOMContentLoaded', function() {

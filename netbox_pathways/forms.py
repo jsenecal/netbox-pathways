@@ -3,6 +3,13 @@ from django import forms
 from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelForm, NetBoxModelImportForm
 from utilities.forms.fields import CSVModelChoiceField, DynamicModelChoiceField
 
+from .choices import (
+    AerialTypeChoices,
+    ConduitBankConfigChoices,
+    ConduitMaterialChoices,
+    EncasementTypeChoices,
+    StructureTypeChoices,
+)
 from .models import (
     AerialSpan,
     CableSegment,
@@ -45,7 +52,7 @@ class StructureImportForm(NetBoxModelImportForm):
 
 class StructureBulkEditForm(NetBoxModelBulkEditForm):
     site = DynamicModelChoiceField(queryset=Site.objects.all(), required=False)
-    structure_type = forms.ChoiceField(choices=[], required=False)
+    structure_type = forms.ChoiceField(choices=StructureTypeChoices, required=False)
     owner = forms.CharField(max_length=100, required=False)
 
     model = Structure
@@ -122,7 +129,7 @@ class ConduitImportForm(NetBoxModelImportForm):
 
 
 class ConduitBulkEditForm(NetBoxModelBulkEditForm):
-    material = forms.ChoiceField(choices=[], required=False)
+    material = forms.ChoiceField(choices=ConduitMaterialChoices, required=False)
     max_cable_count = forms.IntegerField(required=False, min_value=1)
 
     model = Conduit
@@ -175,7 +182,7 @@ class AerialSpanImportForm(NetBoxModelImportForm):
 
 
 class AerialSpanBulkEditForm(NetBoxModelBulkEditForm):
-    aerial_type = forms.ChoiceField(choices=[], required=False)
+    aerial_type = forms.ChoiceField(choices=AerialTypeChoices, required=False)
     max_cable_count = forms.IntegerField(required=False, min_value=1)
     messenger_size = forms.CharField(max_length=50, required=False)
 
@@ -272,8 +279,8 @@ class ConduitBankImportForm(NetBoxModelImportForm):
 
 
 class ConduitBankBulkEditForm(NetBoxModelBulkEditForm):
-    configuration = forms.ChoiceField(choices=[], required=False)
-    encasement_type = forms.ChoiceField(choices=[], required=False)
+    configuration = forms.ChoiceField(choices=ConduitBankConfigChoices, required=False)
+    encasement_type = forms.ChoiceField(choices=EncasementTypeChoices, required=False)
 
     model = ConduitBank
     fieldsets = (

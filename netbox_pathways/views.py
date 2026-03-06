@@ -1,5 +1,6 @@
 from dcim.models import Cable
-from django.db.models import Q, Sum
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, render
 from django.views import View
 from extras.ui.panels import CustomFieldsPanel, TagsPanel
@@ -14,7 +15,7 @@ from .ui import panels
 # --- Structure ---
 
 class StructureListView(generic.ObjectListView):
-    queryset = models.Structure.objects.all()
+    queryset = models.Structure.objects.select_related('site')
     table = tables.StructureTable
     filterset = filters.StructureFilterSet
 
@@ -100,7 +101,9 @@ class StructureConduitBanksView(generic.ObjectChildrenView):
 # --- Pathway (base) ---
 
 class PathwayListView(generic.ObjectListView):
-    queryset = models.Pathway.objects.all()
+    queryset = models.Pathway.objects.select_related(
+        'start_structure', 'end_structure', 'start_location', 'end_location',
+    )
     table = tables.PathwayTable
     filterset = filters.PathwayFilterSet
 
@@ -127,7 +130,9 @@ class PathwayView(generic.ObjectView):
 # --- Conduit ---
 
 class ConduitListView(generic.ObjectListView):
-    queryset = models.Conduit.objects.all()
+    queryset = models.Conduit.objects.select_related(
+        'start_structure', 'end_structure', 'start_location', 'end_location', 'conduit_bank',
+    )
     table = tables.ConduitTable
     filterset = filters.ConduitFilterSet
 
@@ -200,7 +205,9 @@ class ConduitInnerductsView(generic.ObjectChildrenView):
 # --- Aerial Span ---
 
 class AerialSpanListView(generic.ObjectListView):
-    queryset = models.AerialSpan.objects.all()
+    queryset = models.AerialSpan.objects.select_related(
+        'start_structure', 'end_structure', 'start_location', 'end_location',
+    )
     table = tables.AerialSpanTable
     filterset = filters.AerialSpanFilterSet
 
@@ -253,7 +260,9 @@ class AerialSpanBulkDeleteView(generic.BulkDeleteView):
 # --- Direct Buried ---
 
 class DirectBuriedListView(generic.ObjectListView):
-    queryset = models.DirectBuried.objects.all()
+    queryset = models.DirectBuried.objects.select_related(
+        'start_structure', 'end_structure', 'start_location', 'end_location',
+    )
     table = tables.DirectBuriedTable
     filterset = filters.DirectBuriedFilterSet
 
@@ -289,7 +298,7 @@ class DirectBuriedDeleteView(generic.ObjectDeleteView):
 # --- Innerduct ---
 
 class InnerductListView(generic.ObjectListView):
-    queryset = models.Innerduct.objects.all()
+    queryset = models.Innerduct.objects.select_related('parent_conduit')
     table = tables.InnerductTable
     filterset = filters.InnerductFilterSet
 
@@ -325,7 +334,9 @@ class InnerductDeleteView(generic.ObjectDeleteView):
 # --- Conduit Bank ---
 
 class ConduitBankListView(generic.ObjectListView):
-    queryset = models.ConduitBank.objects.all()
+    queryset = models.ConduitBank.objects.select_related('structure').annotate(
+        conduit_count=Count('conduits'),
+    )
     table = tables.ConduitBankTable
     filterset = filters.ConduitBankFilterSet
 
@@ -378,7 +389,9 @@ class ConduitBankBulkDeleteView(generic.BulkDeleteView):
 # --- Conduit Junction ---
 
 class ConduitJunctionListView(generic.ObjectListView):
-    queryset = models.ConduitJunction.objects.all()
+    queryset = models.ConduitJunction.objects.select_related(
+        'trunk_conduit', 'branch_conduit', 'towards_structure',
+    )
     table = tables.ConduitJunctionTable
     filterset = filters.ConduitJunctionFilterSet
 
@@ -407,7 +420,7 @@ class ConduitJunctionDeleteView(generic.ObjectDeleteView):
 # --- Cable Segment ---
 
 class CableSegmentListView(generic.ObjectListView):
-    queryset = models.CableSegment.objects.all()
+    queryset = models.CableSegment.objects.select_related('cable', 'pathway')
     table = tables.CableSegmentTable
     filterset = filters.CableSegmentFilterSet
 
@@ -446,7 +459,7 @@ class CableSegmentBulkDeleteView(generic.BulkDeleteView):
 # --- Pathway Location ---
 
 class PathwayLocationListView(generic.ObjectListView):
-    queryset = models.PathwayLocation.objects.all()
+    queryset = models.PathwayLocation.objects.select_related('pathway', 'site', 'location')
     table = tables.PathwayLocationTable
     filterset = filters.PathwayLocationFilterSet
 
@@ -474,13 +487,30 @@ class PathwayLocationDeleteView(generic.ObjectDeleteView):
 
 # --- Map View ---
 
+MAP_MAX_OBJECTS = 2000
+
+
 class MapView(generic.ObjectListView):
     queryset = models.Structure.objects.all()
     template_name = 'netbox_pathways/map.html'
 
+    def _safe_float(self, value, default):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _safe_int(self, value, default):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
     def get_extra_context(self, request):
-        structures = models.Structure.objects.select_related('site')
-        pathways = models.Pathway.objects.select_related('start_structure', 'end_structure')
+        structures = models.Structure.objects.select_related('site')[:MAP_MAX_OBJECTS]
+        pathways = models.Pathway.objects.select_related(
+            'start_structure', 'end_structure',
+        )[:MAP_MAX_OBJECTS]
 
         structures_geojson = []
         for structure in structures:
@@ -522,9 +552,9 @@ class MapView(generic.ObjectListView):
         return {
             'structures_geojson': structures_geojson,
             'pathways_geojson': pathways_geojson,
-            'map_center_lat': request.GET.get('lat', 45.5017),
-            'map_center_lon': request.GET.get('lon', -73.5673),
-            'map_zoom': request.GET.get('zoom', 10),
+            'map_center_lat': self._safe_float(request.GET.get('lat'), 45.5017),
+            'map_center_lon': self._safe_float(request.GET.get('lon'), -73.5673),
+            'map_zoom': self._safe_int(request.GET.get('zoom'), 10),
         }
 
 
@@ -532,7 +562,11 @@ class MapView(generic.ObjectListView):
 
 class PullSheetListView(generic.ObjectListView):
     """Lists cables that have pathway segments routed, for pull sheet selection."""
-    queryset = Cable.objects.filter(pathway_segments__isnull=False).distinct()
+    queryset = Cable.objects.filter(
+        pathway_segments__isnull=False,
+    ).distinct().annotate(
+        segment_count=Count('pathway_segments'),
+    )
     table = tables.PullSheetCableTable
     template_name = 'netbox_pathways/pullsheet_list.html'
 
@@ -540,7 +574,7 @@ class PullSheetListView(generic.ObjectListView):
         return {'title': 'Pull Sheets'}
 
 
-class PullSheetDetailView(View):
+class PullSheetDetailView(LoginRequiredMixin, View):
     """Renders a pull sheet for a specific cable."""
 
     def get(self, request, cable_pk):

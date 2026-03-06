@@ -170,8 +170,7 @@ class ConduitBankTable(NetBoxTable):
     encasement_type = columns.ChoiceFieldColumn()
     conduit_count = tables.Column(
         verbose_name='Conduits',
-        accessor='conduits__count',
-        orderable=False,
+        orderable=True,
     )
     actions = columns.ActionsColumn(actions=('edit', 'delete'))
 
@@ -223,8 +222,7 @@ class PullSheetCableTable(NetBoxTable):
     label = tables.Column(linkify=True)
     segment_count = tables.Column(
         verbose_name='Segments',
-        accessor='pathway_segments__count',
-        orderable=False,
+        orderable=True,
     )
     pull_sheet = tables.TemplateColumn(
         template_code='<a href="{% url \'plugins:netbox_pathways:pullsheet_detail\' cable_pk=record.pk %}" '
