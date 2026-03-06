@@ -75,8 +75,7 @@ class PathwayForm(NetBoxModelForm):
         fields = [
             'name', 'path', 'start_structure', 'end_structure',
             'start_location', 'end_location',
-            'length', 'cable_count', 'max_cable_count',
-            'installation_date', 'comments', 'tags',
+            'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
             'path': forms.HiddenInput(),
@@ -102,8 +101,7 @@ class ConduitForm(NetBoxModelForm):
             'start_junction', 'end_junction',
             'inner_diameter', 'outer_diameter', 'depth',
             'conduit_bank', 'bank_position',
-            'length', 'cable_count', 'max_cable_count',
-            'installation_date', 'comments', 'tags',
+            'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
             'path': forms.HiddenInput(),
@@ -123,18 +121,16 @@ class ConduitImportForm(NetBoxModelImportForm):
         fields = [
             'name', 'material', 'start_structure', 'end_structure',
             'inner_diameter', 'outer_diameter', 'depth',
-            'length', 'cable_count', 'max_cable_count',
-            'installation_date', 'comments',
+            'length', 'installation_date', 'comments',
         ]
 
 
 class ConduitBulkEditForm(NetBoxModelBulkEditForm):
     material = forms.ChoiceField(choices=ConduitMaterialChoices, required=False)
-    max_cable_count = forms.IntegerField(required=False, min_value=1)
 
     model = Conduit
     fieldsets = (
-        (None, ('material', 'max_cable_count')),
+        (None, ('material',)),
     )
     nullable_fields = ('material',)
 
@@ -154,8 +150,7 @@ class AerialSpanForm(NetBoxModelForm):
             'start_location', 'end_location',
             'attachment_height', 'sag', 'messenger_size',
             'wind_loading', 'ice_loading',
-            'length', 'cable_count', 'max_cable_count',
-            'installation_date', 'comments', 'tags',
+            'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
             'path': forms.HiddenInput(),
@@ -176,19 +171,17 @@ class AerialSpanImportForm(NetBoxModelImportForm):
             'name', 'aerial_type', 'start_structure', 'end_structure',
             'attachment_height', 'sag', 'messenger_size',
             'wind_loading', 'ice_loading',
-            'length', 'cable_count', 'max_cable_count',
-            'installation_date', 'comments',
+            'length', 'installation_date', 'comments',
         ]
 
 
 class AerialSpanBulkEditForm(NetBoxModelBulkEditForm):
     aerial_type = forms.ChoiceField(choices=AerialTypeChoices, required=False)
-    max_cable_count = forms.IntegerField(required=False, min_value=1)
     messenger_size = forms.CharField(max_length=50, required=False)
 
     model = AerialSpan
     fieldsets = (
-        (None, ('aerial_type', 'max_cable_count', 'messenger_size')),
+        (None, ('aerial_type', 'messenger_size')),
     )
     nullable_fields = ('messenger_size', 'wind_loading', 'ice_loading')
 
@@ -207,8 +200,7 @@ class DirectBuriedForm(NetBoxModelForm):
             'name', 'path', 'start_structure', 'end_structure',
             'start_location', 'end_location',
             'burial_depth', 'warning_tape', 'tracer_wire', 'armor_type',
-            'length', 'cable_count', 'max_cable_count',
-            'installation_date', 'comments', 'tags',
+            'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
             'path': forms.HiddenInput(),
@@ -242,8 +234,7 @@ class InnerductForm(NetBoxModelForm):
             'name', 'parent_conduit', 'size', 'color', 'position',
             'path', 'start_structure', 'end_structure',
             'start_location', 'end_location',
-            'length', 'cable_count', 'max_cable_count',
-            'installation_date', 'comments', 'tags',
+            'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
             'path': forms.HiddenInput(),

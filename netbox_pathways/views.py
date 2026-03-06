@@ -103,7 +103,7 @@ class StructureConduitBanksView(generic.ObjectChildrenView):
 class PathwayListView(generic.ObjectListView):
     queryset = models.Pathway.objects.select_related(
         'start_structure', 'end_structure', 'start_location', 'end_location',
-    )
+    ).annotate(cables_routed=Count('cable_segments'))
     table = tables.PathwayTable
     filterset = filters.PathwayFilterSet
 
@@ -132,7 +132,7 @@ class PathwayView(generic.ObjectView):
 class ConduitListView(generic.ObjectListView):
     queryset = models.Conduit.objects.select_related(
         'start_structure', 'end_structure', 'start_location', 'end_location', 'conduit_bank',
-    )
+    ).annotate(cables_routed=Count('cable_segments'))
     table = tables.ConduitTable
     filterset = filters.ConduitFilterSet
 
@@ -207,7 +207,7 @@ class ConduitInnerductsView(generic.ObjectChildrenView):
 class AerialSpanListView(generic.ObjectListView):
     queryset = models.AerialSpan.objects.select_related(
         'start_structure', 'end_structure', 'start_location', 'end_location',
-    )
+    ).annotate(cables_routed=Count('cable_segments'))
     table = tables.AerialSpanTable
     filterset = filters.AerialSpanFilterSet
 
@@ -262,7 +262,7 @@ class AerialSpanBulkDeleteView(generic.BulkDeleteView):
 class DirectBuriedListView(generic.ObjectListView):
     queryset = models.DirectBuried.objects.select_related(
         'start_structure', 'end_structure', 'start_location', 'end_location',
-    )
+    ).annotate(cables_routed=Count('cable_segments'))
     table = tables.DirectBuriedTable
     filterset = filters.DirectBuriedFilterSet
 
@@ -298,7 +298,9 @@ class DirectBuriedDeleteView(generic.ObjectDeleteView):
 # --- Innerduct ---
 
 class InnerductListView(generic.ObjectListView):
-    queryset = models.Innerduct.objects.select_related('parent_conduit')
+    queryset = models.Innerduct.objects.select_related('parent_conduit').annotate(
+        cables_routed=Count('cable_segments'),
+    )
     table = tables.InnerductTable
     filterset = filters.InnerductFilterSet
 
@@ -510,7 +512,7 @@ class MapView(generic.ObjectListView):
         structures = models.Structure.objects.select_related('site')[:MAP_MAX_OBJECTS]
         pathways = models.Pathway.objects.select_related(
             'start_structure', 'end_structure',
-        )[:MAP_MAX_OBJECTS]
+        ).annotate(cables_routed=Count('cable_segments'))[:MAP_MAX_OBJECTS]
 
         structures_geojson = []
         for structure in structures:
@@ -544,7 +546,7 @@ class MapView(generic.ObjectListView):
                         'id': pathway.pk,
                         'name': pathway.name,
                         'pathway_type': pathway.get_pathway_type_display(),
-                        'utilization': pathway.utilization_percentage,
+                        'cables_routed': pathway.cables_routed,
                         'url': pathway.get_absolute_url(),
                     },
                 })

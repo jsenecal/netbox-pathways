@@ -21,8 +21,7 @@ class PathwayPanel(ObjectAttributesPanel):
     start_location = attrs.RelatedObjectAttr('start_location', linkify=True, label=_('Start location'))
     end_location = attrs.RelatedObjectAttr('end_location', linkify=True, label=_('End location'))
     length = attrs.NumericAttr('length', label=_('Length (m)'))
-    cable_count = attrs.NumericAttr('cable_count', label=_('Cable count'))
-    max_cable_count = attrs.NumericAttr('max_cable_count', label=_('Max cables'))
+
     installation_date = attrs.TextAttr('installation_date', label=_('Installation date'))
 
 
@@ -39,8 +38,7 @@ class ConduitPanel(ObjectAttributesPanel):
     outer_diameter = attrs.NumericAttr('outer_diameter', label=_('Outer diameter (mm)'))
     depth = attrs.NumericAttr('depth', label=_('Depth (m)'))
     length = attrs.NumericAttr('length', label=_('Length (m)'))
-    cable_count = attrs.NumericAttr('cable_count', label=_('Cable count'))
-    max_cable_count = attrs.NumericAttr('max_cable_count', label=_('Max cables'))
+
     installation_date = attrs.TextAttr('installation_date', label=_('Installation date'))
 
 
@@ -57,8 +55,7 @@ class AerialSpanPanel(ObjectAttributesPanel):
     wind_loading = attrs.TextAttr('wind_loading', label=_('Wind loading'))
     ice_loading = attrs.TextAttr('ice_loading', label=_('Ice loading'))
     length = attrs.NumericAttr('length', label=_('Length (m)'))
-    cable_count = attrs.NumericAttr('cable_count', label=_('Cable count'))
-    max_cable_count = attrs.NumericAttr('max_cable_count', label=_('Max cables'))
+
     installation_date = attrs.TextAttr('installation_date', label=_('Installation date'))
 
 
@@ -73,8 +70,7 @@ class DirectBuriedPanel(ObjectAttributesPanel):
     tracer_wire = attrs.BooleanAttr('tracer_wire', label=_('Tracer wire'))
     armor_type = attrs.TextAttr('armor_type', label=_('Armor type'))
     length = attrs.NumericAttr('length', label=_('Length (m)'))
-    cable_count = attrs.NumericAttr('cable_count', label=_('Cable count'))
-    max_cable_count = attrs.NumericAttr('max_cable_count', label=_('Max cables'))
+
     installation_date = attrs.TextAttr('installation_date', label=_('Installation date'))
 
 
@@ -85,8 +81,7 @@ class InnerductPanel(ObjectAttributesPanel):
     color = attrs.TextAttr('color', label=_('Color'))
     position = attrs.TextAttr('position', label=_('Position'))
     length = attrs.NumericAttr('length', label=_('Length (m)'))
-    cable_count = attrs.NumericAttr('cable_count', label=_('Cable count'))
-    max_cable_count = attrs.NumericAttr('max_cable_count', label=_('Max cables'))
+
     installation_date = attrs.TextAttr('installation_date', label=_('Installation date'))
 
 

@@ -1,5 +1,5 @@
 from netbox.api.serializers import NetBoxModelSerializer
-from rest_framework import serializers
+from rest_framework import serializers as drf_serializers
 
 from ..models import (
     AerialSpan,
@@ -16,7 +16,7 @@ from ..models import (
 
 
 class StructureSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
+    url = drf_serializers.HyperlinkedIdentityField(
         view_name='plugins-api:netbox_pathways-api:structure-detail',
     )
 
@@ -31,7 +31,7 @@ class StructureSerializer(NetBoxModelSerializer):
 
 
 class ConduitBankSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
+    url = drf_serializers.HyperlinkedIdentityField(
         view_name='plugins-api:netbox_pathways-api:conduitbank-detail',
     )
 
@@ -46,9 +46,10 @@ class ConduitBankSerializer(NetBoxModelSerializer):
 
 
 class PathwaySerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
+    url = drf_serializers.HyperlinkedIdentityField(
         view_name='plugins-api:netbox_pathways-api:pathway-detail',
     )
+    cables_routed = drf_serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Pathway
@@ -56,16 +57,17 @@ class PathwaySerializer(NetBoxModelSerializer):
             'id', 'url', 'display', 'name', 'pathway_type', 'path',
             'start_structure', 'end_structure',
             'start_location', 'end_location', 'length',
-            'cable_count', 'max_cable_count', 'installation_date',
+            'cables_routed', 'installation_date',
             'comments', 'tags', 'created', 'last_updated',
         ]
         brief_fields = ('id', 'url', 'display', 'name', 'pathway_type')
 
 
 class ConduitSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
+    url = drf_serializers.HyperlinkedIdentityField(
         view_name='plugins-api:netbox_pathways-api:conduit-detail',
     )
+    cables_routed = drf_serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Conduit
@@ -76,16 +78,17 @@ class ConduitSerializer(NetBoxModelSerializer):
             'material', 'inner_diameter', 'outer_diameter', 'depth',
             'conduit_bank', 'bank_position',
             'start_junction', 'end_junction',
-            'length', 'cable_count', 'max_cable_count',
+            'length', 'cables_routed',
             'installation_date', 'comments', 'tags', 'created', 'last_updated',
         ]
         brief_fields = ('id', 'url', 'display', 'name', 'material')
 
 
 class AerialSpanSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
+    url = drf_serializers.HyperlinkedIdentityField(
         view_name='plugins-api:netbox_pathways-api:aerialspan-detail',
     )
+    cables_routed = drf_serializers.IntegerField(read_only=True)
 
     class Meta:
         model = AerialSpan
@@ -95,16 +98,17 @@ class AerialSpanSerializer(NetBoxModelSerializer):
             'start_location', 'end_location',
             'aerial_type', 'attachment_height', 'sag',
             'messenger_size', 'wind_loading', 'ice_loading',
-            'length', 'cable_count', 'max_cable_count',
+            'length', 'cables_routed',
             'installation_date', 'comments', 'tags', 'created', 'last_updated',
         ]
         brief_fields = ('id', 'url', 'display', 'name', 'aerial_type')
 
 
 class DirectBuriedSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
+    url = drf_serializers.HyperlinkedIdentityField(
         view_name='plugins-api:netbox_pathways-api:directburied-detail',
     )
+    cables_routed = drf_serializers.IntegerField(read_only=True)
 
     class Meta:
         model = DirectBuried
@@ -113,16 +117,17 @@ class DirectBuriedSerializer(NetBoxModelSerializer):
             'start_structure', 'end_structure',
             'start_location', 'end_location',
             'burial_depth', 'warning_tape', 'tracer_wire', 'armor_type',
-            'length', 'cable_count', 'max_cable_count',
+            'length', 'cables_routed',
             'installation_date', 'comments', 'tags', 'created', 'last_updated',
         ]
         brief_fields = ('id', 'url', 'display', 'name')
 
 
 class InnerductSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
+    url = drf_serializers.HyperlinkedIdentityField(
         view_name='plugins-api:netbox_pathways-api:innerduct-detail',
     )
+    cables_routed = drf_serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Innerduct
@@ -131,14 +136,14 @@ class InnerductSerializer(NetBoxModelSerializer):
             'start_structure', 'end_structure',
             'start_location', 'end_location',
             'parent_conduit', 'size', 'color', 'position',
-            'length', 'cable_count', 'max_cable_count',
+            'length', 'cables_routed',
             'installation_date', 'comments', 'tags', 'created', 'last_updated',
         ]
         brief_fields = ('id', 'url', 'display', 'name', 'size')
 
 
 class ConduitJunctionSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
+    url = drf_serializers.HyperlinkedIdentityField(
         view_name='plugins-api:netbox_pathways-api:conduitjunction-detail',
     )
 
@@ -154,7 +159,7 @@ class ConduitJunctionSerializer(NetBoxModelSerializer):
 
 
 class PathwayLocationSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
+    url = drf_serializers.HyperlinkedIdentityField(
         view_name='plugins-api:netbox_pathways-api:pathwaylocation-detail',
     )
 
@@ -168,7 +173,7 @@ class PathwayLocationSerializer(NetBoxModelSerializer):
 
 
 class CableSegmentSerializer(NetBoxModelSerializer):
-    url = serializers.HyperlinkedIdentityField(
+    url = drf_serializers.HyperlinkedIdentityField(
         view_name='plugins-api:netbox_pathways-api:cablesegment-detail',
     )
 

@@ -38,11 +38,7 @@ class PathwayTable(NetBoxTable):
     end_structure = tables.Column(linkify=True)
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
-    utilization = tables.TemplateColumn(
-        template_code='{{ record.cable_count }}/{{ record.max_cable_count }}',
-        verbose_name='Cable Usage',
-        orderable=False,
-    )
+    cables_routed = tables.Column(verbose_name='Cables', orderable=True)
     actions = columns.ActionsColumn(actions=('edit', 'delete'))
 
     class Meta(NetBoxTable.Meta):
@@ -51,10 +47,10 @@ class PathwayTable(NetBoxTable):
             'pk', 'id', 'name', 'pathway_type',
             'start_structure', 'end_structure',
             'start_location', 'end_location', 'length',
-            'utilization', 'installation_date', 'actions',
+            'cables_routed', 'installation_date', 'actions',
         )
         default_columns = (
-            'name', 'pathway_type', 'start_structure', 'end_structure', 'utilization',
+            'name', 'pathway_type', 'start_structure', 'end_structure', 'cables_routed',
         )
 
 
@@ -66,11 +62,7 @@ class ConduitTable(NetBoxTable):
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
     conduit_bank = tables.Column(linkify=True)
-    utilization = tables.TemplateColumn(
-        template_code='{{ record.cable_count }}/{{ record.max_cable_count }}',
-        verbose_name='Cable Usage',
-        orderable=False,
-    )
+    cables_routed = tables.Column(verbose_name='Cables', orderable=True)
     actions = columns.ActionsColumn(actions=('edit', 'delete'))
 
     class Meta(NetBoxTable.Meta):
@@ -80,11 +72,11 @@ class ConduitTable(NetBoxTable):
             'start_structure', 'end_structure',
             'start_location', 'end_location',
             'conduit_bank', 'bank_position',
-            'length', 'utilization', 'installation_date', 'actions',
+            'length', 'cables_routed', 'installation_date', 'actions',
         )
         default_columns = (
             'name', 'material', 'start_structure', 'end_structure',
-            'conduit_bank', 'utilization',
+            'conduit_bank', 'cables_routed',
         )
 
 
@@ -95,11 +87,7 @@ class AerialSpanTable(NetBoxTable):
     end_structure = tables.Column(linkify=True)
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
-    utilization = tables.TemplateColumn(
-        template_code='{{ record.cable_count }}/{{ record.max_cable_count }}',
-        verbose_name='Cable Usage',
-        orderable=False,
-    )
+    cables_routed = tables.Column(verbose_name='Cables', orderable=True)
     actions = columns.ActionsColumn(actions=('edit', 'delete'))
 
     class Meta(NetBoxTable.Meta):
@@ -109,10 +97,10 @@ class AerialSpanTable(NetBoxTable):
             'start_structure', 'end_structure',
             'start_location', 'end_location',
             'attachment_height', 'length',
-            'utilization', 'installation_date', 'actions',
+            'cables_routed', 'installation_date', 'actions',
         )
         default_columns = (
-            'name', 'aerial_type', 'start_structure', 'end_structure', 'utilization',
+            'name', 'aerial_type', 'start_structure', 'end_structure', 'cables_routed',
         )
 
 
@@ -122,11 +110,7 @@ class DirectBuriedTable(NetBoxTable):
     end_structure = tables.Column(linkify=True)
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
-    utilization = tables.TemplateColumn(
-        template_code='{{ record.cable_count }}/{{ record.max_cable_count }}',
-        verbose_name='Cable Usage',
-        orderable=False,
-    )
+    cables_routed = tables.Column(verbose_name='Cables', orderable=True)
     actions = columns.ActionsColumn(actions=('edit', 'delete'))
 
     class Meta(NetBoxTable.Meta):
@@ -136,21 +120,17 @@ class DirectBuriedTable(NetBoxTable):
             'start_structure', 'end_structure',
             'start_location', 'end_location',
             'burial_depth', 'warning_tape', 'tracer_wire',
-            'length', 'utilization', 'installation_date', 'actions',
+            'length', 'cables_routed', 'installation_date', 'actions',
         )
         default_columns = (
-            'name', 'start_structure', 'end_structure', 'burial_depth', 'utilization',
+            'name', 'start_structure', 'end_structure', 'burial_depth', 'cables_routed',
         )
 
 
 class InnerductTable(NetBoxTable):
     name = tables.Column(linkify=True)
     parent_conduit = tables.Column(linkify=True)
-    utilization = tables.TemplateColumn(
-        template_code='{{ record.cable_count }}/{{ record.max_cable_count }}',
-        verbose_name='Cable Usage',
-        orderable=False,
-    )
+    cables_routed = tables.Column(verbose_name='Cables', orderable=True)
     actions = columns.ActionsColumn(actions=('edit', 'delete'))
 
     class Meta(NetBoxTable.Meta):
@@ -158,9 +138,9 @@ class InnerductTable(NetBoxTable):
         fields = (
             'pk', 'id', 'name', 'parent_conduit',
             'size', 'color', 'position',
-            'utilization', 'installation_date', 'actions',
+            'cables_routed', 'installation_date', 'actions',
         )
-        default_columns = ('name', 'parent_conduit', 'size', 'color', 'utilization')
+        default_columns = ('name', 'parent_conduit', 'size', 'color', 'cables_routed')
 
 
 class ConduitBankTable(NetBoxTable):

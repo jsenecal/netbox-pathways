@@ -1,3 +1,4 @@
+from django.db.models import Count
 from netbox.api.viewsets import NetBoxModelViewSet
 
 from .. import filters, models
@@ -19,7 +20,7 @@ class ConduitBankViewSet(NetBoxModelViewSet):
 class PathwayViewSet(NetBoxModelViewSet):
     queryset = models.Pathway.objects.select_related(
         'start_structure', 'end_structure', 'start_location', 'end_location',
-    )
+    ).annotate(cables_routed=Count('cable_segments'))
     serializer_class = serializers.PathwaySerializer
     filterset_class = filters.PathwayFilterSet
 
@@ -28,7 +29,7 @@ class ConduitViewSet(NetBoxModelViewSet):
     queryset = models.Conduit.objects.select_related(
         'start_structure', 'end_structure', 'start_location', 'end_location',
         'conduit_bank', 'start_junction', 'end_junction',
-    )
+    ).annotate(cables_routed=Count('cable_segments'))
     serializer_class = serializers.ConduitSerializer
     filterset_class = filters.ConduitFilterSet
 
@@ -36,7 +37,7 @@ class ConduitViewSet(NetBoxModelViewSet):
 class AerialSpanViewSet(NetBoxModelViewSet):
     queryset = models.AerialSpan.objects.select_related(
         'start_structure', 'end_structure', 'start_location', 'end_location',
-    )
+    ).annotate(cables_routed=Count('cable_segments'))
     serializer_class = serializers.AerialSpanSerializer
     filterset_class = filters.AerialSpanFilterSet
 
@@ -44,13 +45,15 @@ class AerialSpanViewSet(NetBoxModelViewSet):
 class DirectBuriedViewSet(NetBoxModelViewSet):
     queryset = models.DirectBuried.objects.select_related(
         'start_structure', 'end_structure', 'start_location', 'end_location',
-    )
+    ).annotate(cables_routed=Count('cable_segments'))
     serializer_class = serializers.DirectBuriedSerializer
     filterset_class = filters.DirectBuriedFilterSet
 
 
 class InnerductViewSet(NetBoxModelViewSet):
-    queryset = models.Innerduct.objects.select_related('parent_conduit')
+    queryset = models.Innerduct.objects.select_related('parent_conduit').annotate(
+        cables_routed=Count('cable_segments'),
+    )
     serializer_class = serializers.InnerductSerializer
     filterset_class = filters.InnerductFilterSet
 

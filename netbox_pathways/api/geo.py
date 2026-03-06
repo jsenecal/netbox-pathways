@@ -5,6 +5,7 @@ Uses djangorestframework-gis GeoFeatureModelSerializer to produce
 standard GeoJSON FeatureCollections from the existing models.
 """
 
+from django.db.models import Count
 from rest_framework import serializers as drf_serializers
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from rest_framework_gis.serializers import GeoFeatureModelSerializer
@@ -35,9 +36,7 @@ class PathwayGeoSerializer(GeoFeatureModelSerializer):
     )
     start_name = drf_serializers.SerializerMethodField()
     end_name = drf_serializers.SerializerMethodField()
-    utilization_pct = drf_serializers.FloatField(
-        source='utilization_percentage', read_only=True,
-    )
+    cables_routed = drf_serializers.IntegerField(read_only=True)
 
     class Meta:
         model = models.Pathway
@@ -47,8 +46,7 @@ class PathwayGeoSerializer(GeoFeatureModelSerializer):
             'start_structure', 'end_structure',
             'start_location', 'end_location',
             'start_name', 'end_name',
-            'length', 'cable_count', 'max_cable_count',
-            'utilization_pct', 'installation_date',
+            'length', 'cables_routed', 'installation_date',
         ]
 
     def get_start_name(self, obj):
@@ -69,9 +67,7 @@ class ConduitGeoSerializer(GeoFeatureModelSerializer):
     conduit_bank_name = drf_serializers.CharField(
         source='conduit_bank.name', read_only=True, default=None,
     )
-    utilization_pct = drf_serializers.FloatField(
-        source='utilization_percentage', read_only=True,
-    )
+    cables_routed = drf_serializers.IntegerField(read_only=True)
 
     class Meta:
         model = models.Conduit
@@ -83,8 +79,7 @@ class ConduitGeoSerializer(GeoFeatureModelSerializer):
             'start_name', 'end_name',
             'inner_diameter', 'outer_diameter', 'depth',
             'conduit_bank', 'conduit_bank_name', 'bank_position',
-            'length', 'cable_count', 'max_cable_count',
-            'utilization_pct', 'installation_date',
+            'length', 'cables_routed', 'installation_date',
         ]
 
     def get_start_name(self, obj):
@@ -102,9 +97,7 @@ class AerialSpanGeoSerializer(GeoFeatureModelSerializer):
     )
     start_name = drf_serializers.SerializerMethodField()
     end_name = drf_serializers.SerializerMethodField()
-    utilization_pct = drf_serializers.FloatField(
-        source='utilization_percentage', read_only=True,
-    )
+    cables_routed = drf_serializers.IntegerField(read_only=True)
 
     class Meta:
         model = models.AerialSpan
@@ -115,8 +108,7 @@ class AerialSpanGeoSerializer(GeoFeatureModelSerializer):
             'start_location', 'end_location',
             'start_name', 'end_name',
             'attachment_height', 'sag', 'messenger_size',
-            'length', 'cable_count', 'max_cable_count',
-            'utilization_pct', 'installation_date',
+            'length', 'cables_routed', 'installation_date',
         ]
 
     def get_start_name(self, obj):
@@ -131,9 +123,7 @@ class AerialSpanGeoSerializer(GeoFeatureModelSerializer):
 class DirectBuriedGeoSerializer(GeoFeatureModelSerializer):
     start_name = drf_serializers.SerializerMethodField()
     end_name = drf_serializers.SerializerMethodField()
-    utilization_pct = drf_serializers.FloatField(
-        source='utilization_percentage', read_only=True,
-    )
+    cables_routed = drf_serializers.IntegerField(read_only=True)
 
     class Meta:
         model = models.DirectBuried
@@ -144,8 +134,7 @@ class DirectBuriedGeoSerializer(GeoFeatureModelSerializer):
             'start_location', 'end_location',
             'start_name', 'end_name',
             'burial_depth', 'warning_tape', 'tracer_wire',
-            'length', 'cable_count', 'max_cable_count',
-            'utilization_pct', 'installation_date',
+            'length', 'cables_routed', 'installation_date',
         ]
 
     def get_start_name(self, obj):
@@ -169,7 +158,7 @@ class PathwayGeoViewSet(ReadOnlyModelViewSet):
     queryset = models.Pathway.objects.select_related(
         'start_structure', 'end_structure',
         'start_location', 'end_location',
-    ).all()
+    ).annotate(cables_routed=Count('cable_segments'))
     serializer_class = PathwayGeoSerializer
     filterset_class = filters.PathwayFilterSet
 
@@ -179,7 +168,7 @@ class ConduitGeoViewSet(ReadOnlyModelViewSet):
         'start_structure', 'end_structure',
         'start_location', 'end_location',
         'conduit_bank',
-    ).all()
+    ).annotate(cables_routed=Count('cable_segments'))
     serializer_class = ConduitGeoSerializer
     filterset_class = filters.ConduitFilterSet
 
@@ -188,7 +177,7 @@ class AerialSpanGeoViewSet(ReadOnlyModelViewSet):
     queryset = models.AerialSpan.objects.select_related(
         'start_structure', 'end_structure',
         'start_location', 'end_location',
-    ).all()
+    ).annotate(cables_routed=Count('cable_segments'))
     serializer_class = AerialSpanGeoSerializer
     filterset_class = filters.AerialSpanFilterSet
 
@@ -197,6 +186,6 @@ class DirectBuriedGeoViewSet(ReadOnlyModelViewSet):
     queryset = models.DirectBuried.objects.select_related(
         'start_structure', 'end_structure',
         'start_location', 'end_location',
-    ).all()
+    ).annotate(cables_routed=Count('cable_segments'))
     serializer_class = DirectBuriedGeoSerializer
     filterset_class = filters.DirectBuriedFilterSet

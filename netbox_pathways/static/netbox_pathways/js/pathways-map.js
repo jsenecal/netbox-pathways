@@ -4,6 +4,12 @@ let pathwaysLayer;
 let structuresVisible = true;
 let pathwaysVisible = true;
 
+function _esc(text) {
+    var el = document.createElement('span');
+    el.textContent = text;
+    return el.innerHTML;
+}
+
 const structureColors = {
     'Pole': 'green',
     'Manhole': 'blue',
@@ -73,12 +79,12 @@ function addStructuresToMap(structures) {
 
         var popupContent =
             '<div class="pathways-popup">' +
-            '<h5>' + structure.properties.name + '</h5>' +
+            '<h5>' + _esc(structure.properties.name) + '</h5>' +
             '<table class="table table-sm">' +
-            '<tr><td><strong>Type:</strong></td><td>' + structure.properties.type + '</td></tr>' +
-            '<tr><td><strong>Site:</strong></td><td>' + structure.properties.site + '</td></tr>' +
+            '<tr><td><strong>Type:</strong></td><td>' + _esc(structure.properties.type) + '</td></tr>' +
+            '<tr><td><strong>Site:</strong></td><td>' + _esc(structure.properties.site) + '</td></tr>' +
             '</table>' +
-            '<a href="' + structure.properties.url + '" class="btn btn-sm btn-primary">View Details</a>' +
+            '<a href="' + _esc(structure.properties.url) + '" class="btn btn-sm btn-primary">View Details</a>' +
             '</div>';
 
         marker.bindPopup(popupContent);
@@ -101,18 +107,12 @@ function addPathwaysToMap(pathways) {
 
         var popupContent =
             '<div class="pathways-popup">' +
-            '<h5>' + pathway.properties.name + '</h5>' +
+            '<h5>' + _esc(pathway.properties.name) + '</h5>' +
             '<table class="table table-sm">' +
-            '<tr><td><strong>Type:</strong></td><td>' + pathway.properties.pathway_type + '</td></tr>' +
-            '<tr><td><strong>Utilization:</strong></td><td>' + pathway.properties.utilization.toFixed(1) + '%</td></tr>' +
+            '<tr><td><strong>Type:</strong></td><td>' + _esc(pathway.properties.pathway_type) + '</td></tr>' +
+            '<tr><td><strong>Cables:</strong></td><td>' + (pathway.properties.cables_routed || 0) + '</td></tr>' +
             '</table>' +
-            '<div class="progress mb-2">' +
-            '<div class="progress-bar" role="progressbar" ' +
-            'style="width: ' + pathway.properties.utilization + '%" ' +
-            'aria-valuenow="' + pathway.properties.utilization + '" ' +
-            'aria-valuemin="0" aria-valuemax="100"></div>' +
-            '</div>' +
-            '<a href="' + pathway.properties.url + '" class="btn btn-sm btn-primary">View Details</a>' +
+            '<a href="' + _esc(pathway.properties.url) + '" class="btn btn-sm btn-primary">View Details</a>' +
             '</div>';
 
         polyline.bindPopup(popupContent);

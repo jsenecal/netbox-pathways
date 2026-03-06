@@ -90,8 +90,6 @@ class Pathway(NetBoxModel):
         Location, on_delete=models.SET_NULL, null=True, blank=True, related_name='pathways_in',
     )
     length = models.FloatField(null=True, blank=True, help_text="Total length in meters")
-    cable_count = models.PositiveIntegerField(default=0, help_text="Number of cables currently in pathway")
-    max_cable_count = models.PositiveIntegerField(default=1, help_text="Maximum number of cables")
     installation_date = models.DateField(null=True, blank=True)
     comments = models.TextField(blank=True)
 
@@ -120,12 +118,6 @@ class Pathway(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse('plugins:netbox_pathways:pathway', args=[self.pk])
-
-    @property
-    def utilization_percentage(self):
-        if self.max_cable_count == 0:
-            return 0
-        return (self.cable_count / self.max_cable_count) * 100
 
     def save(self, *args, **kwargs):
         if not self.pathway_type:
