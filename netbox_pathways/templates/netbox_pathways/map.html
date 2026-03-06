@@ -1,0 +1,79 @@
+{% extends 'netbox_pathways/base.html' %}
+{% load static %}
+
+{% block pathways_content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Infrastructure Map</h3>
+        <div class="card-actions">
+            <button id="toggle-structures" class="btn btn-sm btn-primary">Toggle Structures</button>
+            <button id="toggle-pathways" class="btn btn-sm btn-primary">Toggle Pathways</button>
+            <button id="reset-view" class="btn btn-sm btn-secondary">Reset View</button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div id="pathways-map" style="height: 600px;"></div>
+    </div>
+    <div class="card-footer">
+        <div class="row">
+            <div class="col-md-4">
+                <strong>Structures:</strong> <span id="structure-count">0</span>
+            </div>
+            <div class="col-md-4">
+                <strong>Pathways:</strong> <span id="pathway-count">0</span>
+            </div>
+            <div class="col-md-4">
+                <strong>Total Length:</strong> <span id="total-length">0</span> km
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">
+        <h4 class="card-title">Legend</h4>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h5>Structure Types</h5>
+                <ul class="list-unstyled">
+                    <li><span class="badge bg-success">&bull;</span> Pole</li>
+                    <li><span class="badge bg-primary">&bull;</span> Manhole</li>
+                    <li><span class="badge bg-info">&bull;</span> Handhole</li>
+                    <li><span class="badge bg-warning">&bull;</span> Cabinet</li>
+                    <li><span class="badge bg-danger">&bull;</span> Building Entrance</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h5>Pathway Types</h5>
+                <ul class="list-unstyled">
+                    <li><span style="color: brown;">&#9473;&#9473;&#9473;</span> Conduit</li>
+                    <li><span style="color: blue;">&#9473;&#9473;&#9473;</span> Aerial</li>
+                    <li><span style="color: gray;">&#9473;&#9473;&#9473;</span> Direct Buried</li>
+                    <li><span style="color: orange;">&#9473;&#9473;&#9473;</span> Innerduct</li>
+                    <li><span style="color: green;">&#9473;&#9473;&#9473;</span> Cable Tray</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block pathways_javascript %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="{% static 'netbox_pathways/js/pathways-map.js' %}"></script>
+<script>
+    const mapConfig = {
+        center: [{{ map_center_lat }}, {{ map_center_lon }}],
+        zoom: {{ map_zoom }},
+        structures: {{ structures_geojson|safe|default:"[]" }},
+        pathways: {{ pathways_geojson|safe|default:"[]" }}
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        initializePathwaysMap('pathways-map', mapConfig);
+    });
+</script>
+{% endblock %}
