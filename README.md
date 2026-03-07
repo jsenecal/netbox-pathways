@@ -11,6 +11,7 @@ A NetBox plugin for documenting physical cable plant infrastructure with PostGIS
 - **Pull Sheets** — Printable cable routing documents for field crews
 - **GeoJSON API** — Standard GeoJSON endpoints for QGIS and other GIS clients
 - **QGIS Integration** — Style files, project generator, and documentation
+- **Geometry Editing** — Draw and edit geometries directly in NetBox forms via Leaflet map widgets
 - **Interactive Map** — Built-in Leaflet map for quick visualization
 - **Indoor/Outdoor** — Pathways can terminate at structures (outdoor) or NetBox locations (indoor)
 
@@ -35,7 +36,10 @@ PLUGINS = ['netbox_pathways']
 
 PLUGINS_CONFIG = {
     'netbox_pathways': {
-        'srid': 3348,  # REQUIRED — your spatial reference system ID (EPSG code)
+        'srid': 3348,           # REQUIRED — your EPSG code (see warning below)
+        'map_center_lat': 45.5, # default map center latitude (optional)
+        'map_center_lon': -73.5,# default map center longitude (optional)
+        'map_zoom': 10,         # default map zoom level (optional)
     }
 }
 ```

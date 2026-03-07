@@ -1,5 +1,6 @@
 from dcim.models import Cable, Location, Site
 from django import forms
+from leaflet.forms.widgets import LeafletWidget
 from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelForm, NetBoxModelImportForm
 from utilities.forms.fields import CSVModelChoiceField, DynamicModelChoiceField
 
@@ -36,7 +37,7 @@ class StructureForm(NetBoxModelForm):
             'installation_date', 'owner', 'access_notes', 'comments', 'tags',
         ]
         widgets = {
-            'location': forms.HiddenInput(),
+            'location': LeafletWidget(),
         }
 
 
@@ -79,7 +80,7 @@ class PathwayForm(NetBoxModelForm):
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': forms.HiddenInput(),
+            'path': LeafletWidget(),
         }
 
 
@@ -105,7 +106,7 @@ class ConduitForm(NetBoxModelForm):
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': forms.HiddenInput(),
+            'path': LeafletWidget(),
         }
 
 
@@ -154,7 +155,7 @@ class AerialSpanForm(NetBoxModelForm):
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': forms.HiddenInput(),
+            'path': LeafletWidget(),
         }
 
 
@@ -204,7 +205,7 @@ class DirectBuriedForm(NetBoxModelForm):
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': forms.HiddenInput(),
+            'path': LeafletWidget(),
         }
 
 
@@ -238,7 +239,7 @@ class InnerductForm(NetBoxModelForm):
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': forms.HiddenInput(),
+            'path': LeafletWidget(),
         }
 
 
@@ -312,9 +313,9 @@ class CableSegmentForm(NetBoxModelForm):
             'comments', 'tags',
         ]
         widgets = {
-            'enter_point': forms.HiddenInput(),
-            'exit_point': forms.HiddenInput(),
-            'slack_loop_location': forms.HiddenInput(),
+            'enter_point': LeafletWidget(),
+            'exit_point': LeafletWidget(),
+            'slack_loop_location': LeafletWidget(),
         }
 
 
@@ -349,3 +350,6 @@ class SiteGeometryForm(NetBoxModelForm):
     class Meta:
         model = SiteGeometry
         fields = ['site', 'structure', 'geometry', 'comments', 'tags']
+        widgets = {
+            'geometry': LeafletWidget(),
+        }
