@@ -92,6 +92,21 @@ menu_items = (
         ),
     ),
     PluginMenuItem(
+        link='plugins:netbox_pathways:route_finder',
+        link_text='Route Finder',
+        permissions=['netbox_pathways.view_pathway'],
+    ),
+    PluginMenuItem(
+        link='plugins:netbox_pathways:cable_trace',
+        link_text='Cable Trace',
+        permissions=['netbox_pathways.view_cablesegment'],
+    ),
+    PluginMenuItem(
+        link='plugins:netbox_pathways:neighbors',
+        link_text='Neighbors',
+        permissions=['netbox_pathways.view_structure'],
+    ),
+    PluginMenuItem(
         link='plugins:netbox_pathways:pullsheet_list',
         link_text='Pull Sheets',
         permissions=['netbox_pathways.view_cablesegment'],

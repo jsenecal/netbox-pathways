@@ -1,0 +1,136 @@
+{% extends 'base/layout.html' %}
+{% load static %}
+
+{% block title %}Cable Trace{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header">
+        <h3 class="card-title">Cable Trace</h3>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-8">
+                <label class="form-label">Cable</label>
+                <select name="cable" class="form-select">
+                    <option value="">---------</option>
+                    {% for c in cables %}
+                    <option value="{{ c.pk }}" {% if c.pk == cable_id %}selected{% endif %}>{{ c }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Trace</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if segments is not None %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4 class="card-title">
+                    Physical Route: {{ cable }}
+                    <span class="badge bg-secondary">{{ segments|length }} segment{{ segments|length|pluralize }}</span>
+                    <span class="badge bg-info">{{ total_length|floatformat:1 }} m</span>
+                </h4>
+            </div>
+            <div class="card-body p-0">
+                {% if segments %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Seq</th>
+                                <th>Pathway</th>
+                                <th>Type</th>
+                                <th>From</th>
+                                <th>To</th>
+                                <th>Length</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for seg in segments %}
+                            <tr>
+                                <td>{{ seg.sequence }}</td>
+                                <td>
+                                    {% if seg.pathway_url %}
+                                    <a href="{{ seg.pathway_url }}">{{ seg.pathway_name }}</a>
+                                    {% else %}
+                                    <span class="text-muted">Unknown</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ seg.pathway_type|default:"-" }}</td>
+                                <td>{{ seg.start_name|default:"-" }}</td>
+                                <td>{{ seg.end_name|default:"-" }}</td>
+                                <td>{% if seg.length %}{{ seg.length|floatformat:1 }} m{% else %}-{% endif %}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-3 text-muted">No pathway segments found for this cable.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="card-title mb-0">Map</h4>
+                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#trace-map-modal" title="Expand">
+                    <i class="mdi mdi-arrow-expand-all"></i>
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div id="trace-map" style="height: 500px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Fullscreen modal -->
+<div class="modal fade" id="trace-map-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Cable Trace: {{ cable }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="trace-map-expanded" style="height: 100%;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block javascript %}
+{{ block.super }}
+{% if geo_data %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="{% static 'netbox_pathways/js/detail-map.js' %}"></script>
+{{ geo_data|json_script:"trace-geo-data" }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var data = JSON.parse(document.getElementById('trace-geo-data').textContent);
+    initGeoMap('trace-map', data);
+
+    var modalEl = document.getElementById('trace-map-modal');
+    modalEl.addEventListener('shown.bs.modal', function() {
+        var expanded = document.getElementById('trace-map-expanded');
+        if (expanded._leafletMap) {
+            expanded._leafletMap.invalidateSize();
+        } else {
+            initGeoMap('trace-map-expanded', data);
+        }
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

@@ -1,3 +1,5 @@
+from django.urls import path
+
 from netbox.api.routers import NetBoxRouter
 
 from . import views
@@ -8,6 +10,7 @@ from .geo import (
     PathwayGeoViewSet,
     StructureGeoViewSet,
 )
+from .traversal import CableTraceView, NeighborsView, RouteFinderView
 
 router = NetBoxRouter()
 router.register('structures', views.StructureViewSet)
@@ -28,4 +31,9 @@ router.register('geo/conduits', ConduitGeoViewSet, basename='geo-conduit')
 router.register('geo/aerial-spans', AerialSpanGeoViewSet, basename='geo-aerialspan')
 router.register('geo/direct-buried', DirectBuriedGeoViewSet, basename='geo-directburied')
 
-urlpatterns = router.urls
+urlpatterns = router.urls + [
+    # Graph traversal endpoints
+    path('traversal/routes/', RouteFinderView.as_view(), name='traversal-routes'),
+    path('traversal/cable-trace/', CableTraceView.as_view(), name='traversal-cable-trace'),
+    path('traversal/neighbors/', NeighborsView.as_view(), name='traversal-neighbors'),
+]

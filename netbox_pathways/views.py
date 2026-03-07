@@ -10,6 +10,7 @@ from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filters, forms, models, tables
+from .graph import PathwayGraph, node_to_geo, node_to_label, trace_cable
 from .ui import panels
 
 # --- Structure ---
@@ -606,3 +607,246 @@ class PullSheetDetailView(LoginRequiredMixin, View):
             'total_pathway_length': totals['total_pathway_length'] or 0,
             'total_slack': totals['total_slack'] or 0,
         })
+
+
+# --- Graph Traversal Views ---
+
+class RouteFinderView(LoginRequiredMixin, View):
+    """UI for finding routes between two structures."""
+
+    def get(self, request):
+        start_id = request.GET.get('start')
+        end_id = request.GET.get('end')
+        mode = request.GET.get('mode', 'shortest')
+        site_id = request.GET.get('site')
+
+        context = {
+            'structures': models.Structure.objects.order_by('name'),
+            'start_id': None,
+            'end_id': None,
+            'mode': mode,
+            'routes': None,
+            'geo_data': None,
+        }
+
+        if not start_id or not end_id:
+            return render(request, 'netbox_pathways/route_finder.html', context)
+
+        try:
+            start_id = int(start_id)
+            end_id = int(end_id)
+        except (TypeError, ValueError):
+            return render(request, 'netbox_pathways/route_finder.html', context)
+
+        context['start_id'] = start_id
+        context['end_id'] = end_id
+
+        site_id_int = None
+        if site_id:
+            try:
+                site_id_int = int(site_id)
+            except (TypeError, ValueError):
+                pass
+
+        graph = PathwayGraph.build(site_id=site_id_int)
+        start_node = ('structure', start_id)
+        end_node = ('structure', end_id)
+
+        routes = []
+        if mode == 'all':
+            raw_routes = graph.all_routes(start_node, end_node, max_depth=20, max_routes=10)
+            for cost, pw_ids in raw_routes:
+                routes.append({
+                    'total_length': round(cost, 2),
+                    'hop_count': len(pw_ids),
+                    'pathways': [graph.pathways[pid] for pid in pw_ids],
+                })
+        else:
+            result = graph.shortest_path(start_node, end_node)
+            if result:
+                cost, pw_ids = result
+                routes.append({
+                    'total_length': round(cost, 2),
+                    'hop_count': len(pw_ids),
+                    'pathways': [graph.pathways[pid] for pid in pw_ids],
+                })
+
+        context['routes'] = routes
+
+        # Build geo data for map
+        geo_data = {'points': [], 'lines': []}
+
+        # Start/end markers
+        start_geo = node_to_geo(start_node)
+        end_geo = node_to_geo(end_node)
+        if start_geo:
+            geo_data['points'].append({
+                'lat': start_geo[0], 'lon': start_geo[1],
+                'name': node_to_label(start_node), 'color': 'green',
+            })
+        if end_geo:
+            geo_data['points'].append({
+                'lat': end_geo[0], 'lon': end_geo[1],
+                'name': node_to_label(end_node), 'color': 'red',
+            })
+
+        # Show first (shortest) route on map
+        route_colors = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4',
+                        '#42d4f4', '#f032e6', '#bfef45', '#fabebe', '#469990']
+        for i, route in enumerate(routes):
+            color = route_colors[i % len(route_colors)]
+            for pw in route['pathways']:
+                if pw['coords']:
+                    geo_data['lines'].append({
+                        'coords': pw['coords'],
+                        'name': pw['name'],
+                        'color': color,
+                        'url': pw['url'],
+                    })
+
+        context['geo_data'] = geo_data
+        return render(request, 'netbox_pathways/route_finder.html', context)
+
+
+class CableTraceView(LoginRequiredMixin, View):
+    """UI for tracing a cable's physical route."""
+
+    def get(self, request):
+        cable_id = request.GET.get('cable')
+
+        context = {
+            'cables': Cable.objects.filter(
+                pathway_segments__isnull=False,
+            ).distinct().order_by('_name'),
+            'cable_id': None,
+            'segments': None,
+            'geo_data': None,
+        }
+
+        if not cable_id:
+            return render(request, 'netbox_pathways/cable_trace.html', context)
+
+        try:
+            cable_id = int(cable_id)
+        except (TypeError, ValueError):
+            return render(request, 'netbox_pathways/cable_trace.html', context)
+
+        context['cable_id'] = cable_id
+
+        cable = get_object_or_404(Cable, pk=cable_id)
+        context['cable'] = cable
+
+        segments = trace_cable(cable_id)
+        context['segments'] = segments
+        context['total_length'] = sum(s['length'] or 0 for s in segments)
+
+        # Build geo data
+        geo_data = {'points': [], 'lines': []}
+        segment_colors = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4',
+                          '#42d4f4', '#f032e6', '#bfef45', '#fabebe', '#469990']
+
+        for i, seg in enumerate(segments):
+            color = segment_colors[i % len(segment_colors)]
+            if seg['coords']:
+                geo_data['lines'].append({
+                    'coords': seg['coords'],
+                    'name': f"Seg {seg['sequence']}: {seg['pathway_name'] or 'Unknown'}",
+                    'color': color,
+                    'url': seg['pathway_url'],
+                })
+
+        context['geo_data'] = geo_data
+        return render(request, 'netbox_pathways/cable_trace.html', context)
+
+
+class NeighborsView(LoginRequiredMixin, View):
+    """UI for exploring structure connectivity / neighbors."""
+
+    def get(self, request):
+        structure_id = request.GET.get('structure')
+        max_hops = request.GET.get('max_hops', '3')
+        site_id = request.GET.get('site')
+
+        try:
+            max_hops = min(int(max_hops), 10)
+        except (TypeError, ValueError):
+            max_hops = 3
+
+        context = {
+            'structures': models.Structure.objects.order_by('name'),
+            'structure_id': None,
+            'max_hops': max_hops,
+            'neighbors': None,
+            'geo_data': None,
+        }
+
+        if not structure_id:
+            return render(request, 'netbox_pathways/neighbors.html', context)
+
+        try:
+            structure_id = int(structure_id)
+        except (TypeError, ValueError):
+            return render(request, 'netbox_pathways/neighbors.html', context)
+
+        context['structure_id'] = structure_id
+
+        site_id_int = None
+        if site_id:
+            try:
+                site_id_int = int(site_id)
+            except (TypeError, ValueError):
+                pass
+
+        graph = PathwayGraph.build(site_id=site_id_int)
+        start_node = ('structure', structure_id)
+        raw_neighbors = graph.neighbors(start_node, max_hops=max_hops)
+
+        neighbor_list = []
+        for node, (dist, hops, pw_ids) in sorted(raw_neighbors.items(), key=lambda x: x[1][1]):
+            geo = node_to_geo(node)
+            neighbor_list.append({
+                'type': node[0],
+                'id': node[1],
+                'label': node_to_label(node),
+                'distance': round(dist, 2),
+                'hops': hops,
+                'lat': geo[0] if geo else None,
+                'lon': geo[1] if geo else None,
+            })
+
+        context['neighbors'] = neighbor_list
+
+        # Build geo data
+        geo_data = {'points': [], 'lines': []}
+
+        # Origin marker
+        origin_geo = node_to_geo(start_node)
+        if origin_geo:
+            geo_data['points'].append({
+                'lat': origin_geo[0], 'lon': origin_geo[1],
+                'name': node_to_label(start_node), 'color': 'red',
+            })
+
+        # Neighbor markers
+        hop_colors = ['green', 'blue', 'orange', 'purple', 'cyan',
+                      'pink', 'brown', 'gray', 'teal', 'indigo']
+        for n in neighbor_list:
+            if n['lat'] is not None:
+                geo_data['points'].append({
+                    'lat': n['lat'], 'lon': n['lon'],
+                    'name': n['label'],
+                    'color': hop_colors[(n['hops'] - 1) % len(hop_colors)],
+                })
+
+        # All pathways in the graph as context lines
+        for pw_data in graph.pathways.values():
+            if pw_data['coords']:
+                geo_data['lines'].append({
+                    'coords': pw_data['coords'],
+                    'name': pw_data['name'],
+                    'color': '#999',
+                    'url': pw_data['url'],
+                })
+
+        context['geo_data'] = geo_data
+        return render(request, 'netbox_pathways/neighbors.html', context)
