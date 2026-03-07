@@ -10,6 +10,7 @@ from .models import (
     DirectBuried,
     Innerduct,
     PathwayLocation,
+    SiteGeometry,
     Structure,
 )
 
@@ -81,3 +82,10 @@ class CableSegmentAdmin(GISModelAdmin):
     list_filter = ['pathway']
     search_fields = ['cable__label']
     ordering = ['cable', 'sequence']
+
+
+@admin.register(SiteGeometry)
+class SiteGeometryAdmin(GISModelAdmin):
+    list_display = ['site']
+    search_fields = ['site__name']
+    ordering = ['site']

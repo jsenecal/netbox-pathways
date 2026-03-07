@@ -4,7 +4,7 @@ A NetBox plugin for documenting physical cable plant infrastructure with PostGIS
 
 ## Features
 
-- **Structures** — Poles, manholes, cabinets, equipment rooms, and more with PostGIS point geometry
+- **Structures** — Poles, manholes, cabinets, equipment rooms, and more with PostGIS geometry (point or polygon)
 - **Pathways** — Conduits, aerial spans, direct buried, innerducts, cable trays with PostGIS line geometry
 - **Conduit Banks & Junctions** — Model conduit bank configurations and mid-span Y-tees
 - **Cable Routing** — Track which NetBox cables traverse which pathways, in sequence
@@ -32,7 +32,34 @@ Add to your NetBox `configuration.py`:
 
 ```python
 PLUGINS = ['netbox_pathways']
+
+PLUGINS_CONFIG = {
+    'netbox_pathways': {
+        'srid': 3348,  # REQUIRED — your spatial reference system ID (EPSG code)
+    }
+}
 ```
+
+> **⚠️ WARNING: SRID IS IMMUTABLE AFTER INSTALLATION ⚠️**
+>
+> The `srid` setting defines the coordinate reference system used for **all** geometry
+> columns in the database. It is baked into the database schema at migration time.
+>
+> **Changing the SRID after data has been loaded WILL CORRUPT YOUR SPATIAL DATA.**
+> PostgreSQL/PostGIS does NOT automatically re-project existing coordinates when the
+> column SRID changes. Your geometries will have wrong coordinates in the new CRS
+> with no way to recover them automatically.
+>
+> **Choose your SRID carefully before first deployment.** Common choices:
+> - `4326` — WGS84, GPS coordinates (degrees). Global, but distorts distances/areas.
+> - `3857` — Web Mercator (meters). Used by Google Maps, OSM tiles.
+> - `3348` — NAD83(CSRS) / Statistics Canada Lambert (meters). Good for Canada.
+> - `2154` — RGF93 / Lambert-93 (meters). Good for France.
+> - `32632` — WGS84 / UTM zone 32N (meters). Good for central Europe.
+>
+> If you need to change SRID after deployment, you must manually re-project all
+> geometry data using PostGIS `ST_Transform()` and update the column SRID definitions.
+> This is an advanced DBA operation — back up everything first.
 
 Run migrations and restart:
 

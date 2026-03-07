@@ -91,3 +91,12 @@ class CableSegmentIndex(SearchIndex):
         ('comments', 5000),
     )
     display_attrs = ('cable', 'pathway', 'sequence')
+
+
+@register_search
+class SiteGeometryIndex(SearchIndex):
+    model = models.SiteGeometry
+    fields = (
+        ('comments', 5000),
+    )
+    display_attrs = ('site', 'structure')

@@ -11,7 +11,7 @@ class NetBoxPathwaysConfig(PluginConfig):
     author = 'Jonathan Senecal'
     author_email = 'contact@jonathansenecal.com'
     base_url = 'pathways'
-    required_settings = []
+    required_settings = ['srid']
     default_settings = {
         'map_center_lat': 45.5017,
         'map_center_lon': -73.5673,

@@ -13,13 +13,17 @@ from .choices import (
     PathwayTypeChoices,
     StructureTypeChoices,
 )
+from .geo import get_srid
 
 
 class Structure(NetBoxModel):
     name = models.CharField(max_length=100, unique=True)
     structure_type = models.CharField(max_length=50, choices=StructureTypeChoices, blank=True)
     site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='pathways_structures')
-    location = models.PointField(srid=4326, help_text="Geographic location (WGS84)")
+    location = models.GeometryField(
+        srid=get_srid(),
+        help_text="Geographic geometry (point for simple structures, polygon for footprints)",
+    )
     elevation = models.FloatField(null=True, blank=True, help_text="Elevation in meters")
     installation_date = models.DateField(null=True, blank=True)
     owner = models.CharField(max_length=100, blank=True, help_text="Structure owner/operator")
@@ -33,6 +37,15 @@ class Structure(NetBoxModel):
             models.Index(fields=['site']),
         ]
 
+    @property
+    def centroid(self):
+        """Return the centroid point regardless of geometry type."""
+        if self.location is None:
+            return None
+        if self.location.geom_type == 'Point':
+            return self.location
+        return self.location.centroid
+
     def __str__(self):
         if self.structure_type:
             return f"{self.name} ({self.get_structure_type_display()})"
@@ -40,6 +53,55 @@ class Structure(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse('plugins:netbox_pathways:structure', args=[self.pk])
+
+
+class SiteGeometry(NetBoxModel):
+    """
+    Links a NetBox Site to pathways infrastructure.
+
+    Optionally associates a Structure (the Site IS this Structure), and
+    provides a geometry field for the site boundary/footprint.  When a
+    structure is linked and no explicit geometry is set, the geometry is
+    copied from the structure on save.
+    """
+    site = models.OneToOneField(
+        Site, on_delete=models.CASCADE, related_name='pathways_geometry',
+    )
+    structure = models.OneToOneField(
+        'Structure', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='site_geometry',
+        help_text="Structure that physically represents this site",
+    )
+    geometry = models.GeometryField(
+        srid=get_srid(), null=True, blank=True,
+        help_text="Site boundary or footprint — auto-populated from structure if blank",
+    )
+    comments = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['site']
+        verbose_name = 'Site Geometry'
+        verbose_name_plural = 'Site Geometries'
+
+    @property
+    def effective_geometry(self):
+        """Return explicit geometry, or fall back to linked structure's geometry."""
+        if self.geometry:
+            return self.geometry
+        if self.structure_id and self.structure.location:
+            return self.structure.location
+        return None
+
+    def __str__(self):
+        return f"Geometry: {self.site.name}"
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_pathways:sitegeometry', args=[self.pk])
+
+    def save(self, *args, **kwargs):
+        if self.structure_id and not self.geometry:
+            self.geometry = self.structure.location
+        super().save(*args, **kwargs)
 
 
 class ConduitBank(NetBoxModel):
@@ -76,7 +138,7 @@ class ConduitBank(NetBoxModel):
 class Pathway(NetBoxModel):
     name = models.CharField(max_length=100, unique=True)
     pathway_type = models.CharField(max_length=50, choices=PathwayTypeChoices, editable=False)
-    path = models.LineStringField(srid=4326, help_text="Geographic path")
+    path = models.LineStringField(srid=get_srid(), help_text="Geographic path")
     start_structure = models.ForeignKey(
         Structure, on_delete=models.PROTECT, null=True, blank=True, related_name='pathways_out',
     )
@@ -319,10 +381,10 @@ class CableSegment(NetBoxModel):
         Pathway, on_delete=models.SET_NULL, null=True, blank=True, related_name='cable_segments',
     )
     sequence = models.PositiveIntegerField(default=0, help_text="Order of segment in cable path")
-    enter_point = models.PointField(srid=4326, null=True, blank=True, help_text="Entry point to pathway")
-    exit_point = models.PointField(srid=4326, null=True, blank=True, help_text="Exit point from pathway")
+    enter_point = models.PointField(srid=get_srid(), null=True, blank=True, help_text="Entry point to pathway")
+    exit_point = models.PointField(srid=get_srid(), null=True, blank=True, help_text="Exit point from pathway")
     slack_loop_location = models.PointField(
-        srid=4326, null=True, blank=True, help_text="Location of slack loop if present",
+        srid=get_srid(), null=True, blank=True, help_text="Location of slack loop if present",
     )
     slack_length = models.FloatField(default=0, help_text="Length of slack in meters")
     comments = models.TextField(blank=True)

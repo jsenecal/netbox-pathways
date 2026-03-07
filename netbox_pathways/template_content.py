@@ -3,6 +3,7 @@ from django.templatetags.static import static
 from netbox.plugins.templates import PluginTemplateExtension
 
 from . import models
+from .geo import linestring_to_coords, point_to_latlon
 
 LEAFLET_HEAD = (
     '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />\n'
@@ -42,7 +43,7 @@ def _pathway_line(pathway):
     if not pathway.path:
         return None
     return {
-        'coords': [[p[0], p[1]] for p in pathway.path.coords],
+        'coords': linestring_to_coords(pathway.path),
         'name': pathway.name,
         'color': PATHWAY_COLORS.get(pathway.pathway_type, 'gray'),
         'url': pathway.get_absolute_url(),
@@ -51,11 +52,12 @@ def _pathway_line(pathway):
 
 def _structure_point(structure, color=None):
     """Build a point dict from a Structure instance."""
-    if not structure.location:
+    latlon = point_to_latlon(structure.centroid)
+    if latlon is None:
         return None
     return {
-        'lat': structure.location.y,
-        'lon': structure.location.x,
+        'lat': latlon[0],
+        'lon': latlon[1],
         'name': structure.name,
         'color': color or STRUCTURE_COLORS.get(structure.structure_type, 'gray'),
         'url': structure.get_absolute_url(),
@@ -130,20 +132,24 @@ class PluginModelMapExtension(PluginTemplateExtension):
             if line:
                 data['lines'].append(line)
             # Start/end structure markers
-            if obj.start_structure_id and obj.start_structure.location:
-                data['points'].append({
-                    'lat': obj.start_structure.location.y,
-                    'lon': obj.start_structure.location.x,
-                    'name': str(obj.start_structure),
-                    'color': 'green',
-                })
-            if obj.end_structure_id and obj.end_structure.location:
-                data['points'].append({
-                    'lat': obj.end_structure.location.y,
-                    'lon': obj.end_structure.location.x,
-                    'name': str(obj.end_structure),
-                    'color': 'red',
-                })
+            if obj.start_structure_id:
+                latlon = point_to_latlon(obj.start_structure.centroid)
+                if latlon:
+                    data['points'].append({
+                        'lat': latlon[0],
+                        'lon': latlon[1],
+                        'name': str(obj.start_structure),
+                        'color': 'green',
+                    })
+            if obj.end_structure_id:
+                latlon = point_to_latlon(obj.end_structure.centroid)
+                if latlon:
+                    data['points'].append({
+                        'lat': latlon[0],
+                        'lon': latlon[1],
+                        'name': str(obj.end_structure),
+                        'color': 'red',
+                    })
 
         if not data['points'] and not data['lines']:
             return None
@@ -178,6 +184,26 @@ class CoreModelMapExtension(PluginTemplateExtension):
         data = {'points': [], 'lines': []}
 
         if isinstance(obj, Site):
+            # Show site boundary if present
+            try:
+                site_geo = models.SiteGeometry.objects.select_related('structure').get(site=obj)
+                geom = site_geo.effective_geometry
+                if geom:
+                    from .geo import to_leaflet
+                    geom = to_leaflet(geom)
+                    if geom and geom.geom_type in ('Polygon', 'MultiPolygon'):
+                        if geom.geom_type == 'Polygon':
+                            coords = [[p[0], p[1]] for p in geom.exterior_ring.coords]
+                        else:
+                            coords = [[p[0], p[1]] for p in geom[0].exterior_ring.coords]
+                        data['lines'].append({
+                            'coords': coords,
+                            'name': f'Site boundary: {obj.name}',
+                            'color': '#333',
+                        })
+            except models.SiteGeometry.DoesNotExist:
+                pass
+
             for s in models.Structure.objects.filter(site=obj).only(
                 'name', 'structure_type', 'location',
             )[:500]:
@@ -210,10 +236,14 @@ class CoreModelMapExtension(PluginTemplateExtension):
                 if line:
                     data['lines'].append(line)
                 # Also show endpoint structures
-                if p.start_structure_id and p.start_structure.location:
-                    data['points'].append(_structure_point(p.start_structure))
-                if p.end_structure_id and p.end_structure.location:
-                    data['points'].append(_structure_point(p.end_structure))
+                if p.start_structure_id:
+                    pt = _structure_point(p.start_structure)
+                    if pt:
+                        data['points'].append(pt)
+                if p.end_structure_id:
+                    pt = _structure_point(p.end_structure)
+                    if pt:
+                        data['points'].append(pt)
 
         if not data['points'] and not data['lines']:
             return None

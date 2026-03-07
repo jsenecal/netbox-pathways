@@ -76,3 +76,9 @@ class CableSegmentViewSet(NetBoxModelViewSet):
     queryset = models.CableSegment.objects.select_related('cable', 'pathway')
     serializer_class = serializers.CableSegmentSerializer
     filterset_class = filters.CableSegmentFilterSet
+
+
+class SiteGeometryViewSet(NetBoxModelViewSet):
+    queryset = models.SiteGeometry.objects.select_related('site', 'structure')
+    serializer_class = serializers.SiteGeometrySerializer
+    filterset_class = filters.SiteGeometryFilterSet

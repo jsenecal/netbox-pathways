@@ -21,6 +21,7 @@ from .models import (
     Innerduct,
     Pathway,
     PathwayLocation,
+    SiteGeometry,
     Structure,
 )
 
@@ -279,3 +280,21 @@ class PathwayLocationFilterSet(NetBoxModelFilterSet):
         if not value.strip():
             return queryset
         return queryset.filter(Q(comments__icontains=value))
+
+
+class SiteGeometryFilterSet(NetBoxModelFilterSet):
+    site_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='site', queryset=Site.objects.all(), label='Site (ID)',
+    )
+    structure_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='structure', queryset=Structure.objects.all(), label='Structure (ID)',
+    )
+
+    class Meta:
+        model = SiteGeometry
+        fields = ['id']
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(site__name__icontains=value))

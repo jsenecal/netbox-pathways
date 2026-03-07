@@ -84,6 +84,13 @@ urlpatterns = [
     path('cable-segments/<int:pk>/edit/', views.CableSegmentEditView.as_view(), name='cablesegment_edit'),
     path('cable-segments/<int:pk>/delete/', views.CableSegmentDeleteView.as_view(), name='cablesegment_delete'),
 
+    # Site Geometries
+    path('site-geometries/', views.SiteGeometryListView.as_view(), name='sitegeometry_list'),
+    path('site-geometries/add/', views.SiteGeometryEditView.as_view(), name='sitegeometry_add'),
+    path('site-geometries/<int:pk>/', views.SiteGeometryView.as_view(), name='sitegeometry'),
+    path('site-geometries/<int:pk>/edit/', views.SiteGeometryEditView.as_view(), name='sitegeometry_edit'),
+    path('site-geometries/<int:pk>/delete/', views.SiteGeometryDeleteView.as_view(), name='sitegeometry_delete'),
+
     # Pull Sheets
     path('pull-sheets/', views.PullSheetListView.as_view(), name='pullsheet_list'),
     path('pull-sheets/<int:cable_pk>/', views.PullSheetDetailView.as_view(), name='pullsheet_detail'),

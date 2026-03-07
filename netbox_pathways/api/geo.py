@@ -3,6 +3,9 @@ GeoJSON API endpoints for QGIS and other GIS client consumption.
 
 Uses djangorestframework-gis GeoFeatureModelSerializer to produce
 standard GeoJSON FeatureCollections from the existing models.
+
+Geometries are stored in the plugin's configured SRID and transformed
+to WGS84 (EPSG:4326) on output per GeoJSON RFC 7946.
 """
 
 from django.db.models import Count
@@ -11,10 +14,27 @@ from rest_framework.viewsets import ReadOnlyModelViewSet
 from rest_framework_gis.serializers import GeoFeatureModelSerializer
 
 from .. import filters, models
+from ..geo import LEAFLET_SRID, get_srid
+
+
+class Wgs84GeoFeatureModelSerializer(GeoFeatureModelSerializer):
+    """GeoFeatureModelSerializer that transforms geometry to WGS84 on output."""
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        if get_srid() != LEAFLET_SRID and rep.get('geometry'):
+            geo_field = self.Meta.geo_field
+            geom = getattr(instance, geo_field, None)
+            if geom is not None:
+                clone = geom.clone()
+                clone.transform(LEAFLET_SRID)
+                from rest_framework_gis.fields import GeometryField as GeoField
+                rep['geometry'] = GeoField().to_representation(clone)
+        return rep
 
 # --- GeoJSON Serializers ---
 
-class StructureGeoSerializer(GeoFeatureModelSerializer):
+class StructureGeoSerializer(Wgs84GeoFeatureModelSerializer):
     site_name = drf_serializers.CharField(source='site.name', read_only=True)
     structure_type_display = drf_serializers.CharField(
         source='get_structure_type_display', read_only=True,
@@ -30,7 +50,7 @@ class StructureGeoSerializer(GeoFeatureModelSerializer):
         ]
 
 
-class PathwayGeoSerializer(GeoFeatureModelSerializer):
+class PathwayGeoSerializer(Wgs84GeoFeatureModelSerializer):
     pathway_type_display = drf_serializers.CharField(
         source='get_pathway_type_display', read_only=True,
     )
@@ -58,7 +78,7 @@ class PathwayGeoSerializer(GeoFeatureModelSerializer):
         return str(ep) if ep else None
 
 
-class ConduitGeoSerializer(GeoFeatureModelSerializer):
+class ConduitGeoSerializer(Wgs84GeoFeatureModelSerializer):
     material_display = drf_serializers.CharField(
         source='get_material_display', read_only=True,
     )
@@ -91,7 +111,7 @@ class ConduitGeoSerializer(GeoFeatureModelSerializer):
         return str(ep) if ep else None
 
 
-class AerialSpanGeoSerializer(GeoFeatureModelSerializer):
+class AerialSpanGeoSerializer(Wgs84GeoFeatureModelSerializer):
     aerial_type_display = drf_serializers.CharField(
         source='get_aerial_type_display', read_only=True,
     )
@@ -120,7 +140,7 @@ class AerialSpanGeoSerializer(GeoFeatureModelSerializer):
         return str(ep) if ep else None
 
 
-class DirectBuriedGeoSerializer(GeoFeatureModelSerializer):
+class DirectBuriedGeoSerializer(Wgs84GeoFeatureModelSerializer):
     start_name = drf_serializers.SerializerMethodField()
     end_name = drf_serializers.SerializerMethodField()
     cables_routed = drf_serializers.IntegerField(read_only=True)

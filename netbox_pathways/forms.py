@@ -20,6 +20,7 @@ from .models import (
     Innerduct,
     Pathway,
     PathwayLocation,
+    SiteGeometry,
     Structure,
 )
 
@@ -337,3 +338,14 @@ class PathwayLocationForm(NetBoxModelForm):
         fields = [
             'pathway', 'site', 'location', 'sequence', 'comments', 'tags',
         ]
+
+
+# --- Site Geometry ---
+
+class SiteGeometryForm(NetBoxModelForm):
+    site = DynamicModelChoiceField(queryset=Site.objects.all())
+    structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
+
+    class Meta:
+        model = SiteGeometry
+        fields = ['site', 'structure', 'geometry', 'comments', 'tags']

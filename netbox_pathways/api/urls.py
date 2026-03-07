@@ -1,5 +1,4 @@
 from django.urls import path
-
 from netbox.api.routers import NetBoxRouter
 
 from . import views
@@ -23,6 +22,7 @@ router.register('innerducts', views.InnerductViewSet)
 router.register('junctions', views.ConduitJunctionViewSet)
 router.register('pathway-locations', views.PathwayLocationViewSet)
 router.register('cable-segments', views.CableSegmentViewSet)
+router.register('site-geometries', views.SiteGeometryViewSet)
 
 # GeoJSON endpoints for QGIS / GIS client consumption
 router.register('geo/structures', StructureGeoViewSet, basename='geo-structure')

@@ -11,6 +11,7 @@ from ..models import (
     Innerduct,
     Pathway,
     PathwayLocation,
+    SiteGeometry,
     Structure,
 )
 
@@ -186,3 +187,17 @@ class CableSegmentSerializer(NetBoxModelSerializer):
             'comments', 'tags', 'created', 'last_updated',
         ]
         brief_fields = ('id', 'url', 'display', 'cable', 'sequence')
+
+
+class SiteGeometrySerializer(NetBoxModelSerializer):
+    url = drf_serializers.HyperlinkedIdentityField(
+        view_name='plugins-api:netbox_pathways-api:sitegeometry-detail',
+    )
+
+    class Meta:
+        model = SiteGeometry
+        fields = [
+            'id', 'url', 'display', 'site', 'structure', 'geometry',
+            'comments', 'tags', 'created', 'last_updated',
+        ]
+        brief_fields = ('id', 'url', 'display', 'site')

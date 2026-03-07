@@ -8,9 +8,10 @@ Edges: Pathway instances connecting endpoints, weighted by length.
 import heapq
 from collections import defaultdict
 
-from django.db.models import Q, Subquery, OuterRef
+from django.db.models import OuterRef, Q, Subquery
 
 from . import models
+from .geo import linestring_to_coords, point_to_latlon
 
 
 def _endpoint_nodes(pathway):
@@ -80,7 +81,7 @@ class PathwayGraph:
                 continue
 
             weight = pw.length or 0
-            coords = [[p[0], p[1]] for p in pw.path.coords] if pw.path else []
+            coords = linestring_to_coords(pw.path)
 
             graph.pathways[pw.pk] = {
                 'id': pw.pk,
@@ -234,7 +235,7 @@ def trace_cable(cable_id):
             'end_name': str(pw.end_endpoint) if pw and pw.end_endpoint else None,
         }
         if pw and pw.path:
-            entry['coords'] = [[p[0], p[1]] for p in pw.path.coords]
+            entry['coords'] = linestring_to_coords(pw.path)
         result.append(entry)
 
     return result
@@ -263,21 +264,18 @@ def node_to_label(node):
 
 
 def node_to_geo(node):
-    """Return (lat, lon) for a node, or None."""
+    """Return (lat, lon) for a node in WGS84, or None."""
     kind, pk = node
     if kind == 'structure':
         try:
             s = models.Structure.objects.only('location').get(pk=pk)
-            if s.location:
-                return (s.location.y, s.location.x)
+            return point_to_latlon(s.centroid)
         except models.Structure.DoesNotExist:
             pass
     elif kind == 'junction':
         try:
             j = models.ConduitJunction.objects.select_related('trunk_conduit').get(pk=pk)
-            loc = j.location
-            if loc:
-                return (loc.y, loc.x)
+            return point_to_latlon(j.location)
         except models.ConduitJunction.DoesNotExist:
             pass
     return None

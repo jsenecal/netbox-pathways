@@ -12,6 +12,7 @@ from .models import (
     Innerduct,
     Pathway,
     PathwayLocation,
+    SiteGeometry,
     Structure,
 )
 
@@ -215,6 +216,17 @@ class PullSheetCableTable(NetBoxTable):
         model = Cable
         fields = ('pk', 'id', 'label', 'type', 'status', 'length', 'segment_count', 'pull_sheet')
         default_columns = ('label', 'type', 'status', 'length', 'segment_count', 'pull_sheet')
+
+
+class SiteGeometryTable(NetBoxTable):
+    site = tables.Column(linkify=True)
+    structure = tables.Column(linkify=True)
+    actions = columns.ActionsColumn(actions=('edit', 'delete'))
+
+    class Meta(NetBoxTable.Meta):
+        model = SiteGeometry
+        fields = ('pk', 'id', 'site', 'structure', 'actions')
+        default_columns = ('site', 'structure')
 
 
 class PathwayLocationTable(NetBoxTable):

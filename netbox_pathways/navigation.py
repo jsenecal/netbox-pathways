@@ -92,6 +92,20 @@ menu_items = (
         ),
     ),
     PluginMenuItem(
+        link='plugins:netbox_pathways:sitegeometry_list',
+        link_text='Site Geometries',
+        permissions=['netbox_pathways.view_sitegeometry'],
+        buttons=(
+            PluginMenuButton(
+                link='plugins:netbox_pathways:sitegeometry_add',
+                title='Add',
+                icon_class='mdi mdi-plus-thick',
+                color=ButtonColorChoices.GREEN,
+                permissions=['netbox_pathways.add_sitegeometry'],
+            ),
+        ),
+    ),
+    PluginMenuItem(
         link='plugins:netbox_pathways:route_finder',
         link_text='Route Finder',
         permissions=['netbox_pathways.view_pathway'],

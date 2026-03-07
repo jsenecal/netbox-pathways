@@ -10,6 +10,7 @@ from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filters, forms, models, tables
+from .geo import linestring_to_coords, point_to_latlon
 from .graph import PathwayGraph, node_to_geo, node_to_label, trace_cable
 from .ui import panels
 
@@ -488,6 +489,35 @@ class PathwayLocationDeleteView(generic.ObjectDeleteView):
     queryset = models.PathwayLocation.objects.all()
 
 
+# --- Site Geometry ---
+
+class SiteGeometryListView(generic.ObjectListView):
+    queryset = models.SiteGeometry.objects.select_related('site', 'structure')
+    table = tables.SiteGeometryTable
+    filterset = filters.SiteGeometryFilterSet
+
+
+class SiteGeometryView(generic.ObjectView):
+    queryset = models.SiteGeometry.objects.all()
+    layout = layout.SimpleLayout(
+        left_panels=[
+            panels.SiteGeometryPanel(),
+            TagsPanel(),
+            CustomFieldsPanel(),
+            CommentsPanel(),
+        ],
+    )
+
+
+class SiteGeometryEditView(generic.ObjectEditView):
+    queryset = models.SiteGeometry.objects.all()
+    form = forms.SiteGeometryForm
+
+
+class SiteGeometryDeleteView(generic.ObjectDeleteView):
+    queryset = models.SiteGeometry.objects.all()
+
+
 # --- Map View ---
 
 MAP_MAX_OBJECTS = 2000
@@ -517,12 +547,13 @@ class MapView(generic.ObjectListView):
 
         structures_geojson = []
         for structure in structures:
-            if structure.location:
+            latlon = point_to_latlon(structure.centroid)
+            if latlon:
                 structures_geojson.append({
                     'type': 'Feature',
                     'geometry': {
                         'type': 'Point',
-                        'coordinates': [structure.location.x, structure.location.y],
+                        'coordinates': [latlon[1], latlon[0]],
                     },
                     'properties': {
                         'id': structure.pk,
@@ -535,8 +566,8 @@ class MapView(generic.ObjectListView):
 
         pathways_geojson = []
         for pathway in pathways:
-            if pathway.path:
-                coords = [[point[0], point[1]] for point in pathway.path.coords]
+            coords = linestring_to_coords(pathway.path)
+            if coords:
                 pathways_geojson.append({
                     'type': 'Feature',
                     'geometry': {
@@ -802,7 +833,7 @@ class NeighborsView(LoginRequiredMixin, View):
         raw_neighbors = graph.neighbors(start_node, max_hops=max_hops)
 
         neighbor_list = []
-        for node, (dist, hops, pw_ids) in sorted(raw_neighbors.items(), key=lambda x: x[1][1]):
+        for node, (dist, hops, _pw_ids) in sorted(raw_neighbors.items(), key=lambda x: x[1][1]):
             geo = node_to_geo(node)
             neighbor_list.append({
                 'type': node[0],
