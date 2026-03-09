@@ -17,6 +17,9 @@ class NetBoxPathwaysConfig(PluginConfig):
         'map_center_lon': -73.5673,
         'map_zoom': 10,
         'map_tiles': 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'map_max_native_zoom': 19,
+        'map_attribution': '&copy; OpenStreetMap contributors',
+        'map_overlays': [],
     }
     django_apps = [
         'django.contrib.gis',
@@ -25,21 +28,48 @@ class NetBoxPathwaysConfig(PluginConfig):
     ]
 
     def ready(self):
+        import leaflet as leaflet_mod
         from django.conf import settings
 
         plugin_cfg = settings.PLUGINS_CONFIG.get('netbox_pathways', {})
-        leaflet_config = getattr(settings, 'LEAFLET_CONFIG', {})
 
-        leaflet_config.setdefault('DEFAULT_CENTER', (
+        center = (
             plugin_cfg.get('map_center_lat', 45.5017),
             plugin_cfg.get('map_center_lon', -73.5673),
-        ))
-        leaflet_config.setdefault('DEFAULT_ZOOM', plugin_cfg.get('map_zoom', 10))
-        leaflet_config.setdefault('TILES', plugin_cfg.get('map_tiles',
-            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'))
-        leaflet_config.setdefault('SRID', 4326)
+        )
+        zoom = plugin_cfg.get('map_zoom', 10)
+        tiles_url = plugin_cfg.get('map_tiles',
+            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+        max_native_zoom = plugin_cfg.get('map_max_native_zoom', 19)
+        attribution = plugin_cfg.get('map_attribution',
+            '&copy; OpenStreetMap contributors')
+        # django-leaflet expects TILES as list of (label, url, attrs) tuples;
+        # attrs dict is merged into L.tileLayer options — maxNativeZoom tells
+        # Leaflet to overzoom (upscale) tiles beyond the provider's native max.
+        tiles = [('Background', tiles_url, {
+            'maxNativeZoom': max_native_zoom,
+            'attribution': attribution,
+        })]
 
+        # Set on Django settings for anything that reads it later
+        leaflet_config = getattr(settings, 'LEAFLET_CONFIG', {})
+        leaflet_config.setdefault('DEFAULT_CENTER', center)
+        leaflet_config.setdefault('DEFAULT_ZOOM', zoom)
+        leaflet_config.setdefault('TILES', tiles)
+        leaflet_config.setdefault('SRID', 4326)
+        leaflet_config.setdefault('MAX_ZOOM', 22)
+        leaflet_config.setdefault('MIN_ZOOM', 1)
         settings.LEAFLET_CONFIG = leaflet_config
+
+        # Patch leaflet's cached app_settings directly (populated at import
+        # time before ready() runs, so settings.LEAFLET_CONFIG was missed).
+        leaflet_mod.app_settings['DEFAULT_CENTER'] = center
+        leaflet_mod.app_settings['DEFAULT_ZOOM'] = zoom
+        leaflet_mod.app_settings['TILES'] = tiles
+        leaflet_mod.app_settings['SRID'] = 4326
+        leaflet_mod.app_settings['MAX_ZOOM'] = 22
+        leaflet_mod.app_settings['MIN_ZOOM'] = 1
+        leaflet_mod.app_settings['RESET_VIEW'] = False
 
         super().ready()
 

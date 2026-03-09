@@ -8,7 +8,7 @@ class StructurePanel(ObjectAttributesPanel):
     structure_type = attrs.ChoiceAttr('structure_type', label=_('Type'))
     site = attrs.RelatedObjectAttr('site', linkify=True, label=_('Site'))
     elevation = attrs.NumericAttr('elevation', label=_('Elevation'))
-    owner = attrs.TextAttr('owner', label=_('Owner'))
+    tenant = attrs.RelatedObjectAttr('tenant', linkify=True, label=_('Tenant'))
     installation_date = attrs.TextAttr('installation_date', label=_('Installation date'))
     access_notes = attrs.TextAttr('access_notes', label=_('Access notes'))
 
@@ -20,6 +20,7 @@ class PathwayPanel(ObjectAttributesPanel):
     end_structure = attrs.RelatedObjectAttr('end_structure', linkify=True, label=_('End structure'))
     start_location = attrs.RelatedObjectAttr('start_location', linkify=True, label=_('Start location'))
     end_location = attrs.RelatedObjectAttr('end_location', linkify=True, label=_('End location'))
+    tenant = attrs.RelatedObjectAttr('tenant', linkify=True, label=_('Tenant'))
     length = attrs.NumericAttr('length', label=_('Length (m)'))
 
     installation_date = attrs.TextAttr('installation_date', label=_('Installation date'))
@@ -88,6 +89,7 @@ class InnerductPanel(ObjectAttributesPanel):
 class ConduitBankPanel(ObjectAttributesPanel):
     name = attrs.TextAttr('name', label=_('Name'))
     structure = attrs.RelatedObjectAttr('structure', linkify=True, label=_('Structure'))
+    tenant = attrs.RelatedObjectAttr('tenant', linkify=True, label=_('Tenant'))
     configuration = attrs.ChoiceAttr('configuration', label=_('Configuration'))
     total_conduits = attrs.NumericAttr('total_conduits', label=_('Total conduit positions'))
     encasement_type = attrs.ChoiceAttr('encasement_type', label=_('Encasement type'))

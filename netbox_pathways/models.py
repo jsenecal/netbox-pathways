@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.urls import reverse
 from netbox.models import NetBoxModel
+from tenancy.models import Tenant
 
 from .choices import (
     AerialTypeChoices,
@@ -26,7 +27,10 @@ class Structure(NetBoxModel):
     )
     elevation = models.FloatField(null=True, blank=True, help_text="Elevation in meters")
     installation_date = models.DateField(null=True, blank=True)
-    owner = models.CharField(max_length=100, blank=True, help_text="Structure owner/operator")
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='pathways_structures',
+    )
     access_notes = models.TextField(blank=True, help_text="Access restrictions or requirements")
     comments = models.TextField(blank=True)
 
@@ -113,6 +117,10 @@ class ConduitBank(NetBoxModel):
     structure = models.ForeignKey(
         Structure, on_delete=models.PROTECT, related_name='conduit_banks',
     )
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='pathways_conduit_banks',
+    )
     configuration = models.CharField(
         max_length=50, choices=ConduitBankConfigChoices, blank=True,
         help_text="Layout configuration (e.g., 2x2, 3x3) — leave blank if irregular",
@@ -150,6 +158,10 @@ class Pathway(NetBoxModel):
     )
     end_location = models.ForeignKey(
         Location, on_delete=models.SET_NULL, null=True, blank=True, related_name='pathways_in',
+    )
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='pathways_pathways',
     )
     length = models.FloatField(null=True, blank=True, help_text="Total length in meters")
     installation_date = models.DateField(null=True, blank=True)

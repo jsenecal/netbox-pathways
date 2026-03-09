@@ -2,6 +2,7 @@ from dcim.models import Cable, Location, Site
 from django import forms
 from leaflet.forms.widgets import LeafletWidget
 from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelForm, NetBoxModelImportForm
+from tenancy.models import Tenant
 from utilities.forms.fields import CSVModelChoiceField, DynamicModelChoiceField
 from utilities.forms.rendering import FieldSet
 
@@ -29,10 +30,11 @@ from .models import (
 # --- Structure ---
 
 class StructureForm(NetBoxModelForm):
-    site = DynamicModelChoiceField(queryset=Site.objects.all())
+    site = DynamicModelChoiceField(queryset=Site.objects.all(), selector=True, quick_add=True)
+    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
 
     fieldsets = (
-        FieldSet('name', 'structure_type', 'site', 'elevation', 'installation_date', 'owner', name='Structure'),
+        FieldSet('name', 'structure_type', 'site', 'tenant', 'elevation', 'installation_date', name='Structure'),
         FieldSet('location', name='Geometry'),
         FieldSet('access_notes', 'comments', 'tags', name='Details'),
     )
@@ -40,8 +42,8 @@ class StructureForm(NetBoxModelForm):
     class Meta:
         model = Structure
         fields = [
-            'name', 'structure_type', 'site', 'location', 'elevation',
-            'installation_date', 'owner', 'access_notes', 'comments', 'tags',
+            'name', 'structure_type', 'site', 'tenant', 'location', 'elevation',
+            'installation_date', 'access_notes', 'comments', 'tags',
         ]
         widgets = {
             'location': LeafletWidget(),
@@ -50,37 +52,49 @@ class StructureForm(NetBoxModelForm):
 
 class StructureImportForm(NetBoxModelImportForm):
     site = CSVModelChoiceField(queryset=Site.objects.all(), to_field_name='name', help_text='Site name')
+    tenant = CSVModelChoiceField(
+        queryset=Tenant.objects.all(), to_field_name='name', required=False, help_text='Tenant name',
+    )
 
     class Meta:
         model = Structure
         fields = [
-            'name', 'structure_type', 'site', 'elevation',
-            'installation_date', 'owner', 'access_notes', 'comments',
+            'name', 'structure_type', 'site', 'tenant', 'elevation',
+            'installation_date', 'access_notes', 'comments',
         ]
 
 
 class StructureBulkEditForm(NetBoxModelBulkEditForm):
-    site = DynamicModelChoiceField(queryset=Site.objects.all(), required=False)
+    site = DynamicModelChoiceField(queryset=Site.objects.all(), required=False, selector=True)
+    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
     structure_type = forms.ChoiceField(choices=StructureTypeChoices, required=False)
-    owner = forms.CharField(max_length=100, required=False)
 
     model = Structure
     fieldsets = (
-        FieldSet('site', 'structure_type', 'owner'),
+        FieldSet('site', 'structure_type', 'tenant'),
     )
-    nullable_fields = ('owner', 'access_notes')
+    nullable_fields = ('tenant', 'access_notes')
 
 
 # --- Pathway (base) ---
 
 class PathwayForm(NetBoxModelForm):
-    start_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
-    end_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
-    start_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
-    end_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
+    start_structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    end_structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    start_location = DynamicModelChoiceField(
+        queryset=Location.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    end_location = DynamicModelChoiceField(
+        queryset=Location.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
 
     fieldsets = (
-        FieldSet('name', 'length', 'installation_date', name='Pathway'),
+        FieldSet('name', 'tenant', 'length', 'installation_date', name='Pathway'),
         FieldSet('start_structure', 'end_structure', 'start_location', 'end_location', name='Endpoints'),
         FieldSet('path', name='Geometry'),
         FieldSet('comments', 'tags', name='Details'),
@@ -90,7 +104,7 @@ class PathwayForm(NetBoxModelForm):
         model = Pathway
         fields = [
             'name', 'path', 'start_structure', 'end_structure',
-            'start_location', 'end_location',
+            'start_location', 'end_location', 'tenant',
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
@@ -101,13 +115,27 @@ class PathwayForm(NetBoxModelForm):
 # --- Conduit ---
 
 class ConduitForm(NetBoxModelForm):
-    start_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
-    end_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
-    start_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
-    end_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
-    conduit_bank = DynamicModelChoiceField(queryset=ConduitBank.objects.all(), required=False)
-    start_junction = DynamicModelChoiceField(queryset=ConduitJunction.objects.all(), required=False)
-    end_junction = DynamicModelChoiceField(queryset=ConduitJunction.objects.all(), required=False)
+    start_structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    end_structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    start_location = DynamicModelChoiceField(
+        queryset=Location.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    end_location = DynamicModelChoiceField(
+        queryset=Location.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    conduit_bank = DynamicModelChoiceField(
+        queryset=ConduitBank.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    start_junction = DynamicModelChoiceField(
+        queryset=ConduitJunction.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    end_junction = DynamicModelChoiceField(
+        queryset=ConduitJunction.objects.all(), required=False, selector=True, quick_add=True,
+    )
 
     fieldsets = (
         FieldSet('name', 'material', 'length', 'installation_date', name='Conduit'),
@@ -164,10 +192,18 @@ class ConduitBulkEditForm(NetBoxModelBulkEditForm):
 # --- Aerial Span ---
 
 class AerialSpanForm(NetBoxModelForm):
-    start_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
-    end_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
-    start_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
-    end_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
+    start_structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    end_structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    start_location = DynamicModelChoiceField(
+        queryset=Location.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    end_location = DynamicModelChoiceField(
+        queryset=Location.objects.all(), required=False, selector=True, quick_add=True,
+    )
 
     fieldsets = (
         FieldSet('name', 'aerial_type', 'length', 'installation_date', name='Aerial Span'),
@@ -224,10 +260,18 @@ class AerialSpanBulkEditForm(NetBoxModelBulkEditForm):
 # --- Direct Buried ---
 
 class DirectBuriedForm(NetBoxModelForm):
-    start_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
-    end_structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
-    start_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
-    end_location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
+    start_structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    end_structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    start_location = DynamicModelChoiceField(
+        queryset=Location.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    end_location = DynamicModelChoiceField(
+        queryset=Location.objects.all(), required=False, selector=True, quick_add=True,
+    )
 
     fieldsets = (
         FieldSet('name', 'length', 'installation_date', name='Direct Buried'),
@@ -253,21 +297,23 @@ class DirectBuriedForm(NetBoxModelForm):
 # --- Innerduct ---
 
 class InnerductForm(NetBoxModelForm):
-    parent_conduit = DynamicModelChoiceField(queryset=Conduit.objects.all())
+    parent_conduit = DynamicModelChoiceField(
+        queryset=Conduit.objects.all(), selector=True, quick_add=True,
+    )
     start_structure = DynamicModelChoiceField(
-        queryset=Structure.objects.all(), required=False,
+        queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
         help_text="Leave blank to inherit from parent conduit",
     )
     end_structure = DynamicModelChoiceField(
-        queryset=Structure.objects.all(), required=False,
+        queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
         help_text="Leave blank to inherit from parent conduit",
     )
     start_location = DynamicModelChoiceField(
-        queryset=Location.objects.all(), required=False,
+        queryset=Location.objects.all(), required=False, selector=True, quick_add=True,
         help_text="Leave blank to inherit from parent conduit",
     )
     end_location = DynamicModelChoiceField(
-        queryset=Location.objects.all(), required=False,
+        queryset=Location.objects.all(), required=False, selector=True, quick_add=True,
         help_text="Leave blank to inherit from parent conduit",
     )
 
@@ -295,10 +341,13 @@ class InnerductForm(NetBoxModelForm):
 # --- Conduit Bank ---
 
 class ConduitBankForm(NetBoxModelForm):
-    structure = DynamicModelChoiceField(queryset=Structure.objects.all())
+    structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), selector=True, quick_add=True,
+    )
+    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
 
     fieldsets = (
-        FieldSet('name', 'structure', name='Conduit Bank'),
+        FieldSet('name', 'structure', 'tenant', name='Conduit Bank'),
         FieldSet('configuration', 'total_conduits', 'encasement_type', name='Configuration'),
         FieldSet('installation_date', 'comments', 'tags', name='Details'),
     )
@@ -306,7 +355,7 @@ class ConduitBankForm(NetBoxModelForm):
     class Meta:
         model = ConduitBank
         fields = [
-            'name', 'structure',
+            'name', 'structure', 'tenant',
             'configuration', 'total_conduits', 'encasement_type',
             'installation_date', 'comments', 'tags',
         ]
@@ -340,9 +389,15 @@ class ConduitBankBulkEditForm(NetBoxModelBulkEditForm):
 # --- Conduit Junction ---
 
 class ConduitJunctionForm(NetBoxModelForm):
-    trunk_conduit = DynamicModelChoiceField(queryset=Conduit.objects.all())
-    branch_conduit = DynamicModelChoiceField(queryset=Conduit.objects.all())
-    towards_structure = DynamicModelChoiceField(queryset=Structure.objects.all())
+    trunk_conduit = DynamicModelChoiceField(
+        queryset=Conduit.objects.all(), selector=True, quick_add=True,
+    )
+    branch_conduit = DynamicModelChoiceField(
+        queryset=Conduit.objects.all(), selector=True, quick_add=True,
+    )
+    towards_structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), selector=True, quick_add=True,
+    )
 
     fieldsets = (
         FieldSet('name', name='Junction'),
@@ -362,8 +417,10 @@ class ConduitJunctionForm(NetBoxModelForm):
 # --- Cable Segment ---
 
 class CableSegmentForm(NetBoxModelForm):
-    cable = DynamicModelChoiceField(queryset=Cable.objects.all())
-    pathway = DynamicModelChoiceField(queryset=Pathway.objects.all(), required=False)
+    cable = DynamicModelChoiceField(queryset=Cable.objects.all(), selector=True)
+    pathway = DynamicModelChoiceField(
+        queryset=Pathway.objects.all(), required=False, selector=True, quick_add=True,
+    )
 
     fieldsets = (
         FieldSet('cable', 'pathway', 'sequence', name='Cable Segment'),
@@ -398,9 +455,15 @@ class CableSegmentImportForm(NetBoxModelImportForm):
 # --- Pathway Location ---
 
 class PathwayLocationForm(NetBoxModelForm):
-    pathway = DynamicModelChoiceField(queryset=Pathway.objects.all())
-    site = DynamicModelChoiceField(queryset=Site.objects.all(), required=False)
-    location = DynamicModelChoiceField(queryset=Location.objects.all(), required=False)
+    pathway = DynamicModelChoiceField(
+        queryset=Pathway.objects.all(), selector=True, quick_add=True,
+    )
+    site = DynamicModelChoiceField(
+        queryset=Site.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    location = DynamicModelChoiceField(
+        queryset=Location.objects.all(), required=False, selector=True, quick_add=True,
+    )
 
     fieldsets = (
         FieldSet('pathway', 'site', 'location', 'sequence', name='Waypoint'),
@@ -417,8 +480,12 @@ class PathwayLocationForm(NetBoxModelForm):
 # --- Site Geometry ---
 
 class SiteGeometryForm(NetBoxModelForm):
-    site = DynamicModelChoiceField(queryset=Site.objects.all())
-    structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False)
+    site = DynamicModelChoiceField(
+        queryset=Site.objects.all(), selector=True, quick_add=True,
+    )
+    structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
+    )
 
     fieldsets = (
         FieldSet('site', 'structure', name='Site Geometry'),

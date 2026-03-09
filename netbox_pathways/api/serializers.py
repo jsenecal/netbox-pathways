@@ -25,7 +25,7 @@ class StructureSerializer(NetBoxModelSerializer):
         model = Structure
         fields = [
             'id', 'url', 'display', 'name', 'structure_type', 'site',
-            'location', 'elevation', 'installation_date', 'owner',
+            'location', 'elevation', 'installation_date', 'tenant',
             'access_notes', 'comments', 'tags', 'created', 'last_updated',
         ]
         brief_fields = ('id', 'url', 'display', 'name', 'structure_type')
@@ -39,7 +39,7 @@ class ConduitBankSerializer(NetBoxModelSerializer):
     class Meta:
         model = ConduitBank
         fields = [
-            'id', 'url', 'display', 'name', 'structure',
+            'id', 'url', 'display', 'name', 'structure', 'tenant',
             'configuration', 'total_conduits', 'encasement_type',
             'installation_date', 'comments', 'tags', 'created', 'last_updated',
         ]
@@ -57,7 +57,7 @@ class PathwaySerializer(NetBoxModelSerializer):
         fields = [
             'id', 'url', 'display', 'name', 'pathway_type', 'path',
             'start_structure', 'end_structure',
-            'start_location', 'end_location', 'length',
+            'start_location', 'end_location', 'tenant', 'length',
             'cables_routed', 'installation_date',
             'comments', 'tags', 'created', 'last_updated',
         ]

@@ -2,6 +2,7 @@ import django_filters
 from dcim.models import Cable, Location, Site
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
+from tenancy.models import Tenant
 
 from .choices import (
     AerialTypeChoices,
@@ -35,7 +36,13 @@ class StructureFilterSet(NetBoxModelFilterSet):
         to_field_name='name', label='Site (name)',
     )
     structure_type = django_filters.MultipleChoiceFilter(choices=StructureTypeChoices)
-    owner = django_filters.CharFilter(lookup_expr='icontains')
+    tenant_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='tenant', queryset=Tenant.objects.all(), label='Tenant (ID)',
+    )
+    tenant = django_filters.ModelMultipleChoiceFilter(
+        field_name='tenant__name', queryset=Tenant.objects.all(),
+        to_field_name='name', label='Tenant (name)',
+    )
 
     class Meta:
         model = Structure
@@ -46,13 +53,16 @@ class StructureFilterSet(NetBoxModelFilterSet):
             return queryset
         return queryset.filter(
             Q(name__icontains=value) |
-            Q(owner__icontains=value) |
+            Q(tenant__name__icontains=value) |
             Q(access_notes__icontains=value)
         )
 
 
 class PathwayFilterSet(NetBoxModelFilterSet):
     pathway_type = django_filters.MultipleChoiceFilter(choices=PathwayTypeChoices)
+    tenant_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='tenant', queryset=Tenant.objects.all(), label='Tenant (ID)',
+    )
     start_structure_id = django_filters.ModelMultipleChoiceFilter(
         field_name='start_structure', queryset=Structure.objects.all(),
         label='Start Structure (ID)',
@@ -200,6 +210,9 @@ class ConduitBankFilterSet(NetBoxModelFilterSet):
     structure_id = django_filters.ModelMultipleChoiceFilter(
         field_name='structure', queryset=Structure.objects.all(),
         label='Structure (ID)',
+    )
+    tenant_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='tenant', queryset=Tenant.objects.all(), label='Tenant (ID)',
     )
     configuration = django_filters.MultipleChoiceFilter(choices=ConduitBankConfigChoices)
     encasement_type = django_filters.MultipleChoiceFilter(choices=EncasementTypeChoices)

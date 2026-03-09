@@ -17,9 +17,9 @@ from .models import (
 
 @admin.register(Structure)
 class StructureAdmin(GISModelAdmin):
-    list_display = ['name', 'structure_type', 'site', 'elevation', 'owner']
+    list_display = ['name', 'structure_type', 'site', 'elevation', 'tenant']
     list_filter = ['structure_type', 'site']
-    search_fields = ['name', 'owner']
+    search_fields = ['name', 'tenant__name']
     ordering = ['name']
 
 

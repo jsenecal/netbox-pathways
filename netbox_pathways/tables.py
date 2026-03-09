@@ -21,15 +21,16 @@ class StructureTable(NetBoxTable):
     name = tables.Column(linkify=True)
     site = tables.Column(linkify=True)
     structure_type = columns.ChoiceFieldColumn()
+    tenant = tables.Column(linkify=True)
     actions = columns.ActionsColumn(actions=('edit', 'delete'))
 
     class Meta(NetBoxTable.Meta):
         model = Structure
         fields = (
             'pk', 'id', 'name', 'structure_type', 'site',
-            'elevation', 'installation_date', 'owner', 'actions',
+            'elevation', 'installation_date', 'tenant', 'actions',
         )
-        default_columns = ('name', 'structure_type', 'site', 'owner')
+        default_columns = ('name', 'structure_type', 'site', 'tenant')
 
 
 class PathwayTable(NetBoxTable):
@@ -39,6 +40,7 @@ class PathwayTable(NetBoxTable):
     end_structure = tables.Column(linkify=True)
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
+    tenant = tables.Column(linkify=True)
     cables_routed = tables.Column(verbose_name='Cables', orderable=True)
     actions = columns.ActionsColumn(actions=('edit', 'delete'))
 
@@ -47,7 +49,7 @@ class PathwayTable(NetBoxTable):
         fields = (
             'pk', 'id', 'name', 'pathway_type',
             'start_structure', 'end_structure',
-            'start_location', 'end_location', 'length',
+            'start_location', 'end_location', 'tenant', 'length',
             'cables_routed', 'installation_date', 'actions',
         )
         default_columns = (
@@ -147,6 +149,7 @@ class InnerductTable(NetBoxTable):
 class ConduitBankTable(NetBoxTable):
     name = tables.Column(linkify=True)
     structure = tables.Column(linkify=True)
+    tenant = tables.Column(linkify=True)
     configuration = columns.ChoiceFieldColumn()
     encasement_type = columns.ChoiceFieldColumn()
     conduit_count = tables.Column(
@@ -158,7 +161,7 @@ class ConduitBankTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = ConduitBank
         fields = (
-            'pk', 'id', 'name', 'structure',
+            'pk', 'id', 'name', 'structure', 'tenant',
             'configuration', 'total_conduits', 'conduit_count',
             'encasement_type', 'installation_date', 'actions',
         )

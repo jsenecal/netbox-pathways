@@ -8,11 +8,10 @@ class StructureIndex(SearchIndex):
     model = models.Structure
     fields = (
         ('name', 100),
-        ('owner', 200),
         ('access_notes', 500),
         ('comments', 5000),
     )
-    display_attrs = ('structure_type', 'site', 'owner')
+    display_attrs = ('structure_type', 'site', 'tenant')
 
 
 @register_search
