@@ -1,0 +1,141 @@
+/* ------------------------------------------------------------------ */
+/* Leaflet dark/light theme for NetBox                                 */
+/* Detects NetBox theme via [data-bs-theme="dark"] on <html>          */
+/* ------------------------------------------------------------------ */
+
+:root {
+    --pw-map-bg: #f8f9fa;
+    --pw-map-border: rgba(0, 0, 0, 0.12);
+    --pw-map-text: #212529;
+    --pw-map-text-muted: #6c757d;
+    --pw-map-panel-bg: #ffffff;
+    --pw-map-control-bg: #ffffff;
+    --pw-map-control-text: #333;
+    --pw-map-control-border: rgba(0, 0, 0, 0.2);
+    --pw-map-popup-bg: #ffffff;
+    --pw-map-popup-text: #212529;
+    --pw-map-popup-border: #ddd;
+    --pw-map-popup-heading: #333;
+    --pw-map-progress-bg: #f5f5f5;
+    --pw-map-marker-bg: #fff;
+    --pw-map-marker-border: #000;
+}
+
+[data-bs-theme="dark"] {
+    --pw-map-bg: #1a1d2e;
+    --pw-map-border: rgba(255, 255, 255, 0.1);
+    --pw-map-text: #e0e0f0;
+    --pw-map-text-muted: #a0a0b8;
+    --pw-map-panel-bg: rgba(22, 25, 43, 0.97);
+    --pw-map-control-bg: #212529;
+    --pw-map-control-text: #dee2e6;
+    --pw-map-control-border: #495057;
+    --pw-map-popup-bg: #212529;
+    --pw-map-popup-text: #dee2e6;
+    --pw-map-popup-border: #495057;
+    --pw-map-popup-heading: #e0e0f0;
+    --pw-map-progress-bg: #2c3034;
+    --pw-map-marker-bg: #343a40;
+    --pw-map-marker-border: #adb5bd;
+}
+
+/* --- Dark mode: invert tile layer --------------------------------- */
+
+[data-bs-theme="dark"] .leaflet-tile-pane {
+    filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
+}
+
+/* Skip tile inversion on satellite imagery */
+[data-bs-theme="dark"] .satellite-active .leaflet-tile-pane {
+    filter: none;
+}
+
+/* Don't invert markers/overlays drawn on the map */
+[data-bs-theme="dark"] .leaflet-marker-pane,
+[data-bs-theme="dark"] .leaflet-shadow-pane,
+[data-bs-theme="dark"] .leaflet-overlay-pane {
+    filter: none;
+}
+
+/* --- Leaflet controls --------------------------------------------- */
+
+[data-bs-theme="dark"] .leaflet-control-zoom a {
+    background: var(--pw-map-control-bg);
+    color: var(--pw-map-control-text);
+    border-color: var(--pw-map-control-border);
+}
+
+[data-bs-theme="dark"] .leaflet-control-zoom a:hover {
+    background: #343a40;
+}
+
+[data-bs-theme="dark"] .leaflet-control-attribution {
+    background: rgba(33, 37, 41, 0.8);
+    color: var(--pw-map-text-muted);
+}
+
+[data-bs-theme="dark"] .leaflet-control-attribution a {
+    color: var(--pw-map-text-muted);
+}
+
+[data-bs-theme="dark"] .leaflet-control-layers {
+    background: var(--pw-map-control-bg);
+    color: var(--pw-map-control-text);
+    border-color: var(--pw-map-control-border);
+}
+
+/* --- Popups ------------------------------------------------------- */
+
+[data-bs-theme="dark"] .leaflet-popup-content-wrapper {
+    background: var(--pw-map-popup-bg);
+    color: var(--pw-map-popup-text);
+    border: 1px solid var(--pw-map-popup-border);
+}
+
+[data-bs-theme="dark"] .leaflet-popup-tip {
+    background: var(--pw-map-popup-bg);
+}
+
+[data-bs-theme="dark"] .leaflet-popup-close-button {
+    color: var(--pw-map-text-muted);
+}
+
+[data-bs-theme="dark"] .leaflet-popup-close-button:hover {
+    color: var(--pw-map-popup-text);
+}
+
+/* --- Reset home control ------------------------------------------- */
+
+.leaflet-control-zoom a .mdi {
+    display: block;
+    text-align: center;
+}
+
+/* --- django-leaflet form widget ----------------------------------- */
+
+[data-bs-theme="dark"] .leaflet-container {
+    background: var(--pw-map-bg);
+}
+
+/* Toolbar buttons in draw controls */
+[data-bs-theme="dark"] .leaflet-draw-toolbar a {
+    background-color: var(--pw-map-control-bg);
+    border-color: var(--pw-map-control-border);
+}
+
+[data-bs-theme="dark"] .leaflet-draw-toolbar a:hover {
+    background-color: #343a40;
+}
+
+[data-bs-theme="dark"] .leaflet-draw-actions a {
+    background: var(--pw-map-control-bg);
+    color: var(--pw-map-control-text);
+    border-color: var(--pw-map-control-border);
+}
+
+/* Draw tooltip */
+[data-bs-theme="dark"] .leaflet-draw-tooltip {
+    background: var(--pw-map-popup-bg);
+    color: var(--pw-map-popup-text);
+    border-color: var(--pw-map-popup-border);
+}

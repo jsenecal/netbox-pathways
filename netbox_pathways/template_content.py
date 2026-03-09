@@ -13,12 +13,16 @@ def _leaflet_head():
         static('leaflet/leaflet_django.css'),
         static('leaflet/leaflet.extras.css'),
         static('leaflet/draw/leaflet.draw.css'),
+        static('netbox_pathways/vendor/MarkerCluster.css'),
+        static('netbox_pathways/vendor/MarkerCluster.Default.css'),
+        static('netbox_pathways/css/leaflet-theme.css'),
     ]
     js = [
         static('leaflet/leaflet.js'),
         static('leaflet/leaflet.extras.js'),
         static('leaflet/draw/leaflet.draw.js'),
         static('leaflet/leaflet.forms.js'),
+        static('netbox_pathways/vendor/leaflet.markercluster.js'),
     ]
     html = ''
     for href in css:
@@ -85,8 +89,20 @@ class LeafletHeadExtension(PluginTemplateExtension):
     """Load Leaflet + django-leaflet assets globally via {% plugin_head %}."""
 
     def head(self):
+        import json
+
+        from django.conf import settings
+        plugin_cfg = settings.PLUGINS_CONFIG.get('netbox_pathways', {})
+
+        config = {
+            'maxNativeZoom': plugin_cfg.get('map_max_native_zoom', 19),
+            'apiBase': '/api/plugins/pathways/geo/',
+            'overlays': plugin_cfg.get('map_overlays', []),
+        }
+
         detail_js = static('netbox_pathways/js/detail-map.js')
-        return _leaflet_head() + f'<script src="{detail_js}"></script>\n'
+        config_js = f'<script>window.PATHWAYS_CONFIG={json.dumps(config)};</script>\n'
+        return _leaflet_head() + config_js + f'<script src="{detail_js}"></script>\n'
 
 
 class PluginModelMapExtension(PluginTemplateExtension):
@@ -193,6 +209,7 @@ class CoreModelMapExtension(PluginTemplateExtension):
             'map_id': map_id,
             'data_id': f'{map_id}-data',
             'panel_title': 'Pathways Infrastructure',
+            'dynamic_layers': 'true',
         })
 
     def _get_geo_data(self, obj):

@@ -34,7 +34,8 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var data = JSON.parse(document.getElementById('{{ data_id }}').textContent);
-    initGeoMap('{{ map_id }}', data);
+    var opts = { dynamicLayers: {{ dynamic_layers|default:"false" }} };
+    initGeoMap('{{ map_id }}', data, opts);
 
     var modalEl = document.getElementById('{{ map_id }}-modal');
     modalEl.addEventListener('shown.bs.modal', function() {
@@ -42,7 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (expanded._leafletMap) {
             expanded._leafletMap.invalidateSize();
         } else {
-            initGeoMap('{{ map_id }}-expanded', data);
+            initGeoMap('{{ map_id }}-expanded', data, opts);
         }
     });
 });

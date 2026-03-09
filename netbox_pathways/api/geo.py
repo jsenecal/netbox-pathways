@@ -8,6 +8,7 @@ Geometries are stored in the plugin's configured SRID and transformed
 to WGS84 (EPSG:4326) on output per GeoJSON RFC 7946.
 """
 
+from django.contrib.gis.geos import Polygon
 from django.db.models import Count
 from rest_framework import serializers as drf_serializers
 from rest_framework.viewsets import ReadOnlyModelViewSet
@@ -45,7 +46,7 @@ class StructureGeoSerializer(Wgs84GeoFeatureModelSerializer):
         geo_field = 'location'
         fields = [
             'id', 'name', 'structure_type', 'structure_type_display',
-            'site', 'site_name', 'elevation', 'owner',
+            'site', 'site_name', 'elevation', 'tenant',
             'installation_date',
         ]
 
@@ -166,46 +167,76 @@ class DirectBuriedGeoSerializer(Wgs84GeoFeatureModelSerializer):
         return str(ep) if ep else None
 
 
+# --- Bbox filtering mixin ---
+
+class BboxFilterMixin:
+    """
+    Filter queryset by bounding box via ``?bbox=west,south,east,north`` (WGS84).
+    The geo_field class attribute determines which geometry column to filter.
+    """
+    bbox_geo_field = 'location'  # override per viewset
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        bbox = self.request.query_params.get('bbox')
+        if bbox:
+            try:
+                west, south, east, north = (float(v) for v in bbox.split(','))
+                bbox_poly = Polygon.from_bbox((west, south, east, north))
+                bbox_poly.srid = LEAFLET_SRID
+                if get_srid() != LEAFLET_SRID:
+                    bbox_poly.transform(get_srid())
+                qs = qs.filter(**{f'{self.bbox_geo_field}__intersects': bbox_poly})
+            except (ValueError, TypeError):
+                pass  # ignore malformed bbox
+        return qs
+
+
 # --- GeoJSON ViewSets (read-only) ---
 
-class StructureGeoViewSet(ReadOnlyModelViewSet):
-    queryset = models.Structure.objects.select_related('site').all()
+class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
+    queryset = models.Structure.objects.select_related('site').order_by('name')
     serializer_class = StructureGeoSerializer
     filterset_class = filters.StructureFilterSet
+    bbox_geo_field = 'location'
 
 
-class PathwayGeoViewSet(ReadOnlyModelViewSet):
+class PathwayGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = models.Pathway.objects.select_related(
         'start_structure', 'end_structure',
         'start_location', 'end_location',
-    ).annotate(cables_routed=Count('cable_segments'))
+    ).annotate(cables_routed=Count('cable_segments')).order_by('name')
     serializer_class = PathwayGeoSerializer
     filterset_class = filters.PathwayFilterSet
+    bbox_geo_field = 'path'
 
 
-class ConduitGeoViewSet(ReadOnlyModelViewSet):
+class ConduitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = models.Conduit.objects.select_related(
         'start_structure', 'end_structure',
         'start_location', 'end_location',
         'conduit_bank',
-    ).annotate(cables_routed=Count('cable_segments'))
+    ).annotate(cables_routed=Count('cable_segments')).order_by('name')
     serializer_class = ConduitGeoSerializer
     filterset_class = filters.ConduitFilterSet
+    bbox_geo_field = 'path'
 
 
-class AerialSpanGeoViewSet(ReadOnlyModelViewSet):
+class AerialSpanGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = models.AerialSpan.objects.select_related(
         'start_structure', 'end_structure',
         'start_location', 'end_location',
-    ).annotate(cables_routed=Count('cable_segments'))
+    ).annotate(cables_routed=Count('cable_segments')).order_by('name')
     serializer_class = AerialSpanGeoSerializer
     filterset_class = filters.AerialSpanFilterSet
+    bbox_geo_field = 'path'
 
 
-class DirectBuriedGeoViewSet(ReadOnlyModelViewSet):
+class DirectBuriedGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = models.DirectBuried.objects.select_related(
         'start_structure', 'end_structure',
         'start_location', 'end_location',
-    ).annotate(cables_routed=Count('cable_segments'))
+    ).annotate(cables_routed=Count('cable_segments')).order_by('name')
     serializer_class = DirectBuriedGeoSerializer
     filterset_class = filters.DirectBuriedFilterSet
+    bbox_geo_field = 'path'

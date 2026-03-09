@@ -10,7 +10,6 @@ from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filters, forms, models, tables
-from .geo import linestring_to_coords, point_to_latlon
 from .graph import PathwayGraph, node_to_geo, node_to_label, trace_cable
 from .ui import panels
 
@@ -520,11 +519,11 @@ class SiteGeometryDeleteView(generic.ObjectDeleteView):
 
 # --- Map View ---
 
-MAP_MAX_OBJECTS = 2000
-
 
 class MapView(generic.ObjectListView):
+    """Full-page infrastructure map. Data is fetched client-side from GeoJSON API."""
     queryset = models.Structure.objects.all()
+    table = tables.StructureTable
     template_name = 'netbox_pathways/map.html'
 
     def _safe_float(self, value, default):
@@ -540,55 +539,15 @@ class MapView(generic.ObjectListView):
             return default
 
     def get_extra_context(self, request):
-        structures = models.Structure.objects.select_related('site')[:MAP_MAX_OBJECTS]
-        pathways = models.Pathway.objects.select_related(
-            'start_structure', 'end_structure',
-        ).annotate(cables_routed=Count('cable_segments'))[:MAP_MAX_OBJECTS]
-
-        structures_geojson = []
-        for structure in structures:
-            latlon = point_to_latlon(structure.centroid)
-            if latlon:
-                structures_geojson.append({
-                    'type': 'Feature',
-                    'geometry': {
-                        'type': 'Point',
-                        'coordinates': [latlon[1], latlon[0]],
-                    },
-                    'properties': {
-                        'id': structure.pk,
-                        'name': structure.name,
-                        'type': structure.get_structure_type_display() if structure.structure_type else 'Unknown',
-                        'site': structure.site.name,
-                        'url': structure.get_absolute_url(),
-                    },
-                })
-
-        pathways_geojson = []
-        for pathway in pathways:
-            coords = linestring_to_coords(pathway.path)
-            if coords:
-                pathways_geojson.append({
-                    'type': 'Feature',
-                    'geometry': {
-                        'type': 'LineString',
-                        'coordinates': coords,
-                    },
-                    'properties': {
-                        'id': pathway.pk,
-                        'name': pathway.name,
-                        'pathway_type': pathway.get_pathway_type_display(),
-                        'cables_routed': pathway.cables_routed,
-                        'url': pathway.get_absolute_url(),
-                    },
-                })
-
+        from django.conf import settings
+        plugin_cfg = settings.PLUGINS_CONFIG.get('netbox_pathways', {})
         return {
-            'structures_geojson': structures_geojson,
-            'pathways_geojson': pathways_geojson,
-            'map_center_lat': self._safe_float(request.GET.get('lat'), 45.5017),
-            'map_center_lon': self._safe_float(request.GET.get('lon'), -73.5673),
-            'map_zoom': self._safe_int(request.GET.get('zoom'), 10),
+            'map_center_lat': self._safe_float(
+                request.GET.get('lat'), plugin_cfg.get('map_center_lat', 45.5017)),
+            'map_center_lon': self._safe_float(
+                request.GET.get('lon'), plugin_cfg.get('map_center_lon', -73.5673)),
+            'map_zoom': self._safe_int(
+                request.GET.get('zoom'), plugin_cfg.get('map_zoom', 10)),
         }
 
 
