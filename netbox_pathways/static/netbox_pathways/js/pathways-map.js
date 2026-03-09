@@ -25,19 +25,19 @@
     };
 
     var STRUCTURE_ICONS = {
-        'pole': 'mdi-transmission-tower',
-        'manhole': 'mdi-circle-double',
-        'handhole': 'mdi-circle-outline',
-        'cabinet': 'mdi-archive',
-        'vault': 'mdi-safe-square-outline',
-        'pedestal': 'mdi-pillar',
-        'building_entrance': 'mdi-door',
+        'pole': 'mdi-adjust',
+        'manhole': 'mdi-checkbox-blank-circle',
+        'handhole': 'mdi-checkbox-blank-circle-outline',
+        'cabinet': 'mdi-square-rounded',
+        'vault': 'mdi-square',
+        'pedestal': 'mdi-square-outline',
+        'building_entrance': 'mdi-square-dot',
         'splice_closure': 'mdi-set-center',
-        'tower': 'mdi-broadcast-tower',
-        'roof': 'mdi-home-roof',
-        'equipment_room': 'mdi-server-network',
-        'telecom_closet': 'mdi-lan',
-        'riser_room': 'mdi-stairs-up'
+        'tower': 'mdi-target',
+        'roof': 'mdi-triangle-outline',
+        'equipment_room': 'mdi-square-rounded-outline',
+        'telecom_closet': 'mdi-rhombus',
+        'riser_room': 'mdi-rhombus-outline'
     };
 
     var PATHWAY_COLORS = {
@@ -53,9 +53,9 @@
             className: 'pw-marker',
             html: '<div class="pw-marker-pin" style="background:' + color + '">' +
                   '<i class="mdi ' + icon + '"></i></div>',
-            iconSize: [28, 28],
-            iconAnchor: [14, 14],
-            popupAnchor: [0, -16]
+            iconSize: [18, 18],
+            iconAnchor: [9, 9],
+            popupAnchor: [0, -10]
         });
     }
 
@@ -229,6 +229,24 @@
         // Zoom hint
         var zoomHint = _createZoomHint(map);
 
+        // --- Layer visibility persistence (localStorage) ---
+
+        var PREFS_KEY = 'pathways_map_layers';
+        var DEFAULT_LAYERS = { 'Structures': true, 'Conduits': true, 'Aerial Spans': false, 'Direct Buried': false };
+
+        function _loadPrefs() {
+            try {
+                var saved = localStorage.getItem(PREFS_KEY);
+                return saved ? JSON.parse(saved) : null;
+            } catch (e) { return null; }
+        }
+
+        function _savePrefs(layers) {
+            try { localStorage.setItem(PREFS_KEY, JSON.stringify(layers)); } catch (e) { /* ignore */ }
+        }
+
+        var layerPrefs = _loadPrefs() || DEFAULT_LAYERS;
+
         // --- Dynamic data layers (re-fetched on move) ---
 
         var dataLayers = {
@@ -236,27 +254,44 @@
                 maxClusterRadius: 50,
                 spiderfyOnMaxZoom: true,
                 disableClusteringAtZoom: 18
-            }).addTo(map),
-            pathways: L.layerGroup().addTo(map),
+            }),
             conduits: L.layerGroup(),
             aerialSpans: L.layerGroup(),
             directBuried: L.layerGroup()
         };
 
-        // Register in layer control
-        layerControl.addOverlay(dataLayers.structures, 'Structures');
-        layerControl.addOverlay(dataLayers.pathways, 'Pathways');
-        layerControl.addOverlay(dataLayers.conduits, 'Conduits');
-        layerControl.addOverlay(dataLayers.aerialSpans, 'Aerial Spans');
-        layerControl.addOverlay(dataLayers.directBuried, 'Direct Buried');
+        var layerNames = {
+            'Structures': dataLayers.structures,
+            'Conduits': dataLayers.conduits,
+            'Aerial Spans': dataLayers.aerialSpans,
+            'Direct Buried': dataLayers.directBuried
+        };
+
+        // Add layers based on saved prefs
+        for (var lname in layerNames) {
+            if (layerPrefs[lname] !== false) {
+                layerNames[lname].addTo(map);
+            }
+            layerControl.addOverlay(layerNames[lname], lname);
+        }
+
+        // Persist layer toggles
+        map.on('overlayadd', function(e) {
+            var prefs = _loadPrefs() || DEFAULT_LAYERS;
+            prefs[e.name] = true;
+            _savePrefs(prefs);
+        });
+        map.on('overlayremove', function(e) {
+            var prefs = _loadPrefs() || DEFAULT_LAYERS;
+            prefs[e.name] = false;
+            _savePrefs(prefs);
+        });
 
         function _loadData() {
             var zoom = map.getZoom();
 
             if (zoom < MIN_DATA_ZOOM) {
-                // Clear all data layers and show hint
                 dataLayers.structures.clearLayers();
-                dataLayers.pathways.clearLayers();
                 dataLayers.conduits.clearLayers();
                 dataLayers.aerialSpans.clearLayers();
                 dataLayers.directBuried.clearLayers();
@@ -269,6 +304,29 @@
 
             zoomHint.style.display = 'none';
             var bbox = _bboxParam(map);
+            var pathwayCount = 0, totalLength = 0, pendingPathway = 0;
+
+            function _updatePathwayStats() {
+                if (pathwayCountEl) pathwayCountEl.textContent = pathwayCount;
+                if (totalLengthEl) totalLengthEl.textContent = (totalLength / 1000).toFixed(2);
+            }
+
+            function _pathwayLoaded(data) {
+                var count = data.features ? data.features.length : 0;
+                pathwayCount += count;
+                if (data.features) {
+                    data.features.forEach(function(f) {
+                        if (f.geometry && f.geometry.coordinates) {
+                            var coords = f.geometry.coordinates;
+                            for (var i = 0; i < coords.length - 1; i++) {
+                                totalLength += _haversine(coords[i][1], coords[i][0], coords[i+1][1], coords[i+1][0]);
+                            }
+                        }
+                    });
+                }
+                pendingPathway--;
+                if (pendingPathway <= 0) _updatePathwayStats();
+            }
 
             // Structures
             if (map.hasLayer(dataLayers.structures)) {
@@ -292,7 +350,6 @@
                             );
                         }
                     });
-                    // Add individual markers to cluster group (not the layer group)
                     dataLayers.structures.addLayers(geoLayer.getLayers());
                     if (structureCountEl) {
                         structureCountEl.textContent = data.features ? data.features.length : 0;
@@ -300,53 +357,25 @@
                 });
             }
 
-            // Pathways
-            if (map.hasLayer(dataLayers.pathways)) {
-                _fetchGeoJSON('pathways/', bbox, function(data) {
-                    dataLayers.pathways.clearLayers();
-                    L.geoJSON(data, {
-                        style: function(feature) {
-                            return { color: PATHWAY_COLORS[feature.properties.pathway_type] || 'gray', weight: 3, opacity: 0.7 };
-                        },
-                        onEachFeature: function(feature, layer) {
-                            var p = feature.properties;
-                            layer.bindPopup(
-                                '<div class="pathways-popup">' +
-                                '<h5>' + _esc(p.name) + '</h5>' +
-                                '<table class="table table-sm">' +
-                                '<tr><td><strong>Type:</strong></td><td>' + _esc(p.pathway_type || '') + '</td></tr>' +
-                                '</table></div>'
-                            );
-                        }
-                    }).addTo(dataLayers.pathways);
-                    if (pathwayCountEl) {
-                        pathwayCountEl.textContent = data.features ? data.features.length : 0;
-                    }
-                    if (totalLengthEl && data.features) {
-                        var total = 0;
-                        data.features.forEach(function(f) {
-                            if (f.geometry && f.geometry.coordinates) {
-                                var coords = f.geometry.coordinates;
-                                for (var i = 0; i < coords.length - 1; i++) {
-                                    total += _haversine(coords[i][1], coords[i][0], coords[i+1][1], coords[i+1][0]);
-                                }
-                            }
-                        });
-                        totalLengthEl.textContent = (total / 1000).toFixed(2);
-                    }
-                });
-            }
+            // Count how many pathway layers are active for stats
+            pathwayCount = 0; totalLength = 0;
+            pendingPathway = 0;
+            if (map.hasLayer(dataLayers.conduits)) pendingPathway++;
+            if (map.hasLayer(dataLayers.aerialSpans)) pendingPathway++;
+            if (map.hasLayer(dataLayers.directBuried)) pendingPathway++;
+            if (pendingPathway === 0) _updatePathwayStats();
 
             // Conduits
             if (map.hasLayer(dataLayers.conduits)) {
                 _fetchGeoJSON('conduits/', bbox, function(data) {
                     dataLayers.conduits.clearLayers();
                     L.geoJSON(data, {
-                        style: function() { return { color: 'brown', weight: 3, opacity: 0.7, dashArray: '5 5' }; },
+                        style: function() { return { color: '#795548', weight: 3, opacity: 0.7, dashArray: '5 5' }; },
                         onEachFeature: function(feature, layer) {
                             layer.bindPopup('<strong>' + _esc(feature.properties.name) + '</strong>');
                         }
                     }).addTo(dataLayers.conduits);
+                    _pathwayLoaded(data);
                 });
             }
 
@@ -355,11 +384,12 @@
                 _fetchGeoJSON('aerial-spans/', bbox, function(data) {
                     dataLayers.aerialSpans.clearLayers();
                     L.geoJSON(data, {
-                        style: function() { return { color: 'blue', weight: 3, opacity: 0.7, dashArray: '10 5' }; },
+                        style: function() { return { color: '#1565c0', weight: 3, opacity: 0.7, dashArray: '10 5' }; },
                         onEachFeature: function(feature, layer) {
                             layer.bindPopup('<strong>' + _esc(feature.properties.name) + '</strong>');
                         }
                     }).addTo(dataLayers.aerialSpans);
+                    _pathwayLoaded(data);
                 });
             }
 
@@ -368,11 +398,12 @@
                 _fetchGeoJSON('direct-buried/', bbox, function(data) {
                     dataLayers.directBuried.clearLayers();
                     L.geoJSON(data, {
-                        style: function() { return { color: 'gray', weight: 3, opacity: 0.7, dashArray: '2 4' }; },
+                        style: function() { return { color: '#616161', weight: 3, opacity: 0.7, dashArray: '2 4' }; },
                         onEachFeature: function(feature, layer) {
                             layer.bindPopup('<strong>' + _esc(feature.properties.name) + '</strong>');
                         }
                     }).addTo(dataLayers.directBuried);
+                    _pathwayLoaded(data);
                 });
             }
         }

@@ -112,18 +112,18 @@
 }
 
 .pw-marker-pin {
-    width: 26px;
-    height: 26px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px solid rgba(255, 255, 255, 0.9);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    border: 1.5px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
 .pw-marker-pin .mdi {
-    font-size: 14px;
+    font-size: 10px;
     color: #fff;
     line-height: 1;
 }

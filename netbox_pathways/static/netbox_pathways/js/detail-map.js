@@ -145,19 +145,19 @@
     };
 
     var STRUCTURE_ICONS = {
-        'Pole': 'mdi-transmission-tower',
-        'Manhole': 'mdi-circle-double',
-        'Handhole': 'mdi-circle-outline',
-        'Cabinet': 'mdi-archive',
-        'Vault': 'mdi-safe-square-outline',
-        'Pedestal': 'mdi-pillar',
-        'Building Entrance': 'mdi-door',
+        'Pole': 'mdi-adjust',
+        'Manhole': 'mdi-checkbox-blank-circle',
+        'Handhole': 'mdi-checkbox-blank-circle-outline',
+        'Cabinet': 'mdi-square-rounded',
+        'Vault': 'mdi-square',
+        'Pedestal': 'mdi-square-outline',
+        'Building Entrance': 'mdi-square-dot',
         'Splice Closure': 'mdi-set-center',
-        'Tower': 'mdi-broadcast-tower',
-        'Rooftop': 'mdi-home-roof',
-        'Equipment Room': 'mdi-server-network',
-        'Telecom Closet': 'mdi-lan',
-        'Riser Room': 'mdi-stairs-up'
+        'Tower': 'mdi-target',
+        'Rooftop': 'mdi-triangle-outline',
+        'Equipment Room': 'mdi-square-rounded-outline',
+        'Telecom Closet': 'mdi-rhombus',
+        'Riser Room': 'mdi-rhombus-outline'
     };
 
     var PATHWAY_COLORS = {
@@ -173,9 +173,9 @@
             className: 'pw-marker',
             html: '<div class="pw-marker-pin" style="background:' + color + '">' +
                   '<i class="mdi ' + icon + '"></i></div>',
-            iconSize: [28, 28],
-            iconAnchor: [14, 14],
-            popupAnchor: [0, -16]
+            iconSize: [18, 18],
+            iconAnchor: [9, 9],
+            popupAnchor: [0, -10]
         });
     }
 
