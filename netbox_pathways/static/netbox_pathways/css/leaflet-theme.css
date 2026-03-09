@@ -112,20 +112,22 @@
 }
 
 .pw-marker-pin {
-    width: 18px;
-    height: 18px;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
     border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1.5px solid rgba(255, 255, 255, 0.9);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
 .pw-marker-pin .mdi {
-    font-size: 10px;
+    font-size: 13px;
     color: #fff;
     line-height: 1;
+    margin-top: 0;
 }
 
 /* Cluster icons — match pin style */
@@ -179,4 +181,29 @@ form .leaflet-container {
     background: var(--pw-map-popup-bg);
     color: var(--pw-map-popup-text);
     border-color: var(--pw-map-popup-border);
+}
+
+/* --- Legend icons ------------------------------------------------- */
+
+.pw-legend-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 12px;
+    line-height: 1;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.pw-legend-line {
+    display: inline-block;
+    width: 28px;
+    height: 0;
+    border-top: 3px dashed;
+    margin-right: 6px;
+    vertical-align: middle;
 }
