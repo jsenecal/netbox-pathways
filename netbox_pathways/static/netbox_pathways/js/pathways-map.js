@@ -67,11 +67,11 @@
         // Match MarkerCluster's ring style: translucent outer + opaque inner
         var cls, size;
         if (count < 10) {
-            cls = 'pw-cluster-small'; size = 40;
+            cls = 'pw-cluster-small'; size = 34;
         } else if (count < 100) {
-            cls = 'pw-cluster-medium'; size = 50;
+            cls = 'pw-cluster-medium'; size = 40;
         } else {
-            cls = 'pw-cluster-large'; size = 60;
+            cls = 'pw-cluster-large'; size = 46;
         }
         return L.divIcon({
             className: 'pw-server-cluster',
@@ -281,7 +281,7 @@
         // Structures wrapper — holds either server cluster markers or a MarkerCluster sub-group
         var structuresLayer = L.layerGroup();
         var markerClusterGroup = L.markerClusterGroup({
-            maxClusterRadius: 50,
+            maxClusterRadius: 35,
             spiderfyOnMaxZoom: true,
             disableClusteringAtZoom: 18
         });
