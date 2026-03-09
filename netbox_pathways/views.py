@@ -45,7 +45,6 @@ class StructureView(generic.ObjectView):
 class StructureEditView(generic.ObjectEditView):
     queryset = models.Structure.objects.all()
     form = forms.StructureForm
-    template_name = 'netbox_pathways/object_edit_map.html'
 
 
 class StructureDeleteView(generic.ObjectDeleteView):
@@ -167,7 +166,6 @@ class ConduitView(generic.ObjectView):
 class ConduitEditView(generic.ObjectEditView):
     queryset = models.Conduit.objects.all()
     form = forms.ConduitForm
-    template_name = 'netbox_pathways/object_edit_map.html'
 
 
 class ConduitDeleteView(generic.ObjectDeleteView):
@@ -238,7 +236,6 @@ class AerialSpanView(generic.ObjectView):
 class AerialSpanEditView(generic.ObjectEditView):
     queryset = models.AerialSpan.objects.all()
     form = forms.AerialSpanForm
-    template_name = 'netbox_pathways/object_edit_map.html'
 
 
 class AerialSpanDeleteView(generic.ObjectDeleteView):
@@ -294,7 +291,6 @@ class DirectBuriedView(generic.ObjectView):
 class DirectBuriedEditView(generic.ObjectEditView):
     queryset = models.DirectBuried.objects.all()
     form = forms.DirectBuriedForm
-    template_name = 'netbox_pathways/object_edit_map.html'
 
 
 class DirectBuriedDeleteView(generic.ObjectDeleteView):
@@ -333,7 +329,6 @@ class InnerductView(generic.ObjectView):
 class InnerductEditView(generic.ObjectEditView):
     queryset = models.Innerduct.objects.all()
     form = forms.InnerductForm
-    template_name = 'netbox_pathways/object_edit_map.html'
 
 
 class InnerductDeleteView(generic.ObjectDeleteView):
@@ -449,7 +444,6 @@ class CableSegmentView(generic.ObjectView):
 class CableSegmentEditView(generic.ObjectEditView):
     queryset = models.CableSegment.objects.all()
     form = forms.CableSegmentForm
-    template_name = 'netbox_pathways/object_edit_map.html'
 
 
 class CableSegmentDeleteView(generic.ObjectDeleteView):
@@ -518,7 +512,6 @@ class SiteGeometryView(generic.ObjectView):
 class SiteGeometryEditView(generic.ObjectEditView):
     queryset = models.SiteGeometry.objects.all()
     form = forms.SiteGeometryForm
-    template_name = 'netbox_pathways/object_edit_map.html'
 
 
 class SiteGeometryDeleteView(generic.ObjectDeleteView):

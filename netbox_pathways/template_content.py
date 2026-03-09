@@ -5,10 +5,25 @@ from netbox.plugins.templates import PluginTemplateExtension
 from . import models
 from .geo import linestring_to_coords, point_to_latlon
 
-LEAFLET_HEAD = (
-    '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />\n'
-    '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>\n'
-)
+
+def _leaflet_head():
+    """Return HTML to load Leaflet and django-leaflet assets in <head>."""
+    css = [
+        static('leaflet/leaflet.css'),
+        static('leaflet/draw/leaflet.draw.css'),
+    ]
+    js = [
+        static('leaflet/leaflet.js'),
+        static('leaflet/leaflet.extras.js'),
+        static('leaflet/draw/leaflet.draw.js'),
+        static('leaflet/leaflet.forms.js'),
+    ]
+    html = ''
+    for href in css:
+        html += f'<link rel="stylesheet" href="{href}" />\n'
+    for src in js:
+        html += f'<script src="{src}"></script>\n'
+    return html
 
 PATHWAY_COLORS = {
     'conduit': 'brown',
@@ -64,6 +79,14 @@ def _structure_point(structure, color=None):
     }
 
 
+class LeafletHeadExtension(PluginTemplateExtension):
+    """Load Leaflet + django-leaflet assets globally via {% plugin_head %}."""
+
+    def head(self):
+        detail_js = static('netbox_pathways/js/detail-map.js')
+        return _leaflet_head() + f'<script src="{detail_js}"></script>\n'
+
+
 class PluginModelMapExtension(PluginTemplateExtension):
     """Map panel on plugin model detail pages (Structure, Pathway subtypes, etc.)."""
 
@@ -77,10 +100,6 @@ class PluginModelMapExtension(PluginTemplateExtension):
         'netbox_pathways.conduitbank',
         'netbox_pathways.conduitjunction',
     ]
-
-    def head(self):
-        detail_js = static('netbox_pathways/js/detail-map.js')
-        return LEAFLET_HEAD + f'<script src="{detail_js}"></script>\n'
 
     def right_page(self):
         obj = self.context['object']
@@ -160,10 +179,6 @@ class CoreModelMapExtension(PluginTemplateExtension):
     """Infrastructure overview map on Site and Location detail pages."""
 
     models = ['dcim.site', 'dcim.location']
-
-    def head(self):
-        detail_js = static('netbox_pathways/js/detail-map.js')
-        return LEAFLET_HEAD + f'<script src="{detail_js}"></script>\n'
 
     def full_width_page(self):
         obj = self.context['object']
@@ -250,4 +265,4 @@ class CoreModelMapExtension(PluginTemplateExtension):
         return data
 
 
-template_extensions = [PluginModelMapExtension, CoreModelMapExtension]
+template_extensions = [LeafletHeadExtension, PluginModelMapExtension, CoreModelMapExtension]

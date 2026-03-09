@@ -1,6 +1,6 @@
 from dcim.models import Cable, Location, Site
 from django import forms
-from leaflet.forms.widgets import LeafletWidget as _LeafletWidget
+from leaflet.forms.widgets import LeafletWidget
 from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelForm, NetBoxModelImportForm
 from utilities.forms.fields import CSVModelChoiceField, DynamicModelChoiceField
 
@@ -24,11 +24,6 @@ from .models import (
     SiteGeometry,
     Structure,
 )
-
-
-class LeafletWidget(_LeafletWidget):
-    include_media = True
-
 
 # --- Structure ---
 
