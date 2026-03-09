@@ -6,6 +6,21 @@ from tenancy.models import Tenant
 from utilities.forms.fields import CSVModelChoiceField, DynamicModelChoiceField
 from utilities.forms.rendering import FieldSet
 
+
+class PointPolygonWidget(LeafletWidget):
+    """LeafletWidget that allows point and polygon drawing but not polylines."""
+
+    class Media:
+        js = ('netbox_pathways/js/point-polygon-widget.js',)
+
+
+class PointOnlyWidget(LeafletWidget):
+    """LeafletWidget restricted to point drawing only."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('attrs', {})['geom_type'] = 'POINT'
+        super().__init__(*args, **kwargs)
+
 from .choices import (
     AerialTypeChoices,
     ConduitBankConfigChoices,
@@ -46,7 +61,7 @@ class StructureForm(NetBoxModelForm):
             'installation_date', 'access_notes', 'comments', 'tags',
         ]
         widgets = {
-            'location': LeafletWidget(),
+            'location': PointPolygonWidget(),
         }
 
 
@@ -438,9 +453,9 @@ class CableSegmentForm(NetBoxModelForm):
             'comments', 'tags',
         ]
         widgets = {
-            'enter_point': LeafletWidget(),
-            'exit_point': LeafletWidget(),
-            'slack_loop_location': LeafletWidget(),
+            'enter_point': PointOnlyWidget(),
+            'exit_point': PointOnlyWidget(),
+            'slack_loop_location': PointOnlyWidget(),
         }
 
 
@@ -497,5 +512,5 @@ class SiteGeometryForm(NetBoxModelForm):
         model = SiteGeometry
         fields = ['site', 'structure', 'geometry', 'comments', 'tags']
         widgets = {
-            'geometry': LeafletWidget(),
+            'geometry': PointPolygonWidget(),
         }

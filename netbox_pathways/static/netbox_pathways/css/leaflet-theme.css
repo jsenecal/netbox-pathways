@@ -104,6 +104,41 @@
     color: var(--pw-map-popup-text);
 }
 
+/* --- Structure marker icons --------------------------------------- */
+
+.pw-marker {
+    background: none !important;
+    border: none !important;
+}
+
+.pw-marker-pin {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.pw-marker-pin .mdi {
+    font-size: 14px;
+    color: #fff;
+    line-height: 1;
+}
+
+/* Cluster icons — match pin style */
+.marker-cluster div {
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 /* --- Reset home control ------------------------------------------- */
 
 .leaflet-control-zoom a .mdi {
@@ -112,6 +147,12 @@
 }
 
 /* --- django-leaflet form widget ----------------------------------- */
+
+/* Override django-leaflet default 720px to match NetBox form field width */
+form .leaflet-container {
+    width: 100% !important;
+    max-width: 100%;
+}
 
 [data-bs-theme="dark"] .leaflet-container {
     background: var(--pw-map-bg);

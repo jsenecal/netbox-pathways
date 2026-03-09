@@ -80,6 +80,7 @@ def _structure_point(structure, color=None):
         'lat': latlon[0],
         'lon': latlon[1],
         'name': structure.name,
+        'structure_type': structure.get_structure_type_display(),
         'color': color or STRUCTURE_COLORS.get(structure.structure_type, 'gray'),
         'url': structure.get_absolute_url(),
     }

@@ -134,27 +134,54 @@
         return overlays;
     }
 
-    // --- GeoJSON Styling ---
+    // --- Color & Icon Maps ---
 
     var STRUCTURE_COLORS = {
-        'Pole': 'green', 'Manhole': 'blue', 'Handhole': 'cyan',
-        'Cabinet': 'orange', 'Vault': 'purple', 'Pedestal': 'yellow',
-        'Building Entrance': 'red', 'Splice Closure': 'brown',
-        'Tower': 'darkred', 'Rooftop': 'gray', 'Equipment Room': 'teal',
-        'Telecom Closet': 'indigo', 'Riser Room': 'pink'
+        'Pole': '#2e7d32', 'Manhole': '#1565c0', 'Handhole': '#00838f',
+        'Cabinet': '#e65100', 'Vault': '#6a1b9a', 'Pedestal': '#f9a825',
+        'Building Entrance': '#c62828', 'Splice Closure': '#795548',
+        'Tower': '#b71c1c', 'Rooftop': '#616161', 'Equipment Room': '#00796b',
+        'Telecom Closet': '#283593', 'Riser Room': '#ad1457'
+    };
+
+    var STRUCTURE_ICONS = {
+        'Pole': 'mdi-transmission-tower',
+        'Manhole': 'mdi-circle-double',
+        'Handhole': 'mdi-circle-outline',
+        'Cabinet': 'mdi-archive',
+        'Vault': 'mdi-safe-square-outline',
+        'Pedestal': 'mdi-pillar',
+        'Building Entrance': 'mdi-door',
+        'Splice Closure': 'mdi-set-center',
+        'Tower': 'mdi-broadcast-tower',
+        'Rooftop': 'mdi-home-roof',
+        'Equipment Room': 'mdi-server-network',
+        'Telecom Closet': 'mdi-lan',
+        'Riser Room': 'mdi-stairs-up'
     };
 
     var PATHWAY_COLORS = {
-        'Conduit': 'brown', 'Aerial Span': 'blue', 'Direct Buried': 'gray',
-        'Innerduct': 'orange', 'Microduct': 'purple', 'Cable Tray': 'green',
-        'Raceway': 'cyan', 'Submarine': 'navy'
+        'Conduit': '#795548', 'Aerial Span': '#1565c0', 'Direct Buried': '#616161',
+        'Innerduct': '#e65100', 'Microduct': '#6a1b9a', 'Cable Tray': '#2e7d32',
+        'Raceway': '#00838f', 'Submarine': '#1a237e'
     };
 
+    function _structureIcon(type) {
+        var color = STRUCTURE_COLORS[type] || '#616161';
+        var icon = STRUCTURE_ICONS[type] || 'mdi-map-marker';
+        return L.divIcon({
+            className: 'pw-marker',
+            html: '<div class="pw-marker-pin" style="background:' + color + '">' +
+                  '<i class="mdi ' + icon + '"></i></div>',
+            iconSize: [28, 28],
+            iconAnchor: [14, 14],
+            popupAnchor: [0, -16]
+        });
+    }
+
     function _structurePointToLayer(feature, latlng) {
-        var color = STRUCTURE_COLORS[feature.properties.structure_type] || 'gray';
-        return L.circleMarker(latlng, {
-            radius: 8, fillColor: color, color: '#000',
-            weight: 1, opacity: 1, fillOpacity: 0.8
+        return L.marker(latlng, {
+            icon: _structureIcon(feature.properties.structure_type)
         });
     }
 
@@ -244,10 +271,15 @@
         if (data.points && data.points.length) {
             var pointsLayer = L.layerGroup();
             data.points.forEach(function(pt) {
-                var marker = L.circleMarker([pt.lat, pt.lon], {
-                    radius: 8, fillColor: pt.color || 'blue', color: '#000',
-                    weight: 1, opacity: 1, fillOpacity: 0.8
-                });
+                var icon = pt.structure_type
+                    ? _structureIcon(pt.structure_type)
+                    : L.divIcon({
+                        className: 'pw-marker',
+                        html: '<div class="pw-marker-pin" style="background:' + (pt.color || '#1565c0') + '">' +
+                              '<i class="mdi mdi-map-marker"></i></div>',
+                        iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -16]
+                    });
+                var marker = L.marker([pt.lat, pt.lon], { icon: icon });
                 marker.bindPopup(_makePopup(pt.name, pt.url));
                 marker.addTo(pointsLayer);
                 bounds.extend([pt.lat, pt.lon]);

@@ -12,23 +12,52 @@
     var CFG = window.PATHWAYS_CONFIG || {};
     var API_BASE = CFG.apiBase || '/api/plugins/pathways/geo/';
     var MAX_NATIVE_ZOOM = CFG.maxNativeZoom || 19;
-    var MIN_DATA_ZOOM = 8;  // Don't fetch data below this zoom level (~100km scale)
+    var MIN_DATA_ZOOM = 11;  // Don't fetch data below this zoom level
 
-    // --- Color Maps ---
+    // --- Color & Icon Maps ---
 
     var STRUCTURE_COLORS = {
-        'pole': 'green', 'manhole': 'blue', 'handhole': 'cyan',
-        'cabinet': 'orange', 'vault': 'purple', 'pedestal': 'yellow',
-        'building_entrance': 'red', 'splice_closure': 'brown',
-        'tower': 'darkred', 'roof': 'gray', 'equipment_room': 'teal',
-        'telecom_closet': 'indigo', 'riser_room': 'pink'
+        'pole': '#2e7d32', 'manhole': '#1565c0', 'handhole': '#00838f',
+        'cabinet': '#e65100', 'vault': '#6a1b9a', 'pedestal': '#f9a825',
+        'building_entrance': '#c62828', 'splice_closure': '#795548',
+        'tower': '#b71c1c', 'roof': '#616161', 'equipment_room': '#00796b',
+        'telecom_closet': '#283593', 'riser_room': '#ad1457'
+    };
+
+    var STRUCTURE_ICONS = {
+        'pole': 'mdi-transmission-tower',
+        'manhole': 'mdi-circle-double',
+        'handhole': 'mdi-circle-outline',
+        'cabinet': 'mdi-archive',
+        'vault': 'mdi-safe-square-outline',
+        'pedestal': 'mdi-pillar',
+        'building_entrance': 'mdi-door',
+        'splice_closure': 'mdi-set-center',
+        'tower': 'mdi-broadcast-tower',
+        'roof': 'mdi-home-roof',
+        'equipment_room': 'mdi-server-network',
+        'telecom_closet': 'mdi-lan',
+        'riser_room': 'mdi-stairs-up'
     };
 
     var PATHWAY_COLORS = {
-        'conduit': 'brown', 'aerial': 'blue', 'direct_buried': 'gray',
-        'innerduct': 'orange', 'microduct': 'purple', 'tray': 'green',
-        'raceway': 'cyan', 'submarine': 'navy'
+        'conduit': '#795548', 'aerial': '#1565c0', 'direct_buried': '#616161',
+        'innerduct': '#e65100', 'microduct': '#6a1b9a', 'tray': '#2e7d32',
+        'raceway': '#00838f', 'submarine': '#1a237e'
     };
+
+    function _structureIcon(type) {
+        var color = STRUCTURE_COLORS[type] || '#616161';
+        var icon = STRUCTURE_ICONS[type] || 'mdi-map-marker';
+        return L.divIcon({
+            className: 'pw-marker',
+            html: '<div class="pw-marker-pin" style="background:' + color + '">' +
+                  '<i class="mdi ' + icon + '"></i></div>',
+            iconSize: [28, 28],
+            iconAnchor: [14, 14],
+            popupAnchor: [0, -16]
+        });
+    }
 
     // --- Helpers ---
 
@@ -50,9 +79,17 @@
         return b.getWest() + ',' + b.getSouth() + ',' + b.getEast() + ',' + b.getNorth();
     }
 
+    // Track in-flight requests per endpoint so we can abort stale ones
+    var _inflightXHR = {};
+
     function _fetchGeoJSON(endpoint, bbox, callback) {
+        // Abort any in-flight request for this endpoint
+        if (_inflightXHR[endpoint]) {
+            _inflightXHR[endpoint].abort();
+        }
         var url = API_BASE + endpoint + '?format=json&bbox=' + bbox;
         var xhr = new XMLHttpRequest();
+        _inflightXHR[endpoint] = xhr;
         xhr.open('GET', url);
         xhr.setRequestHeader('Accept', 'application/json');
         var csrfToken = _getCookie('csrftoken');
@@ -60,6 +97,7 @@
             xhr.setRequestHeader('X-CSRFToken', csrfToken);
         }
         xhr.onload = function() {
+            _inflightXHR[endpoint] = null;
             if (xhr.status === 200) {
                 try {
                     callback(JSON.parse(xhr.responseText));
@@ -68,6 +106,7 @@
                 }
             }
         };
+        xhr.onerror = function() { _inflightXHR[endpoint] = null; };
         xhr.send();
     }
 
@@ -237,10 +276,8 @@
                     dataLayers.structures.clearLayers();
                     var geoLayer = L.geoJSON(data, {
                         pointToLayer: function(feature, latlng) {
-                            var color = STRUCTURE_COLORS[feature.properties.structure_type] || 'gray';
-                            return L.circleMarker(latlng, {
-                                radius: 8, fillColor: color, color: '#000',
-                                weight: 1, opacity: 1, fillOpacity: 0.8
+                            return L.marker(latlng, {
+                                icon: _structureIcon(feature.properties.structure_type)
                             });
                         },
                         onEachFeature: function(feature, layer) {
@@ -341,7 +378,7 @@
         }
 
         // Load data on move/zoom with debounce
-        var debouncedLoad = _debounce(_loadData, 300);
+        var debouncedLoad = _debounce(_loadData, 500);
         map.on('moveend', debouncedLoad);
         map.on('overlayadd', function() { _loadData(); });
 
