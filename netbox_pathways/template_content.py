@@ -10,6 +10,8 @@ def _leaflet_head():
     """Return HTML to load Leaflet and django-leaflet assets in <head>."""
     css = [
         static('leaflet/leaflet.css'),
+        static('leaflet/leaflet_django.css'),
+        static('leaflet/leaflet.extras.css'),
         static('leaflet/draw/leaflet.draw.css'),
     ]
     js = [
