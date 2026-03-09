@@ -10,7 +10,8 @@ cluster centroids + counts instead of individual features, dramatically
 reducing payload size at low zoom levels.
 """
 
-from django.contrib.gis.db.models.functions import SnapToGrid, Transform
+from django.contrib.gis.db.models import Collect
+from django.contrib.gis.db.models.functions import Centroid, SnapToGrid, Transform
 from django.contrib.gis.geos import Polygon
 from django.db.models import Count
 from rest_framework import serializers as drf_serializers
@@ -148,18 +149,24 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
         )
 
         grid_size = _grid_size_for_zoom(zoom)
+        geo_expr = Transform('location', LEAFLET_SRID)
         clusters = (
             qs
-            .annotate(snapped=SnapToGrid(Transform('location', LEAFLET_SRID), grid_size))
-            .values('snapped')
-            .annotate(count=Count('id'))
+            # Grid used only for grouping — the actual display point is the
+            # centroid of collected geometries, giving organic placement.
+            .annotate(grid_cell=SnapToGrid(geo_expr, grid_size))
+            .values('grid_cell')
+            .annotate(
+                count=Count('id'),
+                centroid=Centroid(Collect(geo_expr)),
+            )
             .order_by()
         )
 
         features = []
         total = 0
         for c in clusters:
-            pt = c['snapped']
+            pt = c['centroid']
             if pt is None:
                 continue
             count = c['count']

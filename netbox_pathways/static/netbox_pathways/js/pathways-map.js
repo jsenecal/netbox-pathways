@@ -64,12 +64,20 @@
     }
 
     function _clusterIcon(count) {
-        var size = count < 10 ? 28 : count < 100 ? 34 : count < 1000 ? 40 : 48;
-        var color = count < 10 ? '#2d7d32' : count < 100 ? '#1565c0' : count < 1000 ? '#e65100' : '#c62828';
+        // Match MarkerCluster's ring style: translucent outer + opaque inner
+        var cls, size;
+        if (count < 10) {
+            cls = 'pw-cluster-small'; size = 40;
+        } else if (count < 100) {
+            cls = 'pw-cluster-medium'; size = 50;
+        } else {
+            cls = 'pw-cluster-large'; size = 60;
+        }
         return L.divIcon({
             className: 'pw-server-cluster',
-            html: '<div class="pw-cluster-circle" style="width:' + size + 'px;height:' + size + 'px;background:' + color + '">' +
-                  '<span>' + count + '</span></div>',
+            html: '<div class="pw-cluster-ring ' + cls + '" style="width:' + size +
+                  'px;height:' + size + 'px"><div class="pw-cluster-inner"><span>' +
+                  count + '</span></div></div>',
             iconSize: [size, size],
             iconAnchor: [size / 2, size / 2]
         });

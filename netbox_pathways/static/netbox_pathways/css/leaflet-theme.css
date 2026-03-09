@@ -141,26 +141,50 @@
     justify-content: center;
 }
 
-/* Server-side cluster icons (low zoom) */
+/* Server-side cluster icons — matches MarkerCluster ring style */
 .pw-server-cluster {
     background: none !important;
     border: none !important;
 }
 
-.pw-cluster-circle {
+.pw-cluster-ring {
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
-    font-size: 12px;
-    font-weight: 600;
-    border: 2px solid rgba(255, 255, 255, 0.8);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
-.pw-cluster-circle span {
-    line-height: 1;
+.pw-cluster-inner {
+    border-radius: 50%;
+    width: 70%;
+    height: 70%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.pw-cluster-small {
+    background: rgba(181, 226, 140, 0.6);
+}
+.pw-cluster-small .pw-cluster-inner {
+    background: rgba(110, 204, 57, 0.85);
+}
+
+.pw-cluster-medium {
+    background: rgba(241, 211, 87, 0.6);
+}
+.pw-cluster-medium .pw-cluster-inner {
+    background: rgba(240, 194, 12, 0.85);
+}
+
+.pw-cluster-large {
+    background: rgba(253, 156, 115, 0.6);
+}
+.pw-cluster-large .pw-cluster-inner {
+    background: rgba(241, 128, 23, 0.85);
 }
 
 /* --- Reset home control ------------------------------------------- */
