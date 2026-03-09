@@ -28,7 +28,8 @@ class StructureTable(NetBoxTable):
         model = Structure
         fields = (
             'pk', 'id', 'name', 'structure_type', 'site',
-            'elevation', 'installation_date', 'tenant', 'actions',
+            'height', 'width', 'length', 'depth', 'elevation',
+            'installation_date', 'tenant', 'actions',
         )
         default_columns = ('name', 'structure_type', 'site', 'tenant')
 

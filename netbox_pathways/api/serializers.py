@@ -25,7 +25,8 @@ class StructureSerializer(NetBoxModelSerializer):
         model = Structure
         fields = [
             'id', 'url', 'display', 'name', 'structure_type', 'site',
-            'location', 'elevation', 'installation_date', 'tenant',
+            'location', 'height', 'width', 'length', 'depth', 'elevation',
+            'installation_date', 'tenant',
             'access_notes', 'comments', 'tags', 'created', 'last_updated',
         ]
         brief_fields = ('id', 'url', 'display', 'name', 'structure_type')

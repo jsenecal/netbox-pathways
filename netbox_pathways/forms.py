@@ -45,11 +45,12 @@ from .models import (
 # --- Structure ---
 
 class StructureForm(NetBoxModelForm):
-    site = DynamicModelChoiceField(queryset=Site.objects.all(), selector=True, quick_add=True)
+    site = DynamicModelChoiceField(queryset=Site.objects.all(), required=False, selector=True, quick_add=True)
     tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
 
     fieldsets = (
-        FieldSet('name', 'structure_type', 'site', 'tenant', 'elevation', 'installation_date', name='Structure'),
+        FieldSet('name', 'structure_type', 'site', 'tenant', 'installation_date', name='Structure'),
+        FieldSet('height', 'width', 'length', 'depth', 'elevation', name='Dimensions'),
         FieldSet('location', name='Geometry'),
         FieldSet('access_notes', 'comments', 'tags', name='Details'),
     )
@@ -57,7 +58,8 @@ class StructureForm(NetBoxModelForm):
     class Meta:
         model = Structure
         fields = [
-            'name', 'structure_type', 'site', 'tenant', 'location', 'elevation',
+            'name', 'structure_type', 'site', 'tenant', 'location',
+            'height', 'width', 'length', 'depth', 'elevation',
             'installation_date', 'access_notes', 'comments', 'tags',
         ]
         widgets = {
@@ -66,7 +68,9 @@ class StructureForm(NetBoxModelForm):
 
 
 class StructureImportForm(NetBoxModelImportForm):
-    site = CSVModelChoiceField(queryset=Site.objects.all(), to_field_name='name', help_text='Site name')
+    site = CSVModelChoiceField(
+        queryset=Site.objects.all(), to_field_name='name', required=False, help_text='Site name',
+    )
     tenant = CSVModelChoiceField(
         queryset=Tenant.objects.all(), to_field_name='name', required=False, help_text='Tenant name',
     )
@@ -74,7 +78,8 @@ class StructureImportForm(NetBoxModelImportForm):
     class Meta:
         model = Structure
         fields = [
-            'name', 'structure_type', 'site', 'tenant', 'elevation',
+            'name', 'structure_type', 'site', 'tenant',
+            'height', 'width', 'length', 'depth', 'elevation',
             'installation_date', 'access_notes', 'comments',
         ]
 
@@ -88,7 +93,7 @@ class StructureBulkEditForm(NetBoxModelBulkEditForm):
     fieldsets = (
         FieldSet('site', 'structure_type', 'tenant'),
     )
-    nullable_fields = ('tenant', 'access_notes')
+    nullable_fields = ('site', 'tenant', 'access_notes')
 
 
 # --- Pathway (base) ---

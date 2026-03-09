@@ -20,12 +20,19 @@ from .geo import get_srid
 class Structure(NetBoxModel):
     name = models.CharField(max_length=100, unique=True)
     structure_type = models.CharField(max_length=50, choices=StructureTypeChoices, blank=True)
-    site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='pathways_structures')
+    site = models.ForeignKey(
+        Site, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='pathways_structures',
+    )
     location = models.GeometryField(
         srid=get_srid(),
         help_text="Geographic geometry (point for simple structures, polygon for footprints)",
     )
     elevation = models.FloatField(null=True, blank=True, help_text="Elevation in meters")
+    height = models.FloatField(null=True, blank=True, help_text="Height in meters")
+    width = models.FloatField(null=True, blank=True, help_text="Width in meters")
+    length = models.FloatField(null=True, blank=True, help_text="Length in meters")
+    depth = models.FloatField(null=True, blank=True, help_text="Depth in meters")
     installation_date = models.DateField(null=True, blank=True)
     tenant = models.ForeignKey(
         Tenant, on_delete=models.SET_NULL, null=True, blank=True,

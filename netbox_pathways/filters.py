@@ -46,7 +46,7 @@ class StructureFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = Structure
-        fields = ['id', 'name', 'structure_type', 'elevation', 'installation_date']
+        fields = ['id', 'name', 'structure_type', 'height', 'width', 'length', 'depth', 'elevation', 'installation_date']
 
     def search(self, queryset, name, value):
         if not value.strip():

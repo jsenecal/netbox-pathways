@@ -7,8 +7,12 @@ class StructurePanel(ObjectAttributesPanel):
     name = attrs.TextAttr('name', label=_('Name'))
     structure_type = attrs.ChoiceAttr('structure_type', label=_('Type'))
     site = attrs.RelatedObjectAttr('site', linkify=True, label=_('Site'))
-    elevation = attrs.NumericAttr('elevation', label=_('Elevation'))
     tenant = attrs.RelatedObjectAttr('tenant', linkify=True, label=_('Tenant'))
+    height = attrs.NumericAttr('height', label=_('Height (m)'))
+    width = attrs.NumericAttr('width', label=_('Width (m)'))
+    length = attrs.NumericAttr('length', label=_('Length (m)'))
+    depth = attrs.NumericAttr('depth', label=_('Depth (m)'))
+    elevation = attrs.NumericAttr('elevation', label=_('Elevation (m)'))
     installation_date = attrs.TextAttr('installation_date', label=_('Installation date'))
     access_notes = attrs.TextAttr('access_notes', label=_('Access notes'))
 
