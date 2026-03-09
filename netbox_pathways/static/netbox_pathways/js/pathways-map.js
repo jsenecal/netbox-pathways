@@ -12,22 +12,22 @@
     var CFG = window.PATHWAYS_CONFIG || {};
     var API_BASE = CFG.apiBase || '/api/plugins/pathways/geo/';
     var MAX_NATIVE_ZOOM = CFG.maxNativeZoom || 19;
-    var MIN_DATA_ZOOM = 13;  // Don't fetch data below this zoom level
+    var MIN_DATA_ZOOM = 8;  // Don't fetch data below this zoom level (~100km scale)
 
     // --- Color Maps ---
 
     var STRUCTURE_COLORS = {
-        'Pole': 'green', 'Manhole': 'blue', 'Handhole': 'cyan',
-        'Cabinet': 'orange', 'Vault': 'purple', 'Pedestal': 'yellow',
-        'Building Entrance': 'red', 'Splice Closure': 'brown',
-        'Tower': 'darkred', 'Rooftop': 'gray', 'Equipment Room': 'teal',
-        'Telecom Closet': 'indigo', 'Riser Room': 'pink'
+        'pole': 'green', 'manhole': 'blue', 'handhole': 'cyan',
+        'cabinet': 'orange', 'vault': 'purple', 'pedestal': 'yellow',
+        'building_entrance': 'red', 'splice_closure': 'brown',
+        'tower': 'darkred', 'roof': 'gray', 'equipment_room': 'teal',
+        'telecom_closet': 'indigo', 'riser_room': 'pink'
     };
 
     var PATHWAY_COLORS = {
-        'Conduit': 'brown', 'Aerial Span': 'blue', 'Direct Buried': 'gray',
-        'Innerduct': 'orange', 'Microduct': 'purple', 'Cable Tray': 'green',
-        'Raceway': 'cyan', 'Submarine': 'navy'
+        'conduit': 'brown', 'aerial': 'blue', 'direct_buried': 'gray',
+        'innerduct': 'orange', 'microduct': 'purple', 'tray': 'green',
+        'raceway': 'cyan', 'submarine': 'navy'
     };
 
     // --- Helpers ---
@@ -51,7 +51,7 @@
     }
 
     function _fetchGeoJSON(endpoint, bbox, callback) {
-        var url = API_BASE + endpoint + '?format=json&limit=2000&bbox=' + bbox;
+        var url = API_BASE + endpoint + '?format=json&bbox=' + bbox;
         var xhr = new XMLHttpRequest();
         xhr.open('GET', url);
         xhr.setRequestHeader('Accept', 'application/json');
@@ -235,7 +235,7 @@
             if (map.hasLayer(dataLayers.structures)) {
                 _fetchGeoJSON('structures/', bbox, function(data) {
                     dataLayers.structures.clearLayers();
-                    L.geoJSON(data, {
+                    var geoLayer = L.geoJSON(data, {
                         pointToLayer: function(feature, latlng) {
                             var color = STRUCTURE_COLORS[feature.properties.structure_type] || 'gray';
                             return L.circleMarker(latlng, {
@@ -254,7 +254,9 @@
                                 '</table></div>'
                             );
                         }
-                    }).addTo(dataLayers.structures);
+                    });
+                    // Add individual markers to cluster group (not the layer group)
+                    dataLayers.structures.addLayers(geoLayer.getLayers());
                     if (structureCountEl) {
                         structureCountEl.textContent = data.features ? data.features.length : 0;
                     }
@@ -276,7 +278,6 @@
                                 '<h5>' + _esc(p.name) + '</h5>' +
                                 '<table class="table table-sm">' +
                                 '<tr><td><strong>Type:</strong></td><td>' + _esc(p.pathway_type || '') + '</td></tr>' +
-                                '<tr><td><strong>Cables:</strong></td><td>' + (p.cables_routed || 0) + '</td></tr>' +
                                 '</table></div>'
                             );
                         }
