@@ -149,19 +149,32 @@
 
     // --- Base Layers ---
 
+    var DEFAULT_BASE_LAYERS = [
+        {
+            name: 'Street',
+            url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+            maxNativeZoom: MAX_NATIVE_ZOOM
+        },
+        {
+            name: 'Satellite',
+            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            attribution: 'Esri World Imagery',
+            maxNativeZoom: 19
+        }
+    ];
+
     function _createBaseLayers() {
-        return {
-            'Street': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap contributors',
-                maxNativeZoom: MAX_NATIVE_ZOOM,
+        var configs = (CFG.baseLayers && CFG.baseLayers.length) ? CFG.baseLayers : DEFAULT_BASE_LAYERS;
+        var layers = {};
+        configs.forEach(function(cfg) {
+            layers[cfg.name] = L.tileLayer(cfg.url, {
+                attribution: cfg.attribution || '',
+                maxNativeZoom: cfg.maxNativeZoom || MAX_NATIVE_ZOOM,
                 maxZoom: 22
-            }),
-            'Satellite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Esri World Imagery',
-                maxNativeZoom: 19,
-                maxZoom: 22
-            })
-        };
+            });
+        });
+        return layers;
     }
 
     // --- User-configured Overlays (WMS/WMTS/tile) ---

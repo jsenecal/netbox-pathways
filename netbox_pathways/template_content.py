@@ -99,6 +99,7 @@ class LeafletHeadExtension(PluginTemplateExtension):
             'maxNativeZoom': plugin_cfg.get('map_max_native_zoom', 19),
             'apiBase': '/api/plugins/pathways/geo/',
             'overlays': plugin_cfg.get('map_overlays', []),
+            'baseLayers': plugin_cfg.get('map_base_layers', []),
         }
 
         detail_js = static('netbox_pathways/js/detail-map.js')
