@@ -4,6 +4,10 @@
  * Fetches structures and pathways from the GeoJSON API within the visible
  * bounding box, but only when zoomed in past a minimum threshold.
  * Re-fetches on pan/zoom with debouncing.
+ *
+ * Structures use server-side grid clustering at low zoom levels (11-14)
+ * to avoid transferring thousands of features just for client-side clustering.
+ * At zoom 15+ individual features are returned and optionally client-clustered.
  */
 
 (function() {
@@ -59,6 +63,18 @@
         });
     }
 
+    function _clusterIcon(count) {
+        var size = count < 10 ? 28 : count < 100 ? 34 : count < 1000 ? 40 : 48;
+        var color = count < 10 ? '#2d7d32' : count < 100 ? '#1565c0' : count < 1000 ? '#e65100' : '#c62828';
+        return L.divIcon({
+            className: 'pw-server-cluster',
+            html: '<div class="pw-cluster-circle" style="width:' + size + 'px;height:' + size + 'px;background:' + color + '">' +
+                  '<span>' + count + '</span></div>',
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2]
+        });
+    }
+
     // --- Helpers ---
 
     function _esc(text) {
@@ -82,12 +98,17 @@
     // Track in-flight requests per endpoint so we can abort stale ones
     var _inflightXHR = {};
 
-    function _fetchGeoJSON(endpoint, bbox, callback) {
+    function _fetchGeoJSON(endpoint, bbox, callback, extraParams) {
         // Abort any in-flight request for this endpoint
         if (_inflightXHR[endpoint]) {
             _inflightXHR[endpoint].abort();
         }
         var url = API_BASE + endpoint + '?format=json&bbox=' + bbox;
+        if (extraParams) {
+            for (var key in extraParams) {
+                url += '&' + key + '=' + encodeURIComponent(extraParams[key]);
+            }
+        }
         var xhr = new XMLHttpRequest();
         _inflightXHR[endpoint] = xhr;
         xhr.open('GET', url);
@@ -249,12 +270,16 @@
 
         // --- Dynamic data layers (re-fetched on move) ---
 
+        // Structures wrapper — holds either server cluster markers or a MarkerCluster sub-group
+        var structuresLayer = L.layerGroup();
+        var markerClusterGroup = L.markerClusterGroup({
+            maxClusterRadius: 50,
+            spiderfyOnMaxZoom: true,
+            disableClusteringAtZoom: 18
+        });
+
         var dataLayers = {
-            structures: L.markerClusterGroup({
-                maxClusterRadius: 50,
-                spiderfyOnMaxZoom: true,
-                disableClusteringAtZoom: 18
-            }),
+            structures: structuresLayer,
             conduits: L.layerGroup(),
             aerialSpans: L.layerGroup(),
             directBuried: L.layerGroup()
@@ -291,7 +316,7 @@
             var zoom = map.getZoom();
 
             if (zoom < MIN_DATA_ZOOM) {
-                dataLayers.structures.clearLayers();
+                structuresLayer.clearLayers();
                 dataLayers.conduits.clearLayers();
                 dataLayers.aerialSpans.clearLayers();
                 dataLayers.directBuried.clearLayers();
@@ -328,33 +353,54 @@
                 if (pendingPathway <= 0) _updatePathwayStats();
             }
 
-            // Structures
-            if (map.hasLayer(dataLayers.structures)) {
+            // Structures — send zoom for server-side clustering decision
+            if (map.hasLayer(structuresLayer)) {
                 _fetchGeoJSON('structures/', bbox, function(data) {
-                    dataLayers.structures.clearLayers();
-                    var geoLayer = L.geoJSON(data, {
-                        pointToLayer: function(feature, latlng) {
-                            return L.marker(latlng, {
-                                icon: _structureIcon(feature.properties.structure_type)
-                            });
-                        },
-                        onEachFeature: function(feature, layer) {
-                            var p = feature.properties;
-                            layer.bindPopup(
-                                '<div class="pathways-popup">' +
-                                '<h5>' + _esc(p.name) + '</h5>' +
-                                '<table class="table table-sm">' +
-                                '<tr><td><strong>Type:</strong></td><td>' + _esc(p.structure_type || '') + '</td></tr>' +
-                                '<tr><td><strong>Site:</strong></td><td>' + _esc(p.site_name || '') + '</td></tr>' +
-                                '</table></div>'
-                            );
+                    structuresLayer.clearLayers();
+                    markerClusterGroup.clearLayers();
+
+                    var isServerClustered = data.features && data.features.length > 0 &&
+                                            data.features[0].properties.cluster;
+
+                    if (isServerClustered) {
+                        // Server-side clusters — render as plain markers (no client re-clustering)
+                        var total = 0;
+                        data.features.forEach(function(f) {
+                            var count = f.properties.point_count;
+                            total += count;
+                            var latlng = L.latLng(f.geometry.coordinates[1], f.geometry.coordinates[0]);
+                            var marker = L.marker(latlng, { icon: _clusterIcon(count) });
+                            marker.bindPopup('<strong>' + count + ' structures</strong>');
+                            structuresLayer.addLayer(marker);
+                        });
+                        if (structureCountEl) structureCountEl.textContent = total;
+                    } else {
+                        // Individual features — use client MarkerCluster for zoom 15-17
+                        var geoLayer = L.geoJSON(data, {
+                            pointToLayer: function(feature, latlng) {
+                                return L.marker(latlng, {
+                                    icon: _structureIcon(feature.properties.structure_type)
+                                });
+                            },
+                            onEachFeature: function(feature, layer) {
+                                var p = feature.properties;
+                                layer.bindPopup(
+                                    '<div class="pathways-popup">' +
+                                    '<h5>' + _esc(p.name) + '</h5>' +
+                                    '<table class="table table-sm">' +
+                                    '<tr><td><strong>Type:</strong></td><td>' + _esc(p.structure_type || '') + '</td></tr>' +
+                                    '<tr><td><strong>Site:</strong></td><td>' + _esc(p.site_name || '') + '</td></tr>' +
+                                    '</table></div>'
+                                );
+                            }
+                        });
+                        markerClusterGroup.addLayers(geoLayer.getLayers());
+                        structuresLayer.addLayer(markerClusterGroup);
+                        if (structureCountEl) {
+                            structureCountEl.textContent = data.features ? data.features.length : 0;
                         }
-                    });
-                    dataLayers.structures.addLayers(geoLayer.getLayers());
-                    if (structureCountEl) {
-                        structureCountEl.textContent = data.features ? data.features.length : 0;
                     }
-                });
+                }, { zoom: zoom });
             }
 
             // Count how many pathway layers are active for stats
