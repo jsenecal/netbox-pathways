@@ -1,8 +1,10 @@
 MANAGE = /opt/netbox/netbox/manage.py
 PYTHON = /opt/netbox/venv/bin/python
+STATIC_DIR = netbox_pathways/static/netbox_pathways
 
 .PHONY: help migrations migrate runserver createsuperuser shell dbshell \
-	collectstatic check lint test install showurls showmigrations
+	collectstatic check lint test install showurls showmigrations \
+	js-install js-build js-watch js-typecheck js-clean clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -41,10 +43,28 @@ showurls: ## List all registered URL patterns
 showmigrations: ## Show migration status
 	$(PYTHON) $(MANAGE) showmigrations netbox_pathways
 
+# --- JavaScript / TypeScript ---
+
+js-install: ## Install JS build dependencies
+	cd $(STATIC_DIR) && npm install
+
+js-build: js-install ## Build TypeScript → minified JS
+	cd $(STATIC_DIR) && npm run build
+
+js-watch: js-install ## Watch mode — rebuild on save
+	cd $(STATIC_DIR) && npm run watch
+
+js-typecheck: ## Type-check TypeScript without emitting
+	cd $(STATIC_DIR) && npm run typecheck
+
+js-clean: ## Remove JS build artifacts and node_modules
+	rm -rf $(STATIC_DIR)/dist $(STATIC_DIR)/node_modules
+
 # --- Code quality ---
 
-lint: ## Run ruff linter
+lint: ## Run ruff linter + TypeScript type-check
 	ruff check netbox_pathways/
+	cd $(STATIC_DIR) && npm run typecheck
 
 lint-fix: ## Run ruff linter with auto-fix
 	ruff check --fix netbox_pathways/
@@ -68,11 +88,13 @@ test-cov: ## Run tests with coverage report
 
 # --- Install / setup ---
 
-install: ## Install plugin in editable mode
+install: js-build ## Install plugin in editable mode (builds JS first)
 	pip install -e .
 
-install-dev: ## Install plugin with dev dependencies
+install-dev: js-build ## Install plugin with dev dependencies
 	pip install -e ".[dev]"
+
+clean: js-clean ## Remove all build artifacts
 
 # --- Plugin-specific ---
 

@@ -6,7 +6,13 @@ build-backend = "setuptools.build_meta"
 include = ["netbox_pathways", "netbox_pathways.*"]
 
 [tool.setuptools.package-data]
-netbox_pathways = ["templates/**/*", "static/**/*"]
+netbox_pathways = [
+    "templates/**/*",
+    "static/**/dist/*",
+    "static/**/vendor/*",
+    "static/**/css/*",
+    "static/**/qgis/*",
+]
 
 [project]
 name = "netbox-pathways"
