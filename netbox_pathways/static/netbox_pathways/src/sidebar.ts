@@ -867,8 +867,11 @@ function selectFeature(entry: FeatureEntry): void {
     showDetail(entry);
     if (_map && entry.latlng) {
         const zoom = _map.getZoom();
-        if (zoom < 16) {
-            _map.flyTo(entry.latlng, 17, { duration: 0.5 });
+        // Zoom past disableClusteringAtZoom (18) for structures so the
+        // individual marker is visible, not hidden inside a cluster.
+        const minZoom = entry.featureType === 'structure' ? 18 : 16;
+        if (zoom < minZoom) {
+            _map.flyTo(entry.latlng, minZoom, { duration: 0.5 });
         } else {
             _map.panTo(entry.latlng);
         }
