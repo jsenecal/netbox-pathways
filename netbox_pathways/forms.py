@@ -11,7 +11,7 @@ class PointPolygonWidget(LeafletWidget):
     """LeafletWidget that allows point and polygon drawing but not polylines."""
 
     class Media:
-        js = ('netbox_pathways/js/point-polygon-widget.js',)
+        js = ('netbox_pathways/dist/point-polygon-widget.min.js',)
 
 
 class PointOnlyWidget(LeafletWidget):
