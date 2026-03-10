@@ -207,7 +207,7 @@
                 }
                 if (found) {
                     _selected = found;
-                    _highlightMapFeature(found);
+                    // Highlight already applied by onFeatureCreated callback
                     _buildTypeFilters();
                     _applyFilters();
                     show();
@@ -259,14 +259,13 @@
             }
         }
 
-        function _highlightMapFeature(entry) {
-            _unhighlightMapFeature();
+        function _applyHighlightVisuals(entry) {
+            // Apply highlight visuals to the entry's layer (shared logic)
             var layer = entry.layer;
             if (!layer) return;
             _highlightedLayer = layer;
 
             if (entry.featureType === 'structure') {
-                // Marker — swap to a larger highlighted icon
                 layer._origIcon = layer.getIcon();
                 var type = entry.props.structure_type;
                 var color = STRUCTURE_COLORS[type] || '#616161';
@@ -280,23 +279,34 @@
                     popupAnchor: [0, -14]
                 }));
             } else {
-                // Polyline — add a thicker outline behind, then brighten the line
                 var latlngs = layer.getLatLngs();
                 if (latlngs && _map) {
-                    var lineColor = _colorForFeature(entry);
                     _highlightOutline = L.polyline(latlngs, {
-                        color: lineColor,
+                        color: _colorForFeature(entry),
                         weight: 10,
                         opacity: 0.35,
                         interactive: false
                     }).addTo(_map);
                 }
-                layer._origStyle = {
-                    weight: 3,
-                    opacity: 0.7
-                };
+                layer._origStyle = { weight: 3, opacity: 0.7 };
                 layer.setStyle({ weight: 5, opacity: 1 });
             }
+        }
+
+        function _highlightMapFeature(entry) {
+            _unhighlightMapFeature();
+            _applyHighlightVisuals(entry);
+        }
+
+        function _reapplyHighlight(entry) {
+            // Silently clean up stale refs then re-apply — old layer was
+            // already removed by clearLayers, so no need to restore its style.
+            if (_highlightOutline) {
+                _highlightOutline.remove();
+                _highlightOutline = null;
+            }
+            _highlightedLayer = null;
+            _applyHighlightVisuals(entry);
         }
 
         function selectFeature(entry) {
@@ -896,6 +906,17 @@
             });
         }
 
+        // Called from onEachFeature as layers are created — if this entry
+        // matches the current selection, immediately re-apply the highlight
+        // so there is no visible gap between clearLayers and setFeatures.
+        function onFeatureCreated(entry) {
+            if (!_selected) return;
+            if (_featureId(entry) === _featureId(_selected)) {
+                _selected = entry;
+                _reapplyHighlight(entry);
+            }
+        }
+
         return {
             init: init,
             show: show,
@@ -903,7 +924,8 @@
             setFeatures: setFeatures,
             showList: showList,
             showDetail: showDetail,
-            selectFeature: selectFeature
+            selectFeature: selectFeature,
+            onFeatureCreated: onFeatureCreated
         };
     })();
 
@@ -1388,6 +1410,10 @@
                                 });
                             },
                             onEachFeature: function(feature, layer) {
+                                // DRF-GIS puts id at feature level, not in properties
+                                if (feature.id != null && feature.properties.id == null) {
+                                    feature.properties.id = feature.id;
+                                }
                                 var entry = {
                                     props: feature.properties,
                                     featureType: 'structure',
@@ -1395,6 +1421,7 @@
                                     latlng: layer.getLatLng()
                                 };
                                 allFeatures.push(entry);
+                                Sidebar.onFeatureCreated(entry);
                                 layer.on('click', function(e) {
                                     if (e.originalEvent) e.originalEvent._sidebarClick = true;
                                     Sidebar.selectFeature(entry);
@@ -1422,6 +1449,9 @@
                 return {
                     style: function() { return styleObj; },
                     onEachFeature: function(feature, layer) {
+                        if (feature.id != null && feature.properties.id == null) {
+                            feature.properties.id = feature.id;
+                        }
                         var entry = {
                             props: feature.properties,
                             featureType: featureType,
@@ -1429,6 +1459,7 @@
                             latlng: layer.getBounds().getCenter()
                         };
                         allFeatures.push(entry);
+                        Sidebar.onFeatureCreated(entry);
                         layer.on('click', function(e) {
                             if (e.originalEvent) e.originalEvent._sidebarClick = true;
                             Sidebar.selectFeature(entry);
