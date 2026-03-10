@@ -318,7 +318,7 @@
 {% block javascript %}
 {{ block.super }}
 <script>window.PATHWAYS_CONFIG={{ pathways_config_json|safe }};</script>
-<script src="{% static 'netbox_pathways/js/pathways-map.js' %}"></script>
+<script src="{% static 'netbox_pathways/dist/pathways-map.min.js' %}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         function sizeMap() {

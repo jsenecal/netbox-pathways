@@ -5,9 +5,12 @@ const fs = require('fs');
 const srcDir = path.join(__dirname, 'src');
 const outDir = path.join(__dirname, 'dist');
 
-// Find top-level .ts entrypoints (not in types/)
+// Modules imported by other entrypoints — not standalone bundles
+const MODULES = new Set(['sidebar.ts', 'popover.ts']);
+
+// Find top-level .ts entrypoints (not in types/, not internal modules)
 const entryPoints = fs.readdirSync(srcDir)
-  .filter(f => f.endsWith('.ts') && !f.endsWith('.d.ts'))
+  .filter(f => f.endsWith('.ts') && !f.endsWith('.d.ts') && !MODULES.has(f))
   .map(f => path.join(srcDir, f));
 
 const isWatch = process.argv.includes('--watch');

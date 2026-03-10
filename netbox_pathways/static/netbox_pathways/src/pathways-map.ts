@@ -1,0 +1,717 @@
+/**
+ * Full-page infrastructure map.
+ *
+ * Fetches structures and pathways from the GeoJSON API within the visible
+ * bounding box, but only when zoomed in past a minimum threshold.
+ * Re-fetches on pan/zoom with debouncing.
+ *
+ * Structures use server-side grid clustering at low zoom levels (11-14)
+ * to avoid transferring thousands of features just for client-side clustering.
+ * At zoom 15+ individual features are returned and optionally client-clustered.
+ */
+
+import { Sidebar } from './sidebar';
+import { Popover } from './popover';
+import type { FeatureEntry, FeatureType, GeoJSONProperties, PathwayStyle } from './types/features';
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+const CFG: Partial<PathwaysConfig> = window.PATHWAYS_CONFIG || {};
+const API_BASE: string = CFG.apiBase || '/api/plugins/pathways/geo/';
+const MAX_NATIVE_ZOOM: number = CFG.maxNativeZoom || 19;
+const MIN_DATA_ZOOM = 11;
+
+// ---------------------------------------------------------------------------
+// Color & Icon Maps
+// ---------------------------------------------------------------------------
+
+const STRUCTURE_COLORS: Record<string, string> = {
+    'pole': '#2e7d32', 'manhole': '#1565c0', 'handhole': '#00838f',
+    'cabinet': '#e65100', 'vault': '#6a1b9a', 'pedestal': '#f9a825',
+    'building_entrance': '#c62828', 'splice_closure': '#795548',
+    'tower': '#b71c1c', 'roof': '#616161', 'equipment_room': '#00796b',
+    'telecom_closet': '#283593', 'riser_room': '#ad1457',
+};
+
+const STRUCTURE_ICONS: Record<string, string> = {
+    'pole': 'mdi-adjust',
+    'manhole': 'mdi-checkbox-blank-circle',
+    'handhole': 'mdi-checkbox-blank-circle-outline',
+    'cabinet': 'mdi-square-rounded',
+    'vault': 'mdi-square',
+    'pedestal': 'mdi-square-outline',
+    'building_entrance': 'mdi-square-dot',
+    'splice_closure': 'mdi-set-center',
+    'tower': 'mdi-target',
+    'roof': 'mdi-triangle-outline',
+    'equipment_room': 'mdi-square-rounded-outline',
+    'telecom_closet': 'mdi-rhombus',
+    'riser_room': 'mdi-rhombus-outline',
+};
+
+const PATHWAY_COLORS: Record<string, string> = {
+    'conduit': '#795548', 'aerial': '#1565c0', 'direct_buried': '#616161',
+    'innerduct': '#e65100', 'microduct': '#6a1b9a', 'tray': '#2e7d32',
+    'raceway': '#00838f', 'submarine': '#1a237e',
+};
+
+// ---------------------------------------------------------------------------
+// Marker helpers
+// ---------------------------------------------------------------------------
+
+function _structureIcon(type: string): L.DivIcon {
+    const color = STRUCTURE_COLORS[type] || '#616161';
+    const icon = STRUCTURE_ICONS[type] || 'mdi-map-marker';
+    return L.divIcon({
+        className: 'pw-marker',
+        html: '<div class="pw-marker-pin" style="background:' + color + '">' +
+              '<i class="mdi ' + icon + '"></i></div>',
+        iconSize: [18, 18] as [number, number],
+        iconAnchor: [9, 9] as [number, number],
+        popupAnchor: [0, -10] as [number, number],
+    });
+}
+
+function _clusterIcon(count: number): L.DivIcon {
+    let cls: string;
+    let size: number;
+    if (count < 10) {
+        cls = 'pw-cluster-small'; size = 34;
+    } else if (count < 100) {
+        cls = 'pw-cluster-medium'; size = 40;
+    } else {
+        cls = 'pw-cluster-large'; size = 46;
+    }
+    return L.divIcon({
+        className: 'pw-server-cluster',
+        html: '<div class="pw-cluster-ring ' + cls + '" style="width:' + size +
+              'px;height:' + size + 'px"><div class="pw-cluster-inner"><span>' +
+              count + '</span></div></div>',
+        iconSize: [size, size] as [number, number],
+        iconAnchor: [size / 2, size / 2] as [number, number],
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Utility helpers
+// ---------------------------------------------------------------------------
+
+function _esc(text: string): string {
+    const el = document.createElement('span');
+    el.textContent = text;
+    return el.innerHTML;
+}
+
+function _titleCase(str: string): string {
+    return (str || '').replace(/_/g, ' ').replace(/\b\w/g, function (c: string) { return c.toUpperCase(); });
+}
+
+function _getCookie(name: string): string | null {
+    const value = '; ' + document.cookie;
+    const parts = value.split('; ' + name + '=');
+    if (parts.length === 2) return parts.pop()!.split(';').shift() || null;
+    return null;
+}
+
+function _bboxParam(map: L.Map): string {
+    const b = map.getBounds();
+    return b.getWest() + ',' + b.getSouth() + ',' + b.getEast() + ',' + b.getNorth();
+}
+
+function _debounce(fn: () => void, delay: number): () => void {
+    let timer: ReturnType<typeof setTimeout>;
+    return function () {
+        clearTimeout(timer);
+        timer = setTimeout(fn, delay);
+    };
+}
+
+function _haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371000;
+    const p1 = lat1 * Math.PI / 180;
+    const p2 = lat2 * Math.PI / 180;
+    const dp = (lat2 - lat1) * Math.PI / 180;
+    const dl = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dp / 2) * Math.sin(dp / 2) +
+              Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ---------------------------------------------------------------------------
+// GeoJSON fetching with AbortController
+// ---------------------------------------------------------------------------
+
+const _inflightControllers: Record<string, AbortController> = {};
+
+async function _fetchGeoJSON(
+    endpoint: string,
+    bbox: string,
+    callback: (data: GeoJSON.FeatureCollection) => void,
+    extraParams?: Record<string, string | number>,
+): Promise<void> {
+    // Abort any in-flight request for this endpoint
+    if (_inflightControllers[endpoint]) {
+        _inflightControllers[endpoint].abort();
+    }
+
+    let url = API_BASE + endpoint + '?format=json&bbox=' + bbox;
+    if (extraParams) {
+        for (const key in extraParams) {
+            url += '&' + key + '=' + encodeURIComponent(String(extraParams[key]));
+        }
+    }
+
+    const controller = new AbortController();
+    _inflightControllers[endpoint] = controller;
+
+    const headers: Record<string, string> = { 'Accept': 'application/json' };
+    const csrfToken = _getCookie('csrftoken');
+    if (csrfToken) headers['X-CSRFToken'] = csrfToken;
+
+    try {
+        const response = await fetch(url, { headers, signal: controller.signal });
+        _inflightControllers[endpoint] = undefined!;
+        if (response.ok) {
+            const data = await response.json() as GeoJSON.FeatureCollection;
+            callback(data);
+        }
+    } catch (e) {
+        _inflightControllers[endpoint] = undefined!;
+        // Silently ignore AbortError and network errors
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Line labels
+// ---------------------------------------------------------------------------
+
+function _addLineLabels(geoJsonLayer: L.GeoJSON, layerGroup: L.LayerGroup, map: L.Map): void {
+    if (map.getZoom() < 15) return;
+
+    geoJsonLayer.eachLayer(function (layer: L.Layer) {
+        const polyline = layer as L.Polyline;
+        const coords = polyline.getLatLngs() as L.LatLng[];
+        if (!coords || coords.length < 2) return;
+        const feature = (polyline as any).feature as GeoJSON.Feature;
+        const name = feature?.properties?.name as string | undefined;
+        if (!name) return;
+
+        const midIdx = Math.floor(coords.length / 2);
+        const p1 = coords[midIdx - 1] || coords[0];
+        const p2 = coords[midIdx];
+        const midLat = (p1.lat + p2.lat) / 2;
+        const midLng = (p1.lng + p2.lng) / 2;
+
+        const dx = p2.lng - p1.lng;
+        const dy = p2.lat - p1.lat;
+        let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        if (angle > 90) angle -= 180;
+        if (angle < -90) angle += 180;
+
+        const icon = L.divIcon({
+            className: 'pw-line-label',
+            html: '<div style="transform:rotate(' + (-angle) + 'deg)">' + _esc(name) + '</div>',
+            iconSize: [0, 0] as [number, number],
+            iconAnchor: [0, 0] as [number, number],
+        });
+
+        layerGroup.addLayer(L.marker([midLat, midLng], { icon, interactive: false }));
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Base layers
+// ---------------------------------------------------------------------------
+
+interface BaseLayerDef {
+    name: string;
+    url: string;
+    attribution?: string;
+    maxNativeZoom?: number;
+    tileSize?: number;
+    zoomOffset?: number;
+}
+
+const DEFAULT_BASE_LAYERS: BaseLayerDef[] = [
+    {
+        name: 'Street',
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '&copy; OpenStreetMap contributors',
+        maxNativeZoom: MAX_NATIVE_ZOOM,
+    },
+    {
+        name: 'Satellite',
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attribution: 'Esri World Imagery',
+        maxNativeZoom: 19,
+    },
+];
+
+function _createBaseLayers(): Record<string, L.TileLayer> {
+    const configured = (CFG.baseLayers || []).filter(function (c: BaseLayerConfig) { return !!c.url; });
+    const configs: BaseLayerDef[] = configured.length ? configured : DEFAULT_BASE_LAYERS;
+    const layers: Record<string, L.TileLayer> = {};
+    configs.forEach(function (cfg: BaseLayerDef) {
+        layers[cfg.name] = L.tileLayer(cfg.url, {
+            attribution: cfg.attribution || '',
+            maxNativeZoom: cfg.maxNativeZoom || MAX_NATIVE_ZOOM,
+            maxZoom: 22,
+            tileSize: cfg.tileSize || 256,
+            zoomOffset: cfg.zoomOffset || 0,
+        });
+    });
+    return layers;
+}
+
+// ---------------------------------------------------------------------------
+// User-configured overlays
+// ---------------------------------------------------------------------------
+
+function _createUserOverlays(): Record<string, L.TileLayer | L.TileLayer.WMS> {
+    const userOverlays = CFG.overlays || [];
+    const overlays: Record<string, L.TileLayer | L.TileLayer.WMS> = {};
+    userOverlays.forEach(function (cfg: OverlayConfig) {
+        let layer: L.TileLayer | L.TileLayer.WMS;
+        if (cfg.type === 'wms') {
+            layer = L.tileLayer.wms(cfg.url, {
+                layers: (cfg['layers'] as string) || '',
+                format: (cfg['format'] as string) || 'image/png',
+                transparent: cfg['transparent'] !== false,
+                attribution: (cfg['attribution'] as string) || '',
+                maxZoom: 22,
+            });
+        } else {
+            layer = L.tileLayer(cfg.url, {
+                attribution: (cfg['attribution'] as string) || '',
+                maxZoom: (cfg['maxZoom'] as number) || 22,
+                maxNativeZoom: (cfg['maxNativeZoom'] as number) || undefined,
+            });
+        }
+        overlays[cfg.name] = layer;
+    });
+    return overlays;
+}
+
+// ---------------------------------------------------------------------------
+// Zoom hint overlay
+// ---------------------------------------------------------------------------
+
+function _createZoomHint(map: L.Map): HTMLDivElement {
+    const div = L.DomUtil.create('div', 'pathways-zoom-hint') as HTMLDivElement;
+    div.style.cssText =
+        'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);' +
+        'z-index:800;padding:12px 24px;border-radius:8px;font-size:14px;' +
+        'pointer-events:none;text-align:center;' +
+        'background:rgba(0,0,0,0.7);color:#fff;';
+    div.textContent = 'Zoom in to see infrastructure data';
+    map.getContainer().appendChild(div);
+    return div;
+}
+
+// ---------------------------------------------------------------------------
+// Main initialization
+// ---------------------------------------------------------------------------
+
+interface MapInitConfig {
+    center?: [number, number];
+    zoom?: number;
+    bounds?: L.LatLngBoundsExpression;
+}
+
+function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
+    const container = document.getElementById(elementId);
+
+    // Inject dependencies into sub-modules
+    Sidebar.setDeps({
+        titleCase: _titleCase,
+        esc: _esc,
+        debounce: _debounce,
+        getCookie: _getCookie,
+        structureColors: STRUCTURE_COLORS,
+        structureIcons: STRUCTURE_ICONS,
+        pathwayColors: PATHWAY_COLORS,
+        apiBase: API_BASE,
+    });
+    Popover.setDeps({ titleCase: _titleCase });
+
+    const baseLayers = _createBaseLayers();
+    const firstLayer = baseLayers[Object.keys(baseLayers)[0]];
+    const map = L.map(elementId, {
+        layers: [firstLayer],
+    });
+
+    // Fit to data extent if bounds provided, otherwise use center/zoom
+    if (config.bounds) {
+        map.fitBounds(config.bounds, { padding: [30, 30] as [number, number], maxZoom: 17 });
+    } else {
+        map.setView(config.center || [0, 0], config.zoom || 2);
+    }
+
+    // Satellite-active toggle
+    map.on('baselayerchange', function (e: L.LayersControlEvent) {
+        if (e.name === 'Satellite') {
+            container?.classList.add('satellite-active');
+        } else {
+            container?.classList.remove('satellite-active');
+        }
+    });
+
+    // Overlay layers
+    const overlayLayers: Record<string, L.Layer> = {};
+
+    // User-configured WMS/WMTS/tile overlays
+    const userOverlays = _createUserOverlays();
+    for (const name in userOverlays) {
+        overlayLayers[name] = userOverlays[name];
+    }
+
+    // Layer control
+    const layerControl = L.control.layers(baseLayers, overlayLayers, {
+        position: 'topright', collapsed: true,
+    }).addTo(map);
+
+    // Counters
+    const structureCountEl = document.getElementById('structure-count');
+    const pathwayCountEl = document.getElementById('pathway-count');
+    const totalLengthEl = document.getElementById('total-length');
+
+    // Zoom hint
+    const zoomHint = _createZoomHint(map);
+
+    // --- Layer visibility persistence (localStorage) ---
+
+    const PREFS_KEY = 'pathways_map_layers';
+    const DEFAULT_LAYERS: Record<string, boolean> = {
+        'Structures': true, 'Conduits': true, 'Aerial Spans': false, 'Direct Buried': false,
+    };
+
+    function _loadPrefs(): Record<string, boolean> | null {
+        try {
+            const saved = localStorage.getItem(PREFS_KEY);
+            return saved ? JSON.parse(saved) as Record<string, boolean> : null;
+        } catch (_e) { return null; }
+    }
+
+    function _savePrefs(layers: Record<string, boolean>): void {
+        try { localStorage.setItem(PREFS_KEY, JSON.stringify(layers)); } catch (_e) { /* ignore */ }
+    }
+
+    const layerPrefs = _loadPrefs() || DEFAULT_LAYERS;
+
+    // --- Dynamic data layers ---
+
+    const structuresLayer = L.layerGroup();
+    const markerClusterGroup = L.markerClusterGroup({
+        maxClusterRadius: 35,
+        spiderfyOnMaxZoom: true,
+        disableClusteringAtZoom: 18,
+    });
+
+    const dataLayers: Record<string, L.LayerGroup> = {
+        structures: structuresLayer,
+        conduits: L.layerGroup(),
+        aerialSpans: L.layerGroup(),
+        directBuried: L.layerGroup(),
+    };
+
+    const layerNames: Record<string, L.LayerGroup> = {
+        'Structures': dataLayers.structures,
+        'Conduits': dataLayers.conduits,
+        'Aerial Spans': dataLayers.aerialSpans,
+        'Direct Buried': dataLayers.directBuried,
+    };
+
+    // Add layers based on saved prefs
+    for (const lname in layerNames) {
+        if (layerPrefs[lname] !== false) {
+            layerNames[lname].addTo(map);
+        }
+    }
+
+    // --- Sidebar layer toggle sync ---
+
+    const _layerCheckboxes: Record<string, HTMLInputElement> = {};
+
+    function _syncSidebarCheckbox(name: string, checked: boolean): void {
+        if (_layerCheckboxes[name]) {
+            _layerCheckboxes[name].checked = checked;
+        }
+    }
+
+    // Persist layer toggles
+    map.on('overlayadd', function (e: L.LayersControlEvent) {
+        const prefs = _loadPrefs() || DEFAULT_LAYERS;
+        prefs[e.name] = true;
+        _savePrefs(prefs);
+        _syncSidebarCheckbox(e.name, true);
+    });
+    map.on('overlayremove', function (e: L.LayersControlEvent) {
+        const prefs = _loadPrefs() || DEFAULT_LAYERS;
+        prefs[e.name] = false;
+        _savePrefs(prefs);
+        _syncSidebarCheckbox(e.name, false);
+    });
+
+    // --- Sidebar layer toggles ---
+
+    function _buildSidebarLayerToggles(): void {
+        const toggleContainer = document.getElementById('pw-layer-toggles');
+        if (!toggleContainer) return;
+        toggleContainer.textContent = '';
+
+        for (const lname in layerNames) {
+            const label = document.createElement('label');
+            label.className = 'pw-layer-toggle';
+
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = map.hasLayer(layerNames[lname]);
+            _layerCheckboxes[lname] = cb;
+
+            (function (cbName: string, checkbox: HTMLInputElement) {
+                checkbox.addEventListener('change', function () {
+                    if (checkbox.checked) {
+                        map.addLayer(layerNames[cbName]);
+                    } else {
+                        map.removeLayer(layerNames[cbName]);
+                    }
+                    const prefs = _loadPrefs() || DEFAULT_LAYERS;
+                    prefs[cbName] = checkbox.checked;
+                    _savePrefs(prefs);
+                    _loadData();
+                });
+            })(lname, cb);
+
+            label.appendChild(cb);
+            label.appendChild(document.createTextNode(lname));
+            toggleContainer.appendChild(label);
+        }
+    }
+    _buildSidebarLayerToggles();
+
+    // --- Data loading ---
+
+    function _loadData(): void {
+        const zoom = map.getZoom();
+
+        if (zoom < MIN_DATA_ZOOM) {
+            structuresLayer.clearLayers();
+            dataLayers.conduits.clearLayers();
+            dataLayers.aerialSpans.clearLayers();
+            dataLayers.directBuried.clearLayers();
+            zoomHint.style.display = '';
+            if (structureCountEl) structureCountEl.textContent = '-';
+            if (pathwayCountEl) pathwayCountEl.textContent = '-';
+            if (totalLengthEl) totalLengthEl.textContent = '-';
+            Sidebar.setFeatures([]);
+            Sidebar.hide();
+            return;
+        }
+
+        zoomHint.style.display = 'none';
+        const bbox = _bboxParam(map);
+        const allFeatures: FeatureEntry[] = [];
+        let pendingLoads = 0;
+        let totalExpectedLoads = 0;
+
+        if (map.hasLayer(structuresLayer)) totalExpectedLoads++;
+        if (map.hasLayer(dataLayers.conduits)) totalExpectedLoads++;
+        if (map.hasLayer(dataLayers.aerialSpans)) totalExpectedLoads++;
+        if (map.hasLayer(dataLayers.directBuried)) totalExpectedLoads++;
+
+        let pathwayCount = 0;
+        let totalLength = 0;
+        let pendingPathway = 0;
+        if (map.hasLayer(dataLayers.conduits)) pendingPathway++;
+        if (map.hasLayer(dataLayers.aerialSpans)) pendingPathway++;
+        if (map.hasLayer(dataLayers.directBuried)) pendingPathway++;
+
+        function _checkAllLoaded(): void {
+            pendingLoads++;
+            if (pendingLoads === totalExpectedLoads) {
+                Sidebar.setFeatures(allFeatures);
+            }
+        }
+
+        function _updatePathwayStats(): void {
+            if (pathwayCountEl) pathwayCountEl.textContent = String(pathwayCount);
+            if (totalLengthEl) totalLengthEl.textContent = (totalLength / 1000).toFixed(2);
+        }
+
+        function _pathwayLoaded(data: GeoJSON.FeatureCollection): void {
+            const count = data.features ? data.features.length : 0;
+            pathwayCount += count;
+            if (data.features) {
+                data.features.forEach(function (f: GeoJSON.Feature) {
+                    if (f.geometry && f.geometry.type === 'LineString') {
+                        const coords = (f.geometry as GeoJSON.LineString).coordinates;
+                        for (let i = 0; i < coords.length - 1; i++) {
+                            totalLength += _haversine(
+                                coords[i][1], coords[i][0],
+                                coords[i + 1][1], coords[i + 1][0],
+                            );
+                        }
+                    }
+                });
+            }
+            pendingPathway--;
+            if (pendingPathway <= 0) _updatePathwayStats();
+        }
+
+        // Structures
+        if (map.hasLayer(structuresLayer)) {
+            _fetchGeoJSON('structures/', bbox, function (data: GeoJSON.FeatureCollection) {
+                structuresLayer.clearLayers();
+                markerClusterGroup.clearLayers();
+
+                const isServerClustered = data.features && data.features.length > 0 &&
+                    (data.features[0].properties as GeoJSONProperties)?.cluster;
+
+                if (isServerClustered) {
+                    let total = 0;
+                    data.features.forEach(function (f: GeoJSON.Feature) {
+                        const props = f.properties as GeoJSONProperties;
+                        const count = props.point_count || 0;
+                        total += count;
+                        const geom = f.geometry as GeoJSON.Point;
+                        const latlng = L.latLng(geom.coordinates[1], geom.coordinates[0]);
+                        const marker = L.marker(latlng, { icon: _clusterIcon(count) });
+                        marker.on('click', function () {
+                            map.setView(latlng, 15);
+                        });
+                        structuresLayer.addLayer(marker);
+                    });
+                    if (structureCountEl) structureCountEl.textContent = String(total);
+                } else {
+                    const geoLayer = L.geoJSON(data, {
+                        pointToLayer: function (feature: GeoJSON.Feature, latlng: L.LatLng) {
+                            return L.marker(latlng, {
+                                icon: _structureIcon((feature.properties as GeoJSONProperties).structure_type || ''),
+                            });
+                        },
+                        onEachFeature: function (feature: GeoJSON.Feature, layer: L.Layer) {
+                            if (feature.id != null && (feature.properties as GeoJSONProperties).id == null) {
+                                (feature.properties as GeoJSONProperties).id = feature.id as number;
+                            }
+                            const entry: FeatureEntry = {
+                                props: feature.properties as GeoJSONProperties,
+                                featureType: 'structure',
+                                layer: layer,
+                                latlng: (layer as L.Marker).getLatLng(),
+                            };
+                            allFeatures.push(entry);
+                            Sidebar.onFeatureCreated(entry);
+                            layer.on('click', function (e: L.LeafletMouseEvent) {
+                                if (e.originalEvent) (e.originalEvent as any)._sidebarClick = true;
+                                Sidebar.selectFeature(entry);
+                            });
+                            layer.on('mouseover', function (e: L.LeafletMouseEvent) {
+                                Popover.show(e.latlng || (layer as L.Marker).getLatLng(), feature.properties as GeoJSONProperties);
+                            });
+                            layer.on('mouseout', function () { Popover.hide(); });
+                        },
+                    });
+                    markerClusterGroup.addLayers(geoLayer.getLayers());
+                    structuresLayer.addLayer(markerClusterGroup);
+                    if (structureCountEl) {
+                        structureCountEl.textContent = String(data.features ? data.features.length : 0);
+                    }
+                }
+                _checkAllLoaded();
+            }, { zoom: String(zoom) });
+        }
+
+        if (pendingPathway === 0) _updatePathwayStats();
+
+        // Shared pathway handler factory
+        function _makePathwayOpts(featureType: FeatureType, styleObj: PathwayStyle): L.GeoJSONOptions {
+            return {
+                style: function () { return styleObj; },
+                onEachFeature: function (feature: GeoJSON.Feature, layer: L.Layer) {
+                    if (feature.id != null && (feature.properties as GeoJSONProperties).id == null) {
+                        (feature.properties as GeoJSONProperties).id = feature.id as number;
+                    }
+                    const entry: FeatureEntry = {
+                        props: feature.properties as GeoJSONProperties,
+                        featureType: featureType,
+                        layer: layer,
+                        latlng: (layer as L.Polyline).getBounds().getCenter(),
+                    };
+                    allFeatures.push(entry);
+                    Sidebar.onFeatureCreated(entry);
+                    layer.on('click', function (e: L.LeafletMouseEvent) {
+                        if (e.originalEvent) (e.originalEvent as any)._sidebarClick = true;
+                        Sidebar.selectFeature(entry);
+                    });
+                    layer.on('mouseover', function (e: L.LeafletMouseEvent) {
+                        Popover.show(e.latlng, feature.properties as GeoJSONProperties);
+                    });
+                    layer.on('mouseout', function () { Popover.hide(); });
+                },
+            };
+        }
+
+        // Pathway layer configs
+        const pathwayConfigs: [string, L.LayerGroup, FeatureType, PathwayStyle][] = [
+            ['conduits/', dataLayers.conduits, 'conduit', { color: '#795548', weight: 3, opacity: 0.7, dashArray: '5 5' }],
+            ['aerial-spans/', dataLayers.aerialSpans, 'aerial', { color: '#1565c0', weight: 3, opacity: 0.7, dashArray: '10 5' }],
+            ['direct-buried/', dataLayers.directBuried, 'direct_buried', { color: '#616161', weight: 3, opacity: 0.7, dashArray: '2 4' }],
+        ];
+
+        pathwayConfigs.forEach(function (cfg) {
+            const [endpoint, layer, ftype, style] = cfg;
+            if (!map.hasLayer(layer)) return;
+            _fetchGeoJSON(endpoint, bbox, function (data: GeoJSON.FeatureCollection) {
+                layer.clearLayers();
+                const geoLayer = L.geoJSON(data, _makePathwayOpts(ftype, style));
+                geoLayer.addTo(layer);
+                _addLineLabels(geoLayer, layer, map);
+                _pathwayLoaded(data);
+                _checkAllLoaded();
+            });
+        });
+
+        // If no layers active, still update sidebar
+        if (totalExpectedLoads === 0) {
+            Sidebar.setFeatures([]);
+        }
+    }
+
+    // Load data on move/zoom with debounce
+    const debouncedLoad = _debounce(_loadData, 500);
+    map.on('moveend', debouncedLoad);
+
+    // Initialize sidebar and popover
+    Sidebar.init(map);
+    Popover.init(map);
+
+    // Initial load
+    _loadData();
+
+    // Reset view button
+    const resetBtn = document.getElementById('reset-view');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function () {
+            if (config.bounds) {
+                map.fitBounds(config.bounds, { padding: [30, 30] as [number, number], maxZoom: 17 });
+            } else {
+                map.setView(config.center || [0, 0], config.zoom || 2);
+            }
+        });
+    }
+
+    // Store reference
+    (window as any).PathwaysMap = {
+        map: map,
+        layerControl: layerControl,
+    };
+
+    // Leaflet calculates size at init; force a recheck after layout settles
+    setTimeout(function () { map.invalidateSize(); }, 100);
+    window.addEventListener('resize', function () { map.invalidateSize(); });
+}
+
+// Expose globally
+window.initializePathwaysMap = initializePathwaysMap;

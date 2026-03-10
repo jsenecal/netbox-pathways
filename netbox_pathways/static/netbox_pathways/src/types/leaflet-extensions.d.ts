@@ -39,6 +39,10 @@ declare global {
     export type ControlOptions = import('leaflet').ControlOptions;
     export type LayersControlEvent = import('leaflet').LayersControlEvent;
     export type Control = import('leaflet').Control;
+    export type LeafletMouseEvent = import('leaflet').LeafletMouseEvent;
+    export type LeafletEvent = import('leaflet').LeafletEvent;
+    export type LatLngBoundsExpression = import('leaflet').LatLngBoundsExpression;
+    export type GeoJSONOptions = import('leaflet').GeoJSONOptions;
     // Nested namespace for L.Control.Layers and L.TileLayer.WMS
     export namespace Control {
       export type Layers = import('leaflet').Control.Layers;
