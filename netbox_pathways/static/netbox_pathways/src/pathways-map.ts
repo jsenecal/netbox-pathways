@@ -35,20 +35,20 @@ const STRUCTURE_COLORS: Record<string, string> = {
     'telecom_closet': '#283593', 'riser_room': '#ad1457',
 };
 
-const STRUCTURE_ICONS: Record<string, string> = {
-    'pole': 'mdi-adjust',
-    'manhole': 'mdi-checkbox-blank-circle',
-    'handhole': 'mdi-checkbox-blank-circle-outline',
-    'cabinet': 'mdi-square-rounded',
-    'vault': 'mdi-square',
-    'pedestal': 'mdi-square-outline',
-    'building_entrance': 'mdi-square-dot',
-    'splice_closure': 'mdi-set-center',
-    'tower': 'mdi-target',
-    'roof': 'mdi-triangle-outline',
-    'equipment_room': 'mdi-square-rounded-outline',
-    'telecom_closet': 'mdi-rhombus',
-    'riser_room': 'mdi-rhombus-outline',
+const STRUCTURE_SHAPES: Record<string, string> = {
+    'pole':               '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/><circle cx="10" cy="10" r="2.5"/>',
+    'manhole':            '<circle cx="10" cy="10" r="8"/>',
+    'handhole':           '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/>',
+    'cabinet':            '<rect x="2" y="2" width="16" height="16" rx="4"/>',
+    'vault':              '<rect x="2" y="2" width="16" height="16" rx="2"/>',
+    'pedestal':           '<rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke-width="2.5"/>',
+    'building_entrance':  '<rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke-width="2.5"/><circle cx="10" cy="10" r="2.5"/>',
+    'splice_closure':     '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/><circle cx="10" cy="10" r="2.5"/>',
+    'tower':              '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/><line x1="10" y1="2" x2="10" y2="18" stroke-width="1.5"/><line x1="2" y1="10" x2="18" y2="10" stroke-width="1.5"/>',
+    'roof':               '<polygon points="10,2 18,17 2,17"/>',
+    'equipment_room':     '<rect x="3" y="3" width="14" height="14" rx="4" fill="none" stroke-width="2.5"/>',
+    'telecom_closet':     '<rect x="3" y="3" width="10" height="10" rx="1" transform="rotate(45 10 10)"/>',
+    'riser_room':         '<rect x="3.5" y="3.5" width="9" height="9" rx="1" fill="none" stroke-width="2.5" transform="rotate(45 10 10)"/>',
 };
 
 const PATHWAY_COLORS: Record<string, string> = {
@@ -61,16 +61,18 @@ const PATHWAY_COLORS: Record<string, string> = {
 // Marker helpers
 // ---------------------------------------------------------------------------
 
-function _structureIcon(type: string): L.DivIcon {
+function _structureIcon(type: string, size = 20): L.DivIcon {
     const color = STRUCTURE_COLORS[type] || '#616161';
-    const icon = STRUCTURE_ICONS[type] || 'mdi-map-marker';
+    const shape = STRUCTURE_SHAPES[type] || '<circle cx="10" cy="10" r="8"/>';
+    const half = size / 2;
     return L.divIcon({
         className: 'pw-marker',
-        html: '<div class="pw-marker-pin" style="background:' + color + '">' +
-              '<i class="mdi ' + icon + '"></i></div>',
-        iconSize: [18, 18] as [number, number],
-        iconAnchor: [9, 9] as [number, number],
-        popupAnchor: [0, -10] as [number, number],
+        html: '<svg class="pw-marker-svg" viewBox="0 0 20 20" width="' + size +
+              '" height="' + size + '" stroke="white" fill="' + color + '">' +
+              shape + '</svg>',
+        iconSize: [size, size] as [number, number],
+        iconAnchor: [half, half] as [number, number],
+        popupAnchor: [0, -(half + 2)] as [number, number],
     });
 }
 
@@ -330,7 +332,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         debounce: _debounce,
         getCookie: _getCookie,
         structureColors: STRUCTURE_COLORS,
-        structureIcons: STRUCTURE_ICONS,
+        structureShapes: STRUCTURE_SHAPES,
         pathwayColors: PATHWAY_COLORS,
         apiBase: API_BASE,
     });
