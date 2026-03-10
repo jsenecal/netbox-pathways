@@ -160,12 +160,7 @@ menu = PluginMenu(
                 link_text='Route Finder',
                 permissions=['netbox_pathways.view_pathway'],
             ),
-            PluginMenuItem(
-                link='plugins:netbox_pathways:cable_trace',
-                link_text='Cable Trace',
-                permissions=['netbox_pathways.view_cablesegment'],
-            ),
-            PluginMenuItem(
+PluginMenuItem(
                 link='plugins:netbox_pathways:neighbors',
                 link_text='Neighbors',
                 permissions=['netbox_pathways.view_structure'],

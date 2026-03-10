@@ -289,4 +289,62 @@ class CoreModelMapExtension(PluginTemplateExtension):
         return data
 
 
-template_extensions = [LeafletHeadExtension, PluginModelMapExtension, CoreModelMapExtension]
+class CableRouteMapExtension(PluginTemplateExtension):
+    """Map panel on Cable detail pages showing pathway route."""
+
+    models = ['dcim.cable']
+
+    def right_page(self):
+        obj = self.context['object']
+        segments = models.CableSegment.objects.filter(
+            cable=obj,
+        ).select_related(
+            'pathway',
+            'pathway__start_structure',
+            'pathway__end_structure',
+        ).order_by('sequence')
+
+        if not segments.exists():
+            return ''
+
+        segment_colors = [
+            '#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4',
+            '#42d4f4', '#f032e6', '#bfef45', '#fabebe', '#469990',
+        ]
+        data = {'points': [], 'lines': []}
+        for i, seg in enumerate(segments):
+            pw = seg.pathway
+            if pw and pw.path:
+                data['lines'].append({
+                    'coords': linestring_to_coords(pw.path),
+                    'name': f"Seg {seg.sequence}: {pw.name}",
+                    'color': segment_colors[i % len(segment_colors)],
+                    'url': pw.get_absolute_url(),
+                })
+            if pw and pw.start_structure_id:
+                pt = _structure_point(pw.start_structure, color='green')
+                if pt:
+                    data['points'].append(pt)
+            if pw and pw.end_structure_id:
+                pt = _structure_point(pw.end_structure, color='red')
+                if pt:
+                    data['points'].append(pt)
+
+        if not data['points'] and not data['lines']:
+            return ''
+
+        map_id = f'geo-cable-{obj.pk}'
+        return self.render('netbox_pathways/inc/geo_map_panel.html', extra_context={
+            'geo_data': data,
+            'map_id': map_id,
+            'data_id': f'{map_id}-data',
+            'panel_title': 'Pathway Route',
+        })
+
+
+template_extensions = [
+    LeafletHeadExtension,
+    PluginModelMapExtension,
+    CoreModelMapExtension,
+    CableRouteMapExtension,
+]

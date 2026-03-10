@@ -101,6 +101,5 @@ urlpatterns = [
 
     # Graph Traversal Tools
     path('route-finder/', views.RouteFinderView.as_view(), name='route_finder'),
-    path('cable-trace/', views.CableTraceView.as_view(), name='cable_trace'),
-    path('neighbors/', views.NeighborsView.as_view(), name='neighbors'),
+path('neighbors/', views.NeighborsView.as_view(), name='neighbors'),
 ]

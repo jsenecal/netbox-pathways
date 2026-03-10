@@ -12,7 +12,7 @@ from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filters, forms, models, tables
-from .graph import PathwayGraph, node_to_geo, node_to_label, trace_cable
+from .graph import PathwayGraph, node_to_geo, node_to_label
 from .ui import panels
 
 # --- Structure ---
@@ -845,56 +845,6 @@ class RouteFinderView(LoginRequiredMixin, View):
         context['geo_data'] = geo_data
         return render(request, 'netbox_pathways/route_finder.html', context)
 
-
-class CableTraceView(LoginRequiredMixin, View):
-    """UI for tracing a cable's physical route."""
-
-    def get(self, request):
-        cable_id = request.GET.get('cable')
-
-        context = {
-            'cables': Cable.objects.filter(
-                pathway_segments__isnull=False,
-            ).distinct().order_by('pk'),
-            'cable_id': None,
-            'segments': None,
-            'geo_data': None,
-        }
-
-        if not cable_id:
-            return render(request, 'netbox_pathways/cable_trace.html', context)
-
-        try:
-            cable_id = int(cable_id)
-        except (TypeError, ValueError):
-            return render(request, 'netbox_pathways/cable_trace.html', context)
-
-        context['cable_id'] = cable_id
-
-        cable = get_object_or_404(Cable, pk=cable_id)
-        context['cable'] = cable
-
-        segments = trace_cable(cable_id)
-        context['segments'] = segments
-        context['total_length'] = sum(s['length'] or 0 for s in segments)
-
-        # Build geo data
-        geo_data = {'points': [], 'lines': []}
-        segment_colors = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4',
-                          '#42d4f4', '#f032e6', '#bfef45', '#fabebe', '#469990']
-
-        for i, seg in enumerate(segments):
-            color = segment_colors[i % len(segment_colors)]
-            if seg['coords']:
-                geo_data['lines'].append({
-                    'coords': seg['coords'],
-                    'name': f"Seg {seg['sequence']}: {seg['pathway_name'] or 'Unknown'}",
-                    'color': color,
-                    'url': seg['pathway_url'],
-                })
-
-        context['geo_data'] = geo_data
-        return render(request, 'netbox_pathways/cable_trace.html', context)
 
 
 class NeighborsView(LoginRequiredMixin, View):
