@@ -108,14 +108,18 @@
     ];
 
     function _createBaseLayers() {
-        var configs = (CFG.baseLayers && CFG.baseLayers.length) ? CFG.baseLayers : DEFAULT_BASE_LAYERS;
+        var configs = (CFG.baseLayers || []).filter(function(c) { return !!c.url; });
+        if (!configs.length) configs = DEFAULT_BASE_LAYERS;
         var layers = {};
         configs.forEach(function(cfg) {
-            layers[cfg.name] = L.tileLayer(cfg.url, {
+            var opts = {
                 attribution: cfg.attribution || '',
                 maxNativeZoom: cfg.maxNativeZoom || MAX_NATIVE_ZOOM,
-                maxZoom: 22
-            });
+                maxZoom: 22,
+                tileSize: cfg.tileSize || 256,
+                zoomOffset: cfg.zoomOffset || 0
+            };
+            layers[cfg.name] = L.tileLayer(cfg.url, opts);
         });
         return layers;
     }
@@ -334,9 +338,10 @@
         options = options || {};
 
         var baseLayers = _createBaseLayers();
+        var firstLayer = baseLayers[Object.keys(baseLayers)[0]];
         var map = L.map(containerId, {
             scrollWheelZoom: true,
-            layers: [baseLayers['Street']]
+            layers: [firstLayer]
         });
 
         // Satellite-active toggle for dark mode CSS

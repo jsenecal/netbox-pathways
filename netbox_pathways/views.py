@@ -538,17 +538,122 @@ class MapView(generic.ObjectListView):
         except (TypeError, ValueError):
             return default
 
+    def _data_extent(self):
+        """Compute WGS84 bounding box of all structures + pathways.
+
+        Uses a two-pass approach for structures: first compute a rough
+        centroid, then re-compute the extent excluding points that are
+        far from the median (> 2 degrees), which filters GPS outliers.
+        """
+        from django.db import connection
+
+        bbox = None
+
+        with connection.cursor() as cursor:
+            # Structures — trimmed extent to reject outliers
+            cursor.execute("""
+                WITH pts AS (
+                    SELECT ST_Transform(location, 4326) AS geom
+                    FROM netbox_pathways_structure
+                    WHERE location IS NOT NULL
+                ),
+                med AS (
+                    SELECT ST_Y(ST_Centroid(ST_Collect(geom))) AS lat,
+                           ST_X(ST_Centroid(ST_Collect(geom))) AS lon
+                    FROM pts
+                ),
+                trimmed AS (
+                    SELECT pts.geom FROM pts, med
+                    WHERE abs(ST_Y(pts.geom) - med.lat) < 2
+                      AND abs(ST_X(pts.geom) - med.lon) < 2
+                )
+                SELECT ST_Extent(geom) FROM trimmed
+            """)
+            row = cursor.fetchone()
+            if row and row[0]:
+                # Parse BOX(xmin ymin,xmax ymax)
+                bbox = self._parse_box(row[0])
+
+            # Pathways
+            cursor.execute("""
+                SELECT ST_Extent(ST_Transform(path, 4326))
+                FROM netbox_pathways_pathway
+                WHERE path IS NOT NULL
+            """)
+            row = cursor.fetchone()
+            if row and row[0]:
+                pbox = self._parse_box(row[0])
+                if pbox:
+                    if bbox:
+                        bbox = (
+                            min(bbox[0], pbox[0]),
+                            min(bbox[1], pbox[1]),
+                            max(bbox[2], pbox[2]),
+                            max(bbox[3], pbox[3]),
+                        )
+                    else:
+                        bbox = pbox
+
+        return bbox  # (west, south, east, north) or None
+
+    @staticmethod
+    def _parse_box(box_str):
+        """Parse PostGIS BOX(xmin ymin,xmax ymax) to (west, south, east, north)."""
+        try:
+            coords = box_str.replace('BOX(', '').replace(')', '')
+            min_part, max_part = coords.split(',')
+            west, south = (float(v) for v in min_part.split())
+            east, north = (float(v) for v in max_part.split())
+            return (west, south, east, north)
+        except (ValueError, AttributeError):
+            return None
+
     def get_extra_context(self, request):
+        import json
+
         from django.conf import settings
         plugin_cfg = settings.PLUGINS_CONFIG.get('netbox_pathways', {})
-        return {
-            'map_center_lat': self._safe_float(
-                request.GET.get('lat'), plugin_cfg.get('map_center_lat', 45.5017)),
-            'map_center_lon': self._safe_float(
-                request.GET.get('lon'), plugin_cfg.get('map_center_lon', -73.5673)),
-            'map_zoom': self._safe_int(
-                request.GET.get('zoom'), plugin_cfg.get('map_zoom', 10)),
+
+        pathways_config = {
+            'maxNativeZoom': plugin_cfg.get('map_max_native_zoom', 19),
+            'apiBase': '/api/plugins/pathways/geo/',
+            'overlays': plugin_cfg.get('map_overlays', []),
+            'baseLayers': plugin_cfg.get('map_base_layers', []),
         }
+
+        # Compute extent from data; fall back to config or defaults
+        extent = self._data_extent()
+        default_lat = plugin_cfg.get('map_center_lat', 45.5017)
+        default_lon = plugin_cfg.get('map_center_lon', -73.5673)
+        default_zoom = plugin_cfg.get('map_zoom', 10)
+
+        ctx = {
+            'pathways_config_json': json.dumps(pathways_config),
+        }
+
+        if request.GET.get('lat') or request.GET.get('lon'):
+            # Explicit URL params override everything
+            ctx['map_center_lat'] = self._safe_float(request.GET.get('lat'), default_lat)
+            ctx['map_center_lon'] = self._safe_float(request.GET.get('lon'), default_lon)
+            ctx['map_zoom'] = self._safe_int(request.GET.get('zoom'), default_zoom)
+            ctx['map_bounds'] = ''
+        elif extent:
+            # Fit to data extent
+            ctx['map_center_lat'] = (extent[1] + extent[3]) / 2
+            ctx['map_center_lon'] = (extent[0] + extent[2]) / 2
+            ctx['map_zoom'] = default_zoom
+            ctx['map_bounds'] = json.dumps([
+                [extent[1], extent[0]],  # [south, west]
+                [extent[3], extent[2]],  # [north, east]
+            ])
+        else:
+            # No data — use config defaults
+            ctx['map_center_lat'] = default_lat
+            ctx['map_center_lon'] = default_lon
+            ctx['map_zoom'] = default_zoom
+            ctx['map_bounds'] = ''
+
+        return ctx
 
 
 # --- Pull Sheet ---

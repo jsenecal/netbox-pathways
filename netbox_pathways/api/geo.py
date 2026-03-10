@@ -37,53 +37,60 @@ def _grid_size_for_zoom(zoom):
 # so DRF doesn't try to introspect the model for it.
 
 
-class StructureGeoSerializer(GeoFeatureModelSerializer):
+class _UrlMixin(metaclass=drf_serializers.SerializerMetaclass):
+    url = drf_serializers.SerializerMethodField()
+
+    def get_url(self, obj):
+        return obj.get_absolute_url()
+
+
+class StructureGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
     site_name = drf_serializers.SerializerMethodField()
 
     class Meta:
         model = models.Structure
         geo_field = 'geo_4326'
-        fields = ['id', 'name', 'structure_type', 'site_name']
+        fields = ['id', 'name', 'structure_type', 'site_name', 'url']
 
     def get_site_name(self, obj):
         return obj.site.name if obj.site_id else None
 
 
-class PathwayGeoSerializer(GeoFeatureModelSerializer):
+class PathwayGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
 
     class Meta:
         model = models.Pathway
         geo_field = 'geo_4326'
-        fields = ['id', 'name', 'pathway_type']
+        fields = ['id', 'name', 'pathway_type', 'url']
 
 
-class ConduitGeoSerializer(GeoFeatureModelSerializer):
+class ConduitGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
 
     class Meta:
         model = models.Conduit
         geo_field = 'geo_4326'
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'pathway_type', 'url']
 
 
-class AerialSpanGeoSerializer(GeoFeatureModelSerializer):
+class AerialSpanGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
 
     class Meta:
         model = models.AerialSpan
         geo_field = 'geo_4326'
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'pathway_type', 'url']
 
 
-class DirectBuriedGeoSerializer(GeoFeatureModelSerializer):
+class DirectBuriedGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
 
     class Meta:
         model = models.DirectBuried
         geo_field = 'geo_4326'
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'pathway_type', 'url']
 
 
 # --- Bbox filtering mixin ---

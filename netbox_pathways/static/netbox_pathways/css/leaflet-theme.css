@@ -130,6 +130,15 @@
     margin-top: 0;
 }
 
+/* Selected marker highlight */
+.pw-marker-selected .pw-marker-pin {
+    border-color: #fff;
+    box-shadow: 0 0 0 3px rgba(32, 107, 196, 0.7), 0 0 10px rgba(32, 107, 196, 0.5);
+}
+[data-bs-theme="dark"] .pw-marker-selected .pw-marker-pin {
+    box-shadow: 0 0 0 3px rgba(99, 163, 230, 0.8), 0 0 12px rgba(99, 163, 230, 0.5);
+}
+
 /* Client-side cluster icons (MarkerCluster plugin) */
 .marker-cluster div {
     border-radius: 50%;
@@ -229,27 +238,59 @@ form .leaflet-container {
     border-color: var(--pw-map-popup-border);
 }
 
-/* --- Legend icons ------------------------------------------------- */
 
-.pw-legend-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    color: #fff;
+/* --- Hover Popover --- */
+.pw-popover {
+    position: absolute;
+    z-index: 1100;
+    padding: 6px 12px;
+    border-radius: 6px;
     font-size: 12px;
-    line-height: 1;
-    margin-right: 6px;
-    vertical-align: middle;
+    pointer-events: none;
+    max-width: 280px;
+    white-space: nowrap;
+    background: var(--tblr-card-bg, #fff);
+    color: var(--tblr-body-color, #212529);
+    border: 1px solid var(--tblr-border-color, #dee2e6);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+.pw-popover-name {
+    font-weight: 600;
+}
+.pw-popover-type {
+    font-size: 11px;
+    opacity: 0.6;
+    margin-left: 6px;
+}
+[data-bs-theme="dark"] .pw-popover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
-.pw-legend-line {
-    display: inline-block;
-    width: 28px;
-    height: 0;
-    border-top: 3px dashed;
-    margin-right: 6px;
-    vertical-align: middle;
+/* --- Pathway Line Labels --- */
+.pw-line-label {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--tblr-body-color, #333);
+    text-shadow:
+        -1px -1px 0 var(--tblr-body-bg, #fff),
+         1px -1px 0 var(--tblr-body-bg, #fff),
+        -1px  1px 0 var(--tblr-body-bg, #fff),
+         1px  1px 0 var(--tblr-body-bg, #fff),
+         0   -1px 0 var(--tblr-body-bg, #fff),
+         0    1px 0 var(--tblr-body-bg, #fff),
+        -1px  0   0 var(--tblr-body-bg, #fff),
+         1px  0   0 var(--tblr-body-bg, #fff);
+    pointer-events: none;
+}
+[data-bs-theme="dark"] .pw-line-label {
+    color: #ccc;
+    text-shadow:
+        -1px -1px 0 #1e1e2e,
+         1px -1px 0 #1e1e2e,
+        -1px  1px 0 #1e1e2e,
+         1px  1px 0 #1e1e2e;
 }

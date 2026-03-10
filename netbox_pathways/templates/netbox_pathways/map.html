@@ -5,21 +5,265 @@
 
 {% block content %}
 <style>
-    /* Force map and card to fill full content width */
-    .pathways-map-wrapper,
-    .pathways-map-wrapper .card,
+    /* Map card fills full viewport below the navbar */
+    .pathways-map-wrapper {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+    }
+    .pathways-map-wrapper .card {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
+    }
     .pathways-map-wrapper .card-body {
         width: 100%;
         max-width: 100%;
         box-sizing: border-box;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
     }
-    #pathways-map {
-        width: 100% !important;
-        max-width: 100% !important;
-    }
-    /* Leaflet container must also fill its parent */
+    /* Leaflet container must fill its parent */
     #pathways-map .leaflet-container {
         width: 100% !important;
+    }
+    /* Flex wrapper for map + sidebar side-by-side */
+    .pw-map-flex {
+        display: flex;
+        width: 100%;
+        flex: 1;
+        min-height: 0;
+    }
+    .pw-map-flex #pathways-map {
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+    }
+
+    /* --- Sidebar --- */
+    .pw-sidebar {
+        width: 340px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--tblr-card-bg, var(--tblr-body-bg, #fff));
+        color: var(--tblr-body-color, inherit);
+        border-left: 1px solid var(--tblr-border-color, #dee2e6);
+    }
+    .pw-panel {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+    }
+    .pw-sidebar-header {
+        display: flex;
+        align-items: center;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--tblr-border-color, #dee2e6);
+        background: var(--tblr-card-bg, var(--tblr-body-bg, #fff));
+        flex-shrink: 0;
+    }
+    .pw-count-badge {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 7px;
+        border-radius: 10px;
+        font-size: 0.75em;
+        font-weight: 600;
+        background: var(--tblr-border-color-translucent, rgba(0,0,0,0.06));
+        color: var(--tblr-body-color, inherit);
+    }
+    .pw-kbd {
+        font-size: 0.7em;
+        padding: 1px 5px;
+        border-radius: 3px;
+        background: var(--tblr-border-color-translucent, rgba(0,0,0,0.06));
+        color: var(--tblr-muted-color, #667382);
+        border: 1px solid var(--tblr-border-color, #dee2e6);
+    }
+    .pw-search-bar {
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--tblr-border-color, #dee2e6);
+        flex-shrink: 0;
+    }
+    .pw-type-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--tblr-border-color, #dee2e6);
+        flex-shrink: 0;
+    }
+    .pw-type-filters:empty {
+        display: none;
+        padding: 0;
+        border-bottom: none;
+    }
+    .pw-feature-list {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+    }
+    .pw-list-item {
+        display: flex;
+        align-items: center;
+        padding: 8px 14px;
+        cursor: pointer;
+        gap: 8px;
+        border-bottom: 1px solid var(--tblr-border-color-translucent, rgba(0,0,0,0.06));
+    }
+    .pw-list-item:hover {
+        background: var(--tblr-border-color-translucent, rgba(0,0,0,0.06));
+    }
+    .pw-list-item.active {
+        background: var(--tblr-primary-lt, rgba(32,107,196,0.1));
+    }
+    .pw-list-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .pw-list-label {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.9em;
+    }
+    .pw-list-type {
+        font-size: 0.65em;
+        text-transform: uppercase;
+        font-weight: 600;
+        color: var(--tblr-muted-color, #667382);
+        flex-shrink: 0;
+        letter-spacing: 0.03em;
+    }
+    .pw-detail-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 14px;
+        min-height: 0;
+    }
+    .pw-detail-title {
+        font-size: 1.1em;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .pw-detail-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        color: #fff;
+        font-size: 0.8em;
+        margin-bottom: 10px;
+    }
+    .pw-detail-table {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    .pw-detail-table td {
+        padding: 4px 6px;
+        vertical-align: top;
+        border-top: 1px solid var(--tblr-border-color-translucent, rgba(0,0,0,0.06));
+    }
+    .pw-detail-table td:first-child {
+        white-space: nowrap;
+        font-weight: 600;
+        width: 1%;
+        color: var(--tblr-muted-color, #667382);
+    }
+    .pw-detail-loading {
+        text-align: center;
+        padding: 16px;
+        color: var(--tblr-muted-color, #667382);
+        font-size: 0.85em;
+    }
+    /* Layer toggles in sidebar */
+    .pw-layer-toggles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--tblr-border-color, #dee2e6);
+        flex-shrink: 0;
+    }
+    .pw-layer-toggles:empty {
+        display: none;
+    }
+    .pw-stats-bar {
+        padding: 4px 14px;
+        font-size: 0.72em;
+        color: var(--tblr-muted-color, #667382);
+        border-bottom: 1px solid var(--tblr-border-color, #dee2e6);
+        flex-shrink: 0;
+    }
+    .pw-layer-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.75em;
+        cursor: pointer;
+        user-select: none;
+    }
+    .pw-layer-toggle input[type="checkbox"] {
+        margin: 0;
+    }
+    .pw-inline-edit {
+        display: none;
+        gap: 4px;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+    .pw-inline-edit.active {
+        display: flex;
+    }
+    .pw-edit-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0 4px;
+        opacity: 0.4;
+        font-size: 0.85em;
+        color: var(--tblr-body-color, inherit);
+    }
+    .pw-edit-btn:hover {
+        opacity: 1;
+    }
+    .pw-filter-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 12px;
+        border: 1px solid var(--tblr-border-color, #dee2e6);
+        background: var(--tblr-card-bg, var(--tblr-body-bg, #fff));
+        color: var(--tblr-body-color, inherit);
+        font-size: 0.75em;
+        cursor: pointer;
+        transition: border-color 0.15s;
+    }
+    .pw-filter-btn:hover {
+        border-color: var(--tblr-primary, #206bc4);
+    }
+    .pw-filter-btn.active {
+        border-color: var(--tblr-primary, #206bc4);
+        background: var(--tblr-primary-lt, rgba(32,107,196,0.1));
+    }
+    .pw-filter-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
     }
 </style>
 <div class="pathways-map-wrapper">
@@ -31,52 +275,39 @@
             </button>
         </div>
         <div class="card-body p-0">
-            <div id="pathways-map" style="min-height: 400px;"></div>
-        </div>
-        <div class="card-footer">
-            <div class="row">
-                <div class="col-md-4">
-                    <strong>Structures:</strong> <span id="structure-count">0</span>
-                </div>
-                <div class="col-md-4">
-                    <strong>Pathways:</strong> <span id="pathway-count">0</span>
-                </div>
-                <div class="col-md-4">
-                    <strong>Total Length:</strong> <span id="total-length">0</span> km
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card mt-3">
-        <h2 class="card-header">Legend</h2>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-6">
-                    <h5>Structure Types</h5>
-                    <ul class="list-unstyled">
-                        <li><span class="pw-legend-icon" style="background:#2e7d32"><i class="mdi mdi-adjust"></i></span> Pole</li>
-                        <li><span class="pw-legend-icon" style="background:#1565c0"><i class="mdi mdi-checkbox-blank-circle"></i></span> Manhole</li>
-                        <li><span class="pw-legend-icon" style="background:#00838f"><i class="mdi mdi-checkbox-blank-circle-outline"></i></span> Handhole</li>
-                        <li><span class="pw-legend-icon" style="background:#e65100"><i class="mdi mdi-square-rounded"></i></span> Cabinet</li>
-                        <li><span class="pw-legend-icon" style="background:#6a1b9a"><i class="mdi mdi-square"></i></span> Vault</li>
-                        <li><span class="pw-legend-icon" style="background:#f9a825"><i class="mdi mdi-square-outline"></i></span> Pedestal</li>
-                        <li><span class="pw-legend-icon" style="background:#c62828"><i class="mdi mdi-square-dot"></i></span> Building Entrance</li>
-                        <li><span class="pw-legend-icon" style="background:#795548"><i class="mdi mdi-set-center"></i></span> Splice Closure</li>
-                        <li><span class="pw-legend-icon" style="background:#b71c1c"><i class="mdi mdi-target"></i></span> Tower</li>
-                        <li><span class="pw-legend-icon" style="background:#616161"><i class="mdi mdi-triangle-outline"></i></span> Rooftop</li>
-                        <li><span class="pw-legend-icon" style="background:#00796b"><i class="mdi mdi-square-rounded-outline"></i></span> Equipment Room</li>
-                        <li><span class="pw-legend-icon" style="background:#283593"><i class="mdi mdi-rhombus"></i></span> Telecom Closet</li>
-                        <li><span class="pw-legend-icon" style="background:#ad1457"><i class="mdi mdi-rhombus-outline"></i></span> Riser Room</li>
-                    </ul>
-                </div>
-                <div class="col-md-6">
-                    <h5>Pathway Types</h5>
-                    <ul class="list-unstyled">
-                        <li><span class="pw-legend-line" style="border-color:#795548; border-style:dashed;">&#8203;</span> Conduit</li>
-                        <li><span class="pw-legend-line" style="border-color:#1565c0; border-style:dashed;">&#8203;</span> Aerial Span</li>
-                        <li><span class="pw-legend-line" style="border-color:#616161; border-style:dotted;">&#8203;</span> Direct Buried</li>
-                    </ul>
+            <div class="pw-map-flex">
+                <div id="pathways-map" style="min-height: 400px;"></div>
+                <div id="pw-sidebar" class="pw-sidebar">
+                    <!-- Layer Toggles + Stats -->
+                    <div id="pw-layer-toggles" class="pw-layer-toggles"></div>
+                    <div class="pw-stats-bar">
+                        <span id="structure-count">0</span> structures &middot;
+                        <span id="pathway-count">0</span> pathways &middot;
+                        <span id="total-length">0</span> km
+                    </div>
+                    <!-- List Panel -->
+                    <div id="pw-panel-list" class="pw-panel">
+                        <div class="pw-sidebar-header">
+                            <strong>Features</strong>
+                            <span id="pw-list-count" class="pw-count-badge">0</span>
+                            <button id="pw-sidebar-close" type="button" class="btn-close btn-close-sm ms-auto" aria-label="Close"></button>
+                        </div>
+                        <div class="pw-search-bar">
+                            <input id="pw-search" type="text" class="form-control form-control-sm" placeholder="Search features...">
+                        </div>
+                        <div id="pw-type-filters" class="pw-type-filters"></div>
+                        <div id="pw-feature-list" class="pw-feature-list"></div>
+                    </div>
+                    <!-- Detail Panel -->
+                    <div id="pw-panel-detail" class="pw-panel" style="display:none;">
+                        <div class="pw-sidebar-header">
+                            <button id="pw-detail-back" type="button" class="btn btn-sm btn-link p-0 text-decoration-none">
+                                <i class="mdi mdi-arrow-left"></i> Back
+                            </button>
+                            <kbd class="ms-2 pw-kbd">Esc</kbd>
+                        </div>
+                        <div id="pw-detail-body" class="pw-detail-body"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -86,19 +317,25 @@
 
 {% block javascript %}
 {{ block.super }}
+<script>window.PATHWAYS_CONFIG={{ pathways_config_json|safe }};</script>
 <script src="{% static 'netbox_pathways/js/pathways-map.js' %}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         function sizeMap() {
+            var wrapper = document.querySelector('.pathways-map-wrapper');
             var el = document.getElementById('pathways-map');
-            if (!el) return;
-            var rect = el.getBoundingClientRect();
-            var h = window.innerHeight - rect.top - 120;
-            el.style.height = Math.max(400, h) + 'px';
-            // Ensure width matches parent
-            var parent = el.parentElement;
-            if (parent) {
-                el.style.width = parent.clientWidth + 'px';
+            if (!wrapper || !el) return;
+            // Fill from wrapper top to bottom of viewport
+            var wrapRect = wrapper.getBoundingClientRect();
+            var wrapH = Math.max(400, window.innerHeight - wrapRect.top - 8);
+            wrapper.style.height = wrapH + 'px';
+            // Map flex container fills card-body; set its height explicitly
+            var flexWrap = el.parentElement;
+            if (flexWrap) {
+                var flexRect = flexWrap.getBoundingClientRect();
+                var flexH = Math.max(300, window.innerHeight - flexRect.top - 8);
+                flexWrap.style.height = flexH + 'px';
+                el.style.height = flexH + 'px';
             }
             if (window.PathwaysMap && window.PathwaysMap.map) {
                 window.PathwaysMap.map.invalidateSize();
@@ -107,7 +344,8 @@
         sizeMap();
         initializePathwaysMap('pathways-map', {
             center: [{{ map_center_lat }}, {{ map_center_lon }}],
-            zoom: {{ map_zoom }}
+            zoom: {{ map_zoom }},
+            bounds: {{ map_bounds|default:"null" }}
         });
         // Re-size after layout settles and on window resize
         setTimeout(sizeMap, 200);
