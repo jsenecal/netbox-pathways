@@ -102,7 +102,7 @@ class LeafletHeadExtension(PluginTemplateExtension):
             'baseLayers': plugin_cfg.get('map_base_layers', []),
         }
 
-        detail_js = static('netbox_pathways/js/detail-map.js')
+        detail_js = static('netbox_pathways/dist/detail-map.min.js')
         config_js = f'<script>window.PATHWAYS_CONFIG={json.dumps(config)};</script>\n'
         return _leaflet_head() + config_js + f'<script src="{detail_js}"></script>\n'
 

@@ -120,7 +120,7 @@
 {% if geo_data %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="{% static 'netbox_pathways/js/detail-map.js' %}"></script>
+<script src="{% static 'netbox_pathways/dist/detail-map.min.js' %}"></script>
 {{ geo_data|json_script:"route-geo-data" }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {

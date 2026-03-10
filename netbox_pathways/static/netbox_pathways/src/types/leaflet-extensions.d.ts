@@ -26,11 +26,26 @@ declare global {
     export type Map = import('leaflet').Map;
     export type Layer = import('leaflet').Layer;
     export type LatLng = import('leaflet').LatLng;
+    export type LatLngBounds = import('leaflet').LatLngBounds;
     export type LayerGroup = import('leaflet').LayerGroup;
     export type Icon = import('leaflet').Icon;
     export type DivIcon = import('leaflet').DivIcon;
+    export type Marker = import('leaflet').Marker;
+    export type Polyline = import('leaflet').Polyline;
+    export type TileLayer = import('leaflet').TileLayer;
+    export type GeoJSON = import('leaflet').GeoJSON;
     export type PathOptions = import('leaflet').PathOptions;
+    export type TileLayerOptions = import('leaflet').TileLayerOptions;
+    export type ControlOptions = import('leaflet').ControlOptions;
+    export type LayersControlEvent = import('leaflet').LayersControlEvent;
     export type Control = import('leaflet').Control;
+    // Nested namespace for L.Control.Layers and L.TileLayer.WMS
+    export namespace Control {
+      export type Layers = import('leaflet').Control.Layers;
+    }
+    export namespace TileLayer {
+      export type WMS = import('leaflet').TileLayer.WMS;
+    }
   }
 
   /** Custom event fired by django-leaflet on map widget initialization. */
