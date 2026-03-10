@@ -1,7 +1,9 @@
-from dcim.models import Cable
+from dcim.models import Cable, Site
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, Q, Sum
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.text import slugify
 from django.views import View
 from extras.ui.panels import CustomFieldsPanel, TagsPanel
 from netbox.ui import layout
@@ -65,6 +67,47 @@ class StructureBulkEditView(generic.BulkEditView):
 class StructureBulkDeleteView(generic.BulkDeleteView):
     queryset = models.Structure.objects.all()
     table = tables.StructureTable
+
+
+class StructureCreateSiteView(LoginRequiredMixin, View):
+    """Create a NetBox Site from a Structure and link them."""
+
+    def post(self, request, pk):
+        structure = get_object_or_404(models.Structure, pk=pk)
+
+        if structure.site:
+            messages.warning(request, f"Structure already has a linked site: {structure.site}")
+            return redirect(structure.get_absolute_url())
+
+        # Generate a unique slug
+        base_slug = slugify(structure.name)[:100]
+        slug = base_slug
+        counter = 2
+        while Site.objects.filter(slug=slug).exists():
+            suffix = f"-{counter}"
+            slug = base_slug[: 100 - len(suffix)] + suffix
+            counter += 1
+
+        # Handle duplicate site names
+        name = structure.name[:100]
+        if Site.objects.filter(name=name).exists():
+            messages.error(
+                request,
+                f'A site named "{name}" already exists. Create the site manually with a different name.',
+            )
+            return redirect(structure.get_absolute_url())
+
+        site = Site.objects.create(
+            name=name,
+            slug=slug,
+            status='active',
+            tenant=structure.tenant,
+        )
+        structure.site = site
+        structure.save()
+
+        messages.success(request, f'Created site "{site.name}" and linked it to this structure.')
+        return redirect(structure.get_absolute_url())
 
 
 @register_model_view(models.Structure, 'pathways')

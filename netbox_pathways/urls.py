@@ -11,6 +11,7 @@ urlpatterns = [
     path('structures/delete/', views.StructureBulkDeleteView.as_view(), name='structure_bulk_delete'),
     path('structures/<int:pk>/', views.StructureView.as_view(), name='structure'),
     path('structures/<int:pk>/edit/', views.StructureEditView.as_view(), name='structure_edit'),
+    path('structures/<int:pk>/create-site/', views.StructureCreateSiteView.as_view(), name='structure_create_site'),
     path('structures/<int:pk>/delete/', views.StructureDeleteView.as_view(), name='structure_delete'),
 
     # Pathways (all types)

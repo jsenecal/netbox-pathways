@@ -1,1 +1,13 @@
 {% extends 'generic/object.html' %}
+{% load i18n %}
+
+{% block extra_controls %}
+  {% if not object.site %}
+    <form method="post" action="{% url 'plugins:netbox_pathways:structure_create_site' pk=object.pk %}" class="d-inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-green">
+        <i class="mdi mdi-plus-thick" aria-hidden="true"></i> {% trans "Create Site" %}
+      </button>
+    </form>
+  {% endif %}
+{% endblock extra_controls %}
