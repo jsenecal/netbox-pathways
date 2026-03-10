@@ -214,20 +214,20 @@
         'Telecom Closet': '#283593', 'Riser Room': '#ad1457',
     };
 
-    const STRUCTURE_ICONS: Record<string, string> = {
-        'Pole': 'mdi-adjust',
-        'Manhole': 'mdi-checkbox-blank-circle',
-        'Handhole': 'mdi-checkbox-blank-circle-outline',
-        'Cabinet': 'mdi-square-rounded',
-        'Vault': 'mdi-square',
-        'Pedestal': 'mdi-square-outline',
-        'Building Entrance': 'mdi-square-dot',
-        'Splice Closure': 'mdi-set-center',
-        'Tower': 'mdi-target',
-        'Rooftop': 'mdi-triangle-outline',
-        'Equipment Room': 'mdi-square-rounded-outline',
-        'Telecom Closet': 'mdi-rhombus',
-        'Riser Room': 'mdi-rhombus-outline',
+    const STRUCTURE_SHAPES: Record<string, string> = {
+        'Pole':               '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/><circle cx="10" cy="10" r="2.5"/>',
+        'Manhole':            '<circle cx="10" cy="10" r="8"/>',
+        'Handhole':           '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/>',
+        'Cabinet':            '<rect x="2" y="2" width="16" height="16" rx="4"/>',
+        'Vault':              '<rect x="2" y="2" width="16" height="16" rx="2"/>',
+        'Pedestal':           '<rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke-width="2.5"/>',
+        'Building Entrance':  '<rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke-width="2.5"/><circle cx="10" cy="10" r="2.5"/>',
+        'Splice Closure':     '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/><circle cx="10" cy="10" r="2.5"/>',
+        'Tower':              '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/><line x1="10" y1="2" x2="10" y2="18" stroke-width="1.5"/><line x1="2" y1="10" x2="18" y2="10" stroke-width="1.5"/>',
+        'Rooftop':            '<polygon points="10,2 18,17 2,17"/>',
+        'Equipment Room':     '<rect x="3" y="3" width="14" height="14" rx="4" fill="none" stroke-width="2.5"/>',
+        'Telecom Closet':     '<rect x="3" y="3" width="10" height="10" rx="1" transform="rotate(45 10 10)"/>',
+        'Riser Room':         '<rect x="3.5" y="3.5" width="9" height="9" rx="1" fill="none" stroke-width="2.5" transform="rotate(45 10 10)"/>',
     };
 
     const PATHWAY_COLORS: Record<string, string> = {
@@ -236,16 +236,18 @@
         'Raceway': '#00838f', 'Submarine': '#1a237e',
     };
 
-    function _structureIcon(type: string): L.DivIcon {
+    function _structureIcon(type: string, size = 20): L.DivIcon {
         const color: string = STRUCTURE_COLORS[type] || '#616161';
-        const icon: string = STRUCTURE_ICONS[type] || 'mdi-map-marker';
+        const shape: string = STRUCTURE_SHAPES[type] || '<circle cx="10" cy="10" r="8"/>';
+        const half: number = size / 2;
         return L.divIcon({
             className: 'pw-marker',
-            html: '<div class="pw-marker-pin" style="background:' + color + '">' +
-                  '<i class="mdi ' + icon + '"></i></div>',
-            iconSize: [18, 18] as [number, number],
-            iconAnchor: [9, 9] as [number, number],
-            popupAnchor: [0, -10] as [number, number],
+            html: '<svg class="pw-marker-svg" viewBox="0 0 20 20" width="' + size +
+                  '" height="' + size + '" stroke="white" fill="' + color + '">' +
+                  shape + '</svg>',
+            iconSize: [size, size] as [number, number],
+            iconAnchor: [half, half] as [number, number],
+            popupAnchor: [0, -(half + 2)] as [number, number],
         });
     }
 
@@ -350,8 +352,9 @@
                     ? _structureIcon(pt.structure_type)
                     : L.divIcon({
                         className: 'pw-marker',
-                        html: '<div class="pw-marker-pin" style="background:' + (pt.color || '#1565c0') + '">' +
-                              '<i class="mdi mdi-map-marker"></i></div>',
+                        html: '<svg class="pw-marker-svg" viewBox="0 0 20 20" width="28" height="28"' +
+                              ' stroke="white" fill="' + (pt.color || '#1565c0') + '">' +
+                              '<circle cx="10" cy="10" r="8"/></svg>',
                         iconSize: [28, 28] as [number, number],
                         iconAnchor: [14, 14] as [number, number],
                         popupAnchor: [0, -16] as [number, number],
