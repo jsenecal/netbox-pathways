@@ -112,14 +112,13 @@
     stroke-width: 1.5;
 }
 
-/* Selected marker highlight */
-.pw-marker-selected .pw-marker-svg {
-    filter: drop-shadow(0 0 3px rgba(32, 107, 196, 0.7))
-            drop-shadow(0 0 8px rgba(32, 107, 196, 0.5));
+/* Selected marker highlight — box-shadow on container for solid ring */
+.pw-marker-selected {
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(32, 107, 196, 0.8), 0 0 10px rgba(32, 107, 196, 0.5);
 }
-[data-bs-theme="dark"] .pw-marker-selected .pw-marker-svg {
-    filter: drop-shadow(0 0 3px rgba(99, 163, 230, 0.8))
-            drop-shadow(0 0 10px rgba(99, 163, 230, 0.5));
+[data-bs-theme="dark"] .pw-marker-selected {
+    box-shadow: 0 0 0 3px rgba(99, 163, 230, 0.8), 0 0 12px rgba(99, 163, 230, 0.5);
 }
 
 /* Client-side cluster icons (MarkerCluster plugin) */
