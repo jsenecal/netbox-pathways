@@ -67,3 +67,7 @@ site/
 # Package
 *.tar.gz
 *.zip
+
+# TypeScript build artifacts
+netbox_pathways/static/netbox_pathways/dist/
+netbox_pathways/static/netbox_pathways/node_modules/
