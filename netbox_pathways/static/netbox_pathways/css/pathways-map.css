@@ -45,14 +45,6 @@
     margin-bottom: 5px;
 }
 
-.structure-marker {
-    background-color: var(--pw-map-marker-bg, #fff);
-    border: 2px solid var(--pw-map-marker-border, #000);
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-}
-
 #pathways-map {
     width: 100%;
     height: 600px;

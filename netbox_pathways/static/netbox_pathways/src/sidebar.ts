@@ -91,10 +91,12 @@ function _applyHighlightVisuals(entry: FeatureEntry): void {
         const type = entry.props.structure_type || '';
         const color = STRUCTURE_COLORS[type] || '#616161';
         const shape = STRUCTURE_SHAPES[type] || '<circle cx="10" cy="10" r="8"/>';
+        const isOutline = shape.includes('fill="none"');
         marker.setIcon(L.divIcon({
             className: 'pw-marker pw-marker-selected',
             html: '<svg class="pw-marker-svg" viewBox="0 0 20 20" width="26" height="26"' +
-                  ' stroke="white" fill="' + color + '">' + shape + '</svg>',
+                  ' stroke="' + (isOutline ? color : 'white') +
+                  '" fill="' + color + '">' + shape + '</svg>',
             iconSize: [26, 26] as [number, number],
             iconAnchor: [13, 13] as [number, number],
             popupAnchor: [0, -14] as [number, number],

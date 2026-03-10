@@ -64,12 +64,13 @@ const PATHWAY_COLORS: Record<string, string> = {
 function _structureIcon(type: string, size = 20): L.DivIcon {
     const color = STRUCTURE_COLORS[type] || '#616161';
     const shape = STRUCTURE_SHAPES[type] || '<circle cx="10" cy="10" r="8"/>';
+    const isOutline = shape.includes('fill="none"');
     const half = size / 2;
     return L.divIcon({
         className: 'pw-marker',
         html: '<svg class="pw-marker-svg" viewBox="0 0 20 20" width="' + size +
-              '" height="' + size + '" stroke="white" fill="' + color + '">' +
-              shape + '</svg>',
+              '" height="' + size + '" stroke="' + (isOutline ? color : 'white') +
+              '" fill="' + color + '">' + shape + '</svg>',
         iconSize: [size, size] as [number, number],
         iconAnchor: [half, half] as [number, number],
         popupAnchor: [0, -(half + 2)] as [number, number],
