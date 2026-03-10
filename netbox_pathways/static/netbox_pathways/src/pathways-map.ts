@@ -440,6 +440,10 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
     function _syncSidebarCheckbox(name: string, checked: boolean): void {
         if (_layerCheckboxes[name]) {
             _layerCheckboxes[name].checked = checked;
+            const btn = _layerCheckboxes[name].closest('.pw-layer-toggle');
+            if (btn) {
+                btn.classList.toggle('pw-layer-active', checked);
+            }
         }
     }
 
@@ -459,37 +463,59 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
     // --- Sidebar layer toggles ---
 
+    // SVG icons for layer toggle buttons
+    const LAYER_ICONS: Record<string, string> = {
+        'Structures': '<svg viewBox="0 0 20 20" width="14" height="14"><circle cx="10" cy="10" r="8" fill="#2e7d32" stroke="white" stroke-width="1.5"/></svg>',
+        'Conduits': '<svg viewBox="0 0 20 6" width="18" height="6"><line x1="0" y1="3" x2="20" y2="3" stroke="#795548" stroke-width="3" stroke-dasharray="5 5"/></svg>',
+        'Aerial Spans': '<svg viewBox="0 0 20 6" width="18" height="6"><line x1="0" y1="3" x2="20" y2="3" stroke="#1565c0" stroke-width="3" stroke-dasharray="10 5"/></svg>',
+        'Direct Buried': '<svg viewBox="0 0 20 6" width="18" height="6"><line x1="0" y1="3" x2="20" y2="3" stroke="#616161" stroke-width="3" stroke-dasharray="2 4"/></svg>',
+    };
+
     function _buildSidebarLayerToggles(): void {
         const toggleContainer = document.getElementById('pw-layer-toggles');
         if (!toggleContainer) return;
         toggleContainer.textContent = '';
 
         for (const lname in layerNames) {
-            const label = document.createElement('label');
-            label.className = 'pw-layer-toggle';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            const active = map.hasLayer(layerNames[lname]);
+            btn.className = 'pw-layer-toggle' + (active ? ' pw-layer-active' : '');
+
+            // Build button content using DOM methods — icon SVG is from a hardcoded constant
+            const iconSvg = LAYER_ICONS[lname] || '';
+            const span = document.createElement('span');
+            span.textContent = lname;
+            const wrapper = document.createElement('span');
+            wrapper.innerHTML = iconSvg; // Safe: hardcoded SVG from LAYER_ICONS constant
+            while (wrapper.firstChild) btn.appendChild(wrapper.firstChild);
+            btn.appendChild(span);
 
             const cb = document.createElement('input');
             cb.type = 'checkbox';
-            cb.checked = map.hasLayer(layerNames[lname]);
+            cb.checked = active;
+            cb.style.display = 'none';
             _layerCheckboxes[lname] = cb;
+            btn.appendChild(cb);
 
-            (function (cbName: string, checkbox: HTMLInputElement) {
-                checkbox.addEventListener('change', function () {
+            (function (cbName: string, checkbox: HTMLInputElement, button: HTMLButtonElement) {
+                button.addEventListener('click', function () {
+                    checkbox.checked = !checkbox.checked;
                     if (checkbox.checked) {
                         map.addLayer(layerNames[cbName]);
+                        button.classList.add('pw-layer-active');
                     } else {
                         map.removeLayer(layerNames[cbName]);
+                        button.classList.remove('pw-layer-active');
                     }
                     const prefs = _loadPrefs() || DEFAULT_LAYERS;
                     prefs[cbName] = checkbox.checked;
                     _savePrefs(prefs);
                     _loadData();
                 });
-            })(lname, cb);
+            })(lname, cb, btn);
 
-            label.appendChild(cb);
-            label.appendChild(document.createTextNode(lname));
-            toggleContainer.appendChild(label);
+            toggleContainer.appendChild(btn);
         }
     }
     _buildSidebarLayerToggles();
