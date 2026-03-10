@@ -18,7 +18,7 @@ let _debounce: (fn: () => void, delay: number) => () => void;
 let _getCookie: (name: string) => string | null;
 
 let STRUCTURE_COLORS: Record<string, string>;
-let STRUCTURE_ICONS: Record<string, string>;
+let STRUCTURE_SHAPES: Record<string, string>;
 let PATHWAY_COLORS: Record<string, string>;
 let API_BASE: string;
 
@@ -90,11 +90,11 @@ function _applyHighlightVisuals(entry: FeatureEntry): void {
         marker._origIcon = (marker as any).getIcon();
         const type = entry.props.structure_type || '';
         const color = STRUCTURE_COLORS[type] || '#616161';
-        const iconCls = STRUCTURE_ICONS[type] || 'mdi-map-marker';
+        const shape = STRUCTURE_SHAPES[type] || '<circle cx="10" cy="10" r="8"/>';
         marker.setIcon(L.divIcon({
             className: 'pw-marker pw-marker-selected',
-            html: '<div class="pw-marker-pin" style="background:' + color + '">' +
-                  '<i class="mdi ' + iconCls + '"></i></div>',
+            html: '<svg class="pw-marker-svg" viewBox="0 0 20 20" width="26" height="26"' +
+                  ' stroke="white" fill="' + color + '">' + shape + '</svg>',
             iconSize: [26, 26] as [number, number],
             iconAnchor: [13, 13] as [number, number],
             popupAnchor: [0, -14] as [number, number],
@@ -891,7 +891,7 @@ export interface SidebarDeps {
     debounce: (fn: () => void, delay: number) => () => void;
     getCookie: (name: string) => string | null;
     structureColors: Record<string, string>;
-    structureIcons: Record<string, string>;
+    structureShapes: Record<string, string>;
     pathwayColors: Record<string, string>;
     apiBase: string;
 }
@@ -902,7 +902,7 @@ function setDeps(deps: SidebarDeps): void {
     _debounce = deps.debounce;
     _getCookie = deps.getCookie;
     STRUCTURE_COLORS = deps.structureColors;
-    STRUCTURE_ICONS = deps.structureIcons;
+    STRUCTURE_SHAPES = deps.structureShapes;
     PATHWAY_COLORS = deps.pathwayColors;
     API_BASE = deps.apiBase;
 }
