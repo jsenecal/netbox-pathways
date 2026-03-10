@@ -855,7 +855,7 @@ class CableTraceView(LoginRequiredMixin, View):
         context = {
             'cables': Cable.objects.filter(
                 pathway_segments__isnull=False,
-            ).distinct().order_by('_name'),
+            ).distinct().order_by('pk'),
             'cable_id': None,
             'segments': None,
             'geo_data': None,

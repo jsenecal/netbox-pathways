@@ -200,7 +200,7 @@ class CoreModelMapExtension(PluginTemplateExtension):
 
     models = ['dcim.site', 'dcim.location']
 
-    def full_width_page(self):
+    def right_page(self):
         obj = self.context['object']
         geo_data = self._get_geo_data(obj)
         if not geo_data:
@@ -249,8 +249,6 @@ class CoreModelMapExtension(PluginTemplateExtension):
 
             pathways = models.Pathway.objects.filter(
                 Q(start_structure__site=obj) | Q(end_structure__site=obj),
-            ).select_related(
-                'start_structure', 'end_structure',
             ).only(
                 'name', 'pathway_type', 'path',
             )[:500]
@@ -266,6 +264,11 @@ class CoreModelMapExtension(PluginTemplateExtension):
                 'start_structure', 'end_structure',
             ).only(
                 'name', 'pathway_type', 'path',
+                'start_structure_id', 'end_structure_id',
+                'start_structure__name', 'start_structure__structure_type',
+                'start_structure__location',
+                'end_structure__name', 'end_structure__structure_type',
+                'end_structure__location',
             )[:500]
             for p in pathways:
                 line = _pathway_line(p)
