@@ -48,20 +48,35 @@ function init(map: L.Map): void {
     map.getContainer().appendChild(_el);
 }
 
-function show(latlng: L.LatLng, props: GeoJSONProperties): void {
+function show(latlng: L.LatLng, props: GeoJSONProperties, popoverFields?: string[]): void {
     if (!_el) return;
-    const t = props.structure_type || props.pathway_type || '';
     _el.textContent = '';
 
+    // Name line
     const name = document.createElement('span');
     name.className = 'pw-popover-name';
-    name.textContent = props.name || 'Unnamed';
+    if (popoverFields && popoverFields.length > 0) {
+        name.textContent = String(props[popoverFields[0]] ?? props.name ?? `#${props.id}`);
+    } else {
+        name.textContent = props.name || 'Unnamed';
+    }
     _el.appendChild(name);
 
-    if (t) {
+    // Type line
+    let typeText = '';
+    if (popoverFields && popoverFields.length > 1) {
+        typeText = popoverFields.slice(1)
+            .map(f => String(props[f] ?? ''))
+            .filter(Boolean)
+            .join(' / ');
+    } else {
+        const t = props.structure_type || props.pathway_type || '';
+        typeText = t ? _titleCase(t) : '';
+    }
+    if (typeText) {
         const type = document.createElement('span');
         type.className = 'pw-popover-type';
-        type.textContent = _titleCase(t);
+        type.textContent = typeText;
         _el.appendChild(type);
     }
 
