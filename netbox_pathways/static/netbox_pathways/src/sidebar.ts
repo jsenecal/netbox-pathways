@@ -6,6 +6,8 @@
  */
 
 import type { FeatureEntry, FeatureType, DetailFieldDef, ResolvedValue } from './types/features';
+import { NATIVE_TYPES } from './types/features';
+import { getLayerConfig } from './external-layers';
 
 // ---------------------------------------------------------------------------
 // Module-level helpers imported from the outer scope at init time
@@ -38,6 +40,16 @@ let _highlightOutline: L.Polyline | null = null;
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+function _isNativeType(featureType: string): boolean {
+    return (NATIVE_TYPES as readonly string[]).indexOf(featureType) !== -1;
+}
+
+function _typeLabel(featureType: string): string {
+    const extCfg = getLayerConfig(featureType);
+    if (extCfg) return extCfg.label;
+    return _titleCase(featureType.replace(/_/g, ' '));
+}
 
 function _colorForFeature(entry: FeatureEntry): string {
     if (entry.featureType === 'structure') {
@@ -222,7 +234,7 @@ function _buildTypeFilters(): void {
         dot.style.background = typeMap[type];
         btn.appendChild(dot);
 
-        const label = document.createTextNode(_titleCase(type));
+        const label = document.createTextNode(_typeLabel(type));
         btn.appendChild(label);
 
         btn.addEventListener('click', function () {
@@ -266,19 +278,30 @@ function _apiUrlForFeature(entry: FeatureEntry): string {
         return '/api' + entry.props.url;
     }
     const id = entry.props.id;
-    const base = API_BASE.replace(/geo\/?$/, '');
-    switch (entry.featureType) {
-        case 'structure':
-            return base + 'structures/' + id + '/';
-        case 'conduit':
-            return base + 'conduits/' + id + '/';
-        case 'aerial':
-            return base + 'aerial-spans/' + id + '/';
-        case 'direct_buried':
-            return base + 'direct-buried/' + id + '/';
-        default:
-            return base + 'pathways/' + id + '/';
+
+    // Native types use the pathways API
+    if (_isNativeType(entry.featureType)) {
+        const base = API_BASE.replace(/geo\/?$/, '');
+        switch (entry.featureType) {
+            case 'structure':
+                return base + 'structures/' + id + '/';
+            case 'conduit':
+                return base + 'conduits/' + id + '/';
+            case 'aerial':
+                return base + 'aerial-spans/' + id + '/';
+            case 'direct_buried':
+                return base + 'direct-buried/' + id + '/';
+            default:
+                return base + 'pathways/' + id + '/';
+        }
     }
+
+    // Check external layer config for detail URL
+    const extCfg = getLayerConfig(entry.featureType);
+    if (extCfg?.detail?.urlTemplate) {
+        return extCfg.detail.urlTemplate.replace('{id}', String(id));
+    }
+    return '';
 }
 
 // ---------------------------------------------------------------------------
@@ -459,6 +482,21 @@ const DETAIL_FIELDS: Record<string, DetailFieldDef[]> = {
 // ---------------------------------------------------------------------------
 
 function _renderEnrichedDetail(data: Record<string, unknown>, entry: FeatureEntry, container: HTMLElement): void {
+    // Check if this is an external layer feature
+    const extCfg = getLayerConfig(entry.featureType);
+    if (extCfg?.detail) {
+        const table = document.createElement('table');
+        table.className = 'pw-detail-table';
+        for (const fieldName of extCfg.detail.fields) {
+            const val = data[fieldName];
+            if (val !== undefined && val !== null) {
+                _addFieldRow(table, _titleCase(fieldName.replace(/_/g, ' ')), val);
+            }
+        }
+        container.appendChild(table);
+        return;
+    }
+
     const fields = DETAIL_FIELDS[entry.featureType] || DETAIL_FIELDS['default'];
     const table = document.createElement('table');
     table.className = 'pw-detail-table';
@@ -560,12 +598,26 @@ async function _fetchDetail(entry: FeatureEntry, container: HTMLElement): Promis
         return;
     }
 
+    const url = _apiUrlForFeature(entry);
+
+    // No detail URL available — render GeoJSON properties directly
+    if (!url) {
+        const table = document.createElement('table');
+        table.className = 'pw-detail-table';
+        const props = entry.props as Record<string, unknown>;
+        for (const key in props) {
+            if (!props.hasOwnProperty(key)) continue;
+            if (key === 'id' || key === 'url') continue;
+            _addFieldRow(table, _titleCase(key.replace(/_/g, ' ')), props[key]);
+        }
+        container.appendChild(table);
+        return;
+    }
+
     const loadingDiv = document.createElement('div');
     loadingDiv.className = 'pw-detail-loading';
     loadingDiv.textContent = 'Loading details...';
     container.appendChild(loadingDiv);
-
-    const url = _apiUrlForFeature(entry);
     const headers: Record<string, string> = { 'Accept': 'application/json' };
     const csrfToken = _getCookie('csrftoken');
     if (csrfToken) headers['X-CSRFToken'] = csrfToken;
