@@ -2,6 +2,7 @@ from django.urls import path
 from netbox.api.routers import NetBoxRouter
 
 from . import views
+from .external_geo import ExternalLayerGeoView
 from .geo import (
     AerialSpanGeoViewSet,
     ConduitGeoViewSet,
@@ -32,6 +33,8 @@ router.register('geo/aerial-spans', AerialSpanGeoViewSet, basename='geo-aerialsp
 router.register('geo/direct-buried', DirectBuriedGeoViewSet, basename='geo-directburied')
 
 urlpatterns = router.urls + [
+    # External plugin map layer endpoint
+    path('geo/external/<str:layer_name>/', ExternalLayerGeoView.as_view(), name='external-geo'),
     # Graph traversal endpoints
     path('traversal/routes/', RouteFinderView.as_view(), name='traversal-routes'),
     path('traversal/cable-trace/', CableTraceView.as_view(), name='traversal-cable-trace'),
