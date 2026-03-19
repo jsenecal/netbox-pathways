@@ -43,6 +43,10 @@ declare global {
     export type LeafletEvent = import('leaflet').LeafletEvent;
     export type LatLngBoundsExpression = import('leaflet').LatLngBoundsExpression;
     export type GeoJSONOptions = import('leaflet').GeoJSONOptions;
+    export type CircleMarker = import('leaflet').CircleMarker;
+    export type CircleMarkerOptions = import('leaflet').CircleMarkerOptions;
+    export type Polygon = import('leaflet').Polygon;
+    export type LatLngExpression = import('leaflet').LatLngExpression;
     // Nested namespace for L.Control.Layers and L.TileLayer.WMS
     export namespace Control {
       export type Layers = import('leaflet').Control.Layers;

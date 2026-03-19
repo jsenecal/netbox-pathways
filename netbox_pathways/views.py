@@ -11,6 +11,8 @@ from netbox.ui.panels import CommentsPanel, ObjectsTablePanel
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
+from netbox_pathways.registry import registry as map_layer_registry
+
 from . import filters, forms, models, tables
 from .graph import PathwayGraph, node_to_geo, node_to_label
 from .ui import panels
@@ -662,6 +664,10 @@ class MapView(generic.ObjectListView):
             'apiBase': '/api/plugins/pathways/geo/',
             'overlays': plugin_cfg.get('map_overlays', []),
             'baseLayers': plugin_cfg.get('map_base_layers', []),
+            'externalLayers': [
+                layer.to_json(api_base='/api/plugins/pathways/geo/')
+                for layer in map_layer_registry.all()
+            ],
         }
 
         # Compute extent from data; fall back to config or defaults

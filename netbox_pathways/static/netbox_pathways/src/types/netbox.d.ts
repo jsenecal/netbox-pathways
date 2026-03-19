@@ -6,6 +6,7 @@ declare global {
     maxNativeZoom: number;
     overlays?: OverlayConfig[];
     baseLayers?: BaseLayerConfig[];
+    externalLayers?: import('./external').ExternalLayerConfig[];
   }
 
   interface OverlayConfig {

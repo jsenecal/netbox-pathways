@@ -89,6 +89,7 @@ ignore = ["E501", "S101", "DJ01"]
 "tests/*" = ["S101", "S105"]
 
 [tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "netbox.settings"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
