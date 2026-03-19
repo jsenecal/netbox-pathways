@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 
+from django.contrib.gis.db import models as gis_models
 from django.contrib.gis.db.models.functions import Transform
 from django.contrib.gis.geos import Polygon
 from django.http import Http404, JsonResponse
@@ -52,7 +53,9 @@ def _build_properties(obj, feature_fields: list[str] | None, model) -> dict:
         for f in model._meta.get_fields():
             if not hasattr(f, "column"):
                 continue  # skip reverse relations, M2M, etc.
-            if hasattr(f, "geo_cols"):
+            if f.name in ("id", "pk"):
+                continue  # already handled above
+            if isinstance(f, gis_models.GeometryField):
                 continue  # skip geometry fields
             fields_to_use.append(f.name)
 
