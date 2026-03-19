@@ -13,6 +13,12 @@
 import { Sidebar } from './sidebar';
 import { Popover } from './popover';
 import type { FeatureEntry, FeatureType, GeoJSONProperties, PathwayStyle } from './types/features';
+import {
+    initExternalLayers,
+    loadExternalLayers,
+    getLayerConfig,
+} from './external-layers';
+import type { ExternalLayerConfig } from './types/external';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -426,6 +432,18 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         'Direct Buried': dataLayers.directBuried,
     };
 
+    // --- External plugin layers ---
+    const externalConfigs: ExternalLayerConfig[] = CFG.externalLayers ?? [];
+    const externalGroups = initExternalLayers(externalConfigs, map);
+
+    // Add external layers to layerNames for the layer control
+    for (const [name, group] of externalGroups) {
+        const cfg = getLayerConfig(name);
+        if (cfg) {
+            layerNames[cfg.label] = group;
+        }
+    }
+
     // Add layers based on saved prefs
     for (const lname in layerNames) {
         if (layerPrefs[lname] !== false) {
@@ -701,6 +719,33 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
                 _checkAllLoaded();
             });
         });
+
+        // --- External plugin layers ---
+        const visibleExternal = new Set<string>();
+        for (const [name, group] of externalGroups) {
+            if (map.hasLayer(group)) {
+                visibleExternal.add(name);
+            }
+        }
+        if (visibleExternal.size > 0) {
+            totalExpectedLoads++;
+            loadExternalLayers(bbox, zoom, visibleExternal, function (entry: FeatureEntry, extCfg: ExternalLayerConfig) {
+                Sidebar.onFeatureCreated(entry);
+                entry.layer.on('click', function (e: L.LeafletMouseEvent) {
+                    if (e.originalEvent) (e.originalEvent as any)._sidebarClick = true;
+                    Sidebar.selectFeature(entry);
+                });
+                entry.layer.on('mouseover', function (e: L.LeafletMouseEvent) {
+                    Popover.show(e.latlng, entry.props, extCfg.popoverFields);
+                });
+                entry.layer.on('mouseout', function () { Popover.hide(); });
+            }).then(function (extEntries: FeatureEntry[]) {
+                for (let i = 0; i < extEntries.length; i++) {
+                    allFeatures.push(extEntries[i]);
+                }
+                _checkAllLoaded();
+            });
+        }
 
         // If no layers active, still update sidebar
         if (totalExpectedLoads === 0) {
