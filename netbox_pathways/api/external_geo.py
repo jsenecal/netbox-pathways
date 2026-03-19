@@ -12,6 +12,7 @@ import logging
 from django.contrib.gis.db import models as gis_models
 from django.contrib.gis.db.models.functions import Transform
 from django.contrib.gis.geos import Polygon
+from django.db import models as db_models
 from django.http import Http404, JsonResponse
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
@@ -57,6 +58,8 @@ def _build_properties(obj, feature_fields: list[str] | None, model) -> dict:
                 continue  # already handled above
             if isinstance(f, gis_models.GeometryField):
                 continue  # skip geometry fields
+            if isinstance(f, (db_models.BinaryField, db_models.JSONField)):
+                continue  # skip non-serializable / large fields
             fields_to_use.append(f.name)
 
     for fname in fields_to_use:

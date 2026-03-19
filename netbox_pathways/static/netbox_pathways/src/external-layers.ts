@@ -28,11 +28,11 @@ function _resolveColor(
   return style.color;
 }
 
-/** Create a Leaflet marker for a point feature. */
+/** Create a Leaflet marker for a point feature.
+ *  TODO: Use iconClass to render MDI icons instead of plain circles. */
 function _createPointMarker(
   latlng: L.LatLng,
   color: string,
-  _iconClass: string | null,
 ): L.CircleMarker {
   return L.circleMarker(latlng, {
     radius: 7,
@@ -188,21 +188,15 @@ async function _fetchLayer(
       if (feature.geometry.type === 'Point') {
         const [lng, lat] = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
         latlng = L.latLng(lat, lng);
-        layer = _createPointMarker(latlng, color, config.style.icon);
-      } else if (
-        feature.geometry.type === 'LineString' ||
-        feature.geometry.type === 'MultiLineString'
-      ) {
+        layer = _createPointMarker(latlng, color);
+      } else if (feature.geometry.type === 'LineString') {
         const coords = (feature.geometry as GeoJSON.LineString).coordinates.map(
           (c: number[]) => L.latLng(c[1], c[0]),
         );
         const line = _createLine(coords, color, config.style);
         latlng = line.getBounds().getCenter();
         layer = line;
-      } else if (
-        feature.geometry.type === 'Polygon' ||
-        feature.geometry.type === 'MultiPolygon'
-      ) {
+      } else if (feature.geometry.type === 'Polygon') {
         const rings = (feature.geometry as GeoJSON.Polygon).coordinates.map(
           (ring: number[][]) => ring.map((c: number[]) => L.latLng(c[1], c[0])),
         );
