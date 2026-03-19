@@ -1,39 +1,94 @@
 # NetBox Pathways
 
-A NetBox plugin for documenting physical cable plant infrastructure — comparable to SmallWorld or ArcGIS with ArcFM for outside/inside plant documentation.
+**Physical cable plant infrastructure documentation for NetBox.**
 
-NetBox Pathways tracks **where cables physically go**: the structures they pass through, the conduits and aerial spans they traverse, and the geographic paths they follow. It integrates with PostGIS for spatial data and provides GeoJSON API endpoints for QGIS and other GIS clients.
+NetBox Pathways extends [NetBox](https://netbox.dev/) with comprehensive outside and inside plant documentation — structures, pathways, conduit systems, cable routing, and GIS integration. Think SmallWorld or ArcGIS with ArcFM, but integrated directly into your network source of truth.
 
-## What It Does
+---
 
-- **Structures** — Poles, manholes, handholes, cabinets, building entrances, equipment rooms, telecom closets, riser rooms
-- **Pathways** — Conduits, aerial spans, direct buried paths, innerducts, cable trays, raceways
-- **Conduit Banks** — Groups of conduit openings on a structure wall, with position tracking
-- **Conduit Junctions** — Y-tees where conduits branch mid-span
-- **Cable Segment Routing** — Track which NetBox cables pass through which pathways, in what order
-- **Pull Sheets** — Printable documents showing complete cable routing for field crews
-- **GIS Integration** — GeoJSON API endpoints for QGIS, with style files and project generator
-- **Interactive Map** — Leaflet-based map view of structures and pathways
+## Key Features
+
+<div class="grid cards" markdown>
+
+-   :material-map-marker:{ .lg .middle } **Structures**
+
+    ---
+
+    Document poles, manholes, cabinets, equipment rooms, and other infrastructure with full geographic coordinates and metadata.
+
+    [:octicons-arrow-right-24: Structures](user-guide/structures.md)
+
+-   :material-transit-connection-variant:{ .lg .middle } **Pathways**
+
+    ---
+
+    Model conduits, aerial spans, direct buried routes, innerducts, cable trays, and raceways connecting your structures.
+
+    [:octicons-arrow-right-24: Pathways](user-guide/pathways.md)
+
+-   :material-cable-data:{ .lg .middle } **Cable Routing**
+
+    ---
+
+    Track which cables run through which pathways with entry/exit points, sequencing, and slack loop documentation.
+
+    [:octicons-arrow-right-24: Cable Routing](user-guide/cable-routing.md)
+
+-   :material-map:{ .lg .middle } **Interactive Map**
+
+    ---
+
+    Leaflet-based map with structure markers, pathway lines, layer toggles, search, filtering, and hover details.
+
+    [:octicons-arrow-right-24: Interactive Map](user-guide/interactive-map.md)
+
+-   :material-printer:{ .lg .middle } **Pull Sheets**
+
+    ---
+
+    Generate field crew documents showing cable routing through pathways with lengths and slack requirements.
+
+    [:octicons-arrow-right-24: Pull Sheets](user-guide/pull-sheets.md)
+
+-   :material-earth:{ .lg .middle } **GIS Integration**
+
+    ---
+
+    GeoJSON REST API endpoints plus QGIS project generator for seamless GIS client integration.
+
+    [:octicons-arrow-right-24: QGIS Integration](user-guide/qgis-integration.md)
+
+-   :material-puzzle:{ .lg .middle } **Plugin Extensibility**
+
+    ---
+
+    Map layer registry allows other NetBox plugins to display their data on the Pathways map.
+
+    [:octicons-arrow-right-24: Map Layer Registry](developer/map-layer-registry.md)
+
+</div>
+
+---
 
 ## Plugin Scope
 
-NetBox Pathways handles physical infrastructure routing only. It does **not** cover:
+NetBox Pathways handles **physical infrastructure** — where cables physically go. It does not handle splice connections, cable internals, or fiber strand management. Those capabilities are planned for a separate splice/connectivity plugin.
 
-- Splice connections (fusion, mechanical, connectorized)
-- Cable internals (fiber type, buffer colors, strand details)
-- End-to-end circuit tracing
-- OTDR/test results
+The boundary is NetBox's native `dcim.Cable` model: Pathways tracks physical routing; the splice plugin tracks what's inside cables and how strands connect.
 
-These are planned for a separate splice/connectivity plugin. The boundary between the two plugins is NetBox's native `dcim.Cable` model — Pathways tracks physical routing, the splice plugin will track what's inside cables and how strands connect.
+---
 
 ## Requirements
 
-| Component | Version |
-|-----------|---------|
-| NetBox | 4.5.3+ |
-| Python | 3.12+ |
-| PostgreSQL | 16+ with PostGIS 3.4 |
-| Django | 5.2+ (included with NetBox) |
+| Component    | Version                         |
+|--------------|---------------------------------|
+| NetBox       | 4.5.3+                         |
+| Python       | 3.12+                          |
+| PostgreSQL   | 16+ with PostGIS 3.4           |
+| Django       | 5.2+ (ships with NetBox 4.5)   |
+| GDAL/GEOS   | System libraries for PostGIS   |
+
+---
 
 ## Quick Start
 
@@ -47,4 +102,4 @@ Then add to your NetBox configuration:
 PLUGINS = ['netbox_pathways']
 ```
 
-See [Installation](installation.md) for full setup instructions.
+See the [Installation Guide](getting-started/installation.md) for full setup instructions.
