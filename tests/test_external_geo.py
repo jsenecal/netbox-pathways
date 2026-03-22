@@ -28,12 +28,20 @@ class TestResolveGeoColumn:
         assert col == 'start_structure__location'
         assert 'structure' in label.lower()
 
-    def test_unsupported_fk_raises(self):
+    def test_site_fk_resolves_via_sitegeometry(self):
         from netbox_pathways.models import Structure
 
-        # Structure.site is a FK to dcim.Site — not in SUPPORTED_GEO_MODELS
+        # Structure.site is a FK to dcim.Site — resolves via SiteGeometry
+        col, label = _resolve_geo_column(Structure, 'site')
+        assert col == 'site__pathways_geometry__geometry'
+        assert 'site' in label.lower()
+
+    def test_unsupported_fk_raises(self):
+        from netbox_pathways.models import Conduit
+
+        # Conduit.conduit_bank is a FK to ConduitBank — not in SUPPORTED_GEO_MODELS
         with pytest.raises(ValueError, match="not in SUPPORTED_GEO_MODELS"):
-            _resolve_geo_column(Structure, 'site')
+            _resolve_geo_column(Conduit, 'conduit_bank')
 
 
 class TestBuildProperties:

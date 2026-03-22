@@ -82,12 +82,15 @@ register_map_layer(
 
 Reference mode resolves geometry through foreign keys to these models:
 
-| Model | Geometry Column | Geometry Type |
+| Model | Geometry Lookup | Geometry Type |
 |-------|----------------|---------------|
 | `netbox_pathways.Structure` | `location` | Point/Polygon |
 | `netbox_pathways.SiteGeometry` | `geometry` | Point/Polygon |
+| `dcim.Site` | `pathways_geometry__geometry` | Point/Polygon |
 
 The `geometry_field` parameter names the FK field on your model that points to one of these targets.
+
+The `dcim.Site` entry uses a two-hop ORM lookup: it traverses the reverse OneToOne from `Site` to `SiteGeometry`, then accesses the `geometry` field. This means any model with a `site` FK can be registered as a map layer — as long as a `SiteGeometry` record exists for that site.
 
 ## Registration API
 
