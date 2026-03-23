@@ -593,6 +593,23 @@ function _renderConnectedPathways(entry: FeatureEntry, container: HTMLElement): 
 
 async function _fetchDetail(entry: FeatureEntry, container: HTMLElement): Promise<void> {
     const cacheKey = _featureId(entry);
+
+    // Check for HTML fragment URL from external layer config
+    const extCfg = getLayerConfig(entry.featureType);
+    const htmlUrl = _resolveDetailUrl(extCfg, entry);
+
+    if (htmlUrl) {
+        // HTML fragment mode — check cache (stored as string under a prefixed key)
+        const htmlCacheKey = 'html:' + cacheKey;
+        if (_detailCache[htmlCacheKey]) {
+            _setTrustedHtml(container, _detailCache[htmlCacheKey] as unknown as string);
+            return;
+        }
+        await _fetchHtmlDetail(htmlUrl, htmlCacheKey, container);
+        return;
+    }
+
+    // JSON mode — existing behavior
     if (_detailCache[cacheKey]) {
         _renderEnrichedDetail(_detailCache[cacheKey], entry, container);
         return;
@@ -629,6 +646,64 @@ async function _fetchDetail(entry: FeatureEntry, container: HTMLElement): Promis
             const data = await response.json() as Record<string, unknown>;
             _detailCache[cacheKey] = data;
             _renderEnrichedDetail(data, entry, container);
+        } else {
+            const errDiv = document.createElement('div');
+            errDiv.className = 'pw-detail-loading';
+            errDiv.textContent = 'Could not load details (HTTP ' + response.status + ')';
+            container.appendChild(errDiv);
+        }
+    } catch (_e) {
+        container.textContent = '';
+        const errDiv = document.createElement('div');
+        errDiv.className = 'pw-detail-loading';
+        errDiv.textContent = 'Network error';
+        container.appendChild(errDiv);
+    }
+}
+
+/** Resolve HTML detail URL from external layer config, if available. */
+function _resolveDetailUrl(
+    extCfg: import('./types/external').ExternalLayerConfig | undefined,
+    entry: FeatureEntry,
+): string {
+    if (!extCfg?.detail?.detailUrl) return '';
+    return extCfg.detail.detailUrl.replace('{id}', String(entry.props.id));
+}
+
+/**
+ * Inject trusted HTML into a container element.
+ *
+ * SECURITY: This HTML is fetched from same-origin endpoints served by
+ * registered NetBox plugins — the same trust model as Django's
+ * PluginTemplateExtension. Only installed plugin code can register
+ * detail_url endpoints via the map layer registry.
+ */
+function _setTrustedHtml(container: HTMLElement, html: string): void {
+    container.innerHTML = html;  // eslint-disable-line no-unsanitized/property
+}
+
+/** Fetch an HTML fragment and inject it into the container. */
+async function _fetchHtmlDetail(
+    url: string,
+    cacheKey: string,
+    container: HTMLElement,
+): Promise<void> {
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'pw-detail-loading';
+    loadingDiv.textContent = 'Loading details...';
+    container.appendChild(loadingDiv);
+
+    const headers: Record<string, string> = { 'Accept': 'text/html' };
+    const csrfToken = _getCookie('csrftoken');
+    if (csrfToken) headers['X-CSRFToken'] = csrfToken;
+
+    try {
+        const response = await fetch(url, { headers });
+        container.textContent = '';
+        if (response.ok) {
+            const html = await response.text();
+            _detailCache[cacheKey] = html as unknown as Record<string, unknown>;
+            _setTrustedHtml(container, html);
         } else {
             const errDiv = document.createElement('div');
             errDiv.className = 'pw-detail-loading';

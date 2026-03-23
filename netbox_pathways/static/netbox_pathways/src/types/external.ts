@@ -11,6 +11,7 @@ export interface ExternalLayerStyle {
 
 export interface ExternalLayerDetail {
   urlTemplate: string;
+  detailUrl: string;
   fields: string[];
   labelField: string;
 }

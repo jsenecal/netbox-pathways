@@ -39,6 +39,7 @@ class LayerStyle:
 class LayerDetail:
     """Sidebar detail panel configuration."""
     url_template: str = ''
+    detail_url: str = ''
     fields: list[str] = field(default_factory=list)
     label_field: str = 'name'
 
@@ -100,6 +101,7 @@ class MapLayerRegistration:
         if self.detail:
             data['detail'] = {
                 'urlTemplate': self.detail.url_template,
+                'detailUrl': self.detail.detail_url,
                 'fields': self.detail.fields,
                 'labelField': self.detail.label_field,
             }

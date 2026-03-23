@@ -1,6 +1,7 @@
 import pytest
 
 from netbox_pathways.registry import (
+    LayerDetail,
     LayerStyle,
     register_map_layer,
     registry,
@@ -123,6 +124,17 @@ class TestToJson:
         assert data['url'] == '/api/plugins/pathways/geo/external/test_points/'
         assert data['detail']['urlTemplate'] == '/api/plugins/test/points/{id}/'
         assert data['detail']['fields'] == ['name', 'status']
+
+    def test_detail_url_in_json(self, ref_layer_kwargs):
+        ref_layer_kwargs['detail'] = LayerDetail(
+            url_template='/plugins/test/points/{id}/',
+            detail_url='/api/plugins/test/points/{id}/card/',
+            fields=['name'],
+        )
+        layer = register_map_layer(**ref_layer_kwargs)
+        data = layer.to_json()
+        assert data['detail']['detailUrl'] == '/api/plugins/test/points/{id}/card/'
+        assert data['detail']['urlTemplate'] == '/plugins/test/points/{id}/'
 
     def test_json_camel_case_keys(self, url_layer_kwargs):
         layer = register_map_layer(**url_layer_kwargs)

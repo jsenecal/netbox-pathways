@@ -158,9 +158,18 @@ LayerStyle(
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `url_template` | `str` | `None` | URL pattern with `{id}` placeholder |
-| `fields` | `list[str]` | `[]` | Fields to show in detail panel |
+| `url_template` | `str` | `''` | Object detail page URL with `{id}` placeholder (used for "View" link and JSON fallback) |
+| `detail_url` | `str` | `''` | HTML fragment endpoint with `{id}` placeholder (sidebar injects HTML directly) |
+| `fields` | `list[str]` | `[]` | Fields to show in detail panel (JSON mode fallback) |
 | `label_field` | `str` | `'name'` | Field used as the detail panel title |
+
+The sidebar resolves detail content in this order:
+
+1. **`detail_url`** — Fetch HTML fragment, inject directly (richest option)
+2. **`url_template`** — Fetch JSON, render field table from `fields` list
+3. **Neither** — Render raw GeoJSON properties as key-value table
+
+**HTML fragment mode** lets plugins render domain-specific content (fiber tube diagrams, splice schematics, status indicators). The endpoint must return a self-contained HTML fragment using Tabler/NetBox CSS variables for theme compatibility.
 
 ## Integration Example
 
@@ -202,6 +211,7 @@ class FMSConfig(PluginConfig):
             ),
             detail=LayerDetail(
                 url_template='/plugins/netbox-fms/fiber-cables/{id}/',
+                detail_url='/api/plugins/netbox-fms/fiber-cables/{id}/card/',
                 fields=['name', 'cable_type', 'fiber_count', 'status'],
             ),
             popover_fields=['name', 'cable_type'],
@@ -251,7 +261,13 @@ Registered layers appear as toggle buttons in the map's layer control. The `labe
 
 ### Sidebar Integration
 
-Clicking an external feature opens the sidebar detail panel. If a `detail.url_template` is configured, the panel shows enriched data fetched from that URL. Otherwise, it renders the GeoJSON properties directly.
+Clicking an external feature opens the sidebar detail panel. The sidebar resolves content using a three-tier fallback:
+
+1. **`detail.detail_url`** — Fetches an HTML fragment from the plugin and injects it directly. This enables rich, domain-specific content like fiber tube diagrams or splice schematics. The endpoint must return a self-contained HTML fragment (no `<html>`/`<body>` wrappers) styled with Tabler/NetBox CSS variables.
+2. **`detail.url_template`** — Fetches JSON and renders a field table using the `fields` list.
+3. **Neither** — Renders raw GeoJSON properties as a key-value table.
+
+HTML responses are cached per feature to avoid redundant fetches.
 
 ### Hover Popover
 
