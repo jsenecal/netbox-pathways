@@ -320,6 +320,106 @@ function _createZoomHint(map: L.Map): HTMLDivElement {
 }
 
 // ---------------------------------------------------------------------------
+// Legend control
+// ---------------------------------------------------------------------------
+
+const PATHWAY_DASH: Record<string, string> = {
+    'conduit': '5,5', 'aerial': '10,5', 'direct_buried': '2,4',
+    'innerduct': '8,3', 'microduct': '1,3', 'tray': '',
+    'raceway': '12,4', 'submarine': '6,2,2,2',
+};
+
+/**
+ * Inject trusted static SVG markup into an element.
+ *
+ * Security: All SVG strings passed to this helper originate from compile-time
+ * constants (STRUCTURE_SHAPES, PATHWAY_COLORS, PATHWAY_DASH) defined in this
+ * file — no user/network input is involved. This is the same trust model as
+ * _structureIcon() which also builds innerHTML from these constants.
+ */
+function _setStaticSvg(el: HTMLElement, svg: string): void {
+    el.innerHTML = svg; // eslint-disable-line no-unsanitized/property
+}
+
+function _createLegend(map: L.Map): void {
+    const LegendControl = L.Control.extend({
+        options: { position: 'bottomleft' },
+        onAdd: function () {
+            const container = L.DomUtil.create('div', 'pw-legend leaflet-bar');
+            L.DomEvent.disableClickPropagation(container);
+            L.DomEvent.disableScrollPropagation(container);
+
+            // Header
+            const header = L.DomUtil.create('div', 'pw-legend-header', container);
+            const chevron = document.createElement('i');
+            chevron.className = 'mdi mdi-chevron-down';
+            header.appendChild(chevron);
+            const titleSpan = document.createElement('span');
+            titleSpan.textContent = 'Legend';
+            header.appendChild(titleSpan);
+
+            // Body
+            const body = L.DomUtil.create('div', 'pw-legend-body', container);
+
+            // Structures section
+            const structSec = L.DomUtil.create('div', 'pw-legend-section', body);
+            const structTitle = L.DomUtil.create('div', 'pw-legend-section-title', structSec);
+            structTitle.textContent = 'Structures';
+
+            const structTypes = ['pole', 'manhole', 'handhole', 'cabinet', 'vault',
+                'pedestal', 'building_entrance', 'splice_closure', 'tower',
+                'equipment_room', 'telecom_closet', 'riser_room'];
+            for (let i = 0; i < structTypes.length; i++) {
+                const stype = structTypes[i];
+                const color = STRUCTURE_COLORS[stype] || '#616161';
+                const shape = STRUCTURE_SHAPES[stype] || '<circle cx="10" cy="10" r="8"/>';
+                const isOutline = shape.includes('fill="none"');
+                const item = L.DomUtil.create('div', 'pw-legend-item', structSec);
+                const swatch = L.DomUtil.create('span', 'pw-legend-swatch', item);
+                _setStaticSvg(swatch,
+                    '<svg viewBox="0 0 20 20" width="14" height="14" ' +
+                    'stroke="' + (isOutline ? color : 'white') + '" fill="' + color + '">' +
+                    shape + '</svg>');
+                const label = L.DomUtil.create('span', 'pw-legend-label', item);
+                label.textContent = _titleCase(stype);
+            }
+
+            // Pathways section
+            const pathSec = L.DomUtil.create('div', 'pw-legend-section', body);
+            const pathTitle = L.DomUtil.create('div', 'pw-legend-section-title', pathSec);
+            pathTitle.textContent = 'Pathways';
+
+            const pathTypes = ['conduit', 'aerial', 'direct_buried', 'innerduct',
+                'microduct', 'tray', 'raceway', 'submarine'];
+            for (let i = 0; i < pathTypes.length; i++) {
+                const ptype = pathTypes[i];
+                const color = PATHWAY_COLORS[ptype] || '#616161';
+                const dash = PATHWAY_DASH[ptype] || '';
+                const item = L.DomUtil.create('div', 'pw-legend-item', pathSec);
+                const swatch = L.DomUtil.create('span', 'pw-legend-swatch', item);
+                _setStaticSvg(swatch,
+                    '<svg viewBox="0 0 24 6" width="20" height="6">' +
+                    '<line x1="0" y1="3" x2="24" y2="3" stroke="' + color +
+                    '" stroke-width="3"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') +
+                    '/></svg>');
+                const label = L.DomUtil.create('span', 'pw-legend-label', item);
+                label.textContent = _titleCase(ptype);
+            }
+
+            // Toggle collapse
+            header.addEventListener('click', function () {
+                const isCollapsed = body.classList.toggle('collapsed');
+                header.classList.toggle('collapsed', isCollapsed);
+            });
+
+            return container;
+        },
+    });
+
+    new LegendControl().addTo(map);
+}
+
+// ---------------------------------------------------------------------------
 // Main initialization
 // ---------------------------------------------------------------------------
 
@@ -380,6 +480,9 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
     const layerControl = L.control.layers(baseLayers, overlayLayers, {
         position: 'topright', collapsed: true,
     }).addTo(map);
+
+    // Legend
+    _createLegend(map);
 
     // Counters
     const structureCountEl = document.getElementById('structure-count');

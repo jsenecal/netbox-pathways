@@ -200,12 +200,19 @@
     .pw-layer-toggles:empty {
         display: none;
     }
-    .pw-stats-bar {
-        padding: 4px 14px;
+    .pw-stats-overlay {
+        position: absolute;
+        bottom: 6px;
+        right: 10px;
+        z-index: 800;
+        padding: 3px 10px;
+        border-radius: 4px;
         font-size: 0.72em;
-        color: var(--tblr-muted-color, #667382);
-        border-bottom: 1px solid var(--tblr-border-color, #dee2e6);
-        flex-shrink: 0;
+        color: var(--tblr-body-color, #212529);
+        background: var(--tblr-card-bg, rgba(255,255,255,0.9));
+        border: 1px solid var(--tblr-border-color, #dee2e6);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        pointer-events: none;
     }
     .pw-layer-toggle {
         display: inline-flex;
@@ -288,15 +295,17 @@
         </div>
         <div class="card-body p-0">
             <div class="pw-map-flex">
-                <div id="pathways-map" style="min-height: 400px;"></div>
-                <div id="pw-sidebar" class="pw-sidebar">
-                    <!-- Layer Toggles + Stats -->
-                    <div id="pw-layer-toggles" class="pw-layer-toggles"></div>
-                    <div class="pw-stats-bar">
+                <div id="pathways-map" style="min-height: 400px; position: relative;">
+                    <!-- Floating stats overlay at bottom-right of map -->
+                    <div class="pw-stats-overlay">
                         <span id="structure-count">0</span> structures &middot;
                         <span id="pathway-count">0</span> pathways &middot;
                         <span id="total-length">0</span> km
                     </div>
+                </div>
+                <div id="pw-sidebar" class="pw-sidebar">
+                    <!-- Layer Toggles -->
+                    <div id="pw-layer-toggles" class="pw-layer-toggles"></div>
                     <!-- List Panel -->
                     <div id="pw-panel-list" class="pw-panel">
                         <div class="pw-sidebar-header">
@@ -314,9 +323,10 @@
                     <div id="pw-panel-detail" class="pw-panel" style="display:none;">
                         <div class="pw-sidebar-header">
                             <button id="pw-detail-back" type="button" class="btn btn-sm btn-link p-0 text-decoration-none">
-                                <i class="mdi mdi-arrow-left"></i> Back
+                                <i class="mdi mdi-arrow-left"></i>
                             </button>
-                            <kbd class="ms-2 pw-kbd">Esc</kbd>
+                            <strong id="pw-detail-heading" class="ms-1" style="font-size:0.85em;"></strong>
+                            <kbd class="ms-auto pw-kbd">Esc</kbd>
                         </div>
                         <div id="pw-detail-body" class="pw-detail-body"></div>
                     </div>

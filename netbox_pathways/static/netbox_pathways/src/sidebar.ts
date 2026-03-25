@@ -850,15 +850,15 @@ function _renderDetail(entry: FeatureEntry): void {
     });
     body.appendChild(table);
 
-    // View link
+    // View in NetBox button
     if (p.url) {
         const link = document.createElement('a');
         link.href = p.url;
-        link.className = 'btn btn-sm btn-primary mb-3';
+        link.className = 'btn btn-sm btn-primary w-100 mb-3';
         const icon = document.createElement('i');
         icon.className = 'mdi mdi-open-in-new';
         link.appendChild(icon);
-        link.appendChild(document.createTextNode(' View'));
+        link.appendChild(document.createTextNode(' View in NetBox'));
         body.appendChild(link);
     }
 
@@ -984,6 +984,13 @@ function showDetail(entry: FeatureEntry): void {
     const detailPanel = document.getElementById('pw-panel-detail');
     if (listPanel) listPanel.style.display = 'none';
     if (detailPanel) detailPanel.style.display = '';
+
+    // Set panel heading (e.g. "Structure Details")
+    const heading = document.getElementById('pw-detail-heading');
+    if (heading) {
+        heading.textContent = _typeLabel(entry.featureType) + ' Details';
+    }
+
     _renderDetail(entry);
 }
 
