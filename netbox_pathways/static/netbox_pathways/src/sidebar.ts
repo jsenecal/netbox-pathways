@@ -481,10 +481,66 @@ const DETAIL_FIELDS: Record<string, DetailFieldDef[]> = {
 // Enriched detail rendering
 // ---------------------------------------------------------------------------
 
+/** Create a collapsible section with chevron toggle. */
+function _createSection(title: string, parent: HTMLElement): HTMLElement {
+    const header = document.createElement('div');
+    header.className = 'pw-section-header';
+    const chevron = document.createElement('i');
+    chevron.className = 'mdi mdi-chevron-down';
+    header.appendChild(chevron);
+    const label = document.createElement('span');
+    label.textContent = title;
+    header.appendChild(label);
+    parent.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'pw-section-body';
+    parent.appendChild(body);
+
+    header.addEventListener('click', function () {
+        const collapsed = body.classList.toggle('collapsed');
+        header.classList.toggle('collapsed', collapsed);
+    });
+
+    return body;
+}
+
+/** Add enrichment metric badges from API data to the badge row. */
+function _addEnrichmentBadges(data: Record<string, unknown>, entry: FeatureEntry): void {
+    const badgeRow = document.querySelector('.pw-metric-row');
+    if (!badgeRow) return;
+
+    // Add measurement badges based on feature type
+    const metrics: [string, string, string][] = [];  // [label, field, suffix]
+
+    if (entry.featureType === 'structure') {
+        if (data.elevation) metrics.push(['Elev', 'elevation', ' m']);
+    } else {
+        if (data.length) metrics.push(['Length', 'length', ' m']);
+    }
+
+    if (entry.featureType === 'conduit') {
+        if (data.inner_diameter) metrics.push(['ID', 'inner_diameter', ' mm']);
+    }
+
+    metrics.forEach(function (m) {
+        const resolved = _resolveValue(data[m[1]]);
+        if (!resolved) return;
+        const badge = document.createElement('span');
+        badge.className = 'pw-metric-badge pw-metric-muted';
+        badge.textContent = m[0] + ' ' + resolved.text + m[2];
+        badgeRow.appendChild(badge);
+    });
+}
+
 function _renderEnrichedDetail(data: Record<string, unknown>, entry: FeatureEntry, container: HTMLElement): void {
+    // Add metric badges from enriched data
+    _addEnrichmentBadges(data, entry);
+
     // Check if this is an external layer feature
     const extCfg = getLayerConfig(entry.featureType);
     if (extCfg?.detail) {
+        const sectionBody = _createSection('Details', container);
         const table = document.createElement('table');
         table.className = 'pw-detail-table';
         for (const fieldName of extCfg.detail.fields) {
@@ -493,7 +549,7 @@ function _renderEnrichedDetail(data: Record<string, unknown>, entry: FeatureEntr
                 _addFieldRow(table, _titleCase(fieldName.replace(/_/g, ' ')), val);
             }
         }
-        container.appendChild(table);
+        sectionBody.appendChild(table);
         return;
     }
 
@@ -509,14 +565,8 @@ function _renderEnrichedDetail(data: Record<string, unknown>, entry: FeatureEntr
     _addTagsRow(table, data.tags as TagData[] | undefined);
 
     if (table.childNodes.length > 0) {
-        const heading = document.createElement('div');
-        heading.style.fontWeight = '600';
-        heading.style.fontSize = '0.85em';
-        heading.style.marginBottom = '6px';
-        heading.style.color = 'var(--tblr-muted-color, #667382)';
-        heading.textContent = 'Details';
-        container.appendChild(heading);
-        container.appendChild(table);
+        const sectionBody = _createSection('Details', container);
+        sectionBody.appendChild(table);
     }
 
     // Timestamps
@@ -550,14 +600,10 @@ function _renderConnectedPathways(entry: FeatureEntry, container: HTMLElement): 
     });
     if (connected.length === 0) return;
 
-    const heading = document.createElement('div');
-    heading.style.fontWeight = '600';
-    heading.style.fontSize = '0.85em';
-    heading.style.marginBottom = '6px';
-    heading.style.marginTop = '12px';
-    heading.style.color = 'var(--tblr-muted-color, #667382)';
-    heading.textContent = 'Connected Pathways';
-    container.appendChild(heading);
+    const sectionBody = _createSection(
+        'Connected Pathways (' + connected.length + ')',
+        container,
+    );
 
     connected.forEach(function (f: FeatureEntry) {
         const item = document.createElement('div');
@@ -575,7 +621,9 @@ function _renderConnectedPathways(entry: FeatureEntry, container: HTMLElement): 
         item.appendChild(label);
 
         const typeBadge = document.createElement('span');
-        typeBadge.className = 'pw-list-type';
+        typeBadge.className = 'pw-metric-badge pw-metric-muted';
+        typeBadge.style.fontSize = '0.65em';
+        typeBadge.style.padding = '1px 6px';
         typeBadge.textContent = _titleCase(_typeKeyForFeature(f));
         item.appendChild(typeBadge);
 
@@ -583,7 +631,7 @@ function _renderConnectedPathways(entry: FeatureEntry, container: HTMLElement): 
             selectFeature(f);
         });
 
-        container.appendChild(item);
+        sectionBody.appendChild(item);
     });
 }
 
@@ -818,37 +866,27 @@ function _renderDetail(entry: FeatureEntry): void {
         if (e.key === 'Escape') cancelEditBtn.click();
     });
 
-    // Type badge
+    // Metric badge row
     const color = _colorForFeature(entry);
     const typeKey = _typeKeyForFeature(entry);
-    const badge = document.createElement('span');
-    badge.className = 'pw-detail-badge';
-    badge.style.background = color;
-    badge.textContent = _titleCase(typeKey);
-    body.appendChild(badge);
+    const badgeRow = document.createElement('div');
+    badgeRow.className = 'pw-metric-row';
 
-    // Basic attributes table from GeoJSON properties
-    const table = document.createElement('table');
-    table.className = 'pw-detail-table';
-    const rows: [string, string][] = [];
-    if (entry.featureType === 'structure') {
-        rows.push(['Type', _titleCase(p.structure_type || '')]);
-        if (p.site_name) rows.push(['Site', p.site_name as string]);
-    } else {
-        rows.push(['Type', _titleCase(p.pathway_type || '')]);
+    const typeBadge = document.createElement('span');
+    typeBadge.className = 'pw-metric-badge';
+    typeBadge.style.background = color;
+    typeBadge.style.color = '#fff';
+    typeBadge.textContent = _titleCase(typeKey);
+    badgeRow.appendChild(typeBadge);
+
+    if (entry.featureType === 'structure' && p.site_name) {
+        const siteBadge = document.createElement('span');
+        siteBadge.className = 'pw-metric-badge pw-metric-muted';
+        siteBadge.textContent = p.site_name as string;
+        badgeRow.appendChild(siteBadge);
     }
 
-    rows.forEach(function (r: [string, string]) {
-        const tr = document.createElement('tr');
-        const tdLabel = document.createElement('td');
-        tdLabel.textContent = r[0];
-        const tdVal = document.createElement('td');
-        tdVal.textContent = r[1];
-        tr.appendChild(tdLabel);
-        tr.appendChild(tdVal);
-        table.appendChild(tr);
-    });
-    body.appendChild(table);
+    body.appendChild(badgeRow);
 
     // View in NetBox button
     if (p.url) {
