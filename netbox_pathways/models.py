@@ -1,3 +1,4 @@
+from circuits.models import Circuit
 from dcim.models import Cable, Location, Site
 from django.contrib.gis.db import models
 from django.core.exceptions import ValidationError
@@ -113,6 +114,38 @@ class SiteGeometry(NetBoxModel):
         if self.structure_id and not self.geometry:
             self.geometry = self.structure.location
         super().save(*args, **kwargs)
+
+
+class CircuitGeometry(NetBoxModel):
+    """
+    Stores a provider-described route geometry for a native NetBox Circuit.
+
+    The circuit itself is a black box — this just records the geographic path
+    the provider says the circuit follows, for display on the infrastructure map.
+    """
+    circuit = models.OneToOneField(
+        Circuit, on_delete=models.CASCADE, related_name='pathways_route',
+    )
+    path = models.LineStringField(
+        srid=get_srid(),
+        help_text="Provider-described route as a LineString",
+    )
+    provider_reference = models.CharField(
+        max_length=200, blank=True,
+        help_text="Provider's route/span ID or document reference",
+    )
+    comments = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['circuit']
+        verbose_name = 'Circuit Geometry'
+        verbose_name_plural = 'Circuit Geometries'
+
+    def __str__(self):
+        return f"Route: {self.circuit.cid}"
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_pathways:circuitgeometry', args=[self.pk])
 
 
 class ConduitBank(NetBoxModel):
