@@ -4,6 +4,7 @@ from django.contrib.gis.admin import GISModelAdmin
 from .models import (
     AerialSpan,
     CableSegment,
+    CircuitGeometry,
     Conduit,
     ConduitBank,
     ConduitJunction,
@@ -89,3 +90,10 @@ class SiteGeometryAdmin(GISModelAdmin):
     list_display = ['site']
     search_fields = ['site__name']
     ordering = ['site']
+
+
+@admin.register(CircuitGeometry)
+class CircuitGeometryAdmin(GISModelAdmin):
+    list_display = ['circuit', 'provider_reference']
+    search_fields = ['circuit__cid', 'provider_reference']
+    ordering = ['circuit']

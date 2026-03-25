@@ -110,3 +110,13 @@ class SiteGeometryIndex(SearchIndex):
         ('comments', 5000),
     )
     display_attrs = ('site', 'structure')
+
+
+@register_search
+class CircuitGeometryIndex(SearchIndex):
+    model = models.CircuitGeometry
+    fields = (
+        ('provider_reference', 200),
+        ('comments', 5000),
+    )
+    display_attrs = ('circuit', 'provider_reference')

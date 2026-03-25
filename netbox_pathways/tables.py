@@ -5,6 +5,7 @@ from netbox.tables import NetBoxTable, columns
 from .models import (
     AerialSpan,
     CableSegment,
+    CircuitGeometry,
     Conduit,
     ConduitBank,
     ConduitJunction,
@@ -245,3 +246,14 @@ class PathwayLocationTable(NetBoxTable):
             'pk', 'id', 'pathway', 'site', 'location', 'sequence', 'actions',
         )
         default_columns = ('pathway', 'site', 'location', 'sequence')
+
+
+class CircuitGeometryTable(NetBoxTable):
+    circuit = tables.Column(linkify=True)
+    provider_reference = tables.Column()
+    actions = columns.ActionsColumn(actions=('edit', 'delete'))
+
+    class Meta(NetBoxTable.Meta):
+        model = CircuitGeometry
+        fields = ('pk', 'id', 'circuit', 'provider_reference', 'actions')
+        default_columns = ('circuit', 'provider_reference')

@@ -1,4 +1,5 @@
 import django_filters
+from circuits.models import Circuit, Provider
 from dcim.models import Cable, Location, Site
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
@@ -15,6 +16,7 @@ from .choices import (
 from .models import (
     AerialSpan,
     CableSegment,
+    CircuitGeometry,
     Conduit,
     ConduitBank,
     ConduitJunction,
@@ -311,3 +313,26 @@ class SiteGeometryFilterSet(NetBoxModelFilterSet):
         if not value.strip():
             return queryset
         return queryset.filter(Q(site__name__icontains=value))
+
+
+class CircuitGeometryFilterSet(NetBoxModelFilterSet):
+    circuit_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='circuit', queryset=Circuit.objects.all(),
+        label='Circuit (ID)',
+    )
+    provider_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='circuit__provider', queryset=Provider.objects.all(),
+        label='Provider (ID)',
+    )
+
+    class Meta:
+        model = CircuitGeometry
+        fields = ['id']
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(circuit__cid__icontains=value) |
+            Q(provider_reference__icontains=value)
+        )
