@@ -153,6 +153,20 @@ menu = PluginMenu(
                     ),
                 ),
             ),
+            PluginMenuItem(
+                link='plugins:netbox_pathways:circuitgeometry_list',
+                link_text='Circuit Routes',
+                permissions=['netbox_pathways.view_circuitgeometry'],
+                buttons=(
+                    PluginMenuButton(
+                        link='plugins:netbox_pathways:circuitgeometry_add',
+                        title='Add',
+                        icon_class='mdi mdi-plus-thick',
+                        color=ButtonColorChoices.GREEN,
+                        permissions=['netbox_pathways.add_circuitgeometry'],
+                    ),
+                ),
+            ),
         )),
         ('Tools', (
             PluginMenuItem(

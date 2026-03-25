@@ -562,6 +562,37 @@ class SiteGeometryDeleteView(generic.ObjectDeleteView):
     queryset = models.SiteGeometry.objects.all()
 
 
+# --- Circuit Geometry ---
+
+class CircuitGeometryListView(generic.ObjectListView):
+    queryset = models.CircuitGeometry.objects.select_related(
+        'circuit', 'circuit__provider',
+    )
+    table = tables.CircuitGeometryTable
+    filterset = filters.CircuitGeometryFilterSet
+
+
+class CircuitGeometryView(generic.ObjectView):
+    queryset = models.CircuitGeometry.objects.all()
+    layout = layout.SimpleLayout(
+        left_panels=[
+            panels.CircuitGeometryPanel(),
+            TagsPanel(),
+            CustomFieldsPanel(),
+            CommentsPanel(),
+        ],
+    )
+
+
+class CircuitGeometryEditView(generic.ObjectEditView):
+    queryset = models.CircuitGeometry.objects.all()
+    form = forms.CircuitGeometryForm
+
+
+class CircuitGeometryDeleteView(generic.ObjectDeleteView):
+    queryset = models.CircuitGeometry.objects.all()
+
+
 # --- Map View ---
 
 

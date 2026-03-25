@@ -1,3 +1,4 @@
+from circuits.models import Circuit
 from dcim.models import Cable, Location, Site
 from django import forms
 from leaflet.forms.widgets import LeafletWidget
@@ -31,6 +32,7 @@ from .choices import (
 from .models import (
     AerialSpan,
     CableSegment,
+    CircuitGeometry,
     Conduit,
     ConduitBank,
     ConduitJunction,
@@ -518,4 +520,25 @@ class SiteGeometryForm(NetBoxModelForm):
         fields = ['site', 'structure', 'geometry', 'comments', 'tags']
         widgets = {
             'geometry': PointPolygonWidget(),
+        }
+
+
+# --- Circuit Geometry ---
+
+class CircuitGeometryForm(NetBoxModelForm):
+    circuit = DynamicModelChoiceField(
+        queryset=Circuit.objects.all(), selector=True,
+    )
+
+    fieldsets = (
+        FieldSet('circuit', 'provider_reference', name='Circuit Route'),
+        FieldSet('path', name='Route Geometry'),
+        FieldSet('comments', 'tags', name='Details'),
+    )
+
+    class Meta:
+        model = CircuitGeometry
+        fields = ['circuit', 'path', 'provider_reference', 'comments', 'tags']
+        widgets = {
+            'path': LeafletWidget(),
         }

@@ -125,3 +125,8 @@ class CableSegmentPanel(ObjectAttributesPanel):
 class SiteGeometryPanel(ObjectAttributesPanel):
     site = attrs.RelatedObjectAttr('site', linkify=True, label=_('Site'))
     structure = attrs.RelatedObjectAttr('structure', linkify=True, label=_('Structure'))
+
+
+class CircuitGeometryPanel(ObjectAttributesPanel):
+    circuit = attrs.RelatedObjectAttr('circuit', linkify=True, label=_('Circuit'))
+    provider_reference = attrs.TextAttr('provider_reference', label=_('Provider Reference'))
