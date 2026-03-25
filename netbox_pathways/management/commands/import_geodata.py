@@ -17,6 +17,7 @@ from django.db import models as db_models
 from netbox_pathways.geo import get_srid
 from netbox_pathways.models import (
     AerialSpan,
+    CircuitGeometry,
     Conduit,
     ConduitBank,
     DirectBuried,
@@ -31,6 +32,7 @@ MODEL_MAP = {
     'direct_buried': DirectBuried,
     'innerduct': Innerduct,
     'conduit_bank': ConduitBank,
+    'circuit_geometry': CircuitGeometry,
 }
 
 TRANSFORMS = {
@@ -39,6 +41,7 @@ TRANSFORMS = {
     'to_float': lambda v: float(v) if v is not None else None,
     'to_bool': lambda v: bool(int(v)) if v is not None else False,
     'to_str': lambda v: str(v) if v is not None else '',
+    'boolean_flag': lambda v: bool(int(v)) if v is not None else False,
 }
 
 
@@ -90,15 +93,16 @@ class Command(BaseCommand):
         # Resolve FK defaults
         defaults = self._resolve_defaults(schema.get('defaults', {}), model_class)
 
-        # Separate comments-target fields from direct fields
-        comments_specs = {
-            src: spec for src, spec in field_specs.items()
-            if isinstance(spec, dict) and spec.get('to') == 'comments' and spec.get('label')
-        }
-        direct_specs = {
-            src: spec for src, spec in field_specs.items()
-            if src not in comments_specs
-        }
+        # Separate labeled-aggregate fields (multiple source fields → one text field)
+        # from direct 1:1 field mappings. Grouped by target field name.
+        aggregate_specs = {}  # {target_field: {src_field: spec, ...}}
+        direct_specs = {}
+        for src, spec in field_specs.items():
+            if isinstance(spec, dict) and spec.get('label'):
+                target = spec.get('to', 'comments')
+                aggregate_specs.setdefault(target, {})[src] = spec
+            else:
+                direct_specs[src] = spec
 
         # Process features
         batch = []
@@ -149,17 +153,29 @@ class Command(BaseCommand):
                     if mapped is not None:
                         kwargs[target] = mapped
 
-                # Aggregate comments from labeled fields
-                if comments_specs:
+                # Aggregate labeled fields into their target text fields
+                for target_field, specs in aggregate_specs.items():
                     parts = []
-                    for src_field, spec in comments_specs.items():
-                        value = feature.get(src_field)
-                        if value is not None and str(value).strip():
+                    for src_field, spec in specs.items():
+                        value = raw.get(src_field)
+                        if value is None or not str(value).strip():
+                            continue
+                        # Apply transform if present (e.g. boolean_flag)
+                        transform_name = spec.get('transform')
+                        if transform_name:
+                            transform_fn = TRANSFORMS.get(transform_name)
+                            if transform_fn:
+                                value = transform_fn(value)
+                        # For boolean flags, only include if truthy
+                        if spec.get('transform') == 'boolean_flag':
+                            if value:
+                                parts.append(spec['label'])
+                        elif str(value).strip():
                             parts.append(f"{spec['label']}: {value}")
                     if parts:
-                        existing = kwargs.get('comments', '')
+                        existing = kwargs.get(target_field, '')
                         joined = '\n'.join(parts)
-                        kwargs['comments'] = f"{existing}\n{joined}".strip() if existing else joined
+                        kwargs[target_field] = f"{existing}\n{joined}".strip() if existing else joined
 
                 if dry_run:
                     if len(batch) < 5:
