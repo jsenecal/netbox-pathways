@@ -4,6 +4,7 @@ from rest_framework import serializers as drf_serializers
 from ..models import (
     AerialSpan,
     CableSegment,
+    CircuitGeometry,
     Conduit,
     ConduitBank,
     ConduitJunction,
@@ -202,3 +203,17 @@ class SiteGeometrySerializer(NetBoxModelSerializer):
             'comments', 'tags', 'created', 'last_updated',
         ]
         brief_fields = ('id', 'url', 'display', 'site')
+
+
+class CircuitGeometrySerializer(NetBoxModelSerializer):
+    url = drf_serializers.HyperlinkedIdentityField(
+        view_name='plugins-api:netbox_pathways-api:circuitgeometry-detail',
+    )
+
+    class Meta:
+        model = CircuitGeometry
+        fields = [
+            'id', 'url', 'display', 'circuit', 'path',
+            'provider_reference', 'comments', 'tags', 'created', 'last_updated',
+        ]
+        brief_fields = ('id', 'url', 'display', 'circuit')

@@ -24,6 +24,7 @@ router.register('junctions', views.ConduitJunctionViewSet)
 router.register('pathway-locations', views.PathwayLocationViewSet)
 router.register('cable-segments', views.CableSegmentViewSet)
 router.register('site-geometries', views.SiteGeometryViewSet)
+router.register('circuit-geometries', views.CircuitGeometryViewSet)
 
 # GeoJSON endpoints for QGIS / GIS client consumption
 router.register('geo/structures', StructureGeoViewSet, basename='geo-structure')

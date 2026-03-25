@@ -82,3 +82,9 @@ class SiteGeometryViewSet(NetBoxModelViewSet):
     queryset = models.SiteGeometry.objects.select_related('site', 'structure')
     serializer_class = serializers.SiteGeometrySerializer
     filterset_class = filters.SiteGeometryFilterSet
+
+
+class CircuitGeometryViewSet(NetBoxModelViewSet):
+    queryset = models.CircuitGeometry.objects.select_related('circuit', 'circuit__provider')
+    serializer_class = serializers.CircuitGeometrySerializer
+    filterset_class = filters.CircuitGeometryFilterSet
