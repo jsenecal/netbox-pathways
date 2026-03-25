@@ -496,7 +496,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
     const PREFS_KEY = 'pathways_map_layers';
     const DEFAULT_LAYERS: Record<string, boolean> = {
-        'Structures': true, 'Conduits': true, 'Aerial Spans': false, 'Direct Buried': false,
+        'Structures': true, 'Conduits': true, 'Aerial Spans': false, 'Direct Buried': false, 'Circuit Routes': false,
     };
 
     function _loadPrefs(): Record<string, boolean> | null {
@@ -526,6 +526,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         conduits: L.layerGroup(),
         aerialSpans: L.layerGroup(),
         directBuried: L.layerGroup(),
+        circuits: L.layerGroup(),
     };
 
     const layerNames: Record<string, L.LayerGroup> = {
@@ -533,6 +534,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         'Conduits': dataLayers.conduits,
         'Aerial Spans': dataLayers.aerialSpans,
         'Direct Buried': dataLayers.directBuried,
+        'Circuit Routes': dataLayers.circuits,
     };
 
     // --- External plugin layers ---
@@ -590,6 +592,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         'Conduits': '<svg viewBox="0 0 20 6" width="18" height="6"><line x1="0" y1="3" x2="20" y2="3" stroke="#795548" stroke-width="3" stroke-dasharray="5 5"/></svg>',
         'Aerial Spans': '<svg viewBox="0 0 20 6" width="18" height="6"><line x1="0" y1="3" x2="20" y2="3" stroke="#1565c0" stroke-width="3" stroke-dasharray="10 5"/></svg>',
         'Direct Buried': '<svg viewBox="0 0 20 6" width="18" height="6"><line x1="0" y1="3" x2="20" y2="3" stroke="#616161" stroke-width="3" stroke-dasharray="2 4"/></svg>',
+        'Circuit Routes': '<svg viewBox="0 0 20 6" width="18" height="6"><line x1="0" y1="3" x2="20" y2="3" stroke="#d32f2f" stroke-width="3" stroke-dasharray="8 6"/></svg>',
     };
 
     function _buildSidebarLayerToggles(): void {
@@ -651,6 +654,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
             dataLayers.conduits.clearLayers();
             dataLayers.aerialSpans.clearLayers();
             dataLayers.directBuried.clearLayers();
+            dataLayers.circuits.clearLayers();
             zoomHint.style.display = '';
             if (structureCountEl) structureCountEl.textContent = '-';
             if (pathwayCountEl) pathwayCountEl.textContent = '-';
@@ -670,6 +674,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         if (map.hasLayer(dataLayers.conduits)) totalExpectedLoads++;
         if (map.hasLayer(dataLayers.aerialSpans)) totalExpectedLoads++;
         if (map.hasLayer(dataLayers.directBuried)) totalExpectedLoads++;
+        if (map.hasLayer(dataLayers.circuits)) totalExpectedLoads++;
 
         let pathwayCount = 0;
         let totalLength = 0;
@@ -677,6 +682,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         if (map.hasLayer(dataLayers.conduits)) pendingPathway++;
         if (map.hasLayer(dataLayers.aerialSpans)) pendingPathway++;
         if (map.hasLayer(dataLayers.directBuried)) pendingPathway++;
+        if (map.hasLayer(dataLayers.circuits)) pendingPathway++;
 
         function _checkAllLoaded(): void {
             pendingLoads++;
@@ -808,6 +814,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
             ['conduits/', dataLayers.conduits, 'conduit', { color: '#795548', weight: 3, opacity: 0.7, dashArray: '5 5' }],
             ['aerial-spans/', dataLayers.aerialSpans, 'aerial', { color: '#1565c0', weight: 3, opacity: 0.7, dashArray: '10 5' }],
             ['direct-buried/', dataLayers.directBuried, 'direct_buried', { color: '#616161', weight: 3, opacity: 0.7, dashArray: '2 4' }],
+            ['circuits/', dataLayers.circuits, 'circuit', { color: '#d32f2f', weight: 3, opacity: 0.8, dashArray: '8 6' }],
         ];
 
         pathwayConfigs.forEach(function (cfg) {

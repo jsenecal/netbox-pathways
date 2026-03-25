@@ -55,6 +55,9 @@ function _colorForFeature(entry: FeatureEntry): string {
     if (entry.featureType === 'structure') {
         return STRUCTURE_COLORS[entry.props.structure_type || ''] || '#616161';
     }
+    if (entry.featureType === 'circuit') {
+        return '#d32f2f';
+    }
     return PATHWAY_COLORS[entry.props.pathway_type || ''] || '#616161';
 }
 
@@ -291,6 +294,8 @@ function _apiUrlForFeature(entry: FeatureEntry): string {
                 return base + 'aerial-spans/' + id + '/';
             case 'direct_buried':
                 return base + 'direct-buried/' + id + '/';
+            case 'circuit':
+                return base + 'circuit-geometries/' + id + '/';
             default:
                 return base + 'pathways/' + id + '/';
         }
@@ -462,6 +467,11 @@ const DETAIL_FIELDS: Record<string, DetailFieldDef[]> = {
         ['Cables Routed', 'cables_routed'],
         ['Tenant', 'tenant'],
         ['Installation Date', 'installation_date'],
+        ['Comments', 'comments'],
+    ],
+    circuit: [
+        ['Circuit', 'circuit'],
+        ['Provider Reference', 'provider_reference'],
         ['Comments', 'comments'],
     ],
     default: [
