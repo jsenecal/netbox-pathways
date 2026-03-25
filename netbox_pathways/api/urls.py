@@ -5,6 +5,7 @@ from . import views
 from .external_geo import ExternalLayerGeoView
 from .geo import (
     AerialSpanGeoViewSet,
+    CircuitGeoViewSet,
     ConduitGeoViewSet,
     DirectBuriedGeoViewSet,
     PathwayGeoViewSet,
@@ -32,6 +33,7 @@ router.register('geo/pathways', PathwayGeoViewSet, basename='geo-pathway')
 router.register('geo/conduits', ConduitGeoViewSet, basename='geo-conduit')
 router.register('geo/aerial-spans', AerialSpanGeoViewSet, basename='geo-aerialspan')
 router.register('geo/direct-buried', DirectBuriedGeoViewSet, basename='geo-directburied')
+router.register('geo/circuits', CircuitGeoViewSet, basename='geo-circuit')
 
 urlpatterns = router.urls + [
     # External plugin map layer endpoint

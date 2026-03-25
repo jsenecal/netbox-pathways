@@ -93,6 +93,19 @@ class DirectBuriedGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
         fields = ['id', 'name', 'pathway_type', 'url']
 
 
+class CircuitGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
+    geo_4326 = GeometryField(read_only=True)
+    cid = drf_serializers.CharField(source='circuit.cid', read_only=True)
+    provider = drf_serializers.CharField(source='circuit.provider.name', read_only=True)
+    circuit_type = drf_serializers.CharField(source='circuit.type.name', read_only=True)
+    status = drf_serializers.CharField(source='circuit.status', read_only=True)
+
+    class Meta:
+        model = models.CircuitGeometry
+        geo_field = 'geo_4326'
+        fields = ['id', 'cid', 'provider', 'circuit_type', 'status', 'provider_reference', 'url']
+
+
 # --- Bbox filtering mixin ---
 
 class BboxFilterMixin:
@@ -233,5 +246,15 @@ class DirectBuriedGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     ).order_by('pk')
     serializer_class = DirectBuriedGeoSerializer
     filterset_class = filters.DirectBuriedFilterSet
+    bbox_geo_field = 'path'
+    pagination_class = None
+
+
+class CircuitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
+    queryset = models.CircuitGeometry.objects.select_related(
+        'circuit', 'circuit__provider', 'circuit__type',
+    ).order_by('pk')
+    serializer_class = CircuitGeoSerializer
+    filterset_class = filters.CircuitGeometryFilterSet
     bbox_geo_field = 'path'
     pagination_class = None
