@@ -1,5 +1,6 @@
 from django.db.models import Q
 from django.templatetags.static import static
+from django.urls import reverse
 from netbox.plugins.templates import PluginTemplateExtension
 
 from . import models
@@ -87,7 +88,21 @@ def _structure_point(structure, color=None):
 
 
 class LeafletHeadExtension(PluginTemplateExtension):
-    """Load Leaflet + django-leaflet assets globally via {% plugin_head %}."""
+    """Load Leaflet + django-leaflet assets on pages that show map panels."""
+
+    models = [
+        'netbox_pathways.structure',
+        'netbox_pathways.pathway',
+        'netbox_pathways.conduit',
+        'netbox_pathways.aerialspan',
+        'netbox_pathways.directburied',
+        'netbox_pathways.innerduct',
+        'netbox_pathways.conduitbank',
+        'netbox_pathways.conduitjunction',
+        'dcim.site',
+        'dcim.location',
+        'dcim.cable',
+    ]
 
     def head(self):
         import json
@@ -95,9 +110,10 @@ class LeafletHeadExtension(PluginTemplateExtension):
         from django.conf import settings
         plugin_cfg = settings.PLUGINS_CONFIG.get('netbox_pathways', {})
 
+        api_base = reverse('plugins-api:netbox_pathways-api:api-root')
         config = {
             'maxNativeZoom': plugin_cfg.get('map_max_native_zoom', 19),
-            'apiBase': '/api/plugins/pathways/geo/',
+            'apiBase': f'{api_base}geo/',
             'overlays': plugin_cfg.get('map_overlays', []),
             'baseLayers': plugin_cfg.get('map_base_layers', []),
         }

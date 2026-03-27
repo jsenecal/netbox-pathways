@@ -222,7 +222,7 @@ class PathwayGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
 class ConduitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = models.Conduit.objects.only(
-        'id', 'name', 'path',
+        'id', 'name', 'pathway_type', 'path',
     ).order_by('pk')
     serializer_class = ConduitGeoSerializer
     filterset_class = filters.ConduitFilterSet
@@ -232,7 +232,7 @@ class ConduitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
 class AerialSpanGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = models.AerialSpan.objects.only(
-        'id', 'name', 'path',
+        'id', 'name', 'pathway_type', 'path',
     ).order_by('pk')
     serializer_class = AerialSpanGeoSerializer
     filterset_class = filters.AerialSpanFilterSet
@@ -242,7 +242,7 @@ class AerialSpanGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
 class DirectBuriedGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = models.DirectBuried.objects.only(
-        'id', 'name', 'path',
+        'id', 'name', 'pathway_type', 'path',
     ).order_by('pk')
     serializer_class = DirectBuriedGeoSerializer
     filterset_class = filters.DirectBuriedFilterSet

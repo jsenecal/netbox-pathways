@@ -215,6 +215,8 @@ def trace_cable(cable_id):
             'pathway',
             'pathway__start_structure',
             'pathway__end_structure',
+            'pathway__start_location',
+            'pathway__end_location',
         )
         .order_by('sequence')
     )
@@ -241,41 +243,87 @@ def trace_cable(cable_id):
     return result
 
 
+# --- Batch node resolution helpers ---
+
+def _batch_fetch_structures(pks):
+    """Fetch structures by PK set, return dict pk -> Structure."""
+    if not pks:
+        return {}
+    return models.Structure.objects.only(
+        'id', 'name', 'structure_type', 'location',
+    ).in_bulk(list(pks))
+
+
+def _batch_fetch_locations(pks):
+    """Fetch locations by PK set, return dict pk -> Location."""
+    if not pks:
+        return {}
+    from dcim.models import Location
+    return Location.objects.in_bulk(list(pks))
+
+
+def _batch_fetch_junctions(pks):
+    """Fetch junctions by PK set, return dict pk -> ConduitJunction."""
+    if not pks:
+        return {}
+    return models.ConduitJunction.objects.select_related(
+        'trunk_conduit',
+    ).only(
+        'id', 'name', 'trunk_conduit__name', 'trunk_conduit__path',
+        'position_on_trunk',
+    ).in_bulk(list(pks))
+
+
+def batch_resolve_nodes(nodes):
+    """
+    Batch-fetch labels and geo for a collection of node tuples.
+
+    Returns dict: node -> {'label': str, 'geo': (lat, lon) | None}
+    """
+    structure_pks = {pk for kind, pk in nodes if kind == 'structure'}
+    location_pks = {pk for kind, pk in nodes if kind == 'location'}
+    junction_pks = {pk for kind, pk in nodes if kind == 'junction'}
+
+    structures = _batch_fetch_structures(structure_pks)
+    locations = _batch_fetch_locations(location_pks)
+    junctions = _batch_fetch_junctions(junction_pks)
+
+    result = {}
+    for node in nodes:
+        kind, pk = node
+        label = str(node)
+        geo = None
+
+        if kind == 'structure':
+            s = structures.get(pk)
+            if s:
+                label = str(s)
+                geo = point_to_latlon(s.centroid)
+            else:
+                label = f'Structure #{pk}'
+        elif kind == 'location':
+            loc = locations.get(pk)
+            if loc:
+                label = str(loc)
+            else:
+                label = f'Location #{pk}'
+        elif kind == 'junction':
+            j = junctions.get(pk)
+            if j:
+                label = str(j)
+                geo = point_to_latlon(j.location)
+            else:
+                label = f'Junction #{pk}'
+
+        result[node] = {'label': label, 'geo': geo}
+    return result
+
+
 def node_to_label(node):
-    """Convert a node tuple to a human-readable label."""
-    kind, pk = node
-    if kind == 'structure':
-        try:
-            return str(models.Structure.objects.get(pk=pk))
-        except models.Structure.DoesNotExist:
-            return f'Structure #{pk}'
-    elif kind == 'location':
-        from dcim.models import Location
-        try:
-            return str(Location.objects.get(pk=pk))
-        except Location.DoesNotExist:
-            return f'Location #{pk}'
-    elif kind == 'junction':
-        try:
-            return str(models.ConduitJunction.objects.get(pk=pk))
-        except models.ConduitJunction.DoesNotExist:
-            return f'Junction #{pk}'
-    return str(node)
+    """Convert a node tuple to a human-readable label (single-node convenience)."""
+    return batch_resolve_nodes([node])[node]['label']
 
 
 def node_to_geo(node):
-    """Return (lat, lon) for a node in WGS84, or None."""
-    kind, pk = node
-    if kind == 'structure':
-        try:
-            s = models.Structure.objects.only('location').get(pk=pk)
-            return point_to_latlon(s.centroid)
-        except models.Structure.DoesNotExist:
-            pass
-    elif kind == 'junction':
-        try:
-            j = models.ConduitJunction.objects.select_related('trunk_conduit').get(pk=pk)
-            return point_to_latlon(j.location)
-        except models.ConduitJunction.DoesNotExist:
-            pass
-    return None
+    """Return (lat, lon) for a node in WGS84, or None (single-node convenience)."""
+    return batch_resolve_nodes([node])[node]['geo']

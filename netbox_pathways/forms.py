@@ -186,10 +186,12 @@ class ConduitForm(NetBoxModelForm):
 
 class ConduitImportForm(NetBoxModelImportForm):
     start_structure = CSVModelChoiceField(
-        queryset=Structure.objects.all(), to_field_name='name', help_text='Starting structure name',
+        queryset=Structure.objects.all(), to_field_name='name', required=False,
+        help_text='Starting structure name',
     )
     end_structure = CSVModelChoiceField(
-        queryset=Structure.objects.all(), to_field_name='name', help_text='Ending structure name',
+        queryset=Structure.objects.all(), to_field_name='name', required=False,
+        help_text='Ending structure name',
     )
 
     class Meta:

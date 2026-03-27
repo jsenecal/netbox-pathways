@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.text import slugify
 from django.views import View
 from extras.ui.panels import CustomFieldsPanel, TagsPanel
@@ -14,13 +15,13 @@ from utilities.views import ViewTab, register_model_view
 from netbox_pathways.registry import registry as map_layer_registry
 
 from . import filters, forms, models, tables
-from .graph import PathwayGraph, node_to_geo, node_to_label
+from .graph import PathwayGraph, batch_resolve_nodes
 from .ui import panels
 
 # --- Structure ---
 
 class StructureListView(generic.ObjectListView):
-    queryset = models.Structure.objects.select_related('site')
+    queryset = models.Structure.objects.select_related('site', 'tenant')
     table = tables.StructureTable
     filterset = filters.StructureFilterSet
 
@@ -75,6 +76,10 @@ class StructureCreateSiteView(LoginRequiredMixin, View):
     """Create a NetBox Site from a Structure and link them."""
 
     def post(self, request, pk):
+        if not request.user.has_perm('dcim.add_site'):
+            messages.error(request, "You do not have permission to create sites.")
+            return redirect('plugins:netbox_pathways:structure', pk=pk)
+
         structure = get_object_or_404(models.Structure, pk=pk)
 
         if structure.site:
@@ -148,7 +153,7 @@ class StructureConduitBanksView(generic.ObjectChildrenView):
 
 class PathwayListView(generic.ObjectListView):
     queryset = models.Pathway.objects.select_related(
-        'start_structure', 'end_structure', 'start_location', 'end_location',
+        'start_structure', 'end_structure', 'start_location', 'end_location', 'tenant',
     ).annotate(cables_routed=Count('cable_segments'))
     table = tables.PathwayTable
     filterset = filters.PathwayFilterSet
@@ -177,7 +182,8 @@ class PathwayView(generic.ObjectView):
 
 class ConduitListView(generic.ObjectListView):
     queryset = models.Conduit.objects.select_related(
-        'start_structure', 'end_structure', 'start_location', 'end_location', 'conduit_bank',
+        'start_structure', 'end_structure', 'start_location', 'end_location',
+        'conduit_bank', 'tenant',
     ).annotate(cables_routed=Count('cable_segments'))
     table = tables.ConduitTable
     filterset = filters.ConduitFilterSet
@@ -252,7 +258,7 @@ class ConduitInnerductsView(generic.ObjectChildrenView):
 
 class AerialSpanListView(generic.ObjectListView):
     queryset = models.AerialSpan.objects.select_related(
-        'start_structure', 'end_structure', 'start_location', 'end_location',
+        'start_structure', 'end_structure', 'start_location', 'end_location', 'tenant',
     ).annotate(cables_routed=Count('cable_segments'))
     table = tables.AerialSpanTable
     filterset = filters.AerialSpanFilterSet
@@ -307,7 +313,7 @@ class AerialSpanBulkDeleteView(generic.BulkDeleteView):
 
 class DirectBuriedListView(generic.ObjectListView):
     queryset = models.DirectBuried.objects.select_related(
-        'start_structure', 'end_structure', 'start_location', 'end_location',
+        'start_structure', 'end_structure', 'start_location', 'end_location', 'tenant',
     ).annotate(cables_routed=Count('cable_segments'))
     table = tables.DirectBuriedTable
     filterset = filters.DirectBuriedFilterSet
@@ -382,7 +388,7 @@ class InnerductDeleteView(generic.ObjectDeleteView):
 # --- Conduit Bank ---
 
 class ConduitBankListView(generic.ObjectListView):
-    queryset = models.ConduitBank.objects.select_related('structure').annotate(
+    queryset = models.ConduitBank.objects.select_related('structure', 'tenant').annotate(
         conduit_count=Count('conduits'),
     )
     table = tables.ConduitBankTable
@@ -596,11 +602,8 @@ class CircuitGeometryDeleteView(generic.ObjectDeleteView):
 # --- Map View ---
 
 
-class MapView(generic.ObjectListView):
+class MapView(LoginRequiredMixin, View):
     """Full-page infrastructure map. Data is fetched client-side from GeoJSON API."""
-    queryset = models.Structure.objects.all()
-    table = tables.StructureTable
-    template_name = 'netbox_pathways/map.html'
 
     def _safe_float(self, value, default):
         try:
@@ -684,19 +687,22 @@ class MapView(generic.ObjectListView):
         except (ValueError, AttributeError):
             return None
 
-    def get_extra_context(self, request):
+    def get(self, request):
         import json
 
         from django.conf import settings
         plugin_cfg = settings.PLUGINS_CONFIG.get('netbox_pathways', {})
 
+        api_base = reverse('plugins-api:netbox_pathways-api:api-root')
+        geo_base = f'{api_base}geo/'
+
         pathways_config = {
             'maxNativeZoom': plugin_cfg.get('map_max_native_zoom', 19),
-            'apiBase': '/api/plugins/pathways/geo/',
+            'apiBase': geo_base,
             'overlays': plugin_cfg.get('map_overlays', []),
             'baseLayers': plugin_cfg.get('map_base_layers', []),
             'externalLayers': [
-                layer.to_json(api_base='/api/plugins/pathways/geo/')
+                layer.to_json(api_base=geo_base)
                 for layer in map_layer_registry.all()
             ],
         }
@@ -712,28 +718,25 @@ class MapView(generic.ObjectListView):
         }
 
         if request.GET.get('lat') or request.GET.get('lon'):
-            # Explicit URL params override everything
             ctx['map_center_lat'] = self._safe_float(request.GET.get('lat'), default_lat)
             ctx['map_center_lon'] = self._safe_float(request.GET.get('lon'), default_lon)
             ctx['map_zoom'] = self._safe_int(request.GET.get('zoom'), default_zoom)
             ctx['map_bounds'] = ''
         elif extent:
-            # Fit to data extent
             ctx['map_center_lat'] = (extent[1] + extent[3]) / 2
             ctx['map_center_lon'] = (extent[0] + extent[2]) / 2
             ctx['map_zoom'] = default_zoom
             ctx['map_bounds'] = json.dumps([
-                [extent[1], extent[0]],  # [south, west]
-                [extent[3], extent[2]],  # [north, east]
+                [extent[1], extent[0]],
+                [extent[3], extent[2]],
             ])
         else:
-            # No data — use config defaults
             ctx['map_center_lat'] = default_lat
             ctx['map_center_lon'] = default_lon
             ctx['map_zoom'] = default_zoom
             ctx['map_bounds'] = ''
 
-        return ctx
+        return render(request, 'netbox_pathways/map.html', ctx)
 
 
 # --- Pull Sheet ---
@@ -851,18 +854,19 @@ class RouteFinderView(LoginRequiredMixin, View):
         # Build geo data for map
         geo_data = {'points': [], 'lines': []}
 
-        # Start/end markers
-        start_geo = node_to_geo(start_node)
-        end_geo = node_to_geo(end_node)
-        if start_geo:
+        # Start/end markers (batch-resolved)
+        resolved = batch_resolve_nodes([start_node, end_node])
+        start_info = resolved[start_node]
+        end_info = resolved[end_node]
+        if start_info['geo']:
             geo_data['points'].append({
-                'lat': start_geo[0], 'lon': start_geo[1],
-                'name': node_to_label(start_node), 'color': 'green',
+                'lat': start_info['geo'][0], 'lon': start_info['geo'][1],
+                'name': start_info['label'], 'color': 'green',
             })
-        if end_geo:
+        if end_info['geo']:
             geo_data['points'].append({
-                'lat': end_geo[0], 'lon': end_geo[1],
-                'name': node_to_label(end_node), 'color': 'red',
+                'lat': end_info['geo'][0], 'lon': end_info['geo'][1],
+                'name': end_info['label'], 'color': 'red',
             })
 
         # Show first (shortest) route on map
@@ -926,17 +930,21 @@ class NeighborsView(LoginRequiredMixin, View):
         start_node = ('structure', structure_id)
         raw_neighbors = graph.neighbors(start_node, max_hops=max_hops)
 
+        # Batch-resolve all nodes (start + neighbors) in one round-trip
+        all_nodes = [start_node] + list(raw_neighbors.keys())
+        resolved = batch_resolve_nodes(all_nodes)
+
         neighbor_list = []
         for node, (dist, hops, _pw_ids) in sorted(raw_neighbors.items(), key=lambda x: x[1][1]):
-            geo = node_to_geo(node)
+            info = resolved[node]
             neighbor_list.append({
                 'type': node[0],
                 'id': node[1],
-                'label': node_to_label(node),
+                'label': info['label'],
                 'distance': round(dist, 2),
                 'hops': hops,
-                'lat': geo[0] if geo else None,
-                'lon': geo[1] if geo else None,
+                'lat': info['geo'][0] if info['geo'] else None,
+                'lon': info['geo'][1] if info['geo'] else None,
             })
 
         context['neighbors'] = neighbor_list
@@ -945,11 +953,11 @@ class NeighborsView(LoginRequiredMixin, View):
         geo_data = {'points': [], 'lines': []}
 
         # Origin marker
-        origin_geo = node_to_geo(start_node)
-        if origin_geo:
+        start_info = resolved[start_node]
+        if start_info['geo']:
             geo_data['points'].append({
-                'lat': origin_geo[0], 'lon': origin_geo[1],
-                'name': node_to_label(start_node), 'color': 'red',
+                'lat': start_info['geo'][0], 'lon': start_info['geo'][1],
+                'name': start_info['label'], 'color': 'red',
             })
 
         # Neighbor markers

@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ..graph import PathwayGraph, node_to_geo, node_to_label, trace_cable
+from ..graph import PathwayGraph, batch_resolve_nodes, node_to_label, trace_cable
 
 
 class RouteFinderView(APIView):
@@ -69,8 +69,14 @@ class RouteFinderView(APIView):
         graph = PathwayGraph.build(site_id=site_id_int)
 
         if mode == 'all':
-            max_depth = min(int(request.query_params.get('max_depth', 20)), 50)
-            max_routes = min(int(request.query_params.get('max_routes', 10)), 50)
+            try:
+                max_depth = min(int(request.query_params.get('max_depth', 20)), 50)
+            except (TypeError, ValueError):
+                max_depth = 20
+            try:
+                max_routes = min(int(request.query_params.get('max_routes', 10)), 50)
+            except (TypeError, ValueError):
+                max_routes = 10
             routes_raw = graph.all_routes(start_node, end_node, max_depth, max_routes)
             routes = []
             for cost, pw_ids in routes_raw:
@@ -154,7 +160,10 @@ class NeighborsView(APIView):
     def get(self, request):
         node_type = request.query_params.get('type', 'structure')
         node_id = request.query_params.get('id')
-        max_hops = min(int(request.query_params.get('max_hops', 3)), 10)
+        try:
+            max_hops = min(int(request.query_params.get('max_hops', 3)), 10)
+        except (TypeError, ValueError):
+            max_hops = 3
         site_id = request.query_params.get('site')
 
         if not node_id:
@@ -189,31 +198,35 @@ class NeighborsView(APIView):
         graph = PathwayGraph.build(site_id=site_id_int)
         neighbors = graph.neighbors(start_node, max_hops=max_hops)
 
+        # Batch-resolve all nodes (start + neighbors) in one round-trip
+        all_nodes = [start_node] + list(neighbors.keys())
+        resolved = batch_resolve_nodes(all_nodes)
+
         result_nodes = []
         for node, (dist, hops, pw_ids) in sorted(neighbors.items(), key=lambda x: x[1][1]):
-            geo = node_to_geo(node)
+            info = resolved[node]
             entry = {
                 'type': node[0],
                 'id': node[1],
-                'label': node_to_label(node),
+                'label': info['label'],
                 'distance': dist,
                 'hops': hops,
                 'pathway_ids': pw_ids,
             }
-            if geo:
-                entry['lat'] = geo[0]
-                entry['lon'] = geo[1]
+            if info['geo']:
+                entry['lat'] = info['geo'][0]
+                entry['lon'] = info['geo'][1]
             result_nodes.append(entry)
 
-        start_geo = node_to_geo(start_node)
+        start_info = resolved[start_node]
 
         return Response({
             'origin': {
                 'type': node_type,
                 'id': node_id,
-                'label': node_to_label(start_node),
-                'lat': start_geo[0] if start_geo else None,
-                'lon': start_geo[1] if start_geo else None,
+                'label': start_info['label'],
+                'lat': start_info['geo'][0] if start_info['geo'] else None,
+                'lon': start_info['geo'][1] if start_info['geo'] else None,
             },
             'max_hops': max_hops,
             'neighbor_count': len(result_nodes),

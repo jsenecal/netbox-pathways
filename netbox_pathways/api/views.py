@@ -6,20 +6,20 @@ from . import serializers
 
 
 class StructureViewSet(NetBoxModelViewSet):
-    queryset = models.Structure.objects.select_related('site')
+    queryset = models.Structure.objects.select_related('site', 'tenant')
     serializer_class = serializers.StructureSerializer
     filterset_class = filters.StructureFilterSet
 
 
 class ConduitBankViewSet(NetBoxModelViewSet):
-    queryset = models.ConduitBank.objects.select_related('structure')
+    queryset = models.ConduitBank.objects.select_related('structure', 'tenant')
     serializer_class = serializers.ConduitBankSerializer
     filterset_class = filters.ConduitBankFilterSet
 
 
 class PathwayViewSet(NetBoxModelViewSet):
     queryset = models.Pathway.objects.select_related(
-        'start_structure', 'end_structure', 'start_location', 'end_location',
+        'start_structure', 'end_structure', 'start_location', 'end_location', 'tenant',
     ).annotate(cables_routed=Count('cable_segments'))
     serializer_class = serializers.PathwaySerializer
     filterset_class = filters.PathwayFilterSet
@@ -28,7 +28,7 @@ class PathwayViewSet(NetBoxModelViewSet):
 class ConduitViewSet(NetBoxModelViewSet):
     queryset = models.Conduit.objects.select_related(
         'start_structure', 'end_structure', 'start_location', 'end_location',
-        'conduit_bank', 'start_junction', 'end_junction',
+        'conduit_bank', 'start_junction', 'end_junction', 'tenant',
     ).annotate(cables_routed=Count('cable_segments'))
     serializer_class = serializers.ConduitSerializer
     filterset_class = filters.ConduitFilterSet
@@ -36,7 +36,7 @@ class ConduitViewSet(NetBoxModelViewSet):
 
 class AerialSpanViewSet(NetBoxModelViewSet):
     queryset = models.AerialSpan.objects.select_related(
-        'start_structure', 'end_structure', 'start_location', 'end_location',
+        'start_structure', 'end_structure', 'start_location', 'end_location', 'tenant',
     ).annotate(cables_routed=Count('cable_segments'))
     serializer_class = serializers.AerialSpanSerializer
     filterset_class = filters.AerialSpanFilterSet
@@ -44,7 +44,7 @@ class AerialSpanViewSet(NetBoxModelViewSet):
 
 class DirectBuriedViewSet(NetBoxModelViewSet):
     queryset = models.DirectBuried.objects.select_related(
-        'start_structure', 'end_structure', 'start_location', 'end_location',
+        'start_structure', 'end_structure', 'start_location', 'end_location', 'tenant',
     ).annotate(cables_routed=Count('cable_segments'))
     serializer_class = serializers.DirectBuriedSerializer
     filterset_class = filters.DirectBuriedFilterSet

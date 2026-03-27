@@ -247,6 +247,9 @@ class Pathway(NetBoxModel):
 
 
 class Conduit(Pathway):
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_pathways:conduit', args=[self.pk])
+
     material = models.CharField(max_length=50, choices=ConduitMaterialChoices, blank=True)
     inner_diameter = models.FloatField(null=True, blank=True, help_text="Inner diameter in millimeters")
     outer_diameter = models.FloatField(null=True, blank=True, help_text="Outer diameter in millimeters")
@@ -295,6 +298,9 @@ class Conduit(Pathway):
 
 
 class AerialSpan(Pathway):
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_pathways:aerialspan', args=[self.pk])
+
     aerial_type = models.CharField(max_length=50, choices=AerialTypeChoices, blank=True)
     attachment_height = models.FloatField(null=True, blank=True, help_text="Attachment height in meters")
     sag = models.FloatField(null=True, blank=True, help_text="Cable sag in meters")
@@ -312,6 +318,9 @@ class AerialSpan(Pathway):
 
 
 class DirectBuried(Pathway):
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_pathways:directburied', args=[self.pk])
+
     burial_depth = models.FloatField(null=True, blank=True, help_text="Burial depth in meters")
     warning_tape = models.BooleanField(default=False, help_text="Warning tape installed above cable")
     tracer_wire = models.BooleanField(default=False, help_text="Tracer wire installed with cable")
@@ -327,6 +336,9 @@ class DirectBuried(Pathway):
 
 
 class Innerduct(Pathway):
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_pathways:innerduct', args=[self.pk])
+
     parent_conduit = models.ForeignKey(Conduit, on_delete=models.CASCADE, related_name='innerducts')
     size = models.CharField(max_length=50, help_text='Innerduct size (e.g., 1.25", 32mm)')
     color = models.CharField(max_length=50, blank=True, help_text="Innerduct color for identification")
@@ -338,13 +350,15 @@ class Innerduct(Pathway):
 
     def save(self, *args, **kwargs):
         self.pathway_type = 'innerduct'
-        if self.parent_conduit and not any([
-            self.start_structure_id, self.start_location_id,
-        ]):
-            self.start_structure = self.parent_conduit.start_structure
-            self.end_structure = self.parent_conduit.end_structure
-            self.start_location = self.parent_conduit.start_location
-            self.end_location = self.parent_conduit.end_location
+        if self.parent_conduit_id:
+            # Inherit start endpoint from parent if not explicitly set
+            if not any([self.start_structure_id, self.start_location_id]):
+                self.start_structure = self.parent_conduit.start_structure
+                self.start_location = self.parent_conduit.start_location
+            # Inherit end endpoint from parent if not explicitly set
+            if not any([self.end_structure_id, self.end_location_id]):
+                self.end_structure = self.parent_conduit.end_structure
+                self.end_location = self.parent_conduit.end_location
         super().save(*args, **kwargs)
 
 
@@ -367,7 +381,12 @@ class ConduitJunction(NetBoxModel):
 
     class Meta:
         ordering = ['name']
-        unique_together = [['trunk_conduit', 'position_on_trunk']]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['trunk_conduit', 'position_on_trunk'],
+                name='unique_junction_position_on_trunk',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.name}: {self.trunk_conduit.name} \u2192 {self.branch_conduit.name}"
@@ -378,12 +397,20 @@ class ConduitJunction(NetBoxModel):
     def clean(self):
         super().clean()
         if self.trunk_conduit and self.towards_structure:
-            if self.towards_structure not in [
-                self.trunk_conduit.start_structure,
-                self.trunk_conduit.end_structure,
-            ]:
+            trunk_structures = [
+                s for s in [
+                    self.trunk_conduit.start_structure,
+                    self.trunk_conduit.end_structure,
+                ] if s is not None
+            ]
+            if trunk_structures and self.towards_structure not in trunk_structures:
                 raise ValidationError(
-                    "towards_structure must be one of the trunk conduit's endpoints"
+                    "towards_structure must be one of the trunk conduit's structure endpoints"
+                )
+            elif not trunk_structures:
+                raise ValidationError(
+                    "towards_structure cannot be set when the trunk conduit "
+                    "has no structure endpoints (uses locations or junctions only)"
                 )
 
     @property
@@ -412,7 +439,12 @@ class PathwayLocation(NetBoxModel):
 
     class Meta:
         ordering = ['pathway', 'sequence']
-        unique_together = [['pathway', 'sequence']]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['pathway', 'sequence'],
+                name='unique_pathway_location_sequence',
+            ),
+        ]
 
     def __str__(self):
         point = self.location or self.site
@@ -443,7 +475,12 @@ class CableSegment(NetBoxModel):
 
     class Meta:
         ordering = ['cable', 'sequence']
-        unique_together = [['cable', 'sequence']]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cable', 'sequence'],
+                name='unique_cable_segment_sequence',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.cable.label} - Segment {self.sequence}"
