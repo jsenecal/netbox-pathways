@@ -85,6 +85,14 @@ urlpatterns = [
     path('cable-segments/<int:pk>/edit/', views.CableSegmentEditView.as_view(), name='cablesegment_edit'),
     path('cable-segments/<int:pk>/delete/', views.CableSegmentDeleteView.as_view(), name='cablesegment_delete'),
 
+    # Slack Loops
+    path('slack-loops/', views.SlackLoopListView.as_view(), name='slackloop_list'),
+    path('slack-loops/add/', views.SlackLoopEditView.as_view(), name='slackloop_add'),
+    path('slack-loops/delete/', views.SlackLoopBulkDeleteView.as_view(), name='slackloop_bulk_delete'),
+    path('slack-loops/<int:pk>/', views.SlackLoopView.as_view(), name='slackloop'),
+    path('slack-loops/<int:pk>/edit/', views.SlackLoopEditView.as_view(), name='slackloop_edit'),
+    path('slack-loops/<int:pk>/delete/', views.SlackLoopDeleteView.as_view(), name='slackloop_delete'),
+
     # Site Geometries
     path('site-geometries/', views.SiteGeometryListView.as_view(), name='sitegeometry_list'),
     path('site-geometries/add/', views.SiteGeometryEditView.as_view(), name='sitegeometry_add'),

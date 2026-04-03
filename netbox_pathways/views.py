@@ -599,6 +599,41 @@ class CircuitGeometryDeleteView(generic.ObjectDeleteView):
     queryset = models.CircuitGeometry.objects.all()
 
 
+# --- Slack Loops ---
+
+class SlackLoopListView(generic.ObjectListView):
+    queryset = models.SlackLoop.objects.select_related('cable', 'structure', 'pathway')
+    table = tables.SlackLoopTable
+    filterset = filters.SlackLoopFilterSet
+
+
+class SlackLoopView(generic.ObjectView):
+    queryset = models.SlackLoop.objects.all()
+    layout = layout.SimpleLayout(
+        left_panels=[
+            panels.SlackLoopPanel(),
+            TagsPanel(),
+            CustomFieldsPanel(),
+            CommentsPanel(),
+        ],
+        right_panels=[],
+    )
+
+
+class SlackLoopEditView(generic.ObjectEditView):
+    queryset = models.SlackLoop.objects.all()
+    form = forms.SlackLoopForm
+
+
+class SlackLoopDeleteView(generic.ObjectDeleteView):
+    queryset = models.SlackLoop.objects.all()
+
+
+class SlackLoopBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.SlackLoop.objects.all()
+    table = tables.SlackLoopTable
+
+
 # --- Map View ---
 
 
