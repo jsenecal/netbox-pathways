@@ -226,7 +226,6 @@ def trace_cable(cable_id):
         pw = seg.pathway
         entry = {
             'segment_id': seg.pk,
-            'sequence': seg.sequence,
             'pathway_id': pw.pk if pw else None,
             'pathway_name': pw.name if pw else None,
             'pathway_type': pw.pathway_type if pw else None,

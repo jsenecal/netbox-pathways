@@ -25,6 +25,7 @@ from netbox_pathways.models import (
     Pathway,
     PathwayLocation,
     SiteGeometry,
+    SlackLoop,
     Structure,
 )
 
@@ -145,6 +146,9 @@ class Command(BaseCommand):
         self.stdout.write('Creating cable segments (500)...')
         self._create_cable_segments(cables, all_pathways)
 
+        self.stdout.write('Creating slack loops (100)...')
+        self._create_slack_loops(cables, structures, all_pathways)
+
         self.stdout.write('Creating pathway locations (500)...')
         self._create_pathway_locations(all_pathways, sites, locations)
 
@@ -156,6 +160,7 @@ class Command(BaseCommand):
 
     def _flush(self):
         self.stdout.write(self.style.WARNING('Flushing existing pathways data...'))
+        SlackLoop.objects.all().delete()
         CableSegment.objects.all().delete()
         PathwayLocation.objects.all().delete()
         ConduitJunction.objects.all().delete()
@@ -418,6 +423,25 @@ class Command(BaseCommand):
             ))
         return CableSegment.objects.bulk_create(segments)
 
+    def _create_slack_loops(self, cables, structures, pathways):
+        if not cables or not structures:
+            self.stdout.write(self.style.WARNING('  No cables/structures available for slack loops.'))
+            return []
+        loops = []
+        for i in range(100):
+            cable = random.choice(cables)
+            structure = random.choice(structures)
+            length = round(random.uniform(1, 15), 1)
+            # ~20% have a pathway reference (aerial slack)
+            pathway = random.choice(pathways) if pathways and random.random() < 0.2 else None
+            loops.append(SlackLoop(
+                cable=cable,
+                structure=structure,
+                pathway=pathway,
+                length=length,
+            ))
+        return SlackLoop.objects.bulk_create(loops)
+
     def _create_pathway_locations(self, pathways, sites, locations):
         if not pathways:
             return []
@@ -465,5 +489,6 @@ class Command(BaseCommand):
         self.stdout.write(f'  Conduit Junctions:  {ConduitJunction.objects.count()}')
         self.stdout.write(f'  Cables:             {Cable.objects.filter(label__startswith="CBL-SAMPLE-").count()}')
         self.stdout.write(f'  Cable Segments:     {CableSegment.objects.count()}')
+        self.stdout.write(f'  Slack Loops:        {SlackLoop.objects.count()}')
         self.stdout.write(f'  Pathway Locations:  {PathwayLocation.objects.count()}')
         self.stdout.write(f'  Site Geometries:    {SiteGeometry.objects.count()}')
