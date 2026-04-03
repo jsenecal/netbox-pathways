@@ -22,7 +22,7 @@ PLUGINS_CONFIG = {
             },
             {
                 "name": "Light",
-                "url": "https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/{z}/{x}/{y}?access_token=MAPBOX_TOKEN_REMOVED",
+                "url": "https://api.mapbox.com/styles/v1/mapbox/navigation-day-v1/tiles/{z}/{x}/{y}?access_token=MAPBOX_TOKEN_REMOVED",
                 "tileSize": 512,
                 "zoomOffset": -1,
                 "attribution": "&copy; <a href='https://www.mapbox.com/'>Mapbox</a> &copy; <a href='https://www.openstreetmap.org/copyright'>OSM</a>",
