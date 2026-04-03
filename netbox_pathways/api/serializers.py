@@ -13,6 +13,7 @@ from ..models import (
     Pathway,
     PathwayLocation,
     SiteGeometry,
+    SlackLoop,
     Structure,
 )
 
@@ -187,7 +188,21 @@ class CableSegmentSerializer(NetBoxModelSerializer):
             'sequence',
             'comments', 'tags', 'created', 'last_updated',
         ]
-        brief_fields = ('id', 'url', 'display', 'cable', 'pathway')
+        brief_fields = ('id', 'url', 'display', 'cable', 'pathway', 'sequence')
+
+
+class SlackLoopSerializer(NetBoxModelSerializer):
+    url = drf_serializers.HyperlinkedIdentityField(
+        view_name='plugins-api:netbox_pathways-api:slackloop-detail',
+    )
+
+    class Meta:
+        model = SlackLoop
+        fields = [
+            'id', 'url', 'display', 'cable', 'structure', 'pathway',
+            'length', 'comments', 'tags', 'created', 'last_updated',
+        ]
+        brief_fields = ('id', 'url', 'display', 'cable', 'structure', 'length')
 
 
 class SiteGeometrySerializer(NetBoxModelSerializer):

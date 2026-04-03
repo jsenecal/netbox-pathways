@@ -24,6 +24,7 @@ router.register('innerducts', views.InnerductViewSet)
 router.register('junctions', views.ConduitJunctionViewSet)
 router.register('pathway-locations', views.PathwayLocationViewSet)
 router.register('cable-segments', views.CableSegmentViewSet)
+router.register('slack-loops', views.SlackLoopViewSet)
 router.register('site-geometries', views.SiteGeometryViewSet)
 router.register('circuit-geometries', views.CircuitGeometryViewSet)
 
