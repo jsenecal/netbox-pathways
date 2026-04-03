@@ -40,7 +40,6 @@ let _serverSearchCallback: ((query: string) => void) | null = null;
 let _lastServerQuery = '';
 let _pendingSelect: { url: string; featureType: string } | null = null;
 let _isKiosk = false;
-const SIDEBAR_WIDTH = 340;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -1139,21 +1138,13 @@ function _updateSidebarCollapsed(): void {
 function _kioskSidebarOpen(): void {
     const sidebar = document.getElementById('pw-sidebar');
     if (!sidebar) return;
-    const wasOpen = sidebar.classList.contains('pw-sidebar-open');
     sidebar.classList.add('pw-sidebar-open');
-    if (!wasOpen && _map) {
-        _map.panBy([SIDEBAR_WIDTH / 2, 0]);
-    }
 }
 
 function _kioskSidebarClose(): void {
     const sidebar = document.getElementById('pw-sidebar');
     if (!sidebar) return;
-    const wasOpen = sidebar.classList.contains('pw-sidebar-open');
     sidebar.classList.remove('pw-sidebar-open');
-    if (wasOpen && _map) {
-        _map.panBy([-SIDEBAR_WIDTH / 2, 0]);
-    }
 }
 
 function _isCollapsed(): boolean {
@@ -1202,7 +1193,7 @@ function setFeatures(features: FeatureEntry[]): void {
 
     _buildTypeFilters();
     _applyFilters();
-    showList();
+    if (!_isKiosk) showList();
 
     // Resolve pending selection from server search result click
     if (_pendingSelect && features.length > 0) {
