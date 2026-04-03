@@ -467,19 +467,21 @@
 <script src="{% static 'netbox_pathways/dist/pathways-map.min.js' %}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        var isKiosk = !!document.querySelector('.pw-kiosk');
         function sizeMap() {
             var wrapper = document.querySelector('.pathways-map-wrapper');
             var el = document.getElementById('pathways-map');
             if (!wrapper || !el) return;
+            var gap = isKiosk ? 0 : 8;
             // Fill from wrapper top to bottom of viewport
             var wrapRect = wrapper.getBoundingClientRect();
-            var wrapH = Math.max(400, window.innerHeight - wrapRect.top - 8);
+            var wrapH = Math.max(400, window.innerHeight - wrapRect.top - gap);
             wrapper.style.height = wrapH + 'px';
             // Map flex container fills card-body; set its height explicitly
             var flexWrap = el.parentElement;
             if (flexWrap) {
                 var flexRect = flexWrap.getBoundingClientRect();
-                var flexH = Math.max(300, window.innerHeight - flexRect.top - 8);
+                var flexH = Math.max(300, window.innerHeight - flexRect.top - gap);
                 flexWrap.style.height = flexH + 'px';
                 el.style.height = flexH + 'px';
             }
