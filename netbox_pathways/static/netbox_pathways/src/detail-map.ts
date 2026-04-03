@@ -408,15 +408,6 @@
             layers: [firstLayer],
         });
 
-        // Satellite-active toggle for dark mode CSS
-        map.on('baselayerchange', function (e: L.LayersControlEvent) {
-            if (e.name === 'Satellite') {
-                container.classList.add('satellite-active');
-            } else {
-                container.classList.remove('satellite-active');
-            }
-        });
-
         // Build overlay layers
         const overlayLayers: Record<string, L.LayerGroup> = {};
         const bounds: L.LatLngBounds = L.latLngBounds([]);

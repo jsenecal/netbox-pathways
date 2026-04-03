@@ -35,23 +35,8 @@
     --pw-map-progress-bg: #2c3034;
 }
 
-/* --- Dark mode: invert tile layer --------------------------------- */
-
-[data-bs-theme="dark"] .leaflet-tile-pane {
-    filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
-}
-
-/* Skip tile inversion on satellite imagery */
-[data-bs-theme="dark"] .satellite-active .leaflet-tile-pane {
-    filter: none;
-}
-
-/* Don't invert markers/overlays drawn on the map */
-[data-bs-theme="dark"] .leaflet-marker-pane,
-[data-bs-theme="dark"] .leaflet-shadow-pane,
-[data-bs-theme="dark"] .leaflet-overlay-pane {
-    filter: none;
-}
+/* --- Dark mode tile handling -------------------------------------- */
+/* No CSS invert filter — Mapbox provides native dark/light styles.   */
 
 /* --- Leaflet controls --------------------------------------------- */
 
@@ -157,25 +142,48 @@
     color: #fff;
 }
 
+/* Server-side clusters */
 .pw-cluster-small {
-    background: rgba(181, 226, 140, 0.6);
+    background: rgba(23, 162, 184, 0.3);
 }
 .pw-cluster-small .pw-cluster-inner {
-    background: rgba(110, 204, 57, 0.85);
+    background: rgba(23, 162, 184, 0.85);
 }
 
 .pw-cluster-medium {
-    background: rgba(241, 211, 87, 0.6);
+    background: rgba(0, 133, 125, 0.3);
 }
 .pw-cluster-medium .pw-cluster-inner {
-    background: rgba(240, 194, 12, 0.85);
+    background: rgba(0, 133, 125, 0.85);
 }
 
 .pw-cluster-large {
-    background: rgba(253, 156, 115, 0.6);
+    background: rgba(0, 100, 100, 0.3);
 }
 .pw-cluster-large .pw-cluster-inner {
-    background: rgba(241, 128, 23, 0.85);
+    background: rgba(0, 100, 100, 0.85);
+}
+
+/* Client-side clusters (Leaflet.markercluster) */
+.marker-cluster-small {
+    background: rgba(23, 162, 184, 0.3);
+}
+.marker-cluster-small div {
+    background: rgba(23, 162, 184, 0.85);
+}
+
+.marker-cluster-medium {
+    background: rgba(0, 133, 125, 0.3);
+}
+.marker-cluster-medium div {
+    background: rgba(0, 133, 125, 0.85);
+}
+
+.marker-cluster-large {
+    background: rgba(0, 100, 100, 0.3);
+}
+.marker-cluster-large div {
+    background: rgba(0, 100, 100, 0.85);
 }
 
 /* --- Reset home control ------------------------------------------- */

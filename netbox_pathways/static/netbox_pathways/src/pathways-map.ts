@@ -526,15 +526,6 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         map.setView(config.center || [0, 0], config.zoom || 2);
     }
 
-    // Satellite-active toggle
-    map.on('baselayerchange', function (e: L.LayersControlEvent) {
-        if (e.name === 'Satellite') {
-            container?.classList.add('satellite-active');
-        } else {
-            container?.classList.remove('satellite-active');
-        }
-    });
-
     // Overlay layers
     const overlayLayers: Record<string, L.Layer> = {};
 
