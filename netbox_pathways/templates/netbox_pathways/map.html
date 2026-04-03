@@ -364,8 +364,36 @@
     .pw-section-body.collapsed {
         display: none;
     }
+    /* --- Kiosk mode: full-viewport, no chrome --- */
+    .pw-kiosk {
+        position: fixed !important;
+        inset: 0;
+        z-index: 1050;
+        height: 100vh !important;
+        background: var(--tblr-body-bg, #fff);
+    }
+    .pw-kiosk .card {
+        border: none;
+        border-radius: 0;
+    }
+    .pw-kiosk .card-header {
+        display: none !important;
+    }
+    .pw-kiosk .pw-sidebar {
+        position: absolute;
+        top: 0;
+        right: 0;
+        height: 100%;
+        z-index: 1100;
+        width: 340px;
+        display: none;
+        box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
+    }
+    .pw-kiosk .pw-sidebar.pw-sidebar-open {
+        display: flex;
+    }
 </style>
-<div class="pathways-map-wrapper">
+<div class="pathways-map-wrapper{% if kiosk %} pw-kiosk{% endif %}">
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h3 class="card-title mb-0">Infrastructure Map</h3>
@@ -445,11 +473,20 @@
                 window.PathwaysMap.map.invalidateSize();
             }
         }
+        if (document.querySelector('.pw-kiosk')) {
+            var nav = document.querySelector('.navbar');
+            var crumbs = document.querySelector('.container-fluid > .breadcrumb');
+            if (nav) nav.style.display = 'none';
+            if (crumbs) crumbs.parentElement.style.display = 'none';
+            var content = document.getElementById('content');
+            if (content) { content.style.padding = '0'; content.style.margin = '0'; content.style.maxWidth = '100%'; }
+        }
         sizeMap();
         initializePathwaysMap('pathways-map', {
             center: [{{ map_center_lat }}, {{ map_center_lon }}],
             zoom: {{ map_zoom }},
-            bounds: {{ map_bounds|default:"null" }}
+            bounds: {{ map_bounds|default:"null" }},
+            kiosk: {{ kiosk|yesno:"true,false" }}
         });
         // Re-size after layout settles and on window resize
         setTimeout(sizeMap, 200);
