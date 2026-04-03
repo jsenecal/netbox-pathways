@@ -483,7 +483,9 @@
         }
         if (document.querySelector('.pw-kiosk')) {
             document.documentElement.style.overflow = 'hidden';
+            document.documentElement.style.scrollbarGutter = 'auto';
             document.body.style.overflow = 'hidden';
+            document.body.style.scrollbarGutter = 'auto';
             var nav = document.querySelector('.navbar');
             var crumbs = document.querySelector('.container-fluid > .breadcrumb');
             if (nav) nav.style.display = 'none';
