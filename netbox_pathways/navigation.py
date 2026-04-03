@@ -118,6 +118,8 @@ menu = PluginMenu(
                     ),
                 ),
             ),
+        )),
+        ('Cable Routing', (
             PluginMenuItem(
                 link='plugins:netbox_pathways:cablesegment_list',
                 link_text='Cable Segments',
@@ -131,6 +133,25 @@ menu = PluginMenu(
                         permissions=['netbox_pathways.add_cablesegment'],
                     ),
                 ),
+            ),
+            PluginMenuItem(
+                link='plugins:netbox_pathways:slackloop_list',
+                link_text='Slack Loops',
+                permissions=['netbox_pathways.view_slackloop'],
+                buttons=(
+                    PluginMenuButton(
+                        link='plugins:netbox_pathways:slackloop_add',
+                        title='Add',
+                        icon_class='mdi mdi-plus-thick',
+                        color=ButtonColorChoices.GREEN,
+                        permissions=['netbox_pathways.add_slackloop'],
+                    ),
+                ),
+            ),
+            PluginMenuItem(
+                link='plugins:netbox_pathways:pullsheet_list',
+                link_text='Pull Sheets',
+                permissions=['netbox_pathways.view_cablesegment'],
             ),
         )),
         ('GIS', (
@@ -174,15 +195,10 @@ menu = PluginMenu(
                 link_text='Route Finder',
                 permissions=['netbox_pathways.view_pathway'],
             ),
-PluginMenuItem(
+            PluginMenuItem(
                 link='plugins:netbox_pathways:neighbors',
                 link_text='Neighbors',
                 permissions=['netbox_pathways.view_structure'],
-            ),
-            PluginMenuItem(
-                link='plugins:netbox_pathways:pullsheet_list',
-                link_text='Pull Sheets',
-                permissions=['netbox_pathways.view_cablesegment'],
             ),
         )),
     ),
