@@ -393,6 +393,17 @@
     .pw-kiosk .pw-sidebar.pw-sidebar-open {
         display: flex;
     }
+    .pw-kiosk-close-btn {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        z-index: 1;
+        color: var(--tblr-muted-color, #667382);
+        line-height: 1;
+    }
+    .pw-kiosk-close-btn:hover {
+        color: var(--tblr-body-color, #212529);
+    }
 </style>
 <div class="pathways-map-wrapper{% if kiosk %} pw-kiosk{% endif %}">
     <div class="card">
@@ -413,6 +424,12 @@
                     </div>
                 </div>
                 <div id="pw-sidebar" class="pw-sidebar">
+                    <!-- Kiosk close button -->
+                    {% if kiosk %}
+                    <button id="pw-kiosk-close" type="button" class="btn btn-sm btn-link p-1 text-decoration-none pw-kiosk-close-btn" title="Close panel (Esc)">
+                        <i class="mdi mdi-close" style="font-size:1.2em;"></i>
+                    </button>
+                    {% endif %}
                     <!-- Layer Toggles -->
                     <div id="pw-layer-toggles" class="pw-layer-toggles"></div>
                     <!-- List Panel -->
@@ -475,13 +492,16 @@
             }
         }
         if (document.querySelector('.pw-kiosk')) {
+            document.documentElement.style.overflow = 'hidden';
             document.body.style.overflow = 'hidden';
             var nav = document.querySelector('.navbar');
             var crumbs = document.querySelector('.container-fluid > .breadcrumb');
             if (nav) nav.style.display = 'none';
             if (crumbs) crumbs.parentElement.style.display = 'none';
             var content = document.getElementById('content');
-            if (content) { content.style.padding = '0'; content.style.margin = '0'; content.style.maxWidth = '100%'; }
+            if (content) { content.style.padding = '0'; content.style.margin = '0'; content.style.maxWidth = '100%'; content.style.overflow = 'hidden'; }
+            var page = document.querySelector('.page-wrapper');
+            if (page) page.style.overflow = 'hidden';
         }
         sizeMap();
         initializePathwaysMap('pathways-map', {

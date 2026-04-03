@@ -1100,6 +1100,14 @@ function init(map: L.Map, kiosk?: boolean): void {
     });
 
     if (_isKiosk) {
+        const kioskCloseBtn = document.getElementById('pw-kiosk-close');
+        if (kioskCloseBtn) {
+            kioskCloseBtn.addEventListener('click', function () {
+                _kioskSidebarClose();
+                const detailPanel = document.getElementById('pw-panel-detail');
+                if (detailPanel) detailPanel.style.display = 'none';
+            });
+        }
         document.addEventListener('keydown', function (e: KeyboardEvent) {
             if (e.key === 'Escape') {
                 _kioskSidebarClose();
