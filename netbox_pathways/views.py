@@ -794,7 +794,11 @@ class PullSheetDetailView(LoginRequiredMixin, View):
     """Renders a pull sheet for a specific cable."""
 
     def get(self, request, cable_pk):
+        from .routing import validate_cable_route
+
         cable = get_object_or_404(Cable, pk=cable_pk)
+        route = validate_cable_route(cable.pk)
+
         segments = (
             models.CableSegment.objects
             .filter(cable=cable)
@@ -805,18 +809,27 @@ class PullSheetDetailView(LoginRequiredMixin, View):
                 'pathway__start_location',
                 'pathway__end_location',
             )
-            .order_by('pk')
+            .order_by('sequence')
         )
 
         totals = segments.aggregate(
             total_pathway_length=Sum('pathway__length'),
         )
 
+        # Slack from SlackLoop model
+        slack_loops = models.SlackLoop.objects.filter(
+            cable=cable,
+        ).select_related('structure', 'pathway')
+        total_slack = slack_loops.aggregate(total=Sum('length'))['total'] or 0
+
         return render(request, 'netbox_pathways/pullsheet_detail.html', {
             'cable': cable,
             'segments': segments,
             'segment_count': segments.count(),
             'total_pathway_length': totals['total_pathway_length'] or 0,
+            'route': route,
+            'slack_loops': slack_loops,
+            'total_slack': total_slack,
         })
 
 

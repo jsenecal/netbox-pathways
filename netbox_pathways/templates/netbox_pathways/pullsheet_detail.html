@@ -40,6 +40,14 @@
     </div>
 </div>
 
+{% if not route.valid %}
+<div class="alert alert-warning d-print-none">
+    <i class="mdi mdi-alert-outline"></i>
+    <strong>Incomplete Route:</strong> This cable's route has {{ route.gaps|length }} gap{{ route.gaps|length|pluralize }}.
+    The pull sheet may not be accurate.
+</div>
+{% endif %}
+
 <div class="card mb-3">
     <div class="card-header">
         <h4 class="card-title mb-0">Route — {{ segment_count }} Segment{{ segment_count|pluralize }}</h4>
@@ -109,11 +117,48 @@
     {% if segments %}
     <div class="card-footer">
         <div class="row">
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <strong>Total Pathway Length:</strong> {{ total_pathway_length|floatformat:1 }} m
+            </div>
+            <div class="col-md-4">
+                <strong>Total Slack:</strong> {{ total_slack|floatformat:1 }} m
+            </div>
+            <div class="col-md-4">
+                <strong>Estimated Pull Length:</strong> {{ total_pathway_length|floatformat:1 }} m + {{ total_slack|floatformat:1 }} m slack
             </div>
         </div>
     </div>
     {% endif %}
 </div>
+
+{% if slack_loops %}
+<div class="card mb-3">
+    <div class="card-header">
+        <h4 class="card-title mb-0">Slack Loops</h4>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Structure</th>
+                    <th>Pathway</th>
+                    <th>Length</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sl in slack_loops %}
+                <tr>
+                    <td><a href="{{ sl.structure.get_absolute_url }}">{{ sl.structure.name }}</a></td>
+                    <td>{% if sl.pathway %}{{ sl.pathway.name }}{% else %}—{% endif %}</td>
+                    <td>{{ sl.length }} m</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer">
+        <strong>Total Slack:</strong> {{ total_slack|floatformat:1 }} m
+    </div>
+</div>
+{% endif %}
 {% endblock %}
