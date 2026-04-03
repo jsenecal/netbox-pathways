@@ -598,9 +598,9 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         position: 'topright', collapsed: true,
     }).addTo(map);
 
-    // Legend + stats
-    _createLegend(map);
+    // Stats + legend (stats first so legend stacks above it)
     _createStatsControl(map);
+    _createLegend(map);
 
     // Kiosk toggle control
     _createKioskControl(map, !!config.kiosk).addTo(map);
