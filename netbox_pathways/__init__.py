@@ -46,10 +46,20 @@ class NetBoxPathwaysConfig(PluginConfig):
         # django-leaflet expects TILES as list of (label, url, attrs) tuples;
         # attrs dict is merged into L.tileLayer options — maxNativeZoom tells
         # Leaflet to overzoom (upscale) tiles beyond the provider's native max.
-        tiles = [('Background', tiles_url, {
-            'maxNativeZoom': max_native_zoom,
-            'attribution': attribution,
-        })]
+        # Two base layers match the map view: Street (OSM) + Satellite (Esri).
+        tiles = [
+            ('Street', tiles_url, {
+                'maxNativeZoom': max_native_zoom,
+                'attribution': attribution,
+            }),
+            ('Satellite',
+             'https://server.arcgisonline.com/ArcGIS/rest/services/'
+             'World_Imagery/MapServer/tile/{z}/{y}/{x}',
+             {
+                 'maxNativeZoom': 19,
+                 'attribution': 'Esri World Imagery',
+             }),
+        ]
 
         # Set on Django settings for anything that reads it later
         leaflet_config = getattr(settings, 'LEAFLET_CONFIG', {})
