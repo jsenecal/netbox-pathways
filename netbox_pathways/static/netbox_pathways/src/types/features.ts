@@ -26,6 +26,14 @@ export interface FeatureEntry {
   latlng: L.LatLng;
 }
 
+export interface ServerSearchResult {
+  name: string;
+  featureType: FeatureType;
+  typeKey: string;
+  latlng: L.LatLng;
+  url?: string;
+}
+
 export type DetailFieldDef = [string, string] | [string, string, string];
 
 export interface ResolvedValue {

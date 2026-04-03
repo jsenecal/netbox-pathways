@@ -112,6 +112,10 @@ class BboxFilterMixin:
     """
     Filter queryset by bounding box via ``?bbox=west,south,east,north`` (WGS84).
     Annotates a ``geo_4326`` field with the geometry transformed to WGS84.
+
+    The result cap (MAX_GEO_RESULTS) is applied in ``list()`` rather than
+    ``get_queryset()`` so that DRF's filter backends (e.g. ``?q=``) can
+    still filter the queryset before slicing.
     """
     bbox_geo_field = 'location'  # native geometry column name
 
@@ -135,7 +139,13 @@ class BboxFilterMixin:
 
     def get_queryset(self):
         qs = super().get_queryset()
-        return self._apply_bbox(qs)[:MAX_GEO_RESULTS]
+        return self._apply_bbox(qs)
+
+    def list(self, request, *args, **kwargs):
+        # Apply the result cap after all filtering (bbox + filterset)
+        queryset = self.filter_queryset(self.get_queryset())[:MAX_GEO_RESULTS]
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
 
 # --- GeoJSON ViewSets (read-only, unpaginated) ---

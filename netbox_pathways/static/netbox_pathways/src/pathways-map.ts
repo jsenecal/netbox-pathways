@@ -12,7 +12,7 @@
 
 import { Sidebar } from './sidebar';
 import { Popover } from './popover';
-import type { FeatureEntry, FeatureType, GeoJSONProperties, PathwayStyle } from './types/features';
+import type { FeatureEntry, FeatureType, GeoJSONProperties, PathwayStyle, ServerSearchResult } from './types/features';
 import {
     initExternalLayers,
     loadExternalLayers,
@@ -189,6 +189,74 @@ async function _fetchGeoJSON(
     } catch (e) {
         _inflightControllers[endpoint] = undefined!;
         // Silently ignore AbortError and network errors
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Server-side search (fallback when client-side sidebar filter finds nothing)
+// ---------------------------------------------------------------------------
+
+let _searchController: AbortController | null = null;
+
+async function _serverSearch(query: string): Promise<void> {
+    if (_searchController) _searchController.abort();
+    const controller = new AbortController();
+    _searchController = controller;
+
+    const headers: Record<string, string> = { 'Accept': 'application/json' };
+    const csrfToken = _getCookie('csrftoken');
+    if (csrfToken) headers['X-CSRFToken'] = csrfToken;
+
+    // Search all layer endpoints in parallel, without bbox
+    const endpoints: [string, FeatureType, string][] = [
+        ['structures/', 'structure', 'structure_type'],
+        ['conduits/', 'conduit', 'pathway_type'],
+        ['aerial-spans/', 'aerial', 'pathway_type'],
+        ['direct-buried/', 'direct_buried', 'pathway_type'],
+        ['circuits/', 'circuit', 'pathway_type'],
+    ];
+
+    const results: ServerSearchResult[] = [];
+
+    const fetches = endpoints.map(function (cfg) {
+        const [endpoint, featureType, typeField] = cfg;
+        const url = API_BASE + endpoint + '?format=json&q=' + encodeURIComponent(query);
+        return fetch(url, { headers, signal: controller.signal })
+            .then(function (resp) { return resp.ok ? resp.json() : null; })
+            .then(function (data: GeoJSON.FeatureCollection | null) {
+                if (!data || !data.features) return;
+                data.features.forEach(function (f: GeoJSON.Feature) {
+                    if (!f.geometry) return;
+                    const props = f.properties || {};
+                    let latlng: L.LatLng;
+                    if (f.geometry.type === 'Point') {
+                        const coords = (f.geometry as GeoJSON.Point).coordinates;
+                        latlng = L.latLng(coords[1], coords[0]);
+                    } else if (f.geometry.type === 'LineString') {
+                        const coords = (f.geometry as GeoJSON.LineString).coordinates;
+                        const mid = coords[Math.floor(coords.length / 2)];
+                        latlng = L.latLng(mid[1], mid[0]);
+                    } else {
+                        return;
+                    }
+                    results.push({
+                        name: props.name || props.cid || 'Unnamed',
+                        featureType: featureType,
+                        typeKey: (props[typeField] as string) || featureType,
+                        latlng: latlng,
+                        url: props.url as string | undefined,
+                    });
+                });
+            })
+            .catch(function () { /* ignore aborted / failed */ });
+    });
+
+    try {
+        await Promise.all(fetches);
+        _searchController = null;
+        Sidebar.setServerResults(results);
+    } catch {
+        _searchController = null;
     }
 }
 
@@ -660,7 +728,6 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
             if (pathwayCountEl) pathwayCountEl.textContent = '-';
             if (totalLengthEl) totalLengthEl.textContent = '-';
             Sidebar.setFeatures([]);
-            Sidebar.hide();
             return;
         }
 
@@ -869,6 +936,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
     // Initialize sidebar and popover
     Sidebar.init(map);
+    Sidebar.onServerSearch(_serverSearch);
     Popover.init(map);
 
     // Initial load

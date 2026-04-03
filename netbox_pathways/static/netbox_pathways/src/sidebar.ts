@@ -5,7 +5,7 @@
  * REST API data, inline name editing, and map feature highlighting.
  */
 
-import type { FeatureEntry, FeatureType, DetailFieldDef, ResolvedValue } from './types/features';
+import type { FeatureEntry, FeatureType, DetailFieldDef, ResolvedValue, ServerSearchResult } from './types/features';
 import { NATIVE_TYPES } from './types/features';
 import { getLayerConfig } from './external-layers';
 
@@ -36,6 +36,9 @@ const _activeTypes: Record<string, boolean> = {};
 const _detailCache: Record<string, Record<string, unknown>> = {};
 let _highlightedLayer: (L.Marker & { _origIcon?: L.Icon | L.DivIcon }) | (L.Polyline & { _origStyle?: L.PathOptions }) | null = null;
 let _highlightOutline: L.Polyline | null = null;
+let _serverSearchCallback: ((query: string) => void) | null = null;
+let _lastServerQuery = '';
+let _pendingSelect: { url: string; featureType: string } | null = null;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -270,6 +273,18 @@ function _applyFilters(): void {
     });
 
     _renderList();
+
+    // If no client-side results and there's a query, fall back to server search
+    if (_filtered.length === 0 && query.length >= 2 && _serverSearchCallback) {
+        if (query !== _lastServerQuery) {
+            _lastServerQuery = query;
+            _showSearchingIndicator();
+            _serverSearchCallback(query);
+        }
+    } else {
+        _lastServerQuery = '';
+        _clearServerResults();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -898,7 +913,7 @@ function _renderDetail(entry: FeatureEntry): void {
 
     body.appendChild(badgeRow);
 
-    // View in NetBox button
+    // View Details button
     if (p.url) {
         const link = document.createElement('a');
         link.href = p.url;
@@ -906,7 +921,7 @@ function _renderDetail(entry: FeatureEntry): void {
         const icon = document.createElement('i');
         icon.className = 'mdi mdi-open-in-new';
         link.appendChild(icon);
-        link.appendChild(document.createTextNode(' View in NetBox'));
+        link.appendChild(document.createTextNode(' View Details '));
         body.appendChild(link);
     }
 
@@ -917,16 +932,130 @@ function _renderDetail(entry: FeatureEntry): void {
 }
 
 // ---------------------------------------------------------------------------
+// Server-side search fallback
+// ---------------------------------------------------------------------------
+
+function _showSearchingIndicator(): void {
+    const listEl = document.getElementById('pw-feature-list');
+    if (!listEl) return;
+    const indicator = document.createElement('div');
+    indicator.className = 'pw-server-search-status';
+    indicator.id = 'pw-server-searching';
+    const icon = document.createElement('i');
+    icon.className = 'mdi mdi-magnify mdi-spin';
+    indicator.appendChild(icon);
+    indicator.appendChild(document.createTextNode(' Searching all features\u2026'));
+    listEl.appendChild(indicator);
+}
+
+function _clearServerResults(): void {
+    const el = document.getElementById('pw-server-searching');
+    if (el) el.remove();
+    const hdr = document.getElementById('pw-server-results-header');
+    if (hdr) hdr.remove();
+    const items = document.querySelectorAll('.pw-server-result');
+    for (let i = 0; i < items.length; i++) items[i].remove();
+}
+
+function setServerResults(results: ServerSearchResult[]): void {
+    // Remove the "searching" indicator
+    const searching = document.getElementById('pw-server-searching');
+    if (searching) searching.remove();
+
+    const listEl = document.getElementById('pw-feature-list');
+    if (!listEl) return;
+
+    // Remove any previous server results
+    const oldHdr = document.getElementById('pw-server-results-header');
+    if (oldHdr) oldHdr.remove();
+    const oldItems = document.querySelectorAll('.pw-server-result');
+    for (let i = 0; i < oldItems.length; i++) oldItems[i].remove();
+
+    if (results.length === 0) {
+        const noResults = document.createElement('div');
+        noResults.className = 'pw-server-search-status pw-server-result';
+        noResults.textContent = 'No matching features found.';
+        listEl.appendChild(noResults);
+        return;
+    }
+
+    const header = document.createElement('div');
+    header.id = 'pw-server-results-header';
+    header.className = 'pw-server-search-status';
+    const hdrIcon = document.createElement('i');
+    hdrIcon.className = 'mdi mdi-earth';
+    header.appendChild(hdrIcon);
+    header.appendChild(document.createTextNode(
+        ' ' + results.length + ' result' + (results.length !== 1 ? 's' : '') + ' outside current view'
+    ));
+    listEl.appendChild(header);
+
+    results.forEach(function (result: ServerSearchResult) {
+        const item = document.createElement('div');
+        item.className = 'pw-list-item pw-server-result';
+
+        const dot = document.createElement('span');
+        dot.className = 'pw-list-dot';
+        const color = result.featureType === 'structure'
+            ? (STRUCTURE_COLORS[result.typeKey] || '#616161')
+            : (PATHWAY_COLORS[result.typeKey] || '#616161');
+        dot.style.background = color;
+        item.appendChild(dot);
+
+        const label = document.createElement('span');
+        label.className = 'pw-list-label';
+        label.textContent = result.name || 'Unnamed';
+        label.title = result.name || 'Unnamed';
+        item.appendChild(label);
+
+        const typeBadge = document.createElement('span');
+        typeBadge.className = 'pw-list-type';
+        typeBadge.textContent = _titleCase(result.typeKey);
+        item.appendChild(typeBadge);
+
+        const goIcon = document.createElement('i');
+        goIcon.className = 'mdi mdi-crosshairs-gps';
+        goIcon.style.cssText = 'color:var(--tblr-muted-color,#667382);flex-shrink:0;';
+        goIcon.title = 'Go to location';
+        item.appendChild(goIcon);
+
+        item.addEventListener('click', function () {
+            if (_map) {
+                if (result.url) {
+                    _pendingSelect = { url: result.url, featureType: result.featureType };
+                }
+                _map.flyTo(result.latlng, 18, { duration: 0.8 });
+            }
+        });
+
+        listEl.appendChild(item);
+    });
+}
+
+function onServerSearch(cb: (query: string) => void): void {
+    _serverSearchCallback = cb;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 function init(map: L.Map): void {
     _map = map;
 
-    const closeBtn = document.getElementById('pw-sidebar-close');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', function () {
-            hide();
+    const toggleBtn = document.getElementById('pw-sidebar-toggle');
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', function () {
+            const detailPanel = document.getElementById('pw-panel-detail');
+            const detailVisible = detailPanel && detailPanel.style.display !== 'none';
+            if (detailVisible) {
+                // Detail is open — go back to list
+                showList();
+            } else if (_isCollapsed()) {
+                show();
+            } else {
+                hide();
+            }
         });
     }
 
@@ -968,18 +1097,38 @@ function init(map: L.Map): void {
     });
 }
 
+function _setListBodyVisible(visible: boolean): void {
+    const body = document.getElementById('pw-panel-list-body');
+    const chevron = document.getElementById('pw-sidebar-chevron');
+    if (body) body.classList.toggle('collapsed', !visible);
+    if (chevron) chevron.classList.toggle('collapsed', !visible);
+    _updateSidebarCollapsed();
+}
+
+function _updateSidebarCollapsed(): void {
+    const sidebar = document.getElementById('pw-sidebar');
+    if (!sidebar) return;
+    const body = document.getElementById('pw-panel-list-body');
+    const detail = document.getElementById('pw-panel-detail');
+    const bodyHidden = body ? body.classList.contains('collapsed') : true;
+    const detailHidden = !detail || detail.style.display === 'none';
+    sidebar.classList.toggle('collapsed', bodyHidden && detailHidden);
+}
+
+function _isCollapsed(): boolean {
+    const body = document.getElementById('pw-panel-list-body');
+    return body ? body.classList.contains('collapsed') : false;
+}
+
 function show(): void {
-    const listPanel = document.getElementById('pw-panel-list');
-    if (listPanel) listPanel.style.display = '';
+    _setListBodyVisible(true);
 }
 
 function hide(): void {
-    _unhighlightMapFeature();
-    _selected = null;
-    const listPanel = document.getElementById('pw-panel-list');
+    _setListBodyVisible(false);
     const detailPanel = document.getElementById('pw-panel-detail');
-    if (listPanel) listPanel.style.display = 'none';
     if (detailPanel) detailPanel.style.display = 'none';
+    _updateSidebarCollapsed();
 }
 
 function setFeatures(features: FeatureEntry[]): void {
@@ -1004,7 +1153,6 @@ function setFeatures(features: FeatureEntry[]): void {
             _selected = found;
             _buildTypeFilters();
             _applyFilters();
-            show();
             return;
         }
         _selected = null;
@@ -1012,26 +1160,39 @@ function setFeatures(features: FeatureEntry[]): void {
 
     _buildTypeFilters();
     _applyFilters();
-    if (features.length > 0) {
-        show();
-        showList();
-    } else {
-        hide();
+    showList();
+
+    // Resolve pending selection from server search result click
+    if (_pendingSelect && features.length > 0) {
+        const pending = _pendingSelect;
+        for (let i = 0; i < features.length; i++) {
+            if (features[i].props.url === pending.url) {
+                _pendingSelect = null;
+                // Clear the search input so client filter doesn't hide the match
+                const searchInput = document.getElementById('pw-search') as HTMLInputElement | null;
+                if (searchInput) searchInput.value = '';
+                _lastServerQuery = '';
+                _clearServerResults();
+                _applyFilters();
+                selectFeature(features[i]);
+                return;
+            }
+        }
     }
 }
 
 function showList(): void {
-    const listPanel = document.getElementById('pw-panel-list');
+    _setListBodyVisible(true);
     const detailPanel = document.getElementById('pw-panel-detail');
-    if (listPanel) listPanel.style.display = '';
     if (detailPanel) detailPanel.style.display = 'none';
+    _updateSidebarCollapsed();
 }
 
 function showDetail(entry: FeatureEntry): void {
-    const listPanel = document.getElementById('pw-panel-list');
+    _setListBodyVisible(false);
     const detailPanel = document.getElementById('pw-panel-detail');
-    if (listPanel) listPanel.style.display = 'none';
     if (detailPanel) detailPanel.style.display = '';
+    _updateSidebarCollapsed();
 
     // Set panel heading (e.g. "Structure Details")
     const heading = document.getElementById('pw-detail-heading');
@@ -1108,4 +1269,6 @@ export const Sidebar = {
     selectFeature,
     onFeatureCreated,
     setDeps,
+    onServerSearch,
+    setServerResults,
 };

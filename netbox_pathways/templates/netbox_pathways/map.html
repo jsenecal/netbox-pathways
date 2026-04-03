@@ -58,11 +58,33 @@
         color: var(--tblr-body-color, inherit);
         border-left: 1px solid var(--tblr-border-color, #dee2e6);
     }
+    .pw-sidebar.collapsed {
+        width: auto;
+    }
     .pw-panel {
         display: flex;
         flex-direction: column;
         flex: 1;
         min-height: 0;
+    }
+    #pw-panel-list-body {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+    }
+    #pw-panel-list-body.collapsed {
+        display: none;
+    }
+    /* When list body is collapsed, don't let the list panel stretch */
+    #pw-panel-list:has(#pw-panel-list-body.collapsed) {
+        flex: none;
+    }
+    #pw-sidebar-chevron {
+        transition: transform 0.2s ease;
+    }
+    #pw-sidebar-chevron.collapsed {
+        transform: rotate(180deg);
     }
     .pw-sidebar-header {
         display: flex;
@@ -187,6 +209,18 @@
         padding: 16px;
         color: var(--tblr-muted-color, #667382);
         font-size: 0.85em;
+    }
+    .pw-server-search-status {
+        padding: 8px 14px;
+        font-size: 0.8em;
+        color: var(--tblr-muted-color, #667382);
+        border-bottom: 1px solid var(--tblr-border-color-translucent, rgba(0,0,0,0.06));
+    }
+    .pw-server-search-status .mdi {
+        margin-right: 4px;
+    }
+    .pw-server-result {
+        opacity: 0.85;
     }
     /* Layer toggles in sidebar */
     .pw-layer-toggles {
@@ -354,16 +388,18 @@
                     <div id="pw-layer-toggles" class="pw-layer-toggles"></div>
                     <!-- List Panel -->
                     <div id="pw-panel-list" class="pw-panel">
-                        <div class="pw-sidebar-header">
+                        <div class="pw-sidebar-header" id="pw-sidebar-toggle" style="cursor:pointer;">
                             <strong>Features</strong>
                             <span id="pw-list-count" class="pw-count-badge">0</span>
-                            <button id="pw-sidebar-close" type="button" class="btn-close btn-close-sm ms-auto" aria-label="Close"></button>
+                            <i id="pw-sidebar-chevron" class="mdi mdi-chevron-down ms-auto" style="font-size:1.2em;"></i>
                         </div>
-                        <div class="pw-search-bar">
-                            <input id="pw-search" type="text" class="form-control form-control-sm" placeholder="Search features...">
+                        <div id="pw-panel-list-body">
+                            <div class="pw-search-bar">
+                                <input id="pw-search" type="text" class="form-control form-control-sm" placeholder="Search features...">
+                            </div>
+                            <div id="pw-type-filters" class="pw-type-filters"></div>
+                            <div id="pw-feature-list" class="pw-feature-list"></div>
                         </div>
-                        <div id="pw-type-filters" class="pw-type-filters"></div>
-                        <div id="pw-feature-list" class="pw-feature-list"></div>
                     </div>
                     <!-- Detail Panel -->
                     <div id="pw-panel-detail" class="pw-panel" style="display:none;">
