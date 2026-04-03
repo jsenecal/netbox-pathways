@@ -25,6 +25,7 @@ from .models import (
     Pathway,
     PathwayLocation,
     SiteGeometry,
+    SlackLoop,
     Structure,
 )
 
@@ -265,7 +266,31 @@ class CableSegmentFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = CableSegment
-        fields = ['id', 'sequence']
+        fields = ['id']
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(comments__icontains=value))
+
+
+class SlackLoopFilterSet(NetBoxModelFilterSet):
+    cable_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='cable', queryset=Cable.objects.all(),
+        label='Cable (ID)',
+    )
+    structure_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='structure', queryset=Structure.objects.all(),
+        label='Structure (ID)',
+    )
+    pathway_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='pathway', queryset=Pathway.objects.all(),
+        label='Pathway (ID)',
+    )
+
+    class Meta:
+        model = SlackLoop
+        fields = ['id']
 
     def search(self, queryset, name, value):
         if not value.strip():

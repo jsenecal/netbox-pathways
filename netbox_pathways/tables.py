@@ -14,6 +14,7 @@ from .models import (
     Pathway,
     PathwayLocation,
     SiteGeometry,
+    SlackLoop,
     Structure,
 )
 
@@ -202,6 +203,18 @@ class CableSegmentTable(NetBoxTable):
             'sequence', 'actions',
         )
         default_columns = ('cable', 'pathway', 'sequence')
+
+
+class SlackLoopTable(NetBoxTable):
+    cable = tables.Column(linkify=True)
+    structure = tables.Column(linkify=True)
+    pathway = tables.Column(linkify=True)
+    actions = columns.ActionsColumn(actions=('edit', 'delete'))
+
+    class Meta(NetBoxTable.Meta):
+        model = SlackLoop
+        fields = ('pk', 'id', 'cable', 'structure', 'pathway', 'length', 'actions')
+        default_columns = ('cable', 'structure', 'pathway', 'length')
 
 
 class PullSheetCableTable(NetBoxTable):

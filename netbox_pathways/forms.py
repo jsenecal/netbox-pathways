@@ -41,6 +41,7 @@ from .models import (
     Pathway,
     PathwayLocation,
     SiteGeometry,
+    SlackLoop,
     Structure,
 )
 
@@ -447,14 +448,14 @@ class CableSegmentForm(NetBoxModelForm):
     )
 
     fieldsets = (
-        FieldSet('cable', 'pathway', 'sequence', name='Cable Segment'),
+        FieldSet('cable', 'pathway', name='Cable Segment'),
         FieldSet('comments', 'tags', name='Details'),
     )
 
     class Meta:
         model = CableSegment
         fields = [
-            'cable', 'pathway', 'sequence',
+            'cable', 'pathway',
             'comments', 'tags',
         ]
 
@@ -463,8 +464,27 @@ class CableSegmentImportForm(NetBoxModelImportForm):
     class Meta:
         model = CableSegment
         fields = [
-            'cable', 'pathway', 'sequence', 'comments',
+            'cable', 'pathway', 'comments',
         ]
+
+
+# --- Slack Loop ---
+
+class SlackLoopForm(NetBoxModelForm):
+    cable = DynamicModelChoiceField(queryset=Cable.objects.all(), selector=True)
+    structure = DynamicModelChoiceField(queryset=Structure.objects.all(), selector=True)
+    pathway = DynamicModelChoiceField(
+        queryset=Pathway.objects.all(), required=False, selector=True,
+    )
+
+    fieldsets = (
+        FieldSet('cable', 'structure', 'pathway', 'length', name='Slack Loop'),
+        FieldSet('comments', 'tags', name='Details'),
+    )
+
+    class Meta:
+        model = SlackLoop
+        fields = ['cable', 'structure', 'pathway', 'length', 'comments', 'tags']
 
 
 # --- Pathway Location ---
