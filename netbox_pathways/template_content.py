@@ -5,6 +5,7 @@ from netbox.plugins.templates import PluginTemplateExtension
 
 from . import models
 from .geo import linestring_to_coords, point_to_latlon
+from .routing import validate_cable_route
 
 
 def _leaflet_head():
@@ -88,21 +89,12 @@ def _structure_point(structure, color=None):
 
 
 class LeafletHeadExtension(PluginTemplateExtension):
-    """Load Leaflet + django-leaflet assets on pages that show map panels."""
+    """Load Leaflet + detail-map assets globally via {% plugin_head %}.
 
-    models = [
-        'netbox_pathways.structure',
-        'netbox_pathways.pathway',
-        'netbox_pathways.conduit',
-        'netbox_pathways.aerialspan',
-        'netbox_pathways.directburied',
-        'netbox_pathways.innerduct',
-        'netbox_pathways.conduitbank',
-        'netbox_pathways.conduitjunction',
-        'dcim.site',
-        'dcim.location',
-        'dcim.cable',
-    ]
+    NetBox's base template calls {% plugin_head %} without an object, so only
+    extensions with models=None (global) are invoked.  Setting a models list
+    here would silently prevent head() from ever being called.
+    """
 
     def head(self):
         import json
@@ -305,6 +297,140 @@ class CoreModelMapExtension(PluginTemplateExtension):
         return data
 
 
+class CableRouteStatusExtension(PluginTemplateExtension):
+    """Route status panel on Cable detail pages."""
+
+    models = ['dcim.cable']
+
+    def left_page(self):
+        from django.utils.html import format_html, mark_safe
+
+        obj = self.context['object']
+        route = validate_cable_route(obj.pk)
+
+        if route['segment_count'] == 0:
+            return ''
+
+        # Build status badge
+        if route['valid']:
+            badge = '<span class="badge text-bg-green">Complete</span>'
+            pullsheet_link = format_html(
+                ' <a href="{}" class="btn btn-sm btn-outline-secondary ms-2">'
+                '<i class="mdi mdi-file-document-outline"></i> Pull Sheet</a>',
+                f'/plugins/pathways/pull-sheets/{obj.pk}/',
+            )
+        else:
+            gap_count = len(route['gaps'])
+            badge = f'<span class="badge text-bg-yellow">{gap_count} gap{"s" if gap_count != 1 else ""}</span>'
+            pullsheet_link = ''
+
+        # Build gap details
+        gap_html = ''
+        if route['gaps']:
+            gap_rows = []
+            for gap in route['gaps']:
+                gap_rows.append(
+                    f'<tr><td>{gap.get("after_pathway") or "—"}</td>'
+                    f'<td>{gap.get("before_pathway") or "—"}</td>'
+                    f'<td>{gap["detail"]}</td></tr>'
+                )
+            gap_html = (
+                '<table class="table table-sm table-hover mt-2 mb-0">'
+                '<thead><tr><th>After</th><th>Before</th><th>Detail</th></tr></thead>'
+                '<tbody>' + ''.join(gap_rows) + '</tbody></table>'
+            )
+
+        html = format_html(
+            '<div class="card mb-3">'
+            '<div class="card-header"><h5 class="card-title mb-0">Route Status</h5></div>'
+            '<div class="card-body">'
+            '<div class="d-flex align-items-center">'
+            '<span class="me-2">{} segment{}</span> {}{}'
+            '</div>{}'
+            '</div></div>',
+            route['segment_count'],
+            's' if route['segment_count'] != 1 else '',
+            mark_safe(badge),
+            mark_safe(pullsheet_link),
+            mark_safe(gap_html),
+        )
+        return html
+
+
+class CableSlackLoopExtension(PluginTemplateExtension):
+    """Slack loops table on Cable detail pages."""
+
+    models = ['dcim.cable']
+
+    def left_page(self):
+        obj = self.context['object']
+        slack_loops = models.SlackLoop.objects.filter(cable=obj).select_related('structure', 'pathway')
+        if not slack_loops.exists():
+            return ''
+
+        rows = []
+        for sl in slack_loops:
+            pw_name = sl.pathway.name if sl.pathway else '—'
+            rows.append(
+                f'<tr>'
+                f'<td><a href="{sl.structure.get_absolute_url()}">{sl.structure.name}</a></td>'
+                f'<td>{pw_name}</td>'
+                f'<td>{sl.length} m</td>'
+                f'</tr>'
+            )
+
+        total = sum(sl.length for sl in slack_loops)
+
+        from django.utils.html import format_html, mark_safe
+        return format_html(
+            '<div class="card mb-3">'
+            '<div class="card-header"><h5 class="card-title mb-0">Slack Loops</h5></div>'
+            '<div class="card-body p-0">'
+            '<table class="table table-sm table-hover mb-0">'
+            '<thead><tr><th>Structure</th><th>Pathway</th><th>Length</th></tr></thead>'
+            '<tbody>{}</tbody>'
+            '<tfoot><tr><td colspan="2"><strong>Total</strong></td><td><strong>{} m</strong></td></tr></tfoot>'
+            '</table></div></div>',
+            mark_safe(''.join(rows)),
+            total,
+        )
+
+
+class StructureSlackLoopExtension(PluginTemplateExtension):
+    """Slack loops table on Structure detail pages."""
+
+    models = ['netbox_pathways.structure']
+
+    def right_page(self):
+        obj = self.context['object']
+        slack_loops = models.SlackLoop.objects.filter(structure=obj).select_related('cable', 'pathway')
+        if not slack_loops.exists():
+            return ''
+
+        rows = []
+        for sl in slack_loops:
+            pw_name = sl.pathway.name if sl.pathway else '—'
+            rows.append(
+                f'<tr>'
+                f'<td><a href="#">{sl.cable.label}</a></td>'
+                f'<td>{pw_name}</td>'
+                f'<td>{sl.length} m</td>'
+                f'</tr>'
+            )
+
+        from django.utils.html import format_html, mark_safe
+        return format_html(
+            '<div class="card mb-3">'
+            '<div class="card-header"><h5 class="card-title mb-0">Slack Loops</h5></div>'
+            '<div class="card-body p-0">'
+            '<table class="table table-sm table-hover mb-0">'
+            '<thead><tr><th>Cable</th><th>Pathway</th><th>Length</th></tr></thead>'
+            '<tbody>{}</tbody>'
+            '</table></div></div>',
+            mark_safe(''.join(rows)),
+        )
+
+
 class CableRouteMapExtension(PluginTemplateExtension):
     """Map panel on Cable detail pages showing pathway route."""
 
@@ -333,7 +459,7 @@ class CableRouteMapExtension(PluginTemplateExtension):
             if pw and pw.path:
                 data['lines'].append({
                     'coords': linestring_to_coords(pw.path),
-                    'name': f"Seg {seg.sequence}: {pw.name}",
+                    'name': pw.name,
                     'color': segment_colors[i % len(segment_colors)],
                     'url': pw.get_absolute_url(),
                 })
@@ -362,5 +488,8 @@ template_extensions = [
     LeafletHeadExtension,
     PluginModelMapExtension,
     CoreModelMapExtension,
+    CableRouteStatusExtension,
+    CableSlackLoopExtension,
+    StructureSlackLoopExtension,
     CableRouteMapExtension,
 ]
