@@ -487,33 +487,27 @@ function _createLegend(map: L.Map): void {
     new LegendControl().addTo(map);
 }
 
-let _statsEl: HTMLElement | null = null;
-
 function _createStatsControl(map: L.Map): void {
     const StatsControl = L.Control.extend({
         options: { position: 'bottomleft' },
         onAdd: function (): HTMLElement {
             const container = L.DomUtil.create('div', 'pw-stats-overlay');
-            _statsEl = container;
+            const sc = L.DomUtil.create('span', '', container);
+            sc.id = 'structure-count';
+            sc.textContent = '0';
+            container.appendChild(document.createTextNode(' structures \u00b7 '));
+            const pc = L.DomUtil.create('span', '', container);
+            pc.id = 'pathway-count';
+            pc.textContent = '0';
+            container.appendChild(document.createTextNode(' pathways \u00b7 '));
+            const tl = L.DomUtil.create('span', '', container);
+            tl.id = 'total-length';
+            tl.textContent = '0';
+            container.appendChild(document.createTextNode(' km'));
             return container;
         },
     });
     new StatsControl().addTo(map);
-}
-
-function _updateStats(stats: { structures?: number; pathways?: number; lengthKm?: number }): void {
-    if (!_statsEl) return;
-    const parts: string[] = [];
-    if (stats.structures != null && stats.structures >= 0) {
-        parts.push(String(stats.structures) + ' structure' + (stats.structures !== 1 ? 's' : ''));
-    }
-    if (stats.pathways != null && stats.pathways >= 0) {
-        parts.push(String(stats.pathways) + ' pathway' + (stats.pathways !== 1 ? 's' : ''));
-    }
-    if (stats.lengthKm != null && stats.lengthKm > 0) {
-        parts.push(stats.lengthKm.toFixed(2) + ' km');
-    }
-    _statsEl.textContent = parts.join(' \u00b7 ');
 }
 
 // ---------------------------------------------------------------------------
@@ -527,15 +521,15 @@ interface MapInitConfig {
     kiosk?: boolean;
 }
 
-function _createSidebarToggleControl(map: L.Map): L.Control {
+function _createSidebarToggleControl(map: L.Map, isKiosk: boolean): L.Control {
     const SidebarToggle = L.Control.extend({
-        options: { position: 'topleft' as L.ControlPosition },
+        options: { position: 'topright' as L.ControlPosition },
         onAdd: function (): HTMLElement {
-            const container = L.DomUtil.create('div', 'leaflet-control-zoom leaflet-bar');
+            const container = L.DomUtil.create('div', 'leaflet-control-zoom leaflet-bar pw-sidebar-toggle-ctrl');
             const link = L.DomUtil.create('a', '', container) as HTMLAnchorElement;
             link.href = '#';
-            link.title = 'Toggle sidebar';
-            L.DomUtil.create('i', 'mdi mdi-menu', link);
+            link.title = 'Show sidebar';
+            L.DomUtil.create('i', 'mdi mdi-chevron-left', link);
             link.style.display = 'flex';
             link.style.alignItems = 'center';
             link.style.justifyContent = 'center';
@@ -544,14 +538,28 @@ function _createSidebarToggleControl(map: L.Map): L.Control {
             L.DomEvent.disableClickPropagation(container);
             L.DomEvent.on(link, 'click', function (e: Event) {
                 L.DomEvent.preventDefault(e);
+                Sidebar.show();
+            });
+
+            // Watch sidebar visibility to show/hide this button
+            const observer = new MutationObserver(function () {
                 const sidebar = document.getElementById('pw-sidebar');
                 if (!sidebar) return;
-                if (sidebar.classList.contains('pw-sidebar-open') || !sidebar.classList.contains('collapsed')) {
-                    Sidebar.hide();
-                } else {
-                    Sidebar.show();
-                }
+                const sidebarVisible = isKiosk
+                    ? sidebar.classList.contains('pw-sidebar-open')
+                    : !sidebar.classList.contains('collapsed');
+                container.style.display = sidebarVisible ? 'none' : '';
             });
+            const sidebar = document.getElementById('pw-sidebar');
+            if (sidebar) {
+                observer.observe(sidebar, { attributes: true, attributeFilter: ['class'] });
+                // Initial state
+                const sidebarVisible = isKiosk
+                    ? sidebar.classList.contains('pw-sidebar-open')
+                    : !sidebar.classList.contains('collapsed');
+                container.style.display = sidebarVisible ? 'none' : '';
+            }
+
             return container;
         },
     });
@@ -664,7 +672,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
     // Layer control
     const layerControl = L.control.layers(baseLayers, overlayLayers, {
-        position: 'topright', collapsed: true,
+        position: 'bottomright', collapsed: true,
     }).addTo(map);
 
     // Stats + legend (stats first so legend stacks above it)
@@ -673,8 +681,13 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
     // Map controls (topleft, below zoom)
     _createKioskControl(map, !!config.kiosk).addTo(map);
-    _createSidebarToggleControl(map).addTo(map);
+    _createSidebarToggleControl(map, !!config.kiosk).addTo(map);
     _createLocateControl(map).addTo(map);
+
+    // Counters
+    const structureCountEl = document.getElementById('structure-count');
+    const pathwayCountEl = document.getElementById('pathway-count');
+    const totalLengthEl = document.getElementById('total-length');
 
     // Zoom hint
     const zoomHint = _createZoomHint(map);
@@ -843,7 +856,9 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
             dataLayers.directBuried.clearLayers();
             dataLayers.circuits.clearLayers();
             zoomHint.style.display = '';
-            _updateStats({});
+            if (structureCountEl) structureCountEl.textContent = '-';
+            if (pathwayCountEl) pathwayCountEl.textContent = '-';
+            if (totalLengthEl) totalLengthEl.textContent = '-';
             Sidebar.setFeatures([]);
             return;
         }
@@ -862,7 +877,6 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
         let pathwayCount = 0;
         let totalLength = 0;
-        let structureCount: number | undefined;
         let pendingPathway = 0;
         if (map.hasLayer(dataLayers.conduits)) pendingPathway++;
         if (map.hasLayer(dataLayers.aerialSpans)) pendingPathway++;
@@ -876,12 +890,9 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
             }
         }
 
-        function _refreshStats(): void {
-            _updateStats({
-                structures: structureCount,
-                pathways: pathwayCount > 0 ? pathwayCount : undefined,
-                lengthKm: totalLength > 0 ? totalLength / 1000 : undefined,
-            });
+        function _updatePathwayStats(): void {
+            if (pathwayCountEl) pathwayCountEl.textContent = String(pathwayCount);
+            if (totalLengthEl) totalLengthEl.textContent = (totalLength / 1000).toFixed(2);
         }
 
         function _pathwayLoaded(data: GeoJSON.FeatureCollection): void {
@@ -901,7 +912,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
                 });
             }
             pendingPathway--;
-            if (pendingPathway <= 0) _refreshStats();
+            if (pendingPathway <= 0) _updatePathwayStats();
         }
 
         // Structures
@@ -927,9 +938,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
                         });
                         structuresLayer.addLayer(marker);
                     });
-                    // Server-clustered: don't show approximate count in stats
-                    structureCount = undefined;
-                    _refreshStats();
+                    if (structureCountEl) structureCountEl.textContent = String(total);
                 } else {
                     const geoLayer = L.geoJSON(data, {
                         pointToLayer: function (feature: GeoJSON.Feature, latlng: L.LatLng) {
@@ -961,14 +970,15 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
                     });
                     markerClusterGroup.addLayers(geoLayer.getLayers());
                     structuresLayer.addLayer(markerClusterGroup);
-                    structureCount = data.features ? data.features.length : 0;
-                    _refreshStats();
+                    if (structureCountEl) {
+                        structureCountEl.textContent = String(data.features ? data.features.length : 0);
+                    }
                 }
                 _checkAllLoaded();
             }, { zoom: String(zoom) });
         }
 
-        if (pendingPathway === 0) _refreshStats();
+        if (pendingPathway === 0) _updatePathwayStats();
 
         // Shared pathway handler factory
         function _makePathwayOpts(featureType: FeatureType, styleObj: PathwayStyle): L.GeoJSONOptions {

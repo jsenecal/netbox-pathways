@@ -170,7 +170,10 @@ function _renderList(): void {
     if (!listEl) return;
 
     listEl.textContent = '';
-    if (countEl) countEl.textContent = String(_filtered.length);
+    if (countEl) {
+        countEl.textContent = String(_filtered.length);
+        countEl.style.display = _filtered.length > 0 ? '' : 'none';
+    }
 
     _filtered.forEach(function (entry: FeatureEntry) {
         const item = document.createElement('div');

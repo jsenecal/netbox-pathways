@@ -41,6 +41,7 @@
         width: 100%;
         flex: 1;
         min-height: 0;
+        overflow: hidden;
     }
     .pw-map-flex #pathways-map {
         flex: 1;
@@ -57,9 +58,10 @@
         background: var(--tblr-card-bg, var(--tblr-body-bg, #fff));
         color: var(--tblr-body-color, inherit);
         border-left: 1px solid var(--tblr-border-color, #dee2e6);
+        transition: margin-right 0.25s ease;
     }
     .pw-sidebar.collapsed {
-        width: auto;
+        margin-right: -340px;
     }
     .pw-panel {
         display: flex;
@@ -385,11 +387,13 @@
         height: 100%;
         z-index: 1100;
         width: 340px;
-        display: none;
+        margin-right: 0;
+        transform: translateX(100%);
+        transition: transform 0.25s ease;
         box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
     }
     .pw-kiosk .pw-sidebar.pw-sidebar-open {
-        display: flex;
+        transform: translateX(0);
     }
     .pw-kiosk-close-btn {
         position: absolute;
