@@ -547,7 +547,7 @@ function _createSidebarToggleControl(map: L.Map, isKiosk: boolean): L.Control {
                 if (!sidebar) return;
                 const sidebarVisible = isKiosk
                     ? sidebar.classList.contains('pw-sidebar-open')
-                    : !sidebar.classList.contains('collapsed');
+                    : !sidebar.classList.contains('pw-sidebar-hidden');
                 container.style.display = sidebarVisible ? 'none' : '';
             });
             const sidebar = document.getElementById('pw-sidebar');
@@ -556,7 +556,7 @@ function _createSidebarToggleControl(map: L.Map, isKiosk: boolean): L.Control {
                 // Initial state
                 const sidebarVisible = isKiosk
                     ? sidebar.classList.contains('pw-sidebar-open')
-                    : !sidebar.classList.contains('collapsed');
+                    : !sidebar.classList.contains('pw-sidebar-hidden');
                 container.style.display = sidebarVisible ? 'none' : '';
             }
 

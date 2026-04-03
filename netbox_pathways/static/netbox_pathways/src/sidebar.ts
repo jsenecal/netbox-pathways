@@ -1156,15 +1156,16 @@ function _isCollapsed(): boolean {
 }
 
 function show(): void {
+    if (_isKiosk) { _kioskSidebarOpen(); return; }
+    const sidebar = document.getElementById('pw-sidebar');
+    if (sidebar) sidebar.classList.remove('pw-sidebar-hidden');
     _setListBodyVisible(true);
 }
 
 function hide(): void {
     if (_isKiosk) { _kioskSidebarClose(); return; }
-    _setListBodyVisible(false);
-    const detailPanel = document.getElementById('pw-panel-detail');
-    if (detailPanel) detailPanel.style.display = 'none';
-    _updateSidebarCollapsed();
+    const sidebar = document.getElementById('pw-sidebar');
+    if (sidebar) sidebar.classList.add('pw-sidebar-hidden');
 }
 
 function setFeatures(features: FeatureEntry[]): void {
