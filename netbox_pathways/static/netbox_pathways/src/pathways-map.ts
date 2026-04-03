@@ -487,27 +487,33 @@ function _createLegend(map: L.Map): void {
     new LegendControl().addTo(map);
 }
 
+let _statsEl: HTMLElement | null = null;
+
 function _createStatsControl(map: L.Map): void {
     const StatsControl = L.Control.extend({
         options: { position: 'bottomleft' },
         onAdd: function (): HTMLElement {
             const container = L.DomUtil.create('div', 'pw-stats-overlay');
-            const sc = L.DomUtil.create('span', '', container);
-            sc.id = 'structure-count';
-            sc.textContent = '0';
-            container.appendChild(document.createTextNode(' structures \u00b7 '));
-            const pc = L.DomUtil.create('span', '', container);
-            pc.id = 'pathway-count';
-            pc.textContent = '0';
-            container.appendChild(document.createTextNode(' pathways \u00b7 '));
-            const tl = L.DomUtil.create('span', '', container);
-            tl.id = 'total-length';
-            tl.textContent = '0';
-            container.appendChild(document.createTextNode(' km'));
+            _statsEl = container;
             return container;
         },
     });
     new StatsControl().addTo(map);
+}
+
+function _updateStats(stats: { structures?: number; pathways?: number; lengthKm?: number }): void {
+    if (!_statsEl) return;
+    const parts: string[] = [];
+    if (stats.structures != null && stats.structures >= 0) {
+        parts.push(String(stats.structures) + ' structure' + (stats.structures !== 1 ? 's' : ''));
+    }
+    if (stats.pathways != null && stats.pathways >= 0) {
+        parts.push(String(stats.pathways) + ' pathway' + (stats.pathways !== 1 ? 's' : ''));
+    }
+    if (stats.lengthKm != null && stats.lengthKm > 0) {
+        parts.push(stats.lengthKm.toFixed(2) + ' km');
+    }
+    _statsEl.textContent = parts.join(' \u00b7 ');
 }
 
 // ---------------------------------------------------------------------------
@@ -519,6 +525,69 @@ interface MapInitConfig {
     zoom?: number;
     bounds?: L.LatLngBoundsExpression;
     kiosk?: boolean;
+}
+
+function _createSidebarToggleControl(map: L.Map): L.Control {
+    const SidebarToggle = L.Control.extend({
+        options: { position: 'topleft' as L.ControlPosition },
+        onAdd: function (): HTMLElement {
+            const container = L.DomUtil.create('div', 'leaflet-control-zoom leaflet-bar');
+            const link = L.DomUtil.create('a', '', container) as HTMLAnchorElement;
+            link.href = '#';
+            link.title = 'Toggle sidebar';
+            L.DomUtil.create('i', 'mdi mdi-menu', link);
+            link.style.display = 'flex';
+            link.style.alignItems = 'center';
+            link.style.justifyContent = 'center';
+            link.style.fontSize = '18px';
+
+            L.DomEvent.disableClickPropagation(container);
+            L.DomEvent.on(link, 'click', function (e: Event) {
+                L.DomEvent.preventDefault(e);
+                const sidebar = document.getElementById('pw-sidebar');
+                if (!sidebar) return;
+                if (sidebar.classList.contains('pw-sidebar-open') || !sidebar.classList.contains('collapsed')) {
+                    Sidebar.hide();
+                } else {
+                    Sidebar.show();
+                }
+            });
+            return container;
+        },
+    });
+    return new SidebarToggle();
+}
+
+function _createLocateControl(map: L.Map): L.Control {
+    const LocateControl = L.Control.extend({
+        options: { position: 'topleft' as L.ControlPosition },
+        onAdd: function (): HTMLElement {
+            const container = L.DomUtil.create('div', 'leaflet-control-zoom leaflet-bar');
+            const link = L.DomUtil.create('a', '', container) as HTMLAnchorElement;
+            link.href = '#';
+            link.title = 'Go to my location';
+            L.DomUtil.create('i', 'mdi mdi-crosshairs-gps', link);
+            link.style.display = 'flex';
+            link.style.alignItems = 'center';
+            link.style.justifyContent = 'center';
+            link.style.fontSize = '18px';
+
+            L.DomEvent.disableClickPropagation(container);
+            L.DomEvent.on(link, 'click', function (e: Event) {
+                L.DomEvent.preventDefault(e);
+                if (!navigator.geolocation) return;
+                navigator.geolocation.getCurrentPosition(
+                    function (pos: GeolocationPosition) {
+                        map.flyTo([pos.coords.latitude, pos.coords.longitude], 17, { duration: 1 });
+                    },
+                    function () { /* silently ignore denial */ },
+                    { enableHighAccuracy: true, timeout: 10000 },
+                );
+            });
+            return container;
+        },
+    });
+    return new LocateControl();
 }
 
 function _createKioskControl(map: L.Map, isKiosk: boolean): L.Control {
@@ -602,13 +671,10 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
     _createStatsControl(map);
     _createLegend(map);
 
-    // Kiosk toggle control
+    // Map controls (topleft, below zoom)
     _createKioskControl(map, !!config.kiosk).addTo(map);
-
-    // Counters
-    const structureCountEl = document.getElementById('structure-count');
-    const pathwayCountEl = document.getElementById('pathway-count');
-    const totalLengthEl = document.getElementById('total-length');
+    _createSidebarToggleControl(map).addTo(map);
+    _createLocateControl(map).addTo(map);
 
     // Zoom hint
     const zoomHint = _createZoomHint(map);
@@ -777,9 +843,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
             dataLayers.directBuried.clearLayers();
             dataLayers.circuits.clearLayers();
             zoomHint.style.display = '';
-            if (structureCountEl) structureCountEl.textContent = '-';
-            if (pathwayCountEl) pathwayCountEl.textContent = '-';
-            if (totalLengthEl) totalLengthEl.textContent = '-';
+            _updateStats({});
             Sidebar.setFeatures([]);
             return;
         }
@@ -798,6 +862,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
         let pathwayCount = 0;
         let totalLength = 0;
+        let structureCount: number | undefined;
         let pendingPathway = 0;
         if (map.hasLayer(dataLayers.conduits)) pendingPathway++;
         if (map.hasLayer(dataLayers.aerialSpans)) pendingPathway++;
@@ -811,9 +876,12 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
             }
         }
 
-        function _updatePathwayStats(): void {
-            if (pathwayCountEl) pathwayCountEl.textContent = String(pathwayCount);
-            if (totalLengthEl) totalLengthEl.textContent = (totalLength / 1000).toFixed(2);
+        function _refreshStats(): void {
+            _updateStats({
+                structures: structureCount,
+                pathways: pathwayCount > 0 ? pathwayCount : undefined,
+                lengthKm: totalLength > 0 ? totalLength / 1000 : undefined,
+            });
         }
 
         function _pathwayLoaded(data: GeoJSON.FeatureCollection): void {
@@ -833,7 +901,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
                 });
             }
             pendingPathway--;
-            if (pendingPathway <= 0) _updatePathwayStats();
+            if (pendingPathway <= 0) _refreshStats();
         }
 
         // Structures
@@ -859,7 +927,9 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
                         });
                         structuresLayer.addLayer(marker);
                     });
-                    if (structureCountEl) structureCountEl.textContent = String(total);
+                    // Server-clustered: don't show approximate count in stats
+                    structureCount = undefined;
+                    _refreshStats();
                 } else {
                     const geoLayer = L.geoJSON(data, {
                         pointToLayer: function (feature: GeoJSON.Feature, latlng: L.LatLng) {
@@ -891,15 +961,14 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
                     });
                     markerClusterGroup.addLayers(geoLayer.getLayers());
                     structuresLayer.addLayer(markerClusterGroup);
-                    if (structureCountEl) {
-                        structureCountEl.textContent = String(data.features ? data.features.length : 0);
-                    }
+                    structureCount = data.features ? data.features.length : 0;
+                    _refreshStats();
                 }
                 _checkAllLoaded();
             }, { zoom: String(zoom) });
         }
 
-        if (pendingPathway === 0) _updatePathwayStats();
+        if (pendingPathway === 0) _refreshStats();
 
         // Shared pathway handler factory
         function _makePathwayOpts(featureType: FeatureType, styleObj: PathwayStyle): L.GeoJSONOptions {
