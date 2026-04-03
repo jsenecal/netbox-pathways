@@ -752,6 +752,8 @@ class MapView(LoginRequiredMixin, View):
             'pathways_config_json': json.dumps(pathways_config),
         }
 
+        ctx['kiosk'] = request.GET.get('kiosk', '').lower() == 'true'
+
         if request.GET.get('lat') or request.GET.get('lon'):
             ctx['map_center_lat'] = self._safe_float(request.GET.get('lat'), default_lat)
             ctx['map_center_lon'] = self._safe_float(request.GET.get('lon'), default_lon)
