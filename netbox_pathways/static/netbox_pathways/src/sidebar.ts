@@ -39,6 +39,8 @@ let _highlightOutline: L.Polyline | null = null;
 let _serverSearchCallback: ((query: string) => void) | null = null;
 let _lastServerQuery = '';
 let _pendingSelect: { url: string; featureType: string } | null = null;
+let _isKiosk = false;
+const SIDEBAR_WIDTH = 340;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -1040,7 +1042,8 @@ function onServerSearch(cb: (query: string) => void): void {
 // Public API
 // ---------------------------------------------------------------------------
 
-function init(map: L.Map): void {
+function init(map: L.Map, kiosk?: boolean): void {
+    _isKiosk = !!kiosk;
     _map = map;
 
     const toggleBtn = document.getElementById('pw-sidebar-toggle');
@@ -1095,6 +1098,16 @@ function init(map: L.Map): void {
             }
         }
     });
+
+    if (_isKiosk) {
+        document.addEventListener('keydown', function (e: KeyboardEvent) {
+            if (e.key === 'Escape') {
+                _kioskSidebarClose();
+                const detailPanel = document.getElementById('pw-panel-detail');
+                if (detailPanel) detailPanel.style.display = 'none';
+            }
+        });
+    }
 }
 
 function _setListBodyVisible(visible: boolean): void {
@@ -1115,6 +1128,26 @@ function _updateSidebarCollapsed(): void {
     sidebar.classList.toggle('collapsed', bodyHidden && detailHidden);
 }
 
+function _kioskSidebarOpen(): void {
+    const sidebar = document.getElementById('pw-sidebar');
+    if (!sidebar) return;
+    const wasOpen = sidebar.classList.contains('pw-sidebar-open');
+    sidebar.classList.add('pw-sidebar-open');
+    if (!wasOpen && _map) {
+        _map.panBy([SIDEBAR_WIDTH / 2, 0]);
+    }
+}
+
+function _kioskSidebarClose(): void {
+    const sidebar = document.getElementById('pw-sidebar');
+    if (!sidebar) return;
+    const wasOpen = sidebar.classList.contains('pw-sidebar-open');
+    sidebar.classList.remove('pw-sidebar-open');
+    if (wasOpen && _map) {
+        _map.panBy([-SIDEBAR_WIDTH / 2, 0]);
+    }
+}
+
 function _isCollapsed(): boolean {
     const body = document.getElementById('pw-panel-list-body');
     return body ? body.classList.contains('collapsed') : false;
@@ -1125,6 +1158,7 @@ function show(): void {
 }
 
 function hide(): void {
+    if (_isKiosk) { _kioskSidebarClose(); return; }
     _setListBodyVisible(false);
     const detailPanel = document.getElementById('pw-panel-detail');
     if (detailPanel) detailPanel.style.display = 'none';
@@ -1182,6 +1216,7 @@ function setFeatures(features: FeatureEntry[]): void {
 }
 
 function showList(): void {
+    if (_isKiosk) { _kioskSidebarOpen(); return; }
     _setListBodyVisible(true);
     const detailPanel = document.getElementById('pw-panel-detail');
     if (detailPanel) detailPanel.style.display = 'none';
@@ -1189,6 +1224,7 @@ function showList(): void {
 }
 
 function showDetail(entry: FeatureEntry): void {
+    if (_isKiosk) _kioskSidebarOpen();
     _setListBodyVisible(false);
     const detailPanel = document.getElementById('pw-panel-detail');
     if (detailPanel) detailPanel.style.display = '';

@@ -964,7 +964,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
     map.on('moveend', debouncedLoad);
 
     // Initialize sidebar and popover
-    Sidebar.init(map);
+    Sidebar.init(map, config.kiosk);
     Sidebar.onServerSearch(_serverSearch);
     Popover.init(map);
 
