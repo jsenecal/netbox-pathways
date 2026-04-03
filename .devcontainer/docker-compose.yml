@@ -9,7 +9,10 @@ services:
     build:
       dockerfile: .devcontainer/Dockerfile-plugin_dev
       context: ..
-    env_file: env/netbox.env
+    env_file:
+      - env/netbox.env
+      - path: env/local.env
+        required: false
     volumes:
       - ../:/opt/netbox-pathways:cached
       - ~/.gitconfig:/home/ubuntu/.gitconfig:z,ro

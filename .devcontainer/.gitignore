@@ -1,5 +1,6 @@
 # Ignore local customizations
 home/
+env/local.env
 initializers/
 netbox-demo-data/
 
