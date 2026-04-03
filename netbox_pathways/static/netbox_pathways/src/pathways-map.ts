@@ -495,6 +495,41 @@ interface MapInitConfig {
     center?: [number, number];
     zoom?: number;
     bounds?: L.LatLngBoundsExpression;
+    kiosk?: boolean;
+}
+
+function _createKioskControl(map: L.Map, isKiosk: boolean): L.Control {
+    const KioskControl = L.Control.extend({
+        options: { position: 'topleft' as L.ControlPosition },
+        onAdd: function (): HTMLElement {
+            const container = L.DomUtil.create('div', 'leaflet-control-zoom leaflet-bar');
+            const link = L.DomUtil.create('a', '', container) as HTMLAnchorElement;
+            link.href = '#';
+            link.title = isKiosk ? 'Exit kiosk mode' : 'Kiosk mode';
+            L.DomUtil.create('i', 'mdi ' + (isKiosk ? 'mdi-fullscreen-exit' : 'mdi-fullscreen'), link);
+            link.style.display = 'flex';
+            link.style.alignItems = 'center';
+            link.style.justifyContent = 'center';
+            link.style.fontSize = '18px';
+
+            L.DomEvent.disableClickPropagation(container);
+            L.DomEvent.on(link, 'click', function (e: Event) {
+                L.DomEvent.preventDefault(e);
+                const center = map.getCenter();
+                const zoom = map.getZoom();
+                const params = new URLSearchParams();
+                params.set('lat', center.lat.toFixed(6));
+                params.set('lon', center.lng.toFixed(6));
+                params.set('zoom', String(zoom));
+                if (!isKiosk) {
+                    params.set('kiosk', 'true');
+                }
+                window.location.search = params.toString();
+            });
+            return container;
+        },
+    });
+    return new KioskControl();
 }
 
 function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
@@ -542,6 +577,9 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
     // Legend
     _createLegend(map);
+
+    // Kiosk toggle control
+    _createKioskControl(map, !!config.kiosk).addTo(map);
 
     // Counters
     const structureCountEl = document.getElementById('structure-count');
