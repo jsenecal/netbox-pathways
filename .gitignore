@@ -62,8 +62,6 @@ staticfiles/
 
 # Documentation
 docs/_build/
-docs/plans/
-docs/superpowers/
 site/
 
 # Package
