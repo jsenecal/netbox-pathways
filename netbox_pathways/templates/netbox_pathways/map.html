@@ -370,6 +370,7 @@
         inset: 0;
         z-index: 1050;
         height: 100vh !important;
+        overflow: hidden;
         background: var(--tblr-body-bg, #fff);
     }
     .pw-kiosk .card {
@@ -474,6 +475,7 @@
             }
         }
         if (document.querySelector('.pw-kiosk')) {
+            document.body.style.overflow = 'hidden';
             var nav = document.querySelector('.navbar');
             var crumbs = document.querySelector('.container-fluid > .breadcrumb');
             if (nav) nav.style.display = 'none';
