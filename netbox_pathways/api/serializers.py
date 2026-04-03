@@ -183,12 +183,11 @@ class CableSegmentSerializer(NetBoxModelSerializer):
     class Meta:
         model = CableSegment
         fields = [
-            'id', 'url', 'display', 'cable', 'pathway', 'sequence',
-            'enter_point', 'exit_point',
-            'slack_loop_location', 'slack_length',
+            'id', 'url', 'display', 'cable', 'pathway',
+            'sequence',
             'comments', 'tags', 'created', 'last_updated',
         ]
-        brief_fields = ('id', 'url', 'display', 'cable', 'sequence')
+        brief_fields = ('id', 'url', 'display', 'cable', 'pathway')
 
 
 class SiteGeometrySerializer(NetBoxModelSerializer):

@@ -409,21 +409,12 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING('  No pathways available for cable segments.'))
             return []
         segments = []
-        used_keys = set()
         for i in range(500):
             cable = random.choice(cables)
             pathway = random.choice(pathways)
-            seq = random.randint(0, 20)
-            key = (cable.pk, seq)
-            while key in used_keys:
-                seq += 1
-                key = (cable.pk, seq)
-            used_keys.add(key)
             segments.append(CableSegment(
                 cable=cable,
                 pathway=pathway,
-                sequence=seq,
-                slack_length=round(random.uniform(0, 10), 2) if random.random() < 0.3 else 0,
             ))
         return CableSegment.objects.bulk_create(segments)
 

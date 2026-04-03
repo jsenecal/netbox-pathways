@@ -119,7 +119,6 @@ class CableSegmentPanel(ObjectAttributesPanel):
     cable = attrs.RelatedObjectAttr('cable', linkify=True, label=_('Cable'))
     pathway = attrs.RelatedObjectAttr('pathway', linkify=True, label=_('Pathway'))
     sequence = attrs.NumericAttr('sequence', label=_('Sequence'))
-    slack_length = attrs.NumericAttr('slack_length', label=_('Slack length (m)'))
 
 
 class SiteGeometryPanel(ObjectAttributesPanel):

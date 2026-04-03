@@ -464,13 +464,9 @@ class CableSegment(NetBoxModel):
     pathway = models.ForeignKey(
         Pathway, on_delete=models.SET_NULL, null=True, blank=True, related_name='cable_segments',
     )
-    sequence = models.PositiveIntegerField(default=0, help_text="Order of segment in cable path")
-    enter_point = models.PointField(srid=get_srid(), null=True, blank=True, help_text="Entry point to pathway")
-    exit_point = models.PointField(srid=get_srid(), null=True, blank=True, help_text="Exit point from pathway")
-    slack_loop_location = models.PointField(
-        srid=get_srid(), null=True, blank=True, help_text="Location of slack loop if present",
+    sequence = models.PositiveIntegerField(
+        null=True, blank=True, help_text="Order of segment in cable route (auto-assigned)",
     )
-    slack_length = models.FloatField(default=0, help_text="Length of slack in meters")
     comments = models.TextField(blank=True)
 
     class Meta:
@@ -483,7 +479,40 @@ class CableSegment(NetBoxModel):
         ]
 
     def __str__(self):
-        return f"{self.cable.label} - Segment {self.sequence}"
+        pw = self.pathway
+        if pw:
+            return f"{self.cable.label} → {pw.name}"
+        return f"{self.cable.label} - Segment {self.pk}"
 
     def get_absolute_url(self):
         return reverse('plugins:netbox_pathways:cablesegment', args=[self.pk])
+
+    def save(self, *args, **kwargs):
+        if self.sequence is None:
+            max_seq = (
+                CableSegment.objects
+                .filter(cable=self.cable)
+                .aggregate(m=models.Max('sequence'))['m']
+            ) or 0
+            self.sequence = max_seq + 1
+        super().save(*args, **kwargs)
+
+
+class SlackLoop(NetBoxModel):
+    cable = models.ForeignKey(Cable, on_delete=models.CASCADE, related_name='slack_loops')
+    structure = models.ForeignKey(Structure, on_delete=models.CASCADE, related_name='slack_loops')
+    pathway = models.ForeignKey(
+        Pathway, on_delete=models.SET_NULL, null=True, blank=True, related_name='slack_loops',
+        help_text="For aerial slack stored on a span near the structure",
+    )
+    length = models.FloatField(help_text="Length of slack in meters")
+    comments = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['cable', 'structure']
+
+    def __str__(self):
+        return f"{self.cable.label} — {self.length}m @ {self.structure.name}"
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_pathways:slackloop', args=[self.pk])

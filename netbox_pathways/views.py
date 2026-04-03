@@ -770,12 +770,11 @@ class PullSheetDetailView(LoginRequiredMixin, View):
                 'pathway__start_location',
                 'pathway__end_location',
             )
-            .order_by('sequence')
+            .order_by('pk')
         )
 
         totals = segments.aggregate(
             total_pathway_length=Sum('pathway__length'),
-            total_slack=Sum('slack_length'),
         )
 
         return render(request, 'netbox_pathways/pullsheet_detail.html', {
@@ -783,7 +782,6 @@ class PullSheetDetailView(LoginRequiredMixin, View):
             'segments': segments,
             'segment_count': segments.count(),
             'total_pathway_length': totals['total_pathway_length'] or 0,
-            'total_slack': totals['total_slack'] or 0,
         })
 
 

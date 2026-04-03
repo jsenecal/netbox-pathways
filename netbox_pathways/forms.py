@@ -443,13 +443,11 @@ class ConduitJunctionForm(NetBoxModelForm):
 class CableSegmentForm(NetBoxModelForm):
     cable = DynamicModelChoiceField(queryset=Cable.objects.all(), selector=True)
     pathway = DynamicModelChoiceField(
-        queryset=Pathway.objects.all(), required=False, selector=True, quick_add=True,
+        queryset=Pathway.objects.all(), required=False, selector=True,
     )
 
     fieldsets = (
         FieldSet('cable', 'pathway', 'sequence', name='Cable Segment'),
-        FieldSet('enter_point', 'exit_point', name='Entry/Exit Points'),
-        FieldSet('slack_loop_location', 'slack_length', name='Slack'),
         FieldSet('comments', 'tags', name='Details'),
     )
 
@@ -457,22 +455,15 @@ class CableSegmentForm(NetBoxModelForm):
         model = CableSegment
         fields = [
             'cable', 'pathway', 'sequence',
-            'enter_point', 'exit_point',
-            'slack_loop_location', 'slack_length',
             'comments', 'tags',
         ]
-        widgets = {
-            'enter_point': PointOnlyWidget(),
-            'exit_point': PointOnlyWidget(),
-            'slack_loop_location': PointOnlyWidget(),
-        }
 
 
 class CableSegmentImportForm(NetBoxModelImportForm):
     class Meta:
         model = CableSegment
         fields = [
-            'cable', 'pathway', 'sequence', 'slack_length', 'comments',
+            'cable', 'pathway', 'sequence', 'comments',
         ]
 
 
@@ -480,7 +471,7 @@ class CableSegmentImportForm(NetBoxModelImportForm):
 
 class PathwayLocationForm(NetBoxModelForm):
     pathway = DynamicModelChoiceField(
-        queryset=Pathway.objects.all(), selector=True, quick_add=True,
+        queryset=Pathway.objects.all(), selector=True,
     )
     site = DynamicModelChoiceField(
         queryset=Site.objects.all(), required=False, selector=True, quick_add=True,

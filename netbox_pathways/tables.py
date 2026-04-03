@@ -198,10 +198,10 @@ class CableSegmentTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = CableSegment
         fields = (
-            'pk', 'id', 'cable', 'pathway', 'sequence',
-            'slack_length', 'actions',
+            'pk', 'id', 'cable', 'pathway',
+            'sequence', 'actions',
         )
-        default_columns = ('cable', 'pathway', 'sequence', 'slack_length')
+        default_columns = ('cable', 'pathway', 'sequence')
 
 
 class PullSheetCableTable(NetBoxTable):
