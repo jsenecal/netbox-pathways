@@ -487,6 +487,29 @@ function _createLegend(map: L.Map): void {
     new LegendControl().addTo(map);
 }
 
+function _createStatsControl(map: L.Map): void {
+    const StatsControl = L.Control.extend({
+        options: { position: 'bottomleft' },
+        onAdd: function (): HTMLElement {
+            const container = L.DomUtil.create('div', 'pw-stats-overlay');
+            const sc = L.DomUtil.create('span', '', container);
+            sc.id = 'structure-count';
+            sc.textContent = '0';
+            container.appendChild(document.createTextNode(' structures \u00b7 '));
+            const pc = L.DomUtil.create('span', '', container);
+            pc.id = 'pathway-count';
+            pc.textContent = '0';
+            container.appendChild(document.createTextNode(' pathways \u00b7 '));
+            const tl = L.DomUtil.create('span', '', container);
+            tl.id = 'total-length';
+            tl.textContent = '0';
+            container.appendChild(document.createTextNode(' km'));
+            return container;
+        },
+    });
+    new StatsControl().addTo(map);
+}
+
 // ---------------------------------------------------------------------------
 // Main initialization
 // ---------------------------------------------------------------------------
@@ -575,8 +598,9 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         position: 'topright', collapsed: true,
     }).addTo(map);
 
-    // Legend
+    // Legend + stats
     _createLegend(map);
+    _createStatsControl(map);
 
     // Kiosk toggle control
     _createKioskControl(map, !!config.kiosk).addTo(map);

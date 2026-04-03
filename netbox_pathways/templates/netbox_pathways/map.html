@@ -235,10 +235,6 @@
         display: none;
     }
     .pw-stats-overlay {
-        position: absolute;
-        bottom: 6px;
-        right: 10px;
-        z-index: 800;
         padding: 3px 10px;
         border-radius: 4px;
         font-size: 0.72em;
@@ -377,8 +373,7 @@
         border: none;
         border-radius: 0;
     }
-    .pw-kiosk .card-header,
-    .pw-kiosk .pw-stats-overlay {
+    .pw-kiosk .card-header {
         display: none !important;
     }
     .pw-kiosk .pw-sidebar {
@@ -417,12 +412,6 @@
         <div class="card-body p-0">
             <div class="pw-map-flex">
                 <div id="pathways-map" style="min-height: 400px; position: relative;">
-                    <!-- Floating stats overlay at bottom-right of map -->
-                    <div class="pw-stats-overlay">
-                        <span id="structure-count">0</span> structures &middot;
-                        <span id="pathway-count">0</span> pathways &middot;
-                        <span id="total-length">0</span> km
-                    </div>
                 </div>
                 <div id="pw-sidebar" class="pw-sidebar">
                     <!-- Kiosk close button -->
