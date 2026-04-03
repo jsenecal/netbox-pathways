@@ -375,10 +375,6 @@
         margin: 0;
         height: 100%;
     }
-    .pw-kiosk .card-body {
-        padding: 0 !important;
-        height: 100%;
-    }
     .pw-kiosk .card-header {
         display: none !important;
     }
@@ -489,19 +485,13 @@
                 window.PathwaysMap.map.invalidateSize();
             }
         }
-        if (document.querySelector('.pw-kiosk')) {
-            document.documentElement.style.overflow = 'hidden';
+        if (isKiosk) {
             document.documentElement.style.scrollbarGutter = 'auto';
-            document.body.style.overflow = 'hidden';
             document.body.style.scrollbarGutter = 'auto';
             var nav = document.querySelector('.navbar');
             var crumbs = document.querySelector('.container-fluid > .breadcrumb');
             if (nav) nav.style.display = 'none';
             if (crumbs) crumbs.parentElement.style.display = 'none';
-            var content = document.getElementById('content');
-            if (content) { content.style.padding = '0'; content.style.margin = '0'; content.style.maxWidth = '100%'; content.style.overflow = 'hidden'; }
-            var page = document.querySelector('.page-wrapper');
-            if (page) page.style.overflow = 'hidden';
         }
         sizeMap();
         initializePathwaysMap('pathways-map', {
