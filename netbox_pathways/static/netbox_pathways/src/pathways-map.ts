@@ -417,8 +417,8 @@ function _createLegend(map: L.Map): void {
             L.DomEvent.disableClickPropagation(container);
             L.DomEvent.disableScrollPropagation(container);
 
-            // Header
-            const header = L.DomUtil.create('div', 'pw-legend-header', container);
+            // Header — collapsed by default
+            const header = L.DomUtil.create('div', 'pw-legend-header collapsed', container);
             const chevron = document.createElement('i');
             chevron.className = 'mdi mdi-chevron-down';
             header.appendChild(chevron);
@@ -426,8 +426,8 @@ function _createLegend(map: L.Map): void {
             titleSpan.textContent = 'Legend';
             header.appendChild(titleSpan);
 
-            // Body
-            const body = L.DomUtil.create('div', 'pw-legend-body', container);
+            // Body — collapsed by default
+            const body = L.DomUtil.create('div', 'pw-legend-body collapsed', container);
 
             // Structures section
             const structSec = L.DomUtil.create('div', 'pw-legend-section', body);
