@@ -1212,7 +1212,6 @@ function showList(): void {
     _setListBodyVisible(true);
     const detailPanel = document.getElementById('pw-panel-detail');
     if (detailPanel) detailPanel.style.display = 'none';
-    _updateSidebarCollapsed();
 }
 
 function showDetail(entry: FeatureEntry): void {
@@ -1220,7 +1219,6 @@ function showDetail(entry: FeatureEntry): void {
     _setListBodyVisible(false);
     const detailPanel = document.getElementById('pw-panel-detail');
     if (detailPanel) detailPanel.style.display = '';
-    _updateSidebarCollapsed();
 
     // Set panel heading (e.g. "Structure Details")
     const heading = document.getElementById('pw-detail-heading');
