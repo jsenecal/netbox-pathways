@@ -1056,10 +1056,12 @@ function init(map: L.Map, kiosk?: boolean): void {
             if (detailVisible) {
                 // Detail is open — go back to list
                 showList();
-            } else if (_isCollapsed()) {
-                show();
+            } else if (_isKiosk) {
+                // In kiosk, toggle the whole sidebar
+                if (_isCollapsed()) { show(); } else { hide(); }
             } else {
-                hide();
+                // In normal mode, toggle the feature list body only
+                _setListBodyVisible(_isCollapsed());
             }
         });
     }
@@ -1076,8 +1078,6 @@ function init(map: L.Map, kiosk?: boolean): void {
             const detailPanel = document.getElementById('pw-panel-detail');
             if (detailPanel && detailPanel.style.display !== 'none') {
                 showList();
-            } else {
-                hide();
             }
         }
     });
