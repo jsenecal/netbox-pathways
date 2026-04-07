@@ -1051,18 +1051,7 @@ function init(map: L.Map, kiosk?: boolean): void {
     const toggleBtn = document.getElementById('pw-sidebar-toggle');
     if (toggleBtn) {
         toggleBtn.addEventListener('click', function () {
-            const detailPanel = document.getElementById('pw-panel-detail');
-            const detailVisible = detailPanel && detailPanel.style.display !== 'none';
-            if (detailVisible) {
-                // Detail is open — go back to list
-                showList();
-            } else if (_isKiosk) {
-                // In kiosk, toggle the whole sidebar
-                if (_isCollapsed()) { show(); } else { hide(); }
-            } else {
-                // In normal mode, toggle the feature list body only
-                _setListBodyVisible(_isCollapsed());
-            }
+            _setListBodyVisible(_isCollapsed());
         });
     }
 
@@ -1079,6 +1068,10 @@ function init(map: L.Map, kiosk?: boolean): void {
             if (detailPanel && detailPanel.style.display !== 'none') {
                 showList();
             }
+            _unhighlightMapFeature();
+            _selected = null;
+            _highlightListItem(null);
+            if (_isKiosk) _kioskSidebarClose();
         }
     });
 
@@ -1145,7 +1138,10 @@ function _isCollapsed(): boolean {
 }
 
 function show(): void {
-    if (_isKiosk) { _kioskSidebarOpen(); return; }
+    if (_isKiosk) {
+        _kioskSidebarOpen();
+        return;
+    }
     const sidebar = document.getElementById('pw-sidebar');
     if (sidebar) sidebar.classList.remove('pw-sidebar-hidden');
     _setListBodyVisible(true);
@@ -1208,7 +1204,7 @@ function setFeatures(features: FeatureEntry[]): void {
 }
 
 function showList(): void {
-    if (_isKiosk) { _kioskSidebarOpen(); return; }
+    if (_isKiosk) _kioskSidebarOpen();
     _setListBodyVisible(true);
     const detailPanel = document.getElementById('pw-panel-detail');
     if (detailPanel) detailPanel.style.display = 'none';
