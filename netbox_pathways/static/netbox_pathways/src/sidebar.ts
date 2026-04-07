@@ -1125,17 +1125,6 @@ function _setListBodyVisible(visible: boolean): void {
     const chevron = document.getElementById('pw-sidebar-chevron');
     if (body) body.classList.toggle('collapsed', !visible);
     if (chevron) chevron.classList.toggle('collapsed', !visible);
-    _updateSidebarCollapsed();
-}
-
-function _updateSidebarCollapsed(): void {
-    const sidebar = document.getElementById('pw-sidebar');
-    if (!sidebar) return;
-    const body = document.getElementById('pw-panel-list-body');
-    const detail = document.getElementById('pw-panel-detail');
-    const bodyHidden = body ? body.classList.contains('collapsed') : true;
-    const detailHidden = !detail || detail.style.display === 'none';
-    sidebar.classList.toggle('collapsed', bodyHidden && detailHidden);
 }
 
 function _kioskSidebarOpen(): void {
