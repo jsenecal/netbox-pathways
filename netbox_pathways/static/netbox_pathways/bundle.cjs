@@ -10,7 +10,7 @@ const MODULES = new Set(['sidebar.ts', 'popover.ts', 'external-layers.ts']);
 
 // Find top-level .ts entrypoints (not in types/, not internal modules)
 const entryPoints = fs.readdirSync(srcDir)
-  .filter(f => f.endsWith('.ts') && !f.endsWith('.d.ts') && !MODULES.has(f))
+  .filter(f => f.endsWith('.ts') && !f.endsWith('.d.ts') && !f.endsWith('.test.ts') && !MODULES.has(f))
   .map(f => path.join(srcDir, f));
 
 const isWatch = process.argv.includes('--watch');
