@@ -23,8 +23,7 @@ from rest_framework_gis.serializers import GeoFeatureModelSerializer
 from .. import filters, models
 from ..geo import LEAFLET_SRID, get_srid
 
-MAX_GEO_RESULTS = 2000
-CLUSTER_ZOOM_THRESHOLD = 15  # zoom < this → server-side clustering
+MAX_GEO_RESULTS = 1000
 
 
 def _grid_size_for_zoom(zoom):
@@ -39,13 +38,18 @@ def _grid_size_for_zoom(zoom):
 
 class _UrlMixin(metaclass=drf_serializers.SerializerMetaclass):
     url = drf_serializers.SerializerMethodField()
+    name = drf_serializers.SerializerMethodField()
 
     def get_url(self, obj):
         return obj.get_absolute_url()
 
+    def get_name(self, obj):
+        return str(obj)
+
 
 class StructureGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
+    name = drf_serializers.CharField(read_only=True)
     site_name = drf_serializers.SerializerMethodField()
 
     class Meta:
@@ -63,7 +67,17 @@ class PathwayGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
     class Meta:
         model = models.Pathway
         geo_field = 'geo_4326'
-        fields = ['id', 'name', 'pathway_type', 'url']
+        fields = ["id", "name", "label", "pathway_type", "url"]
+
+
+class ConduitBankGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
+    geo_4326 = GeometryField(read_only=True)
+    conduit_count = drf_serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = models.ConduitBank
+        geo_field = "geo_4326"
+        fields = ["id", "name", "label", "pathway_type", "configuration", "conduit_count", "url"]
 
 
 class ConduitGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
@@ -72,7 +86,7 @@ class ConduitGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
     class Meta:
         model = models.Conduit
         geo_field = 'geo_4326'
-        fields = ['id', 'name', 'pathway_type', 'url']
+        fields = ["id", "name", "label", "pathway_type", "url"]
 
 
 class AerialSpanGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
@@ -81,7 +95,7 @@ class AerialSpanGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
     class Meta:
         model = models.AerialSpan
         geo_field = 'geo_4326'
-        fields = ['id', 'name', 'pathway_type', 'url']
+        fields = ["id", "name", "label", "pathway_type", "url"]
 
 
 class DirectBuriedGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
@@ -90,7 +104,7 @@ class DirectBuriedGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
     class Meta:
         model = models.DirectBuried
         geo_field = 'geo_4326'
-        fields = ['id', 'name', 'pathway_type', 'url']
+        fields = ["id", "name", "label", "pathway_type", "url"]
 
 
 class CircuitGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
@@ -162,8 +176,11 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
     def list(self, request, *args, **kwargs):
         zoom = self._parse_zoom()
-        if zoom is not None and zoom < CLUSTER_ZOOM_THRESHOLD:
-            return self._clustered_response(zoom)
+        if zoom is not None:
+            # Count features in bbox; cluster if over the cap
+            count = self.filter_queryset(self.get_queryset()).count()
+            if count > MAX_GEO_RESULTS:
+                return self._clustered_response(zoom)
         return super().list(request, *args, **kwargs)
 
     def _parse_zoom(self):
@@ -222,18 +239,51 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
 class PathwayGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = models.Pathway.objects.only(
-        'id', 'name', 'pathway_type', 'path',
-    ).order_by('pk')
+        "id",
+        "label",
+        "pathway_type",
+        "path",
+    ).order_by("pk")
     serializer_class = PathwayGeoSerializer
     filterset_class = filters.PathwayFilterSet
     bbox_geo_field = 'path'
     pagination_class = None
 
 
+class ConduitBankGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
+    queryset = (
+        models.ConduitBank.objects.annotate(
+            conduit_count=Count("conduits"),
+        )
+        .only(
+            "id",
+            "label",
+            "pathway_type",
+            "path",
+            "configuration",
+        )
+        .order_by("pk")
+    )
+    serializer_class = ConduitBankGeoSerializer
+    filterset_class = filters.ConduitBankFilterSet
+    bbox_geo_field = "path"
+    pagination_class = None
+
+
 class ConduitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
-    queryset = models.Conduit.objects.only(
-        'id', 'name', 'pathway_type', 'path',
-    ).order_by('pk')
+    # Exclude conduits that belong to a bank — those are represented by the bank line
+    queryset = (
+        models.Conduit.objects.filter(
+            conduit_bank__isnull=True,
+        )
+        .only(
+            "id",
+            "label",
+            "pathway_type",
+            "path",
+        )
+        .order_by("pk")
+    )
     serializer_class = ConduitGeoSerializer
     filterset_class = filters.ConduitFilterSet
     bbox_geo_field = 'path'
@@ -242,8 +292,11 @@ class ConduitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
 class AerialSpanGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = models.AerialSpan.objects.only(
-        'id', 'name', 'pathway_type', 'path',
-    ).order_by('pk')
+        "id",
+        "label",
+        "pathway_type",
+        "path",
+    ).order_by("pk")
     serializer_class = AerialSpanGeoSerializer
     filterset_class = filters.AerialSpanFilterSet
     bbox_geo_field = 'path'
@@ -252,8 +305,11 @@ class AerialSpanGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
 class DirectBuriedGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = models.DirectBuried.objects.only(
-        'id', 'name', 'pathway_type', 'path',
-    ).order_by('pk')
+        "id",
+        "label",
+        "pathway_type",
+        "path",
+    ).order_by("pk")
     serializer_class = DirectBuriedGeoSerializer
     filterset_class = filters.DirectBuriedFilterSet
     bbox_geo_field = 'path'

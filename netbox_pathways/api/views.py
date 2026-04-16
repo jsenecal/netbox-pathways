@@ -12,7 +12,9 @@ class StructureViewSet(NetBoxModelViewSet):
 
 
 class ConduitBankViewSet(NetBoxModelViewSet):
-    queryset = models.ConduitBank.objects.select_related('structure', 'tenant')
+    queryset = models.ConduitBank.objects.select_related(
+        'start_structure', 'end_structure', 'start_location', 'end_location', 'tenant',
+    )
     serializer_class = serializers.ConduitBankSerializer
     filterset_class = filters.ConduitBankFilterSet
 
@@ -51,7 +53,10 @@ class DirectBuriedViewSet(NetBoxModelViewSet):
 
 
 class InnerductViewSet(NetBoxModelViewSet):
-    queryset = models.Innerduct.objects.select_related('parent_conduit').annotate(
+    queryset = models.Innerduct.objects.select_related(
+        'parent_conduit', 'start_structure', 'end_structure',
+        'start_location', 'end_location', 'tenant',
+    ).annotate(
         cables_routed=Count('cable_segments'),
     )
     serializer_class = serializers.InnerductSerializer

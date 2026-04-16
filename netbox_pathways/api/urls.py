@@ -6,6 +6,7 @@ from .external_geo import ExternalLayerGeoView
 from .geo import (
     AerialSpanGeoViewSet,
     CircuitGeoViewSet,
+    ConduitBankGeoViewSet,
     ConduitGeoViewSet,
     DirectBuriedGeoViewSet,
     PathwayGeoViewSet,
@@ -31,6 +32,7 @@ router.register('circuit-geometries', views.CircuitGeometryViewSet)
 # GeoJSON endpoints for QGIS / GIS client consumption
 router.register('geo/structures', StructureGeoViewSet, basename='geo-structure')
 router.register('geo/pathways', PathwayGeoViewSet, basename='geo-pathway')
+router.register('geo/conduit-banks', ConduitBankGeoViewSet, basename='geo-conduitbank')
 router.register('geo/conduits', ConduitGeoViewSet, basename='geo-conduit')
 router.register('geo/aerial-spans', AerialSpanGeoViewSet, basename='geo-aerialspan')
 router.register('geo/direct-buried', DirectBuriedGeoViewSet, basename='geo-directburied')
