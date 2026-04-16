@@ -271,6 +271,10 @@
         border-color: var(--tblr-primary, #206bc4);
         color: var(--tblr-body-color, #212529);
     }
+    .pw-layer-unavailable {
+        opacity: 0.3;
+        pointer-events: none;
+    }
     .pw-inline-edit {
         display: none;
         gap: 4px;
@@ -502,7 +506,8 @@
             center: [{{ map_center_lat }}, {{ map_center_lon }}],
             zoom: {{ map_zoom }},
             bounds: {{ map_bounds|default:"null" }},
-            kiosk: {{ kiosk|yesno:"true,false" }}
+            kiosk: {{ kiosk|yesno:"true,false" }},
+            select: '{{ selected_feature|escapejs }}'
         });
         // Re-size after layout settles and on window resize
         setTimeout(sizeMap, 200);

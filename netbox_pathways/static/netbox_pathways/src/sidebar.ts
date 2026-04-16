@@ -39,7 +39,12 @@ let _highlightOutline: L.Polyline | null = null;
 let _serverSearchCallback: ((query: string) => void) | null = null;
 let _lastServerQuery = '';
 let _pendingSelect: { url: string; featureType: string } | null = null;
+let _pendingFlySelectId = '';
 let _isKiosk = false;
+let _onSelectionChange: (() => void) | null = null;
+let _dimmedFeatures: FeatureEntry[] = [];
+let _activeConnectedIds: Set<string> | null = null;
+const DIM_OPACITY = 0.15;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -123,16 +128,22 @@ function _applyHighlightVisuals(entry: FeatureEntry): void {
     } else {
         const polyline = layer as L.Polyline & { _origStyle?: L.PathOptions };
         const latlngs = polyline.getLatLngs() as L.LatLng[];
-        if (latlngs && _map) {
+        if (latlngs && latlngs.length > 0 && _map) {
             _highlightOutline = L.polyline(latlngs, {
-                color: _colorForFeature(entry),
-                weight: 10,
-                opacity: 0.35,
+                color: '#ffeb3b',
+                weight: 12,
+                opacity: 0.5,
                 interactive: false,
             }).addTo(_map);
         }
-        polyline._origStyle = { weight: 3, opacity: 0.7 };
-        polyline.setStyle({ weight: 5, opacity: 1 });
+        const origStyle = (polyline as any).options || {};
+        polyline._origStyle = {
+            weight: origStyle.weight || 3,
+            opacity: origStyle.opacity || 0.7,
+            color: origStyle.color,
+            dashArray: origStyle.dashArray,
+        };
+        polyline.setStyle({ weight: 6, opacity: 1, dashArray: '' });
     }
 }
 
@@ -148,6 +159,48 @@ function _reapplyHighlight(entry: FeatureEntry): void {
     }
     _highlightedLayer = null;
     _applyHighlightVisuals(entry);
+}
+
+// ---------------------------------------------------------------------------
+// Focus dimming — dim features not connected to the selected one
+// ---------------------------------------------------------------------------
+
+function _dimFeatures(connectedIds: Set<string>): void {
+    _dimmedFeatures = [];
+    _activeConnectedIds = connectedIds;
+    _applyDim();
+}
+
+function _applyDim(): void {
+    if (!_activeConnectedIds) return;
+    _dimmedFeatures = [];
+    _features.forEach(function (f: FeatureEntry) {
+        const fid = _featureId(f);
+        if (_activeConnectedIds!.has(fid)) return;
+        if (_selected && fid === _featureId(_selected)) return;
+        if (!f.layer) return;
+
+        _dimmedFeatures.push(f);
+        if (f.featureType === 'structure') {
+            (f.layer as L.Marker).setOpacity(DIM_OPACITY);
+        } else if (typeof (f.layer as L.Polyline).setStyle === 'function') {
+            (f.layer as L.Polyline).setStyle({ opacity: DIM_OPACITY });
+        }
+    });
+}
+
+function _restoreDim(): void {
+    _activeConnectedIds = null;
+    _dimmedFeatures.forEach(function (f: FeatureEntry) {
+        if (!f.layer) return;
+        if (f.featureType === 'structure') {
+            (f.layer as L.Marker).setOpacity(1);
+        } else if (typeof (f.layer as L.Polyline).setStyle === 'function') {
+            const orig = (f.layer as any)._origStyle;
+            (f.layer as L.Polyline).setStyle({ opacity: orig ? orig.opacity : 0.7 });
+        }
+    });
+    _dimmedFeatures = [];
 }
 
 // ---------------------------------------------------------------------------
@@ -307,6 +360,8 @@ function _apiUrlForFeature(entry: FeatureEntry): string {
         switch (entry.featureType) {
             case 'structure':
                 return base + 'structures/' + id + '/';
+            case 'conduit_bank':
+                return base + 'conduit-banks/' + id + '/';
             case 'conduit':
                 return base + 'conduits/' + id + '/';
             case 'aerial':
@@ -352,11 +407,11 @@ function _resolveValue(val: unknown): ResolvedValue | null {
         return { text: choice.label || _titleCase(choice.value || '') };
     }
 
-    // Nested FK: {id, url, display, ...}
+    // Nested FK: {id, url, display_url, display, ...}
     if (typeof val === 'object' && val !== null) {
-        const fk = val as { id?: number; url?: string; display?: string; name?: string };
+        const fk = val as { id?: number; url?: string; display_url?: string; display?: string; name?: string };
         if (fk.display || fk.name || fk.id !== undefined) {
-            return { text: fk.display || fk.name || String(fk.id), url: fk.url || null };
+            return { text: fk.display || fk.name || String(fk.id), url: fk.display_url || fk.url || null };
         }
     }
 
@@ -435,6 +490,19 @@ const DETAIL_FIELDS: Record<string, DetailFieldDef[]> = {
         ['Tenant', 'tenant'],
         ['Installation Date', 'installation_date'],
         ['Access Notes', 'access_notes'],
+        ['Comments', 'comments'],
+    ],
+    conduit_bank: [
+        ['Start Structure', 'start_structure'],
+        ['End Structure', 'end_structure'],
+        ['Start Face', 'start_face'],
+        ['End Face', 'end_face'],
+        ['Configuration', 'configuration'],
+        ['Total Conduits', 'total_conduits'],
+        ['Encasement', 'encasement_type'],
+        ['Length', 'length', ' m'],
+        ['Tenant', 'tenant'],
+        ['Installation Date', 'installation_date'],
         ['Comments', 'comments'],
     ],
     conduit: [
@@ -611,57 +679,221 @@ function _renderEnrichedDetail(data: Record<string, unknown>, entry: FeatureEntr
 
     // For structures: show connected pathways
     if (entry.featureType === 'structure') {
-        _renderConnectedPathways(entry, container);
+        _fetchConnectedPathways(entry, container);
+    }
+    // For pathways: show connected structures
+    if (entry.featureType !== 'structure') {
+        _renderConnectedStructures(data, entry, container);
     }
 }
 
-function _renderConnectedPathways(entry: FeatureEntry, container: HTMLElement): void {
-    const structId = entry.props.id;
-    const connected = _features.filter(function (f: FeatureEntry) {
-        if (f.featureType === 'structure') return false;
-        const cached = _detailCache[_featureId(f)];
-        if (!cached) return false;
-        const startStruct = cached.start_structure as { id?: number } | number | null;
-        const endStruct = cached.end_structure as { id?: number } | number | null;
-        const startId = startStruct ? (typeof startStruct === 'object' ? startStruct.id : startStruct) : null;
-        const endId = endStruct ? (typeof endStruct === 'object' ? endStruct.id : endStruct) : null;
-        return startId === structId || endId === structId;
+/**
+ * Render a clickable list item for a connected object.
+ *
+ * @param selectId  Feature ID (e.g. "structure-123") used to look up in
+ *                  viewport or navigate to if not found.
+ * @param hintLatLng  Approximate location for flyTo when feature is off-screen.
+ */
+function _renderConnectedItem(
+    parent: HTMLElement,
+    name: string,
+    color: string,
+    typeLabel: string,
+    mapFeature: FeatureEntry | undefined,
+    selectId: string,
+    hintLatLng?: { lat: number; lng: number },
+): void {
+    const item = document.createElement('div');
+    item.className = 'pw-list-item';
+    item.style.padding = '6px 0';
+    item.style.cursor = 'pointer';
+
+    const dot = document.createElement('span');
+    dot.className = 'pw-list-dot';
+    dot.style.background = color;
+    item.appendChild(dot);
+
+    const label = document.createElement('span');
+    label.className = 'pw-list-label';
+    label.textContent = name || 'Unnamed';
+    item.appendChild(label);
+
+    const badge = document.createElement('span');
+    badge.className = 'pw-metric-badge pw-metric-muted';
+    badge.style.fontSize = '0.65em';
+    badge.style.padding = '1px 6px';
+    badge.textContent = typeLabel;
+    item.appendChild(badge);
+
+    item.addEventListener('click', function () {
+        // Re-check viewport — features may have been loaded since render
+        const current = _features.find(function (f: FeatureEntry) {
+            return _featureId(f) === selectId;
+        });
+        if (current) {
+            selectFeature(current);
+        } else if (hintLatLng && _map) {
+            // Fly to approximate location; data reload will auto-select
+            _pendingFlySelectId = selectId;
+            _map.flyTo(hintLatLng as L.LatLngExpression, 18, { duration: 0.5 });
+        } else {
+            // No cached location — full page navigation
+            window.location.href = window.location.pathname + '?select=' + encodeURIComponent(selectId);
+        }
     });
-    if (connected.length === 0) return;
+
+    parent.appendChild(item);
+}
+
+/** Fetch connected pathways and neighbor structures for a structure. */
+function _fetchConnectedPathways(entry: FeatureEntry, container: HTMLElement): void {
+    const structId = entry.props.id;
+    const base = API_BASE.replace(/geo\/?$/, '');
+    const url = base + 'pathways/?structure_id=' + structId;
+
+    const headers: Record<string, string> = { 'Accept': 'application/json' };
+    const csrfToken = _getCookie('csrftoken');
+    if (csrfToken) headers['X-CSRFToken'] = csrfToken;
+
+    fetch(url, { headers }).then(function (resp) {
+        return resp.ok ? resp.json() : null;
+    }).then(function (data: { results?: Array<Record<string, unknown>> } | null) {
+        if (!data || !data.results || data.results.length === 0) return;
+
+        // Collect neighbor structures from pathway endpoints
+        interface NeighborInfo { id: number; display: string; hint?: { lat: number; lng: number } }
+        const neighborMap: Record<number, NeighborInfo> = {};
+        const pwItems: Array<{ display: string; color: string; typeLabel: string; mapFeature: FeatureEntry | undefined; selectId: string; hint?: { lat: number; lng: number } }> = [];
+
+        data.results.forEach(function (pw: Record<string, unknown>) {
+            const pwType = pw.pathway_type as { value?: string; label?: string } | string || '';
+            const typeKey = typeof pwType === 'object' ? (pwType.value || '') : pwType;
+            const typeLabel = typeof pwType === 'object' ? (pwType.label || _titleCase(typeKey)) : _titleCase(typeKey);
+            const color = PATHWAY_COLORS[typeKey] || '#616161';
+            const display = (pw.display || pw.label || 'Unnamed') as string;
+
+            const pwId = pw.id as number;
+            const mapFeature = _features.find(function (f: FeatureEntry) {
+                return f.featureType !== 'structure' && f.props.id === pwId;
+            });
+            pwItems.push({
+                display, color, typeLabel, mapFeature,
+                selectId: typeKey + '-' + pwId,
+                hint: mapFeature ? mapFeature.latlng : undefined,
+            });
+
+            // Extract polyline endpoints for neighbor location hints
+            let startHint: { lat: number; lng: number } | undefined;
+            let endHint: { lat: number; lng: number } | undefined;
+            if (mapFeature && mapFeature.layer) {
+                try {
+                    const latlngs = (mapFeature.layer as L.Polyline).getLatLngs() as L.LatLng[];
+                    if (latlngs && latlngs.length >= 2) {
+                        startHint = { lat: latlngs[0].lat, lng: latlngs[0].lng };
+                        endHint = { lat: latlngs[latlngs.length - 1].lat, lng: latlngs[latlngs.length - 1].lng };
+                    }
+                } catch (_e) { /* not a polyline */ }
+            }
+
+            // Extract the "other" structure as a neighbor
+            const startS = pw.start_structure as { id?: number; display?: string } | null;
+            const endS = pw.end_structure as { id?: number; display?: string } | null;
+            if (startS && startS.id && startS.id !== structId && !neighborMap[startS.id]) {
+                neighborMap[startS.id] = { id: startS.id, display: startS.display || String(startS.id), hint: startHint };
+            }
+            if (endS && endS.id && endS.id !== structId && !neighborMap[endS.id]) {
+                neighborMap[endS.id] = { id: endS.id, display: endS.display || String(endS.id), hint: endHint };
+            }
+        });
+
+        // --- Connected Structures (neighbors) — listed first ---
+        const neighbors = Object.values(neighborMap);
+        if (neighbors.length > 0) {
+            const structSection = _createSection(
+                'Connected Structures (' + neighbors.length + ')',
+                container,
+            );
+            neighbors.forEach(function (s) {
+                const mf = _features.find(function (f: FeatureEntry) {
+                    return f.featureType === 'structure' && f.props.id === s.id;
+                });
+                _renderConnectedItem(structSection, s.display, '#2e7d32', 'Structure',
+                    mf, 'structure-' + s.id, s.hint,
+                );
+            });
+        }
+
+        // --- Connected Pathways ---
+        const pwSection = _createSection(
+            'Connected Pathways (' + pwItems.length + ')',
+            container,
+        );
+        pwItems.forEach(function (item) {
+            _renderConnectedItem(pwSection, item.display, item.color, item.typeLabel,
+                item.mapFeature, item.selectId, item.hint,
+            );
+        });
+
+        // Dim unrelated features
+        const connectedIds = new Set<string>();
+        neighbors.forEach(function (s) { connectedIds.add('structure-' + s.id); });
+        pwItems.forEach(function (item) { connectedIds.add(item.selectId); });
+        _dimFeatures(connectedIds);
+    });
+}
+
+/** Render connected structures from the pathway's detail data. */
+function _renderConnectedStructures(data: Record<string, unknown>, entry: FeatureEntry, container: HTMLElement): void {
+    const structs: Array<{ id: number; display: string; url?: string }> = [];
+
+    const startStruct = data.start_structure as { id?: number; display?: string; url?: string } | null;
+    const endStruct = data.end_structure as { id?: number; display?: string; url?: string } | null;
+    if (startStruct && startStruct.id) structs.push({
+        id: startStruct.id,
+        display: startStruct.display || String(startStruct.id),
+        url: startStruct.url,
+    });
+    if (endStruct && endStruct.id && (!startStruct || endStruct.id !== startStruct.id)) structs.push({
+        id: endStruct.id,
+        display: endStruct.display || String(endStruct.id),
+        url: endStruct.url,
+    });
+
+    if (structs.length === 0) return;
 
     const sectionBody = _createSection(
-        'Connected Pathways (' + connected.length + ')',
+        'Connected Structures (' + structs.length + ')',
         container,
     );
 
-    connected.forEach(function (f: FeatureEntry) {
-        const item = document.createElement('div');
-        item.className = 'pw-list-item';
-        item.style.padding = '6px 0';
+    // Extract hint coordinates from the current pathway's endpoints
+    let startHint: { lat: number; lng: number } | undefined;
+    let endHint: { lat: number; lng: number } | undefined;
+    if (entry.layer) {
+        try {
+            const latlngs = (entry.layer as L.Polyline).getLatLngs() as L.LatLng[];
+            if (latlngs && latlngs.length >= 2) {
+                startHint = { lat: latlngs[0].lat, lng: latlngs[0].lng };
+                endHint = { lat: latlngs[latlngs.length - 1].lat, lng: latlngs[latlngs.length - 1].lng };
+            }
+        } catch (_e) { /* not a polyline */ }
+    }
 
-        const dot = document.createElement('span');
-        dot.className = 'pw-list-dot';
-        dot.style.background = _colorForFeature(f);
-        item.appendChild(dot);
-
-        const label = document.createElement('span');
-        label.className = 'pw-list-label';
-        label.textContent = f.props.name || 'Unnamed';
-        item.appendChild(label);
-
-        const typeBadge = document.createElement('span');
-        typeBadge.className = 'pw-metric-badge pw-metric-muted';
-        typeBadge.style.fontSize = '0.65em';
-        typeBadge.style.padding = '1px 6px';
-        typeBadge.textContent = _titleCase(_typeKeyForFeature(f));
-        item.appendChild(typeBadge);
-
-        item.addEventListener('click', function () {
-            selectFeature(f);
+    structs.forEach(function (s, idx) {
+        const mf = _features.find(function (f: FeatureEntry) {
+            return f.featureType === 'structure' && f.props.id === s.id;
         });
+        const hint = idx === 0 ? startHint : endHint;
 
-        sectionBody.appendChild(item);
+        _renderConnectedItem(sectionBody, s.display, '#2e7d32', 'Structure',
+            mf, 'structure-' + s.id, hint,
+        );
     });
+
+    // Dim unrelated features
+    const connectedIds = new Set<string>();
+    structs.forEach(function (s) { connectedIds.add('structure-' + s.id); });
+    _dimFeatures(connectedIds);
 }
 
 // ---------------------------------------------------------------------------
@@ -1069,9 +1301,11 @@ function init(map: L.Map, kiosk?: boolean): void {
                 showList();
             }
             _unhighlightMapFeature();
+            _restoreDim();
             _selected = null;
             _highlightListItem(null);
             if (_isKiosk) _kioskSidebarClose();
+            if (_onSelectionChange) _onSelectionChange();
         }
     });
 
@@ -1085,12 +1319,14 @@ function init(map: L.Map, kiosk?: boolean): void {
     map.on('click', function (e: L.LeafletMouseEvent) {
         if (!(e.originalEvent as any)._sidebarClick) {
             _unhighlightMapFeature();
+            _restoreDim();
             _selected = null;
             _highlightListItem(null);
             const detailPanel = document.getElementById('pw-panel-detail');
             if (detailPanel && detailPanel.style.display !== 'none') {
                 showList();
             }
+            if (_onSelectionChange) _onSelectionChange();
         }
     });
 
@@ -1175,8 +1411,10 @@ function setFeatures(features: FeatureEntry[]): void {
             _selected = found;
             _buildTypeFilters();
             _applyFilters();
+            _applyDim();
             return;
         }
+        _restoreDim();
         _selected = null;
     }
 
@@ -1196,6 +1434,18 @@ function setFeatures(features: FeatureEntry[]): void {
                 _lastServerQuery = '';
                 _clearServerResults();
                 _applyFilters();
+                selectFeature(features[i]);
+                return;
+            }
+        }
+    }
+
+    // Resolve pending fly-to-select (from connected item click)
+    if (_pendingFlySelectId && features.length > 0) {
+        const id = _pendingFlySelectId;
+        _pendingFlySelectId = '';
+        for (let i = 0; i < features.length; i++) {
+            if (_featureId(features[i]) === id) {
                 selectFeature(features[i]);
                 return;
             }
@@ -1226,6 +1476,7 @@ function showDetail(entry: FeatureEntry): void {
 }
 
 function selectFeature(entry: FeatureEntry): void {
+    _restoreDim();
     _selected = entry;
     _highlightListItem(entry);
     _highlightMapFeature(entry);
@@ -1241,6 +1492,7 @@ function selectFeature(entry: FeatureEntry): void {
             _map.panTo(entry.latlng);
         }
     }
+    if (_onSelectionChange) _onSelectionChange();
 }
 
 function onFeatureCreated(entry: FeatureEntry): void {
@@ -1281,6 +1533,27 @@ function setDeps(deps: SidebarDeps): void {
 // Export
 // ---------------------------------------------------------------------------
 
+/** Return the ID string of the selected feature, or empty string. */
+function getSelectedId(): string {
+    return _selected ? _featureId(_selected) : '';
+}
+
+/** Select a feature by its ID string (e.g. "structure-123"). */
+function selectById(id: string): boolean {
+    if (!id) return false;
+    for (let i = 0; i < _features.length; i++) {
+        if (_featureId(_features[i]) === id) {
+            selectFeature(_features[i]);
+            return true;
+        }
+    }
+    return false;
+}
+
+function onSelectionChange(cb: () => void): void {
+    _onSelectionChange = cb;
+}
+
 export const Sidebar = {
     init,
     show,
@@ -1289,7 +1562,10 @@ export const Sidebar = {
     showList,
     showDetail,
     selectFeature,
+    selectById,
+    getSelectedId,
     onFeatureCreated,
+    onSelectionChange,
     setDeps,
     onServerSearch,
     setServerResults,

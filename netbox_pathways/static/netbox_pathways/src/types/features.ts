@@ -13,7 +13,7 @@ export interface GeoJSONProperties {
 }
 
 // Native layer types (used internally for styling/detail lookups)
-export const NATIVE_TYPES = ['structure', 'conduit', 'aerial', 'direct_buried', 'circuit'] as const;
+export const NATIVE_TYPES = ['structure', 'conduit_bank', 'conduit', 'aerial', 'direct_buried', 'circuit'] as const;
 export type NativeFeatureType = typeof NATIVE_TYPES[number];
 
 // Any feature type — includes external layer names

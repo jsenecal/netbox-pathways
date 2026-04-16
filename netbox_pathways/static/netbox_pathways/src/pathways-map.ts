@@ -28,6 +28,7 @@ const CFG: Partial<PathwaysConfig> = window.PATHWAYS_CONFIG || {};
 const API_BASE: string = CFG.apiBase || '/api/plugins/pathways/geo/';
 const MAX_NATIVE_ZOOM: number = CFG.maxNativeZoom || 19;
 const MIN_DATA_ZOOM = 11;
+const MIN_BANK_ZOOM = 18;  // conduit banks only shown past clustering level
 
 // ---------------------------------------------------------------------------
 // Color & Icon Maps
@@ -58,9 +59,9 @@ const STRUCTURE_SHAPES: Record<string, string> = {
 };
 
 const PATHWAY_COLORS: Record<string, string> = {
-    'conduit': '#795548', 'aerial': '#1565c0', 'direct_buried': '#616161',
-    'innerduct': '#e65100', 'microduct': '#6a1b9a', 'tray': '#2e7d32',
-    'raceway': '#00838f', 'submarine': '#1a237e',
+    'conduit': '#f57c00', 'conduit_bank': '#ad1457', 'aerial': '#1565c0',
+    'direct_buried': '#616161', 'innerduct': '#e65100', 'microduct': '#6a1b9a',
+    'tray': '#2e7d32', 'raceway': '#00838f', 'submarine': '#1a237e',
 };
 
 // ---------------------------------------------------------------------------
@@ -210,6 +211,7 @@ async function _serverSearch(query: string): Promise<void> {
     // Search all layer endpoints in parallel, without bbox
     const endpoints: [string, FeatureType, string][] = [
         ['structures/', 'structure', 'structure_type'],
+        ['conduit-banks/', 'conduit_bank', 'pathway_type'],
         ['conduits/', 'conduit', 'pathway_type'],
         ['aerial-spans/', 'aerial', 'pathway_type'],
         ['direct-buried/', 'direct_buried', 'pathway_type'],
@@ -265,7 +267,7 @@ async function _serverSearch(query: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 function _addLineLabels(geoJsonLayer: L.GeoJSON, layerGroup: L.LayerGroup, map: L.Map): void {
-    if (map.getZoom() < 15) return;
+    if (map.getZoom() < 20) return;
 
     geoJsonLayer.eachLayer(function (layer: L.Layer) {
         const polyline = layer as L.Polyline;
@@ -281,15 +283,20 @@ function _addLineLabels(geoJsonLayer: L.GeoJSON, layerGroup: L.LayerGroup, map: 
         const midLat = (p1.lat + p2.lat) / 2;
         const midLng = (p1.lng + p2.lng) / 2;
 
-        const dx = p2.lng - p1.lng;
-        const dy = p2.lat - p1.lat;
+        // Use screen pixel coordinates so the angle matches the visual line
+        const px1 = map.latLngToContainerPoint(p1);
+        const px2 = map.latLngToContainerPoint(p2);
+        const dx = px2.x - px1.x;
+        const dy = px2.y - px1.y;
+        // Angle in screen space (0° = right, positive = clockwise)
         let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        // Keep text readable (not upside-down)
         if (angle > 90) angle -= 180;
         if (angle < -90) angle += 180;
 
         const icon = L.divIcon({
             className: 'pw-line-label',
-            html: '<div style="transform:rotate(' + (-angle) + 'deg)">' + _esc(name) + '</div>',
+            html: '<div style="transform:rotate(' + angle + 'deg) translateY(-12px)">' + _esc(name) + '</div>',
             iconSize: [0, 0] as [number, number],
             iconAnchor: [0, 0] as [number, number],
         });
@@ -392,9 +399,9 @@ function _createZoomHint(map: L.Map): HTMLDivElement {
 // ---------------------------------------------------------------------------
 
 const PATHWAY_DASH: Record<string, string> = {
-    'conduit': '5,5', 'aerial': '10,5', 'direct_buried': '2,4',
-    'innerduct': '8,3', 'microduct': '1,3', 'tray': '',
-    'raceway': '12,4', 'submarine': '6,2,2,2',
+    'conduit': '5,5', 'conduit_bank': '', 'aerial': '10,5',
+    'direct_buried': '2,4', 'innerduct': '8,3', 'microduct': '1,3',
+    'tray': '', 'raceway': '12,4', 'submarine': '6,2,2,2',
 };
 
 /**
@@ -457,8 +464,8 @@ function _createLegend(map: L.Map): void {
             const pathTitle = L.DomUtil.create('div', 'pw-legend-section-title', pathSec);
             pathTitle.textContent = 'Pathways';
 
-            const pathTypes = ['conduit', 'aerial', 'direct_buried', 'innerduct',
-                'microduct', 'tray', 'raceway', 'submarine'];
+            const pathTypes = ['conduit', 'conduit_bank', 'aerial', 'direct_buried',
+                'innerduct', 'microduct', 'tray', 'raceway', 'submarine'];
             for (let i = 0; i < pathTypes.length; i++) {
                 const ptype = pathTypes[i];
                 const color = PATHWAY_COLORS[ptype] || '#616161';
@@ -519,6 +526,7 @@ interface MapInitConfig {
     zoom?: number;
     bounds?: L.LatLngBoundsExpression;
     kiosk?: boolean;
+    select?: string;  // feature ID to auto-select, e.g. "structure-123"
 }
 
 function _createSidebarToggleControl(map: L.Map, isKiosk: boolean): L.Control {
@@ -654,9 +662,11 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         layers: [firstLayer],
     });
 
-    // Fit to data extent if bounds provided, otherwise use center/zoom
+    // Fit to bounds if provided, otherwise use center/zoom
     if (config.bounds) {
-        map.fitBounds(config.bounds, { padding: [30, 30] as [number, number], maxZoom: 17 });
+        // Allow higher zoom when selecting a specific feature vs. viewing full data extent
+        const boundsMaxZoom = config.select ? 20 : 17;
+        map.fitBounds(config.bounds, { padding: [50, 50] as [number, number], maxZoom: boundsMaxZoom });
     } else {
         map.setView(config.center || [0, 0], config.zoom || 2);
     }
@@ -696,7 +706,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
     const PREFS_KEY = 'pathways_map_layers';
     const DEFAULT_LAYERS: Record<string, boolean> = {
-        'Structures': true, 'Conduits': true, 'Aerial Spans': false, 'Direct Buried': false, 'Circuit Routes': false,
+        'Structures': true, 'Conduit Banks': true, 'Conduits': true, 'Aerial Spans': false, 'Direct Buried': false, 'Circuit Routes': false,
     };
 
     function _loadPrefs(): Record<string, boolean> | null {
@@ -723,6 +733,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
     const dataLayers: Record<string, L.LayerGroup> = {
         structures: structuresLayer,
+        conduitBanks: L.layerGroup(),
         conduits: L.layerGroup(),
         aerialSpans: L.layerGroup(),
         directBuried: L.layerGroup(),
@@ -731,6 +742,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
     const layerNames: Record<string, L.LayerGroup> = {
         'Structures': dataLayers.structures,
+        'Conduit Banks': dataLayers.conduitBanks,
         'Conduits': dataLayers.conduits,
         'Aerial Spans': dataLayers.aerialSpans,
         'Direct Buried': dataLayers.directBuried,
@@ -755,6 +767,11 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
             layerNames[lname].addTo(map);
         }
     }
+
+    // Min zoom per layer display name — layers below this zoom are dimmed
+    const LAYER_MIN_ZOOM: Record<string, number> = {
+        'Conduit Banks': MIN_BANK_ZOOM,
+    };
 
     // --- Sidebar layer toggle sync ---
 
@@ -789,7 +806,8 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
     // SVG icons for layer toggle buttons
     const LAYER_ICONS: Record<string, string> = {
         'Structures': '<svg viewBox="0 0 20 20" width="14" height="14"><circle cx="10" cy="10" r="8" fill="#2e7d32" stroke="white" stroke-width="1.5"/></svg>',
-        'Conduits': '<svg viewBox="0 0 20 6" width="18" height="6"><line x1="0" y1="3" x2="20" y2="3" stroke="#795548" stroke-width="3" stroke-dasharray="5 5"/></svg>',
+        'Conduit Banks': '<svg viewBox="0 0 20 6" width="18" height="6"><line x1="0" y1="3" x2="20" y2="3" stroke="#ad1457" stroke-width="5"/></svg>',
+        'Conduits': '<svg viewBox="0 0 20 6" width="18" height="6"><line x1="0" y1="3" x2="20" y2="3" stroke="#f57c00" stroke-width="3" stroke-dasharray="5 5"/></svg>',
         'Aerial Spans': '<svg viewBox="0 0 20 6" width="18" height="6"><line x1="0" y1="3" x2="20" y2="3" stroke="#1565c0" stroke-width="3" stroke-dasharray="10 5"/></svg>',
         'Direct Buried': '<svg viewBox="0 0 20 6" width="18" height="6"><line x1="0" y1="3" x2="20" y2="3" stroke="#616161" stroke-width="3" stroke-dasharray="2 4"/></svg>',
         'Circuit Routes': '<svg viewBox="0 0 20 6" width="18" height="6"><line x1="0" y1="3" x2="20" y2="3" stroke="#d32f2f" stroke-width="3" stroke-dasharray="8 6"/></svg>',
@@ -851,6 +869,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
         if (zoom < MIN_DATA_ZOOM) {
             structuresLayer.clearLayers();
+            dataLayers.conduitBanks.clearLayers();
             dataLayers.conduits.clearLayers();
             dataLayers.aerialSpans.clearLayers();
             dataLayers.directBuried.clearLayers();
@@ -864,29 +883,50 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         }
 
         zoomHint.style.display = 'none';
+
+        // Dim toggles for layers unavailable at this zoom
+        for (const lname in LAYER_MIN_ZOOM) {
+            if (_layerCheckboxes[lname]) {
+                const btn = _layerCheckboxes[lname].closest('.pw-layer-toggle');
+                if (btn) btn.classList.toggle('pw-layer-unavailable', zoom < LAYER_MIN_ZOOM[lname]);
+            }
+        }
+
         const bbox = _bboxParam(map);
         const allFeatures: FeatureEntry[] = [];
         let pendingLoads = 0;
         let totalExpectedLoads = 0;
 
-        if (map.hasLayer(structuresLayer)) totalExpectedLoads++;
-        if (map.hasLayer(dataLayers.conduits)) totalExpectedLoads++;
-        if (map.hasLayer(dataLayers.aerialSpans)) totalExpectedLoads++;
-        if (map.hasLayer(dataLayers.directBuried)) totalExpectedLoads++;
-        if (map.hasLayer(dataLayers.circuits)) totalExpectedLoads++;
+        // Pathway layer configs: [endpoint, layerGroup, featureType, style, minZoom?]
+        const pathwayConfigs: [string, L.LayerGroup, FeatureType, PathwayStyle, number?][] = [
+            ['conduit-banks/', dataLayers.conduitBanks, 'conduit_bank', { color: '#ad1457', weight: 5, opacity: 0.8, dashArray: '' }, MIN_BANK_ZOOM],
+            ['conduits/', dataLayers.conduits, 'conduit', { color: '#f57c00', weight: 3, opacity: 0.7, dashArray: '5 5' }],
+            ['aerial-spans/', dataLayers.aerialSpans, 'aerial', { color: '#1565c0', weight: 3, opacity: 0.7, dashArray: '10 5' }],
+            ['direct-buried/', dataLayers.directBuried, 'direct_buried', { color: '#616161', weight: 3, opacity: 0.7, dashArray: '2 4' }],
+            ['circuits/', dataLayers.circuits, 'circuit', { color: '#d32f2f', weight: 3, opacity: 0.8, dashArray: '8 6' }],
+        ];
 
+        if (map.hasLayer(structuresLayer)) totalExpectedLoads++;
         let pathwayCount = 0;
         let totalLength = 0;
         let pendingPathway = 0;
-        if (map.hasLayer(dataLayers.conduits)) pendingPathway++;
-        if (map.hasLayer(dataLayers.aerialSpans)) pendingPathway++;
-        if (map.hasLayer(dataLayers.directBuried)) pendingPathway++;
-        if (map.hasLayer(dataLayers.circuits)) pendingPathway++;
+        pathwayConfigs.forEach(function (cfg) {
+            const [, layer, , , minZoom] = cfg;
+            if (map.hasLayer(layer) && (!minZoom || zoom >= minZoom)) {
+                totalExpectedLoads++;
+                pendingPathway++;
+            }
+        });
 
         function _checkAllLoaded(): void {
             pendingLoads++;
             if (pendingLoads === totalExpectedLoads) {
                 Sidebar.setFeatures(allFeatures);
+                // Auto-select feature from URL on first load
+                if (_pendingSelectId) {
+                    Sidebar.selectById(_pendingSelectId);
+                    _pendingSelectId = '';
+                }
             }
         }
 
@@ -999,6 +1039,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
                     layer.on('click', function (e: L.LeafletMouseEvent) {
                         if (e.originalEvent) (e.originalEvent as any)._sidebarClick = true;
                         Sidebar.selectFeature(entry);
+                        _updateUrl();
                     });
                     layer.on('mouseover', function (e: L.LeafletMouseEvent) {
                         Popover.show(e.latlng, feature.properties as GeoJSONProperties);
@@ -1008,17 +1049,10 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
             };
         }
 
-        // Pathway layer configs
-        const pathwayConfigs: [string, L.LayerGroup, FeatureType, PathwayStyle][] = [
-            ['conduits/', dataLayers.conduits, 'conduit', { color: '#795548', weight: 3, opacity: 0.7, dashArray: '5 5' }],
-            ['aerial-spans/', dataLayers.aerialSpans, 'aerial', { color: '#1565c0', weight: 3, opacity: 0.7, dashArray: '10 5' }],
-            ['direct-buried/', dataLayers.directBuried, 'direct_buried', { color: '#616161', weight: 3, opacity: 0.7, dashArray: '2 4' }],
-            ['circuits/', dataLayers.circuits, 'circuit', { color: '#d32f2f', weight: 3, opacity: 0.8, dashArray: '8 6' }],
-        ];
-
         pathwayConfigs.forEach(function (cfg) {
-            const [endpoint, layer, ftype, style] = cfg;
+            const [endpoint, layer, ftype, style, minZoom] = cfg;
             if (!map.hasLayer(layer)) return;
+            if (minZoom && zoom < minZoom) { layer.clearLayers(); return; }
             _fetchGeoJSON(endpoint, bbox, function (data: GeoJSON.FeatureCollection) {
                 layer.clearLayers();
                 const geoLayer = L.geoJSON(data, _makePathwayOpts(ftype, style));
@@ -1062,13 +1096,37 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         }
     }
 
+    // --- URL state management ---
+
+    let _pendingSelectId = config.select || '';
+
+    function _updateUrl(): void {
+        const center = map.getCenter();
+        const zoom = map.getZoom();
+        const params = new URLSearchParams();
+        params.set('lat', center.lat.toFixed(6));
+        params.set('lon', center.lng.toFixed(6));
+        params.set('zoom', String(zoom));
+        const selId = Sidebar.getSelectedId();
+        if (selId) params.set('select', selId);
+        if (config.kiosk) params.set('kiosk', 'true');
+        const newUrl = window.location.pathname + '?' + params.toString();
+        history.replaceState(null, '', newUrl);
+    }
+
+    const debouncedUrlUpdate = _debounce(_updateUrl, 300);
+
     // Load data on move/zoom with debounce
     const debouncedLoad = _debounce(_loadData, 500);
-    map.on('moveend', debouncedLoad);
+    map.on('moveend', function () {
+        debouncedLoad();
+        debouncedUrlUpdate();
+    });
 
     // Initialize sidebar and popover
     Sidebar.init(map, config.kiosk);
     Sidebar.onServerSearch(_serverSearch);
+    Sidebar.onSelectionChange(_updateUrl);
     Popover.init(map);
 
     // Initial load

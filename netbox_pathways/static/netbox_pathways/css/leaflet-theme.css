@@ -85,6 +85,15 @@
     color: var(--pw-map-popup-text);
 }
 
+/* --- Dim/focus transitions ---------------------------------------- */
+
+.leaflet-marker-icon {
+    transition: opacity 0.35s ease;
+}
+.leaflet-interactive {
+    transition: stroke-opacity 0.35s ease, opacity 0.35s ease;
+}
+
 /* --- Structure marker icons --------------------------------------- */
 
 .pw-marker {
@@ -199,6 +208,12 @@
 form .leaflet-container {
     width: 100% !important;
     max-width: 100%;
+}
+
+/* Add spacing around the help text below django-leaflet map widgets */
+textarea.django-leaflet-raw-textarea ~ .form-text {
+    display: block;
+    margin-top: 0.5rem;
 }
 
 [data-bs-theme="dark"] .leaflet-container {
