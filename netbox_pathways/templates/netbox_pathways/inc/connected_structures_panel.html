@@ -1,0 +1,9 @@
+{% load render_table from django_tables2 %}
+<div class="card">
+  <h2 class="card-header">Connected Structures</h2>
+  {% if connected_structures_table.rows|length %}
+    {% render_table connected_structures_table 'inc/table.html' %}
+  {% else %}
+    <div class="card-body text-muted">No directly connected structures.</div>
+  {% endif %}
+</div>

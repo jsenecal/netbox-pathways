@@ -8,15 +8,35 @@ from django.utils.text import slugify
 from django.views import View
 from extras.ui.panels import CustomFieldsPanel, TagsPanel
 from netbox.ui import layout
-from netbox.ui.panels import CommentsPanel, ObjectsTablePanel
+from netbox.ui.panels import CommentsPanel, ObjectsTablePanel, TemplatePanel
+from netbox.object_actions import CloneObject, DeleteObject, EditObject, ObjectAction
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from netbox_pathways.registry import registry as map_layer_registry
 
-from . import filters, forms, models, tables
+from . import filterforms, filters, forms, models, tables
 from .graph import PathwayGraph, batch_resolve_nodes
 from .ui import panels
+
+
+def _map_url_for(obj):
+    """Build a map URL that centres on and selects this object."""
+    if hasattr(obj, 'pathway_type') and obj.pathway_type:
+        feature_type = obj.pathway_type
+    else:
+        feature_type = 'structure'
+    return reverse('plugins:netbox_pathways:map') + f'?select={feature_type}-{obj.pk}'
+
+
+class ViewInMap(ObjectAction):
+    label = 'Map'
+    template_name = 'netbox_pathways/buttons/view_in_map.html'
+
+    @classmethod
+    def get_url(cls, obj):
+        return _map_url_for(obj)
+
 
 # --- Structure ---
 
@@ -24,10 +44,12 @@ class StructureListView(generic.ObjectListView):
     queryset = models.Structure.objects.select_related('site', 'tenant')
     table = tables.StructureTable
     filterset = filters.StructureFilterSet
+    filterset_form = filterforms.StructureFilterForm
 
 
 class StructureView(generic.ObjectView):
     queryset = models.Structure.objects.all()
+    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
     layout = layout.SimpleLayout(
         left_panels=[
             panels.StructurePanel(),
@@ -37,13 +59,32 @@ class StructureView(generic.ObjectView):
         ],
         right_panels=[],
         bottom_panels=[
-            ObjectsTablePanel(
-                model='netbox_pathways.ConduitBank',
-                title='Conduit Banks',
-                filters={'structure_id': lambda ctx: ctx['object'].pk},
+            TemplatePanel(
+                template_name='netbox_pathways/inc/connected_structures_panel.html',
             ),
         ],
     )
+
+    def get_extra_context(self, request, instance):
+        # Find all structures directly connected via any pathway
+        connected_ids = set()
+        pathways = models.Pathway.objects.filter(
+            Q(start_structure=instance) | Q(end_structure=instance)
+        ).select_related('start_structure', 'end_structure')
+        for p in pathways:
+            if p.start_structure_id and p.start_structure_id != instance.pk:
+                connected_ids.add(p.start_structure_id)
+            if p.end_structure_id and p.end_structure_id != instance.pk:
+                connected_ids.add(p.end_structure_id)
+
+        connected_qs = models.Structure.objects.filter(pk__in=connected_ids).select_related('site', 'tenant')
+        table = tables.StructureTable(connected_qs, orderable=False)
+        table.columns.hide('actions')
+        table.columns.hide('pk')
+
+        return {
+            'connected_structures_table': table,
+        }
 
 
 class StructureEditView(generic.ObjectEditView):
@@ -117,23 +158,6 @@ class StructureCreateSiteView(LoginRequiredMixin, View):
         return redirect(structure.get_absolute_url())
 
 
-@register_model_view(models.Structure, 'pathways')
-class StructurePathwaysView(generic.ObjectChildrenView):
-    queryset = models.Structure.objects.all()
-    child_model = models.Pathway
-    table = tables.PathwayTable
-    filterset = filters.PathwayFilterSet
-    tab = ViewTab(
-        label='Pathways',
-        badge=lambda obj: obj.pathways_out.count() + obj.pathways_in.count(),
-    )
-
-    def get_children(self, request, parent):
-        return models.Pathway.objects.filter(
-            Q(start_structure=parent) | Q(end_structure=parent)
-        )
-
-
 @register_model_view(models.Structure, 'conduit_banks')
 class StructureConduitBanksView(generic.ObjectChildrenView):
     queryset = models.Structure.objects.all()
@@ -142,11 +166,75 @@ class StructureConduitBanksView(generic.ObjectChildrenView):
     filterset = filters.ConduitBankFilterSet
     tab = ViewTab(
         label='Conduit Banks',
-        badge=lambda obj: obj.conduit_banks.count(),
+        badge=lambda obj: models.ConduitBank.objects.filter(
+            Q(start_structure=obj) | Q(end_structure=obj)
+        ).count(),
     )
 
     def get_children(self, request, parent):
-        return parent.conduit_banks.all()
+        return models.ConduitBank.objects.filter(
+            Q(start_structure=parent) | Q(end_structure=parent)
+        )
+
+
+@register_model_view(models.Structure, 'conduits')
+class StructureConduitsView(generic.ObjectChildrenView):
+    queryset = models.Structure.objects.all()
+    child_model = models.Conduit
+    table = tables.ConduitTable
+    filterset = filters.ConduitFilterSet
+    tab = ViewTab(
+        label='Conduits',
+        badge=lambda obj: models.Conduit.objects.filter(
+            Q(start_structure=obj) | Q(end_structure=obj)
+        ).count(),
+        hide_if_empty=True,
+    )
+
+    def get_children(self, request, parent):
+        return models.Conduit.objects.filter(
+            Q(start_structure=parent) | Q(end_structure=parent)
+        )
+
+
+@register_model_view(models.Structure, 'aerial_spans')
+class StructureAerialSpansView(generic.ObjectChildrenView):
+    queryset = models.Structure.objects.all()
+    child_model = models.AerialSpan
+    table = tables.AerialSpanTable
+    filterset = filters.AerialSpanFilterSet
+    tab = ViewTab(
+        label='Aerial Spans',
+        badge=lambda obj: models.AerialSpan.objects.filter(
+            Q(start_structure=obj) | Q(end_structure=obj)
+        ).count(),
+        hide_if_empty=True,
+    )
+
+    def get_children(self, request, parent):
+        return models.AerialSpan.objects.filter(
+            Q(start_structure=parent) | Q(end_structure=parent)
+        )
+
+
+@register_model_view(models.Structure, 'direct_buried')
+class StructureDirectBuriedView(generic.ObjectChildrenView):
+    queryset = models.Structure.objects.all()
+    child_model = models.DirectBuried
+    table = tables.DirectBuriedTable
+    filterset = filters.DirectBuriedFilterSet
+    tab = ViewTab(
+        label='Direct Buried',
+        badge=lambda obj: models.DirectBuried.objects.filter(
+            Q(start_structure=obj) | Q(end_structure=obj)
+        ).count(),
+        hide_if_empty=True,
+    )
+
+    def get_children(self, request, parent):
+        return models.DirectBuried.objects.filter(
+            Q(start_structure=parent) | Q(end_structure=parent)
+        )
 
 
 # --- Pathway (base) ---
@@ -157,10 +245,12 @@ class PathwayListView(generic.ObjectListView):
     ).annotate(cables_routed=Count('cable_segments'))
     table = tables.PathwayTable
     filterset = filters.PathwayFilterSet
+    filterset_form = filterforms.PathwayFilterForm
 
 
 class PathwayView(generic.ObjectView):
     queryset = models.Pathway.objects.all()
+    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
     layout = layout.SimpleLayout(
         left_panels=[
             panels.PathwayPanel(),
@@ -186,11 +276,13 @@ class ConduitListView(generic.ObjectListView):
         'conduit_bank', 'tenant',
     ).annotate(cables_routed=Count('cable_segments'))
     table = tables.ConduitTable
+    filterset_form = filterforms.ConduitFilterForm
     filterset = filters.ConduitFilterSet
 
 
 class ConduitView(generic.ObjectView):
     queryset = models.Conduit.objects.all()
+    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
     layout = layout.SimpleLayout(
         left_panels=[
             panels.ConduitPanel(),
@@ -262,10 +354,12 @@ class AerialSpanListView(generic.ObjectListView):
     ).annotate(cables_routed=Count('cable_segments'))
     table = tables.AerialSpanTable
     filterset = filters.AerialSpanFilterSet
+    filterset_form = filterforms.AerialSpanFilterForm
 
 
 class AerialSpanView(generic.ObjectView):
     queryset = models.AerialSpan.objects.all()
+    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
     layout = layout.SimpleLayout(
         left_panels=[
             panels.AerialSpanPanel(),
@@ -317,10 +411,12 @@ class DirectBuriedListView(generic.ObjectListView):
     ).annotate(cables_routed=Count('cable_segments'))
     table = tables.DirectBuriedTable
     filterset = filters.DirectBuriedFilterSet
+    filterset_form = filterforms.DirectBuriedFilterForm
 
 
 class DirectBuriedView(generic.ObjectView):
     queryset = models.DirectBuried.objects.all()
+    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
     layout = layout.SimpleLayout(
         left_panels=[
             panels.DirectBuriedPanel(),
@@ -355,10 +451,12 @@ class InnerductListView(generic.ObjectListView):
     )
     table = tables.InnerductTable
     filterset = filters.InnerductFilterSet
+    filterset_form = filterforms.InnerductFilterForm
 
 
 class InnerductView(generic.ObjectView):
     queryset = models.Innerduct.objects.all()
+    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
     layout = layout.SimpleLayout(
         left_panels=[
             panels.InnerductPanel(),
@@ -388,15 +486,17 @@ class InnerductDeleteView(generic.ObjectDeleteView):
 # --- Conduit Bank ---
 
 class ConduitBankListView(generic.ObjectListView):
-    queryset = models.ConduitBank.objects.select_related('structure', 'tenant').annotate(
+    queryset = models.ConduitBank.objects.select_related('start_structure', 'end_structure', 'tenant').annotate(
         conduit_count=Count('conduits'),
     )
     table = tables.ConduitBankTable
     filterset = filters.ConduitBankFilterSet
+    filterset_form = filterforms.ConduitBankFilterForm
 
 
 class ConduitBankView(generic.ObjectView):
     queryset = models.ConduitBank.objects.all()
+    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
     layout = layout.SimpleLayout(
         left_panels=[
             panels.ConduitBankPanel(),
@@ -448,6 +548,7 @@ class ConduitJunctionListView(generic.ObjectListView):
     )
     table = tables.ConduitJunctionTable
     filterset = filters.ConduitJunctionFilterSet
+    filterset_form = filterforms.ConduitJunctionFilterForm
 
 
 class ConduitJunctionView(generic.ObjectView):
@@ -477,6 +578,7 @@ class CableSegmentListView(generic.ObjectListView):
     queryset = models.CableSegment.objects.select_related('cable', 'pathway')
     table = tables.CableSegmentTable
     filterset = filters.CableSegmentFilterSet
+    filterset_form = filterforms.CableSegmentFilterForm
 
 
 class CableSegmentView(generic.ObjectView):
@@ -516,6 +618,7 @@ class PathwayLocationListView(generic.ObjectListView):
     queryset = models.PathwayLocation.objects.select_related('pathway', 'site', 'location')
     table = tables.PathwayLocationTable
     filterset = filters.PathwayLocationFilterSet
+    filterset_form = filterforms.PathwayLocationFilterForm
 
 
 class PathwayLocationView(generic.ObjectView):
@@ -545,6 +648,7 @@ class SiteGeometryListView(generic.ObjectListView):
     queryset = models.SiteGeometry.objects.select_related('site', 'structure')
     table = tables.SiteGeometryTable
     filterset = filters.SiteGeometryFilterSet
+    filterset_form = filterforms.SiteGeometryFilterForm
 
 
 class SiteGeometryView(generic.ObjectView):
@@ -576,6 +680,7 @@ class CircuitGeometryListView(generic.ObjectListView):
     )
     table = tables.CircuitGeometryTable
     filterset = filters.CircuitGeometryFilterSet
+    filterset_form = filterforms.CircuitGeometryFilterForm
 
 
 class CircuitGeometryView(generic.ObjectView):
@@ -605,6 +710,7 @@ class SlackLoopListView(generic.ObjectListView):
     queryset = models.SlackLoop.objects.select_related('cable', 'structure', 'pathway')
     table = tables.SlackLoopTable
     filterset = filters.SlackLoopFilterSet
+    filterset_form = filterforms.SlackLoopFilterForm
 
 
 class SlackLoopView(generic.ObjectView):
@@ -722,6 +828,44 @@ class MapView(LoginRequiredMixin, View):
         except (ValueError, AttributeError):
             return None
 
+    @staticmethod
+    def _resolve_feature_extent(select_param):
+        """Resolve WGS84 bounding box from a select param like 'structure-123'.
+
+        Returns (west, south, east, north) or None.
+        """
+        from django.contrib.gis.db.models import Extent
+        from django.contrib.gis.db.models.functions import Transform
+
+        try:
+            ftype, fid = select_param.rsplit('-', 1)
+            fid = int(fid)
+        except (ValueError, AttributeError):
+            return None
+
+        model_map = {
+            'structure': (models.Structure, 'location'),
+            'conduit': (models.Conduit, 'path'),
+            'conduit_bank': (models.ConduitBank, 'path'),
+            'aerial': (models.AerialSpan, 'path'),
+            'direct_buried': (models.DirectBuried, 'path'),
+        }
+        entry = model_map.get(ftype)
+        if not entry:
+            return None
+
+        model_cls, geom_field = entry
+        try:
+            result = model_cls.objects.filter(pk=fid).annotate(
+                _geo=Transform(geom_field, 4326),
+            ).aggregate(bbox=Extent('_geo'))
+            bbox = result.get('bbox')
+            if bbox:
+                return bbox  # (west, south, east, north)
+        except Exception:
+            pass
+        return None
+
     def get(self, request):
         import json
 
@@ -753,12 +897,37 @@ class MapView(LoginRequiredMixin, View):
         }
 
         ctx['kiosk'] = request.GET.get('kiosk', '').lower() == 'true'
+        ctx['selected_feature'] = request.GET.get('select', '')
 
         if request.GET.get('lat') or request.GET.get('lon'):
             ctx['map_center_lat'] = self._safe_float(request.GET.get('lat'), default_lat)
             ctx['map_center_lon'] = self._safe_float(request.GET.get('lon'), default_lon)
             ctx['map_zoom'] = self._safe_int(request.GET.get('zoom'), default_zoom)
             ctx['map_bounds'] = ''
+        elif ctx['selected_feature']:
+            # Resolve bounds from the selected feature's geometry
+            sel_ext = self._resolve_feature_extent(ctx['selected_feature'])
+            if sel_ext:
+                ctx['map_center_lat'] = (sel_ext[1] + sel_ext[3]) / 2
+                ctx['map_center_lon'] = (sel_ext[0] + sel_ext[2]) / 2
+                ctx['map_zoom'] = 18  # fallback if fitBounds not used
+                ctx['map_bounds'] = json.dumps([
+                    [sel_ext[1], sel_ext[0]],
+                    [sel_ext[3], sel_ext[2]],
+                ])
+            elif extent:
+                ctx['map_center_lat'] = (extent[1] + extent[3]) / 2
+                ctx['map_center_lon'] = (extent[0] + extent[2]) / 2
+                ctx['map_zoom'] = default_zoom
+                ctx['map_bounds'] = json.dumps([
+                    [extent[1], extent[0]],
+                    [extent[3], extent[2]],
+                ])
+            else:
+                ctx['map_center_lat'] = default_lat
+                ctx['map_center_lon'] = default_lon
+                ctx['map_zoom'] = default_zoom
+                ctx['map_bounds'] = ''
         elif extent:
             ctx['map_center_lat'] = (extent[1] + extent[3]) / 2
             ctx['map_center_lon'] = (extent[0] + extent[2]) / 2
