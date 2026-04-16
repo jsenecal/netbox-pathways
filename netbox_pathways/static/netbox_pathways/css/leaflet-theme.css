@@ -371,3 +371,11 @@ textarea.django-leaflet-raw-textarea ~ .form-text {
 [data-bs-theme="dark"] .pw-legend {
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
+
+/* --- Locked Endpoint Markers (edit widget) --- */
+/* Styles defined inline in endpoint-markers.ts via Leaflet options.
+   CSS overrides for dark mode only. */
+
+[data-bs-theme="dark"] .leaflet-interactive.pw-locked-endpoint {
+    stroke: #ff8c5a;
+}
