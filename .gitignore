@@ -71,3 +71,5 @@ site/
 # TypeScript build artifacts
 netbox_pathways/static/netbox_pathways/dist/
 netbox_pathways/static/netbox_pathways/node_modules/
+
+schemas/
