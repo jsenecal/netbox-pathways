@@ -227,3 +227,38 @@ class TestWidgetEndpointRendering:
         widget.endpoint_geojson = None
         html = widget.render('path', None, attrs={'id': 'id_path'})
         assert '-endpoints' not in html
+
+
+@pytest.mark.django_db
+class TestEndToEndFormSave:
+    def test_conduit_bank_form_generates_and_snaps(self):
+        s1 = _make_structure('E2E1', Point(100, 200, srid=SRID))
+        s2 = _make_structure('E2E2', Point(500, 600, srid=SRID))
+        form = ConduitBankForm(data={
+            'start_structure': s1.pk,
+            'end_structure': s2.pk,
+            'tags': [],
+        })
+        assert form.is_valid(), form.errors
+        obj = form.save()
+        assert obj.pk is not None
+        assert obj.path is not None
+        assert obj.path.coords[0] == (100.0, 200.0)
+        assert obj.path.coords[-1] == (500.0, 600.0)
+
+    def test_form_with_drawn_path_snaps_on_save(self):
+        s1 = _make_structure('E2E3', Point(100, 200, srid=SRID))
+        s2 = _make_structure('E2E4', Point(500, 600, srid=SRID))
+        path = LineString((100.3, 200.4), (300, 400), (500.2, 600.1), srid=SRID)
+        path_4326 = to_leaflet(path)
+        form = PathwayForm(data={
+            'start_structure': s1.pk,
+            'end_structure': s2.pk,
+            'path': path_4326.geojson,
+            'tags': [],
+        })
+        assert form.is_valid(), form.errors
+        obj = form.save()
+        assert obj.path.coords[0] == (100.0, 200.0)
+        assert obj.path.coords[-1] == (500.0, 600.0)
+        assert len(obj.path.coords) == 3
