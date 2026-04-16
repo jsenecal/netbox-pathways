@@ -1,6 +1,9 @@
+import json
+
 from circuits.models import Circuit
 from dcim.models import Cable, Location, Site
 from django import forms
+from django.contrib.gis.geos import LineString
 from leaflet.forms.widgets import LeafletWidget
 from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelForm, NetBoxModelImportForm
 from tenancy.models import Tenant
@@ -38,6 +41,7 @@ from .choices import (
     StructureStatusChoices,
     StructureTypeChoices,
 )
+from .geo import get_srid, to_leaflet
 from .models import (
     AerialSpan,
     CableSegment,
@@ -53,6 +57,65 @@ from .models import (
     SlackLoop,
     Structure,
 )
+
+
+class PathwayEndpointFormMixin:
+    """Mixin for pathway forms: auto-generates path from structures, injects geometry for widget."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'path' in self.fields:
+            self.fields['path'].required = False
+        self._inject_endpoint_geometry()
+
+    def _inject_endpoint_geometry(self):
+        """Serialize structure geometry into the widget for client-side markers."""
+        if 'path' not in self.fields:
+            return
+        endpoint_data = {}
+        for side in ('start', 'end'):
+            structure = getattr(self.instance, f'{side}_structure', None)
+            if structure and structure.location:
+                geom_4326 = to_leaflet(structure.location)
+                endpoint_data[side] = json.loads(geom_4326.geojson)
+        widget = self.fields['path'].widget
+        widget.endpoint_geojson = endpoint_data if endpoint_data else None
+
+    def clean(self):
+        super().clean()
+        cleaned = self.cleaned_data
+        path = cleaned.get('path')
+        if path:
+            return cleaned
+
+        # Auto-generate path from structures
+        start_struct = cleaned.get('start_structure')
+        end_struct = cleaned.get('end_structure')
+
+        # Innerduct fallback: use parent conduit's structures
+        if not start_struct and not end_struct:
+            parent = cleaned.get('parent_conduit')
+            if parent:
+                start_struct = start_struct or parent.start_structure
+                end_struct = end_struct or parent.end_structure
+
+        if start_struct and end_struct and start_struct.location and end_struct.location:
+            start_geom = start_struct.location
+            end_geom = end_struct.location
+            start_pt = start_geom.centroid if start_geom.geom_type != 'Point' else start_geom
+            end_pt = end_geom.centroid if end_geom.geom_type != 'Point' else end_geom
+            cleaned['path'] = LineString(
+                (start_pt.x, start_pt.y), (end_pt.x, end_pt.y),
+                srid=get_srid(),
+            )
+        else:
+            from django.core.exceptions import ValidationError
+            raise ValidationError({
+                'path': "Path is required when both endpoint structures are not set."
+            })
+
+        return cleaned
+
 
 # --- Structure ---
 
@@ -111,7 +174,7 @@ class StructureBulkEditForm(NetBoxModelBulkEditForm):
 
 # --- Pathway (base) ---
 
-class PathwayForm(NetBoxModelForm):
+class PathwayForm(PathwayEndpointFormMixin, NetBoxModelForm):
     start_structure = DynamicModelChoiceField(
         queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
     )
@@ -147,7 +210,7 @@ class PathwayForm(NetBoxModelForm):
 
 # --- Conduit ---
 
-class ConduitForm(NetBoxModelForm):
+class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
     start_structure = DynamicModelChoiceField(
         queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
     )
@@ -226,7 +289,7 @@ class ConduitBulkEditForm(NetBoxModelBulkEditForm):
 
 # --- Aerial Span ---
 
-class AerialSpanForm(NetBoxModelForm):
+class AerialSpanForm(PathwayEndpointFormMixin, NetBoxModelForm):
     start_structure = DynamicModelChoiceField(
         queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
     )
@@ -294,7 +357,7 @@ class AerialSpanBulkEditForm(NetBoxModelBulkEditForm):
 
 # --- Direct Buried ---
 
-class DirectBuriedForm(NetBoxModelForm):
+class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
     start_structure = DynamicModelChoiceField(
         queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
     )
@@ -331,7 +394,7 @@ class DirectBuriedForm(NetBoxModelForm):
 
 # --- Innerduct ---
 
-class InnerductForm(NetBoxModelForm):
+class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
     parent_conduit = DynamicModelChoiceField(
         queryset=Conduit.objects.all(), selector=True, quick_add=True,
     )
@@ -375,7 +438,7 @@ class InnerductForm(NetBoxModelForm):
 
 # --- Conduit Bank ---
 
-class ConduitBankForm(NetBoxModelForm):
+class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
     start_structure = DynamicModelChoiceField(
         queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
     )

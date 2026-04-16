@@ -2,7 +2,8 @@ import pytest
 from django.contrib.gis.geos import LineString, Point, Polygon
 from django.core.exceptions import ValidationError
 
-from netbox_pathways.geo import get_srid
+from netbox_pathways.forms import ConduitBankForm, PathwayForm
+from netbox_pathways.geo import get_srid, to_leaflet
 from netbox_pathways.models import Conduit, ConduitJunction, Pathway, Structure
 
 SRID = get_srid()
@@ -150,3 +151,61 @@ class TestConduitJunctionValidation:
         c.pathway_type = 'conduit'
         with pytest.raises(ValidationError, match='start.*junction'):
             c.clean()
+
+
+@pytest.mark.django_db
+class TestPathAutoGeneration:
+    def test_blank_path_with_two_point_structures_generates_line(self):
+        s1 = _make_structure('AG1', Point(100, 200, srid=SRID))
+        s2 = _make_structure('AG2', Point(500, 600, srid=SRID))
+        form = PathwayForm(data={
+            'start_structure': s1.pk,
+            'end_structure': s2.pk,
+            'tags': [],
+        })
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data['path'] is not None
+        coords = form.cleaned_data['path'].coords
+        assert len(coords) == 2
+
+    def test_blank_path_with_polygon_structures_generates_centroid_line(self):
+        poly1 = Polygon(((0, 0), (10, 0), (10, 10), (0, 10), (0, 0)), srid=SRID)
+        poly2 = Polygon(((100, 100), (110, 100), (110, 110), (100, 110), (100, 100)), srid=SRID)
+        s1 = _make_structure('AG3', poly1)
+        s2 = _make_structure('AG4', poly2)
+        form = PathwayForm(data={
+            'start_structure': s1.pk,
+            'end_structure': s2.pk,
+            'tags': [],
+        })
+        assert form.is_valid(), form.errors
+        path = form.cleaned_data['path']
+        assert path is not None
+        assert len(path.coords) == 2
+
+    def test_blank_path_with_only_one_structure_errors(self):
+        s1 = _make_structure('AG5', Point(100, 200, srid=SRID))
+        form = PathwayForm(data={
+            'start_structure': s1.pk,
+            'tags': [],
+        })
+        assert not form.is_valid()
+        assert 'path' in form.errors or '__all__' in form.errors
+
+    def test_blank_path_no_structures_errors(self):
+        form = PathwayForm(data={'tags': []})
+        assert not form.is_valid()
+
+    def test_provided_path_not_overwritten(self):
+        s1 = _make_structure('AG6', Point(100, 200, srid=SRID))
+        s2 = _make_structure('AG7', Point(500, 600, srid=SRID))
+        path = LineString((100, 200), (300, 400), (500, 600), srid=SRID)
+        path_4326 = to_leaflet(path)
+        form = PathwayForm(data={
+            'start_structure': s1.pk,
+            'end_structure': s2.pk,
+            'path': path_4326.geojson,
+            'tags': [],
+        })
+        assert form.is_valid(), form.errors
+        assert len(form.cleaned_data['path'].coords) == 3
