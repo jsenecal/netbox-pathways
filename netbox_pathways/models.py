@@ -380,7 +380,7 @@ class Conduit(Pathway):
         ]
 
     def clean(self):
-        super().clean()
+        super().clean()  # Pathway.clean() handles structure endpoints
         start_options = sum(bool(x) for x in [self.start_structure, self.start_location, self.start_junction])
         end_options = sum(bool(x) for x in [self.end_structure, self.end_location, self.end_junction])
 
@@ -392,6 +392,35 @@ class Conduit(Pathway):
             raise ValidationError("Conduit must have an end point (structure, location, or junction)")
         if end_options > 1:
             raise ValidationError("Conduit end must be exactly one of: structure, location, or junction")
+
+        # Validate/snap junction endpoints (structure endpoints handled by Pathway.clean)
+        if self.path:
+            self._validate_and_snap_junction('start')
+            self._validate_and_snap_junction('end')
+
+    def _validate_and_snap_junction(self, side):
+        """Validate and snap one endpoint to the attached junction's location."""
+        from django.contrib.gis.geos import LineString, Point
+
+        junction = getattr(self, f'{side}_junction', None)
+        if not junction:
+            return
+        junc_loc = junction.location
+        if junc_loc is None:
+            return
+
+        coords = list(self.path.coords)
+        idx = 0 if side == 'start' else -1
+        endpoint = Point(coords[idx][0], coords[idx][1], srid=self.path.srid)
+
+        if endpoint.distance(junc_loc) <= ENDPOINT_TOLERANCE:
+            coords[idx] = (junc_loc.x, junc_loc.y)
+            self.path = LineString(coords, srid=self.path.srid)
+        else:
+            raise ValidationError({
+                'path': f"Path {side} point is too far from the {side} junction "
+                        f"(must be within {ENDPOINT_TOLERANCE}m)."
+            })
 
     def save(self, *args, **kwargs):
         self.pathway_type = 'conduit'
@@ -532,7 +561,7 @@ class ConduitJunction(NetBoxModel):
     @property
     def location(self):
         if self.trunk_conduit and self.trunk_conduit.path:
-            return self.trunk_conduit.path.interpolate(self.position_on_trunk, normalized=True)
+            return self.trunk_conduit.path.interpolate_normalized(self.position_on_trunk)
         return None
 
 

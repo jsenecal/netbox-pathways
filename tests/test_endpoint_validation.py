@@ -3,7 +3,7 @@ from django.contrib.gis.geos import LineString, Point, Polygon
 from django.core.exceptions import ValidationError
 
 from netbox_pathways.geo import get_srid
-from netbox_pathways.models import Pathway, Structure
+from netbox_pathways.models import Conduit, ConduitJunction, Pathway, Structure
 
 SRID = get_srid()
 
@@ -98,3 +98,55 @@ class TestPathwayEndpointValidation:
         assert pw.path.coords[0] == (100.0, 200.0)
         assert pw.path.coords[-1] == (500.0, 600.0)
         assert len(pw.path.coords) == 3
+
+
+@pytest.mark.django_db
+class TestConduitJunctionValidation:
+    @pytest.fixture
+    def trunk_setup(self):
+        s1 = _make_structure('JS1', Point(0, 0, srid=SRID))
+        s2 = _make_structure('JS2', Point(1000, 0, srid=SRID))
+        trunk = Conduit(
+            path=LineString((0, 0), (1000, 0), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+        trunk.pathway_type = 'conduit'
+        trunk.save()
+        branch = Conduit(
+            path=LineString((500, 100), (500, 500), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+        branch.pathway_type = 'conduit'
+        branch.save()
+        junction = ConduitJunction.objects.create(
+            trunk_conduit=trunk,
+            branch_conduit=branch,
+            towards_structure=s1,
+            position_on_trunk=0.5,
+        )
+        return s1, s2, trunk, junction
+
+    def test_junction_within_tolerance_snaps(self, trunk_setup):
+        s1, s2, trunk, junction = trunk_setup
+        c = Conduit(
+            path=LineString((500.5, 0.3), (1000, 0), srid=SRID),
+            start_junction=junction,
+            end_structure=s2,
+        )
+        c.pathway_type = 'conduit'
+        c.clean()
+        assert abs(c.path.coords[0][0] - 500.0) < 0.01
+        assert abs(c.path.coords[0][1] - 0.0) < 0.01
+
+    def test_junction_beyond_tolerance_raises(self, trunk_setup):
+        s1, s2, trunk, junction = trunk_setup
+        c = Conduit(
+            path=LineString((510, 10), (1000, 0), srid=SRID),
+            start_junction=junction,
+            end_structure=s2,
+        )
+        c.pathway_type = 'conduit'
+        with pytest.raises(ValidationError, match='start.*junction'):
+            c.clean()
