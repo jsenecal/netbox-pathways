@@ -19,6 +19,8 @@ from .choices import (
 )
 from .geo import get_srid
 
+ENDPOINT_TOLERANCE = 1.0
+
 
 class Structure(NetBoxModel):
     name = models.CharField(max_length=100, unique=True)
@@ -203,6 +205,48 @@ class Pathway(NetBoxModel):
     @property
     def end_endpoint(self):
         return self.end_structure or self.end_location
+
+    def clean(self):
+        super().clean()
+        if not self.path:
+            return
+        self._validate_and_snap_endpoint('start')
+        self._validate_and_snap_endpoint('end')
+
+    def _validate_and_snap_endpoint(self, side):
+        """Validate and snap one endpoint of self.path to the attached structure."""
+        from django.contrib.gis.geos import LineString, Point
+
+        structure = getattr(self, f'{side}_structure', None)
+        if not structure or not structure.location:
+            return
+
+        coords = list(self.path.coords)
+        idx = 0 if side == 'start' else -1
+        endpoint = Point(coords[idx][0], coords[idx][1], srid=self.path.srid)
+        geom = structure.location
+
+        if geom.geom_type == 'Point':
+            if endpoint.distance(geom) <= ENDPOINT_TOLERANCE:
+                coords[idx] = (geom.x, geom.y)
+            else:
+                raise ValidationError({
+                    'path': f"Path {side} point is too far from the {side} structure "
+                            f"(must be within {ENDPOINT_TOLERANCE}m)."
+                })
+        else:
+            # Polygon or other area geometry
+            if geom.contains(endpoint) or geom.boundary.distance(endpoint) <= ENDPOINT_TOLERANCE:
+                boundary = geom.boundary
+                snap_point = boundary.interpolate(boundary.project(endpoint))
+                coords[idx] = (snap_point.x, snap_point.y)
+            else:
+                raise ValidationError({
+                    'path': f"Path {side} point is too far from the {side} structure "
+                            f"(must be within {ENDPOINT_TOLERANCE}m of the boundary)."
+                })
+
+        self.path = LineString(coords, srid=self.path.srid)
 
     def __str__(self):
         return self.label or f'#{self.pk or self._pk}'
