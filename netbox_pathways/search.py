@@ -12,14 +12,14 @@ class StructureIndex(SearchIndex):
         ('access_notes', 500),
         ('comments', 5000),
     )
-    display_attrs = ('structure_type', 'site', 'tenant')
+    display_attrs = ('status', 'structure_type', 'site', 'tenant')
 
 
 @register_search
 class ConduitIndex(SearchIndex):
     model = models.Conduit
     fields = (
-        ('name', 100),
+        ('label', 100),
         ('material', 200),
         ('bank_position', 300),
         ('comments', 5000),
@@ -31,7 +31,7 @@ class ConduitIndex(SearchIndex):
 class AerialSpanIndex(SearchIndex):
     model = models.AerialSpan
     fields = (
-        ('name', 100),
+        ('label', 100),
         ('aerial_type', 200),
         ('messenger_size', 300),
         ('comments', 5000),
@@ -43,7 +43,7 @@ class AerialSpanIndex(SearchIndex):
 class DirectBuriedIndex(SearchIndex):
     model = models.DirectBuried
     fields = (
-        ('name', 100),
+        ('label', 100),
         ('armor_type', 200),
         ('comments', 5000),
     )
@@ -54,7 +54,7 @@ class DirectBuriedIndex(SearchIndex):
 class InnerductIndex(SearchIndex):
     model = models.Innerduct
     fields = (
-        ('name', 100),
+        ('label', 100),
         ('size', 200),
         ('color', 300),
         ('position', 300),
@@ -67,19 +67,19 @@ class InnerductIndex(SearchIndex):
 class ConduitBankIndex(SearchIndex):
     model = models.ConduitBank
     fields = (
-        ('name', 100),
+        ('label', 100),
         ('configuration', 200),
         ('encasement_type', 300),
         ('comments', 5000),
     )
-    display_attrs = ('structure', 'configuration', 'total_conduits')
+    display_attrs = ('start_structure', 'end_structure', 'configuration', 'total_conduits')
 
 
 @register_search
 class ConduitJunctionIndex(SearchIndex):
     model = models.ConduitJunction
     fields = (
-        ('name', 100),
+        ('label', 100),
         ('comments', 5000),
     )
     display_attrs = ('trunk_conduit', 'branch_conduit', 'towards_structure')

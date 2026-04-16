@@ -18,26 +18,38 @@ from .models import (
     Structure,
 )
 
+_LINKED_RECORD = '<a href="{{ record.get_absolute_url }}">{{ record }}</a>'
+
+_MAP_BUTTON = (
+    '<a href="{% url \'plugins:netbox_pathways:map\' %}?select='
+    '{% if record.pathway_type %}{{ record.pathway_type }}{% else %}structure{% endif %}'
+    '-{{ record.pk }}" class="btn btn-sm btn-primary" title="Show on Map">'
+    '<i class="mdi mdi-map-marker-radius"></i></a>'
+)
+
 
 class StructureTable(NetBoxTable):
     name = tables.Column(linkify=True)
+    status = columns.ChoiceFieldColumn()
     site = tables.Column(linkify=True)
     structure_type = columns.ChoiceFieldColumn()
     tenant = tables.Column(linkify=True)
-    actions = columns.ActionsColumn(actions=('edit', 'delete'))
+    actions = columns.ActionsColumn(actions=('edit', 'delete'), extra_buttons=_MAP_BUTTON)
 
     class Meta(NetBoxTable.Meta):
         model = Structure
         fields = (
-            'pk', 'id', 'name', 'structure_type', 'site',
+            'pk', 'id', 'name', 'status', 'structure_type', 'site',
             'height', 'width', 'length', 'depth', 'elevation',
             'installation_date', 'tenant', 'actions',
         )
-        default_columns = ('name', 'structure_type', 'site', 'tenant')
+        default_columns = ('name', 'status', 'structure_type', 'site', 'tenant')
 
 
 class PathwayTable(NetBoxTable):
-    name = tables.Column(linkify=True)
+    pathway = tables.TemplateColumn(
+        template_code=_LINKED_RECORD, verbose_name='Pathway', order_by='pk',
+    )
     pathway_type = columns.ChoiceFieldColumn()
     start_structure = tables.Column(linkify=True)
     end_structure = tables.Column(linkify=True)
@@ -45,23 +57,25 @@ class PathwayTable(NetBoxTable):
     end_location = tables.Column(linkify=True)
     tenant = tables.Column(linkify=True)
     cables_routed = tables.Column(verbose_name='Cables', orderable=True)
-    actions = columns.ActionsColumn(actions=('edit', 'delete'))
+    actions = columns.ActionsColumn(actions=('edit', 'delete'), extra_buttons=_MAP_BUTTON)
 
     class Meta(NetBoxTable.Meta):
         model = Pathway
         fields = (
-            'pk', 'id', 'name', 'pathway_type',
+            'pk', 'id', 'pathway', 'label', 'pathway_type',
             'start_structure', 'end_structure',
             'start_location', 'end_location', 'tenant', 'length',
             'cables_routed', 'installation_date', 'actions',
         )
         default_columns = (
-            'name', 'pathway_type', 'start_structure', 'end_structure', 'cables_routed',
+            'pathway', 'pathway_type', 'start_structure', 'end_structure', 'cables_routed',
         )
 
 
 class ConduitTable(NetBoxTable):
-    name = tables.Column(linkify=True)
+    conduit = tables.TemplateColumn(
+        template_code=_LINKED_RECORD, verbose_name='Conduit', order_by='pk',
+    )
     material = columns.ChoiceFieldColumn()
     start_structure = tables.Column(linkify=True)
     end_structure = tables.Column(linkify=True)
@@ -69,72 +83,78 @@ class ConduitTable(NetBoxTable):
     end_location = tables.Column(linkify=True)
     conduit_bank = tables.Column(linkify=True)
     cables_routed = tables.Column(verbose_name='Cables', orderable=True)
-    actions = columns.ActionsColumn(actions=('edit', 'delete'))
+    actions = columns.ActionsColumn(actions=('edit', 'delete'), extra_buttons=_MAP_BUTTON)
 
     class Meta(NetBoxTable.Meta):
         model = Conduit
         fields = (
-            'pk', 'id', 'name', 'material',
+            'pk', 'id', 'conduit', 'label', 'material',
             'start_structure', 'end_structure',
             'start_location', 'end_location',
             'conduit_bank', 'bank_position',
             'length', 'cables_routed', 'installation_date', 'actions',
         )
         default_columns = (
-            'name', 'material', 'start_structure', 'end_structure',
+            'conduit', 'material', 'start_structure', 'end_structure',
             'conduit_bank', 'cables_routed',
         )
 
 
 class AerialSpanTable(NetBoxTable):
-    name = tables.Column(linkify=True)
+    aerial_span = tables.TemplateColumn(
+        template_code=_LINKED_RECORD, verbose_name='Aerial Span', order_by='pk',
+    )
     aerial_type = columns.ChoiceFieldColumn()
     start_structure = tables.Column(linkify=True)
     end_structure = tables.Column(linkify=True)
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
     cables_routed = tables.Column(verbose_name='Cables', orderable=True)
-    actions = columns.ActionsColumn(actions=('edit', 'delete'))
+    actions = columns.ActionsColumn(actions=('edit', 'delete'), extra_buttons=_MAP_BUTTON)
 
     class Meta(NetBoxTable.Meta):
         model = AerialSpan
         fields = (
-            'pk', 'id', 'name', 'aerial_type',
+            'pk', 'id', 'aerial_span', 'label', 'aerial_type',
             'start_structure', 'end_structure',
             'start_location', 'end_location',
             'attachment_height', 'length',
             'cables_routed', 'installation_date', 'actions',
         )
         default_columns = (
-            'name', 'aerial_type', 'start_structure', 'end_structure', 'cables_routed',
+            'aerial_span', 'aerial_type', 'start_structure', 'end_structure', 'cables_routed',
         )
 
 
 class DirectBuriedTable(NetBoxTable):
-    name = tables.Column(linkify=True)
+    direct_buried = tables.TemplateColumn(
+        template_code=_LINKED_RECORD, verbose_name='Direct Buried', order_by='pk',
+    )
     start_structure = tables.Column(linkify=True)
     end_structure = tables.Column(linkify=True)
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
     cables_routed = tables.Column(verbose_name='Cables', orderable=True)
-    actions = columns.ActionsColumn(actions=('edit', 'delete'))
+    actions = columns.ActionsColumn(actions=('edit', 'delete'), extra_buttons=_MAP_BUTTON)
 
     class Meta(NetBoxTable.Meta):
         model = DirectBuried
         fields = (
-            'pk', 'id', 'name',
+            'pk', 'id', 'direct_buried', 'label',
             'start_structure', 'end_structure',
             'start_location', 'end_location',
             'burial_depth', 'warning_tape', 'tracer_wire',
             'length', 'cables_routed', 'installation_date', 'actions',
         )
         default_columns = (
-            'name', 'start_structure', 'end_structure', 'burial_depth', 'cables_routed',
+            'direct_buried', 'start_structure', 'end_structure', 'burial_depth', 'cables_routed',
         )
 
 
 class InnerductTable(NetBoxTable):
-    name = tables.Column(linkify=True)
+    innerduct = tables.TemplateColumn(
+        template_code=_LINKED_RECORD, verbose_name='Innerduct', order_by='pk',
+    )
     parent_conduit = tables.Column(linkify=True)
     cables_routed = tables.Column(verbose_name='Cables', orderable=True)
     actions = columns.ActionsColumn(actions=('edit', 'delete'))
@@ -142,16 +162,21 @@ class InnerductTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = Innerduct
         fields = (
-            'pk', 'id', 'name', 'parent_conduit',
+            'pk', 'id', 'innerduct', 'label', 'parent_conduit',
             'size', 'color', 'position',
             'cables_routed', 'installation_date', 'actions',
         )
-        default_columns = ('name', 'parent_conduit', 'size', 'color', 'cables_routed')
+        default_columns = ('innerduct', 'parent_conduit', 'size', 'color', 'cables_routed')
 
 
 class ConduitBankTable(NetBoxTable):
-    name = tables.Column(linkify=True)
-    structure = tables.Column(linkify=True)
+    conduit_bank = tables.TemplateColumn(
+        template_code=_LINKED_RECORD, verbose_name='Conduit Bank', order_by='pk',
+    )
+    start_structure = tables.Column(linkify=True)
+    end_structure = tables.Column(linkify=True)
+    start_face = columns.ChoiceFieldColumn()
+    end_face = columns.ChoiceFieldColumn()
     tenant = tables.Column(linkify=True)
     configuration = columns.ChoiceFieldColumn()
     encasement_type = columns.ChoiceFieldColumn()
@@ -159,22 +184,26 @@ class ConduitBankTable(NetBoxTable):
         verbose_name='Conduits',
         orderable=True,
     )
-    actions = columns.ActionsColumn(actions=('edit', 'delete'))
+    actions = columns.ActionsColumn(actions=('edit', 'delete'), extra_buttons=_MAP_BUTTON)
 
     class Meta(NetBoxTable.Meta):
         model = ConduitBank
         fields = (
-            'pk', 'id', 'name', 'structure', 'tenant',
+            'pk', 'id', 'conduit_bank', 'label', 'start_structure', 'end_structure',
+            'start_face', 'end_face', 'tenant',
             'configuration', 'total_conduits', 'conduit_count',
             'encasement_type', 'installation_date', 'actions',
         )
         default_columns = (
-            'name', 'structure', 'configuration', 'total_conduits', 'conduit_count',
+            'conduit_bank', 'start_structure', 'end_structure',
+            'configuration', 'total_conduits', 'conduit_count',
         )
 
 
 class ConduitJunctionTable(NetBoxTable):
-    name = tables.Column(linkify=True)
+    junction = tables.TemplateColumn(
+        template_code=_LINKED_RECORD, verbose_name='Junction', order_by='pk',
+    )
     trunk_conduit = tables.Column(linkify=True)
     branch_conduit = tables.Column(linkify=True)
     towards_structure = tables.Column(linkify=True)
@@ -183,11 +212,11 @@ class ConduitJunctionTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = ConduitJunction
         fields = (
-            'pk', 'id', 'name', 'trunk_conduit', 'branch_conduit',
+            'pk', 'id', 'junction', 'label', 'trunk_conduit', 'branch_conduit',
             'towards_structure', 'position_on_trunk', 'actions',
         )
         default_columns = (
-            'name', 'trunk_conduit', 'branch_conduit', 'towards_structure',
+            'junction', 'trunk_conduit', 'branch_conduit', 'towards_structure',
         )
 
 

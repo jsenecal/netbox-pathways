@@ -8,14 +8,21 @@ from utilities.forms.fields import CSVModelChoiceField, DynamicModelChoiceField
 from utilities.forms.rendering import FieldSet
 
 
-class PointPolygonWidget(LeafletWidget):
+class PathwaysLeafletWidget(LeafletWidget):
+    """LeafletWidget with fix for edit/delete toolbar buttons staying disabled."""
+
+    class Media:
+        js = ('netbox_pathways/dist/fix-edit-controls.min.js',)
+
+
+class PointPolygonWidget(PathwaysLeafletWidget):
     """LeafletWidget that allows point and polygon drawing but not polylines."""
 
     class Media:
         js = ('netbox_pathways/dist/point-polygon-widget.min.js',)
 
 
-class PointOnlyWidget(LeafletWidget):
+class PointOnlyWidget(PathwaysLeafletWidget):
     """LeafletWidget restricted to point drawing only."""
 
     def __init__(self, *args, **kwargs):
@@ -24,9 +31,11 @@ class PointOnlyWidget(LeafletWidget):
 
 from .choices import (
     AerialTypeChoices,
+    BankFaceChoices,
     ConduitBankConfigChoices,
     ConduitMaterialChoices,
     EncasementTypeChoices,
+    StructureStatusChoices,
     StructureTypeChoices,
 )
 from .models import (
@@ -52,7 +61,7 @@ class StructureForm(NetBoxModelForm):
     tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
 
     fieldsets = (
-        FieldSet('name', 'structure_type', 'site', 'tenant', 'installation_date', name='Structure'),
+        FieldSet('name', 'status', 'structure_type', 'site', 'tenant', 'installation_date', name='Structure'),
         FieldSet('height', 'width', 'length', 'depth', 'elevation', name='Dimensions'),
         FieldSet('location', name='Geometry'),
         FieldSet('access_notes', 'comments', 'tags', name='Details'),
@@ -61,7 +70,7 @@ class StructureForm(NetBoxModelForm):
     class Meta:
         model = Structure
         fields = [
-            'name', 'structure_type', 'site', 'tenant', 'location',
+            'name', 'status', 'structure_type', 'site', 'tenant', 'location',
             'height', 'width', 'length', 'depth', 'elevation',
             'installation_date', 'access_notes', 'comments', 'tags',
         ]
@@ -81,7 +90,7 @@ class StructureImportForm(NetBoxModelImportForm):
     class Meta:
         model = Structure
         fields = [
-            'name', 'structure_type', 'site', 'tenant',
+            'name', 'status', 'structure_type', 'site', 'tenant',
             'height', 'width', 'length', 'depth', 'elevation',
             'installation_date', 'access_notes', 'comments',
         ]
@@ -90,11 +99,12 @@ class StructureImportForm(NetBoxModelImportForm):
 class StructureBulkEditForm(NetBoxModelBulkEditForm):
     site = DynamicModelChoiceField(queryset=Site.objects.all(), required=False, selector=True)
     tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
+    status = forms.ChoiceField(choices=StructureStatusChoices, required=False)
     structure_type = forms.ChoiceField(choices=StructureTypeChoices, required=False)
 
     model = Structure
     fieldsets = (
-        FieldSet('site', 'structure_type', 'tenant'),
+        FieldSet('status', 'site', 'structure_type', 'tenant'),
     )
     nullable_fields = ('site', 'tenant', 'access_notes')
 
@@ -117,7 +127,7 @@ class PathwayForm(NetBoxModelForm):
     tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
 
     fieldsets = (
-        FieldSet('name', 'tenant', 'length', 'installation_date', name='Pathway'),
+        FieldSet('label', 'tenant', 'length', 'installation_date', name='Pathway'),
         FieldSet('start_structure', 'end_structure', 'start_location', 'end_location', name='Endpoints'),
         FieldSet('path', name='Geometry'),
         FieldSet('comments', 'tags', name='Details'),
@@ -126,12 +136,12 @@ class PathwayForm(NetBoxModelForm):
     class Meta:
         model = Pathway
         fields = [
-            'name', 'path', 'start_structure', 'end_structure',
+            'label', 'path', 'start_structure', 'end_structure',
             'start_location', 'end_location', 'tenant',
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': LeafletWidget(),
+            'path': PathwaysLeafletWidget(),
         }
 
 
@@ -161,7 +171,7 @@ class ConduitForm(NetBoxModelForm):
     )
 
     fieldsets = (
-        FieldSet('name', 'material', 'length', 'installation_date', name='Conduit'),
+        FieldSet('label', 'material', 'length', 'installation_date', name='Conduit'),
         FieldSet('start_structure', 'end_structure', 'start_location', 'end_location', name='Endpoints'),
         FieldSet('start_junction', 'end_junction', name='Junctions'),
         FieldSet('inner_diameter', 'outer_diameter', 'depth', name='Dimensions'),
@@ -173,7 +183,7 @@ class ConduitForm(NetBoxModelForm):
     class Meta:
         model = Conduit
         fields = [
-            'name', 'material', 'path', 'start_structure', 'end_structure',
+            'label', 'material', 'path', 'start_structure', 'end_structure',
             'start_location', 'end_location',
             'start_junction', 'end_junction',
             'inner_diameter', 'outer_diameter', 'depth',
@@ -181,7 +191,7 @@ class ConduitForm(NetBoxModelForm):
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': LeafletWidget(),
+            'path': PathwaysLeafletWidget(),
         }
 
 
@@ -198,7 +208,7 @@ class ConduitImportForm(NetBoxModelImportForm):
     class Meta:
         model = Conduit
         fields = [
-            'name', 'material', 'start_structure', 'end_structure',
+            'label', 'material', 'start_structure', 'end_structure',
             'inner_diameter', 'outer_diameter', 'depth',
             'length', 'installation_date', 'comments',
         ]
@@ -231,7 +241,7 @@ class AerialSpanForm(NetBoxModelForm):
     )
 
     fieldsets = (
-        FieldSet('name', 'aerial_type', 'length', 'installation_date', name='Aerial Span'),
+        FieldSet('label', 'aerial_type', 'length', 'installation_date', name='Aerial Span'),
         FieldSet('start_structure', 'end_structure', 'start_location', 'end_location', name='Endpoints'),
         FieldSet('attachment_height', 'sag', 'messenger_size', name='Physical'),
         FieldSet('wind_loading', 'ice_loading', name='Loading'),
@@ -242,14 +252,14 @@ class AerialSpanForm(NetBoxModelForm):
     class Meta:
         model = AerialSpan
         fields = [
-            'name', 'aerial_type', 'path', 'start_structure', 'end_structure',
+            'label', 'aerial_type', 'path', 'start_structure', 'end_structure',
             'start_location', 'end_location',
             'attachment_height', 'sag', 'messenger_size',
             'wind_loading', 'ice_loading',
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': LeafletWidget(),
+            'path': PathwaysLeafletWidget(),
         }
 
 
@@ -264,7 +274,7 @@ class AerialSpanImportForm(NetBoxModelImportForm):
     class Meta:
         model = AerialSpan
         fields = [
-            'name', 'aerial_type', 'start_structure', 'end_structure',
+            'label', 'aerial_type', 'start_structure', 'end_structure',
             'attachment_height', 'sag', 'messenger_size',
             'wind_loading', 'ice_loading',
             'length', 'installation_date', 'comments',
@@ -299,7 +309,7 @@ class DirectBuriedForm(NetBoxModelForm):
     )
 
     fieldsets = (
-        FieldSet('name', 'length', 'installation_date', name='Direct Buried'),
+        FieldSet('label', 'length', 'installation_date', name='Direct Buried'),
         FieldSet('start_structure', 'end_structure', 'start_location', 'end_location', name='Endpoints'),
         FieldSet('burial_depth', 'warning_tape', 'tracer_wire', 'armor_type', name='Physical'),
         FieldSet('path', name='Geometry'),
@@ -309,13 +319,13 @@ class DirectBuriedForm(NetBoxModelForm):
     class Meta:
         model = DirectBuried
         fields = [
-            'name', 'path', 'start_structure', 'end_structure',
+            'label', 'path', 'start_structure', 'end_structure',
             'start_location', 'end_location',
             'burial_depth', 'warning_tape', 'tracer_wire', 'armor_type',
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': LeafletWidget(),
+            'path': PathwaysLeafletWidget(),
         }
 
 
@@ -343,7 +353,7 @@ class InnerductForm(NetBoxModelForm):
     )
 
     fieldsets = (
-        FieldSet('name', 'parent_conduit', 'size', 'color', 'position', name='Innerduct'),
+        FieldSet('label', 'parent_conduit', 'size', 'color', 'position', name='Innerduct'),
         FieldSet('start_structure', 'end_structure', 'start_location', 'end_location', name='Endpoints'),
         FieldSet('length', 'installation_date', name='Physical'),
         FieldSet('path', name='Geometry'),
@@ -353,62 +363,78 @@ class InnerductForm(NetBoxModelForm):
     class Meta:
         model = Innerduct
         fields = [
-            'name', 'parent_conduit', 'size', 'color', 'position',
+            'label', 'parent_conduit', 'size', 'color', 'position',
             'path', 'start_structure', 'end_structure',
             'start_location', 'end_location',
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': LeafletWidget(),
+            'path': PathwaysLeafletWidget(),
         }
 
 
 # --- Conduit Bank ---
 
 class ConduitBankForm(NetBoxModelForm):
-    structure = DynamicModelChoiceField(
-        queryset=Structure.objects.all(), selector=True, quick_add=True,
+    start_structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
+    )
+    end_structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
     )
     tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
 
     fieldsets = (
-        FieldSet('name', 'structure', 'tenant', name='Conduit Bank'),
+        FieldSet('label', 'tenant', name='Conduit Bank'),
+        FieldSet('start_structure', 'start_face', 'end_structure', 'end_face', name='Endpoints'),
         FieldSet('configuration', 'total_conduits', 'encasement_type', name='Configuration'),
-        FieldSet('installation_date', 'comments', 'tags', name='Details'),
+        FieldSet('path', 'installation_date', 'comments', 'tags', name='Details'),
     )
 
     class Meta:
         model = ConduitBank
         fields = [
-            'name', 'structure', 'tenant',
+            'label', 'tenant',
+            'start_structure', 'start_face', 'end_structure', 'end_face',
             'configuration', 'total_conduits', 'encasement_type',
-            'installation_date', 'comments', 'tags',
+            'path', 'installation_date', 'comments', 'tags',
         ]
+        widgets = {
+            'path': PathwaysLeafletWidget(),
+        }
 
 
 class ConduitBankImportForm(NetBoxModelImportForm):
-    structure = CSVModelChoiceField(
-        queryset=Structure.objects.all(), to_field_name='name', help_text='Structure name',
+    start_structure = CSVModelChoiceField(
+        queryset=Structure.objects.all(), to_field_name='name',
+        required=False, help_text='Start structure name',
+    )
+    end_structure = CSVModelChoiceField(
+        queryset=Structure.objects.all(), to_field_name='name',
+        required=False, help_text='End structure name',
     )
 
     class Meta:
         model = ConduitBank
         fields = [
-            'name', 'structure',
+            'label', 'start_structure', 'start_face', 'end_structure', 'end_face',
             'configuration', 'total_conduits', 'encasement_type',
             'installation_date', 'comments',
         ]
 
 
 class ConduitBankBulkEditForm(NetBoxModelBulkEditForm):
+    start_face = forms.ChoiceField(choices=BankFaceChoices, required=False)
+    end_face = forms.ChoiceField(choices=BankFaceChoices, required=False)
     configuration = forms.ChoiceField(choices=ConduitBankConfigChoices, required=False)
     encasement_type = forms.ChoiceField(choices=EncasementTypeChoices, required=False)
 
     model = ConduitBank
     fieldsets = (
+        FieldSet('start_face', 'end_face'),
         FieldSet('configuration', 'encasement_type'),
     )
-    nullable_fields = ('encasement_type',)
+    nullable_fields = ('start_face', 'end_face', 'encasement_type')
 
 
 # --- Conduit Junction ---
@@ -425,7 +451,7 @@ class ConduitJunctionForm(NetBoxModelForm):
     )
 
     fieldsets = (
-        FieldSet('name', name='Junction'),
+        FieldSet('label', name='Junction'),
         FieldSet('trunk_conduit', 'branch_conduit', 'towards_structure', 'position_on_trunk', name='Configuration'),
         FieldSet('comments', 'tags', name='Details'),
     )
@@ -433,7 +459,7 @@ class ConduitJunctionForm(NetBoxModelForm):
     class Meta:
         model = ConduitJunction
         fields = [
-            'name', 'trunk_conduit', 'branch_conduit',
+            'label', 'trunk_conduit', 'branch_conduit',
             'towards_structure', 'position_on_trunk',
             'comments', 'tags',
         ]
@@ -553,5 +579,5 @@ class CircuitGeometryForm(NetBoxModelForm):
         model = CircuitGeometry
         fields = ['circuit', 'path', 'provider_reference', 'comments', 'tags']
         widgets = {
-            'path': LeafletWidget(),
+            'path': PathwaysLeafletWidget(),
         }
