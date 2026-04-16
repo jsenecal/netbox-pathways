@@ -238,9 +238,10 @@ class Command(BaseCommand):
         eligible = [s for s in structures if s.structure_type in ('manhole', 'handhole', 'vault', 'building_entrance')]
         if len(eligible) < 100:
             eligible = structures[:200]
+        faces = ['north', 'south', 'east', 'west', 'other']
         banks = []
         for i in range(500):
-            struct = random.choice(eligible)
+            s1, s2 = random.sample(eligible, 2)
             config = random.choice(BANK_CONFIGS)
             enc = random.choice(ENCASEMENT_TYPES) if random.random() < 0.6 else ''
             if config == 'custom':
@@ -249,8 +250,12 @@ class Command(BaseCommand):
                 rows, cols = config.split('x')
                 total = int(rows) * int(cols)
             banks.append(ConduitBank(
-                name=f'Bank-{struct.name[:20]}-{i+1:04d}',
-                structure=struct,
+                label=f'Bank-{i+1:04d}',
+                path=_line_between(s1.location, s2.location),
+                start_structure=s1,
+                end_structure=s2,
+                start_face=random.choice(faces),
+                end_face=random.choice(faces),
                 tenant=random.choice(tenants) if random.random() < 0.5 else None,
                 configuration=config,
                 total_conduits=total,
@@ -279,7 +284,7 @@ class Command(BaseCommand):
                     bank = None  # no free position, skip bank assignment
             mat = random.choice(CONDUIT_MATERIALS)
             conduits.append(Conduit(
-                name=f'CDT-{i+1:04d}',
+                label=f'CDT-{i+1:04d}',
                 path=path,
                 start_structure=s1,
                 end_structure=s2,
@@ -308,7 +313,7 @@ class Command(BaseCommand):
             s1, s2 = random.sample(pole_structures, 2)
             path = _line_between(s1.location, s2.location)
             spans.append(AerialSpan(
-                name=f'AER-{i+1:04d}',
+                label=f'AER-{i+1:04d}',
                 path=path,
                 start_structure=s1,
                 end_structure=s2,
@@ -332,7 +337,7 @@ class Command(BaseCommand):
             s1, s2 = random.sample(structures, 2)
             path = _line_between(s1.location, s2.location)
             dbs.append(DirectBuried(
-                name=f'DB-{i+1:04d}',
+                label=f'DB-{i+1:04d}',
                 path=path,
                 start_structure=s1,
                 end_structure=s2,
@@ -355,7 +360,7 @@ class Command(BaseCommand):
         for i in range(500):
             parent = random.choice(conduits)
             innerducts.append(Innerduct(
-                name=f'ID-{i+1:04d}',
+                label=f'ID-{i+1:04d}',
                 path=parent.path,
                 parent_conduit=parent,
                 size=random.choice(INNERDUCT_SIZES),
@@ -388,7 +393,7 @@ class Command(BaseCommand):
                 continue
             used_positions.add(key)
             junctions.append(ConduitJunction(
-                name=f'JCT-{len(junctions)+1:04d}',
+                label=f'JCT-{len(junctions)+1:04d}',
                 trunk_conduit=trunk,
                 branch_conduit=branch,
                 towards_structure=towards,

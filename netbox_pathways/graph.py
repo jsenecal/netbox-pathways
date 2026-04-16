@@ -85,7 +85,7 @@ class PathwayGraph:
 
             graph.pathways[pw.pk] = {
                 'id': pw.pk,
-                'name': pw.name,
+                'name': str(pw),
                 'pathway_type': pw.pathway_type,
                 'length': weight,
                 'coords': coords,
@@ -227,7 +227,7 @@ def trace_cable(cable_id):
         entry = {
             'segment_id': seg.pk,
             'pathway_id': pw.pk if pw else None,
-            'pathway_name': pw.name if pw else None,
+            'pathway_name': str(pw) if pw else None,
             'pathway_type': pw.pathway_type if pw else None,
             'pathway_url': pw.get_absolute_url() if pw else None,
             'length': pw.length if pw else None,

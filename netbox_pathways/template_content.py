@@ -67,7 +67,7 @@ def _pathway_line(pathway):
         return None
     return {
         'coords': linestring_to_coords(pathway.path),
-        'name': pathway.name,
+        'name': str(pathway),
         'color': PATHWAY_COLORS.get(pathway.pathway_type, 'gray'),
         'url': pathway.get_absolute_url(),
     }
@@ -151,11 +151,14 @@ class PluginModelMapExtension(PluginTemplateExtension):
                 data['points'].append(pt)
 
         elif isinstance(obj, models.ConduitBank):
-            if obj.structure_id:
-                pt = _structure_point(obj.structure, color='orange')
-                if pt:
-                    pt['name'] = f'{obj.name} @ {obj.structure.name}'
-                    data['points'].append(pt)
+            line = _pathway_line(obj)
+            if line:
+                data['lines'].append(line)
+            for struct in (obj.start_structure, obj.end_structure):
+                if struct:
+                    pt = _structure_point(struct, color='orange')
+                    if pt:
+                        data['points'].append(pt)
 
         elif isinstance(obj, models.ConduitJunction):
             # Show the trunk conduit line for context
@@ -169,7 +172,7 @@ class PluginModelMapExtension(PluginTemplateExtension):
                 data['points'].append({
                     'lat': loc.y,
                     'lon': loc.x,
-                    'name': obj.name,
+                    'name': str(obj),
                     'color': 'red',
                 })
 
@@ -370,7 +373,7 @@ class CableSlackLoopExtension(PluginTemplateExtension):
 
         rows = []
         for sl in slack_loops:
-            pw_name = sl.pathway.name if sl.pathway else '—'
+            pw_name = str(sl.pathway) if sl.pathway else '—'
             rows.append(
                 f'<tr>'
                 f'<td><a href="{sl.structure.get_absolute_url()}">{sl.structure.name}</a></td>'
@@ -409,7 +412,7 @@ class StructureSlackLoopExtension(PluginTemplateExtension):
 
         rows = []
         for sl in slack_loops:
-            pw_name = sl.pathway.name if sl.pathway else '—'
+            pw_name = str(sl.pathway) if sl.pathway else '—'
             rows.append(
                 f'<tr>'
                 f'<td><a href="#">{sl.cable.label}</a></td>'
@@ -459,7 +462,7 @@ class CableRouteMapExtension(PluginTemplateExtension):
             if pw and pw.path:
                 data['lines'].append({
                     'coords': linestring_to_coords(pw.path),
-                    'name': pw.name,
+                    'name': str(pw),
                     'color': segment_colors[i % len(segment_colors)],
                     'url': pw.get_absolute_url(),
                 })
