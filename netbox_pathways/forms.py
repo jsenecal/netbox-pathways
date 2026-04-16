@@ -12,10 +12,28 @@ from utilities.forms.rendering import FieldSet
 
 
 class PathwaysLeafletWidget(LeafletWidget):
-    """LeafletWidget with fix for edit/delete toolbar buttons staying disabled."""
+    """LeafletWidget with edit-control fix and endpoint geometry injection."""
+
+    endpoint_geojson = None
 
     class Media:
-        js = ('netbox_pathways/dist/fix-edit-controls.min.js',)
+        js = (
+            'netbox_pathways/dist/fix-edit-controls.min.js',
+            'netbox_pathways/dist/endpoint-markers.min.js',
+        )
+
+    def render(self, name, value, attrs=None, renderer=None):
+        html = super().render(name, value, attrs, renderer=renderer)
+        if self.endpoint_geojson:
+            field_id = attrs.get('id', name) if attrs else name
+            json_str = json.dumps(self.endpoint_geojson)
+            from django.utils.html import format_html
+            html += format_html(
+                '<script type="application/json" id="{}">{}</script>',
+                field_id + '-endpoints',
+                json_str,
+            )
+        return html
 
 
 class PointPolygonWidget(PathwaysLeafletWidget):
