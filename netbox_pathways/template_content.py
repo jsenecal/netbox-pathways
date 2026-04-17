@@ -9,21 +9,17 @@ from .routing import validate_cable_route
 
 
 def _leaflet_head():
-    """Return HTML to load Leaflet and django-leaflet assets in <head>."""
+    """Return HTML to load Leaflet and geoman assets in <head>."""
     css = [
-        static('leaflet/leaflet.css'),
-        static('leaflet/leaflet_django.css'),
-        static('leaflet/leaflet.extras.css'),
-        static('leaflet/draw/leaflet.draw.css'),
+        static('netbox_pathways/vendor/leaflet/leaflet.css'),
+        static('netbox_pathways/vendor/geoman/leaflet-geoman.css'),
         static('netbox_pathways/vendor/MarkerCluster.css'),
         static('netbox_pathways/vendor/MarkerCluster.Default.css'),
         static('netbox_pathways/css/leaflet-theme.css'),
     ]
     js = [
-        static('leaflet/leaflet.js'),
-        static('leaflet/leaflet.extras.js'),
-        static('leaflet/draw/leaflet.draw.js'),
-        static('leaflet/leaflet.forms.js'),
+        static('netbox_pathways/vendor/leaflet/leaflet.js'),
+        static('netbox_pathways/vendor/geoman/leaflet-geoman.js'),
         static('netbox_pathways/vendor/leaflet.markercluster.js'),
     ]
     html = ''
@@ -100,14 +96,17 @@ class LeafletHeadExtension(PluginTemplateExtension):
         import json
 
         from django.conf import settings
+
+        from . import NetBoxPathwaysConfig
+
         plugin_cfg = settings.PLUGINS_CONFIG.get('netbox_pathways', {})
 
         api_base = reverse('plugins-api:netbox_pathways-api:api-root')
         config = {
+            **NetBoxPathwaysConfig._map_config,
             'maxNativeZoom': plugin_cfg.get('map_max_native_zoom', 19),
             'apiBase': f'{api_base}geo/',
             'overlays': plugin_cfg.get('map_overlays', []),
-            'baseLayers': plugin_cfg.get('map_base_layers', []),
         }
 
         detail_js = static('netbox_pathways/dist/detail-map.min.js')

@@ -4,6 +4,10 @@ declare global {
   interface PathwaysConfig {
     apiBase: string;
     maxNativeZoom: number;
+    center?: [number, number];
+    zoom?: number;
+    minZoom?: number;
+    maxZoom?: number;
     overlays?: OverlayConfig[];
     baseLayers?: BaseLayerConfig[];
     externalLayers?: import('./external').ExternalLayerConfig[];
