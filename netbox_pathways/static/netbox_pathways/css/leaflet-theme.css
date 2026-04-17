@@ -202,45 +202,36 @@
     text-align: center;
 }
 
-/* --- django-leaflet form widget ----------------------------------- */
+/* --- Form map widget ------------------------------------------------- */
 
-/* Override django-leaflet default 720px to match NetBox form field width */
-form .leaflet-container {
+.pathways-map-widget {
+    border-radius: 4px;
+    border: 1px solid var(--pw-map-border);
+    margin-bottom: 0.5rem;
+}
+
+.pathways-map-widget .leaflet-container {
     width: 100% !important;
     max-width: 100%;
 }
 
-/* Add spacing around the help text below django-leaflet map widgets */
-textarea.django-leaflet-raw-textarea ~ .form-text {
-    display: block;
-    margin-top: 0.5rem;
-}
-
-[data-bs-theme="dark"] .leaflet-container {
+[data-bs-theme="dark"] .pathways-map-widget {
     background: var(--pw-map-bg);
 }
 
-/* Toolbar buttons in draw controls */
-[data-bs-theme="dark"] .leaflet-draw-toolbar a {
+/* Geoman toolbar dark mode */
+[data-bs-theme="dark"] .leaflet-pm-toolbar .button-container {
     background-color: var(--pw-map-control-bg);
     border-color: var(--pw-map-control-border);
 }
 
-[data-bs-theme="dark"] .leaflet-draw-toolbar a:hover {
+[data-bs-theme="dark"] .leaflet-pm-toolbar .button-container:hover {
     background-color: #343a40;
 }
 
-[data-bs-theme="dark"] .leaflet-draw-actions a {
+[data-bs-theme="dark"] .leaflet-pm-actions-container a {
     background: var(--pw-map-control-bg);
     color: var(--pw-map-control-text);
-    border-color: var(--pw-map-control-border);
-}
-
-/* Draw tooltip */
-[data-bs-theme="dark"] .leaflet-draw-tooltip {
-    background: var(--pw-map-popup-bg);
-    color: var(--pw-map-popup-text);
-    border-color: var(--pw-map-popup-border);
 }
 
 

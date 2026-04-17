@@ -1,4 +1,4 @@
-/** Type augmentations for Leaflet plugins and django-leaflet. */
+/** Type augmentations for Leaflet plugins and pathways map widgets. */
 
 import * as L from 'leaflet';
 import 'leaflet.markercluster';
@@ -56,7 +56,7 @@ declare global {
     }
   }
 
-  /** Custom event fired by django-leaflet on map widget initialization. */
+  /** Custom event fired by PathwaysMapWidget on map initialization. */
   interface MapInitEvent extends CustomEvent {
     detail: {
       map: L.Map;
