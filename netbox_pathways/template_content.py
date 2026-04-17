@@ -21,6 +21,8 @@ def _leaflet_head():
         static('netbox_pathways/vendor/leaflet/leaflet.js'),
         static('netbox_pathways/vendor/geoman/leaflet-geoman.js'),
         static('netbox_pathways/vendor/leaflet.markercluster.js'),
+        static('netbox_pathways/dist/pathways-field.min.js'),
+        static('netbox_pathways/dist/endpoint-markers.min.js'),
     ]
     html = ''
     for href in css:
