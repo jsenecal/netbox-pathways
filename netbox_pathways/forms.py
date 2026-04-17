@@ -3,52 +3,50 @@ import json
 from circuits.models import Circuit
 from dcim.models import Cable, Location, Site
 from django import forms
+from django.contrib.gis.forms.widgets import BaseGeometryWidget
 from django.contrib.gis.geos import LineString
-from leaflet.forms.widgets import LeafletWidget
+from django.utils.safestring import mark_safe
 from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelForm, NetBoxModelImportForm
 from tenancy.models import Tenant
 from utilities.forms.fields import CSVModelChoiceField, DynamicModelChoiceField
 from utilities.forms.rendering import FieldSet
 
 
-class PathwaysLeafletWidget(LeafletWidget):
-    """LeafletWidget with edit-control fix and endpoint geometry injection."""
+class PathwaysMapWidget(BaseGeometryWidget):
+    """Map widget using Leaflet + geoman for geometry editing."""
 
+    template_name = 'netbox_pathways/widgets/map_widget.html'
+    map_srid = 4326
+    geom_type = 'LINESTRING'  # Default for pathway forms (overrides BaseGeometryWidget 'GEOMETRY')
     endpoint_geojson = None
 
     class Media:
+        css = {'all': (
+            'netbox_pathways/vendor/leaflet/leaflet.css',
+            'netbox_pathways/vendor/geoman/leaflet-geoman.css',
+            'netbox_pathways/css/leaflet-theme.css',
+        )}
         js = (
-            'netbox_pathways/dist/fix-edit-controls.min.js',
+            'netbox_pathways/vendor/leaflet/leaflet.js',
+            'netbox_pathways/vendor/geoman/leaflet-geoman.js',
+            'netbox_pathways/dist/pathways-field.min.js',
             'netbox_pathways/dist/endpoint-markers.min.js',
         )
 
-    def render(self, name, value, attrs=None, renderer=None):
-        html = super().render(name, value, attrs, renderer=renderer)
-        if self.endpoint_geojson:
-            field_id = attrs.get('id', name) if attrs else name
-            json_str = json.dumps(self.endpoint_geojson)
-            from django.utils.html import format_html
-            html += format_html(
-                '<script type="application/json" id="{}">{}</script>',
-                field_id + '-endpoints',
-                json_str,
-            )
-        return html
-
-
-class PointPolygonWidget(PathwaysLeafletWidget):
-    """LeafletWidget that allows point and polygon drawing but not polylines."""
-
-    class Media:
-        js = ('netbox_pathways/dist/point-polygon-widget.min.js',)
-
-
-class PointOnlyWidget(PathwaysLeafletWidget):
-    """LeafletWidget restricted to point drawing only."""
-
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault('attrs', {})['geom_type'] = 'POINT'
+    def __init__(self, geom_type=None, *args, **kwargs):
+        if geom_type:
+            self.geom_type = geom_type
         super().__init__(*args, **kwargs)
+
+    def serialize(self, value):
+        """Emit GeoJSON (not WKT) for JS consumption."""
+        return value.geojson if value else ''
+
+    def get_context(self, name, value, attrs):
+        context = super().get_context(name, value, attrs)
+        if self.endpoint_geojson:
+            context['endpoint_json'] = mark_safe(json.dumps(self.endpoint_geojson))
+        return context
 
 from .choices import (
     AerialTypeChoices,
@@ -156,7 +154,7 @@ class StructureForm(NetBoxModelForm):
             'installation_date', 'access_notes', 'comments', 'tags',
         ]
         widgets = {
-            'location': PointPolygonWidget(),
+            'location': PathwaysMapWidget(geom_type='Geometry'),
         }
 
 
@@ -222,7 +220,7 @@ class PathwayForm(PathwayEndpointFormMixin, NetBoxModelForm):
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': PathwaysLeafletWidget(),
+            'path': PathwaysMapWidget(),
         }
 
 
@@ -272,7 +270,7 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': PathwaysLeafletWidget(),
+            'path': PathwaysMapWidget(),
         }
 
 
@@ -340,7 +338,7 @@ class AerialSpanForm(PathwayEndpointFormMixin, NetBoxModelForm):
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': PathwaysLeafletWidget(),
+            'path': PathwaysMapWidget(),
         }
 
 
@@ -406,7 +404,7 @@ class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': PathwaysLeafletWidget(),
+            'path': PathwaysMapWidget(),
         }
 
 
@@ -450,7 +448,7 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
             'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': PathwaysLeafletWidget(),
+            'path': PathwaysMapWidget(),
         }
 
 
@@ -481,7 +479,7 @@ class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
             'path', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
-            'path': PathwaysLeafletWidget(),
+            'path': PathwaysMapWidget(),
         }
 
 
@@ -639,7 +637,7 @@ class SiteGeometryForm(NetBoxModelForm):
         model = SiteGeometry
         fields = ['site', 'structure', 'geometry', 'comments', 'tags']
         widgets = {
-            'geometry': PointPolygonWidget(),
+            'geometry': PathwaysMapWidget(geom_type='Geometry'),
         }
 
 
@@ -660,5 +658,5 @@ class CircuitGeometryForm(NetBoxModelForm):
         model = CircuitGeometry
         fields = ['circuit', 'path', 'provider_reference', 'comments', 'tags']
         widgets = {
-            'path': PathwaysLeafletWidget(),
+            'path': PathwaysMapWidget(),
         }

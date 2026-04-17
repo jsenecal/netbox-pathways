@@ -2,7 +2,7 @@ import pytest
 from django.contrib.gis.geos import LineString, Point, Polygon
 from django.core.exceptions import ValidationError
 
-from netbox_pathways.forms import ConduitBankForm, PathwayForm, PathwaysLeafletWidget
+from netbox_pathways.forms import ConduitBankForm, PathwayForm, PathwaysMapWidget
 from netbox_pathways.geo import get_srid, to_leaflet
 from netbox_pathways.models import Conduit, ConduitJunction, Pathway, Structure
 
@@ -213,7 +213,7 @@ class TestPathAutoGeneration:
 
 class TestWidgetEndpointRendering:
     def test_renders_endpoint_script_tag(self):
-        widget = PathwaysLeafletWidget()
+        widget = PathwaysMapWidget()
         widget.endpoint_geojson = {
             'start': {'type': 'Point', 'coordinates': [-73.5, 45.5]},
         }
@@ -223,7 +223,7 @@ class TestWidgetEndpointRendering:
         assert '-73.5' in html
 
     def test_no_endpoint_data_no_script_tag(self):
-        widget = PathwaysLeafletWidget()
+        widget = PathwaysMapWidget()
         widget.endpoint_geojson = None
         html = widget.render('path', None, attrs={'id': 'id_path'})
         assert '-endpoints' not in html

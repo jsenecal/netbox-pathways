@@ -1,0 +1,10 @@
+<div id="{{ id }}-map"
+     class="pathways-map-widget"
+     data-field-id="{{ id }}"
+     data-geom-type="{{ geom_type }}"
+     style="height: 400px; width: 100%;">
+</div>
+<input type="hidden" id="{{ id }}" name="{{ name }}" value="{{ serialized }}">
+{% if endpoint_json %}
+<script type="application/json" id="{{ id }}-endpoints">{{ endpoint_json }}</script>
+{% endif %}
