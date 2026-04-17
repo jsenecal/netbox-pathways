@@ -2,8 +2,8 @@
  * Locked endpoint markers for pathway edit forms.
  *
  * Reads structure geometry from a <script type="application/json"> element
- * injected by PathwaysLeafletWidget.render(), draws non-editable markers
- * on the map, and snaps drawn path endpoints to structure geometry.
+ * injected by PathwaysMapWidget, draws non-editable markers on the map,
+ * and snaps drawn path endpoints to structure geometry.
  */
 
 interface EndpointData {
@@ -11,13 +11,10 @@ interface EndpointData {
   end?: GeoJSON.Geometry;
 }
 
-interface LoadFieldEvent {
-  field: {
-    options: { fieldid: string };
-    drawnItems: L.LayerGroup;
-    store: { save: (layer: L.LayerGroup) => void };
-    _drawControl?: Record<string, any>;
-  };
+interface FieldReadyDetail {
+  map: L.Map;
+  drawnItems: L.FeatureGroup;
+  geomType: string;
 }
 
 (function () {
@@ -51,10 +48,7 @@ interface LoadFieldEvent {
     }
   }
 
-  function addLockedGeometry(
-    map: L.Map,
-    geojson: GeoJSON.Geometry,
-  ): void {
+  function addLockedGeometry(map: L.Map, geojson: GeoJSON.Geometry): void {
     if (geojson.type === 'Point') {
       const [lng, lat] = geojson.coordinates as [number, number];
       L.circleMarker([lat, lng], MARKER_STYLE).addTo(map);
@@ -66,44 +60,31 @@ interface LoadFieldEvent {
     }
   }
 
-  function nearestPointOnRing(
-    ring: [number, number][],
-    point: [number, number],
-  ): [number, number] {
-    let bestDist = Infinity;
-    let bestPoint: [number, number] = ring[0];
-
-    for (let i = 0; i < ring.length - 1; i++) {
-      const a = ring[i];
-      const b = ring[i + 1];
-      const nearest = nearestPointOnSegment(a, b, point);
-      const dx = nearest[0] - point[0];
-      const dy = nearest[1] - point[1];
-      const dist = dx * dx + dy * dy;
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestPoint = nearest;
-      }
-    }
-    return bestPoint;
-  }
-
   function nearestPointOnSegment(
-    a: [number, number],
-    b: [number, number],
-    p: [number, number],
+    a: [number, number], b: [number, number], p: [number, number],
   ): [number, number] {
-    const dx = b[0] - a[0];
-    const dy = b[1] - a[1];
+    const dx = b[0] - a[0], dy = b[1] - a[1];
     if (dx === 0 && dy === 0) return a;
     let t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy);
     t = Math.max(0, Math.min(1, t));
     return [a[0] + t * dx, a[1] + t * dy];
   }
 
+  function nearestPointOnRing(
+    ring: [number, number][], point: [number, number],
+  ): [number, number] {
+    let bestDist = Infinity, bestPoint: [number, number] = ring[0];
+    for (let i = 0; i < ring.length - 1; i++) {
+      const nearest = nearestPointOnSegment(ring[i], ring[i + 1], point);
+      const dx = nearest[0] - point[0], dy = nearest[1] - point[1];
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) { bestDist = dist; bestPoint = nearest; }
+    }
+    return bestPoint;
+  }
+
   function getSnapTarget(
-    geojson: GeoJSON.Geometry,
-    currentLatLng: L.LatLng,
+    geojson: GeoJSON.Geometry, latlng: L.LatLng,
   ): [number, number] | null {
     if (geojson.type === 'Point') {
       const [lng, lat] = geojson.coordinates as [number, number];
@@ -113,69 +94,71 @@ interface LoadFieldEvent {
       const ring = (geojson.coordinates as number[][][])[0].map(
         (c) => [c[1], c[0]] as [number, number],
       );
-      return nearestPointOnRing(ring, [currentLatLng.lat, currentLatLng.lng]);
+      return nearestPointOnRing(ring, [latlng.lat, latlng.lng]);
     }
     return null;
   }
 
-  function snapDrawnPath(
-    field: LoadFieldEvent['field'],
-    data: EndpointData,
-  ): void {
-    const layers = (field.drawnItems as any).getLayers() as L.Layer[];
+  function snapPath(drawnItems: L.FeatureGroup, data: EndpointData, fieldId: string): void {
+    const layers = drawnItems.getLayers();
     if (layers.length === 0) return;
-
     const polyline = layers[0] as L.Polyline;
     if (!polyline.getLatLngs) return;
-
     const latLngs = polyline.getLatLngs() as L.LatLng[];
     if (latLngs.length < 2) return;
     let changed = false;
 
     if (data.start) {
       const target = getSnapTarget(data.start, latLngs[0]);
-      if (target) {
-        latLngs[0] = L.latLng(target[0], target[1]);
-        changed = true;
-      }
+      if (target) { latLngs[0] = L.latLng(target[0], target[1]); changed = true; }
     }
-
     if (data.end) {
       const last = latLngs.length - 1;
       const target = getSnapTarget(data.end, latLngs[last]);
-      if (target) {
-        latLngs[last] = L.latLng(target[0], target[1]);
-        changed = true;
-      }
+      if (target) { latLngs[last] = L.latLng(target[0], target[1]); changed = true; }
     }
-
     if (changed) {
       polyline.setLatLngs(latLngs);
-      field.store.save(field.drawnItems as any);
+      // Update the hidden input
+      const input = document.getElementById(fieldId) as HTMLInputElement;
+      if (input) {
+        const geojson = (polyline as any).toGeoJSON();
+        input.value = JSON.stringify(geojson.geometry);
+      }
     }
   }
 
-  window.addEventListener('map:init', function (e: Event) {
-    const detail = (e as CustomEvent).detail;
-    const map: L.Map | undefined = detail?.map;
-    if (!map) return;
+  // Listen for pathways:field-ready on any widget
+  document.addEventListener('pathways:field-ready', function (e: Event) {
+    const detail = (e as CustomEvent<FieldReadyDetail>).detail;
+    if (!detail) return;
+    const { map, drawnItems, geomType } = detail;
 
-    map.on('map:loadfield', function (evt: unknown) {
-      const loadEvt = evt as LoadFieldEvent;
-      const fieldId = loadEvt.field?.options?.fieldid;
-      if (!fieldId) return;
+    // Only snap for LineString geometry
+    const normalized = geomType.replace(/\s+/g, '').toLowerCase();
+    if (normalized !== 'linestring') return;
 
-      const data = getEndpointData(fieldId);
-      if (!data) return;
+    // Find the field ID from the widget container
+    const container = map.getContainer();
+    const fieldId = container.dataset.fieldId;
+    if (!fieldId) return;
 
-      // Draw locked markers
-      if (data.start) addLockedGeometry(map, data.start);
-      if (data.end) addLockedGeometry(map, data.end);
+    const data = getEndpointData(fieldId);
+    if (!data) return;
 
-      // Snap on draw events
-      map.on('draw:created draw:edited', function () {
-        snapDrawnPath(loadEvt.field, data);
-      });
+    // Draw locked markers
+    if (data.start) addLockedGeometry(map, data.start);
+    if (data.end) addLockedGeometry(map, data.end);
+
+    // Snap existing geometry
+    snapPath(drawnItems, data, fieldId);
+
+    // Snap on new draws
+    map.on('pm:create', () => snapPath(drawnItems, data, fieldId));
+
+    // Snap on edits (listen on individual layers as they're added)
+    drawnItems.on('layeradd', (evt: any) => {
+      evt.layer.on('pm:edit', () => snapPath(drawnItems, data, fieldId));
     });
   });
 })();
