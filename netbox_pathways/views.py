@@ -158,7 +158,7 @@ class StructureCreateSiteView(LoginRequiredMixin, View):
         structure.save()
 
         messages.success(request, f'Created site "{site.name}" and linked it to this structure.')
-        return redirect(structure.get_absolute_url())
+        return redirect(reverse('dcim:site_edit', args=[site.pk]))
 
 
 @register_model_view(models.Structure, 'conduit_banks')
