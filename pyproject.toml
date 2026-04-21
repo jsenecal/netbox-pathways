@@ -36,6 +36,7 @@ classifiers = [
 
 dependencies = [
     "djangorestframework-gis>=1.2.0",
+    "networkx>=3.0",
 ]
 
 [project.optional-dependencies]
