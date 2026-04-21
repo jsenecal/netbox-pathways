@@ -1,9 +1,11 @@
 from dcim.models import Cable, Site
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Count, Exists, OuterRef, Q, Sum
-from django.http import JsonResponse
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.db import transaction
+from django.db.models import Count, Exists, F, OuterRef, Q, Sum
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.text import slugify
 from django.views import View
@@ -17,7 +19,7 @@ from utilities.views import ViewTab, register_model_view
 from netbox_pathways.registry import registry as map_layer_registry
 
 from . import filterforms, filters, forms, models, tables
-from .graph import PathwayGraph, node_to_label
+from .graph import PathwayGraph, _endpoint_nodes, node_to_label
 from .ui import panels
 
 
@@ -618,6 +620,22 @@ class CableSegmentView(generic.ObjectView):
         ],
     )
 
+    def get_extra_context(self, request, instance):
+        ctx = super().get_extra_context(request, instance)
+        siblings = list(
+            models.CableSegment.objects.filter(cable=instance.cable)
+            .select_related('pathway')
+            .order_by('sequence')
+        )
+        current_idx = next(
+            (i for i, s in enumerate(siblings) if s.pk == instance.pk), 0
+        )
+        ctx['prev_segment'] = siblings[current_idx - 1] if current_idx > 0 else None
+        ctx['next_segment'] = siblings[current_idx + 1] if current_idx < len(siblings) - 1 else None
+        ctx['segment_ordinal'] = current_idx + 1
+        ctx['segment_total'] = len(siblings)
+        return ctx
+
 
 class CableSegmentEditView(generic.ObjectEditView):
     queryset = models.CableSegment.objects.all()
@@ -1062,3 +1080,221 @@ class AdjacencyView(LoginRequiredMixin, View):
             })
 
         return JsonResponse(results, safe=False)
+
+
+# --- Cable Routing Panel HTMX Views ---
+
+
+class CableRoutingMixin:
+    """Shared helpers for routing panel views."""
+
+    def _start_node(self, cable):
+        """Resolve A termination to a graph node."""
+        from dcim.models import CableTermination
+        term = CableTermination.objects.filter(
+            cable=cable, cable_end='A',
+        ).select_related('_site').first()
+        if not term or not term._site_id:
+            return None
+        structures = models.Structure.objects.filter(site_id=term._site_id)
+        if structures.count() == 1:
+            return ('structure', structures.first().pk)
+        first = structures.first()
+        return ('structure', first.pk) if first else None
+
+    def _end_node(self, cable):
+        """Resolve B termination to a graph node."""
+        from dcim.models import CableTermination
+        term = CableTermination.objects.filter(
+            cable=cable, cable_end='B',
+        ).select_related('_site').first()
+        if not term or not term._site_id:
+            return None
+        structures = models.Structure.objects.filter(site_id=term._site_id)
+        if structures.count() == 1:
+            return ('structure', structures.first().pk)
+        first = structures.first()
+        return ('structure', first.pk) if first else None
+
+    def _far_end_node(self, pathway, coming_from_node=None):
+        """Return the opposite end of a pathway from the entry node."""
+        start, end = _endpoint_nodes(pathway)
+        if coming_from_node and coming_from_node == end:
+            return start
+        return end
+
+    def _render_table(self, request, cable):
+        segments = list(
+            models.CableSegment.objects.filter(cable=cable)
+            .select_related(
+                'pathway', 'pathway__start_structure', 'pathway__end_structure',
+                'pathway__start_location', 'pathway__end_location',
+            )
+            .order_by('sequence')
+        )
+        for i, seg in enumerate(segments):
+            seg.ordinal = i + 1
+            seg.gap_before = (i > 0 and seg.sequence != segments[i - 1].sequence + 1)
+            seg.prev_sequence = segments[i - 1].sequence if i > 0 else 0
+            seg.start_name = str(seg.pathway.start_endpoint) if seg.pathway and seg.pathway.start_endpoint else None
+            seg.end_name = str(seg.pathway.end_endpoint) if seg.pathway and seg.pathway.end_endpoint else None
+
+        html = render_to_string(
+            'netbox_pathways/inc/cable_segment_table.html',
+            {'cable': cable, 'segments': segments},
+            request=request,
+        )
+        return HttpResponse(html)
+
+
+class CableRoutingAddSegmentView(CableRoutingMixin, LoginRequiredMixin, PermissionRequiredMixin, View):
+    """HTMX: Show add-segment form or process segment creation."""
+    permission_required = 'netbox_pathways.add_cablesegment'
+
+    def get(self, request, cable_pk):
+        cable = get_object_or_404(Cable, pk=cable_pk)
+        after_sequence = request.GET.get('after_sequence')
+
+        segments = list(
+            models.CableSegment.objects.filter(cable=cable)
+            .select_related('pathway')
+            .order_by('sequence')
+        )
+
+        if after_sequence is not None:
+            after_sequence = int(after_sequence)
+            prev_seg = next((s for s in segments if s.sequence == after_sequence), None)
+            if prev_seg and prev_seg.pathway:
+                node = self._far_end_node(prev_seg.pathway)
+            else:
+                node = self._start_node(cable)
+        elif segments:
+            last = segments[-1]
+            if last.pathway:
+                node = self._far_end_node(last.pathway)
+            else:
+                node = self._start_node(cable)
+        else:
+            node = self._start_node(cable)
+
+        graph = PathwayGraph.build()
+        connected = graph.connected_pathways(node) if node else []
+        pathway_ids = [c['pathway_id'] for c in connected]
+        pathways = models.Pathway.objects.filter(pk__in=pathway_ids).select_related(
+            'start_structure', 'end_structure',
+        )
+
+        choices = []
+        for pw in pathways:
+            dest = pw.end_endpoint or pw.start_endpoint
+            length_str = f"{pw.length:.1f}m" if pw.length else "?"
+            choices.append((pw.pk, f"{pw} \u2192 {dest} ({length_str})"))
+
+        html = render_to_string(
+            'netbox_pathways/inc/cable_add_segment_form.html',
+            {
+                'cable': cable,
+                'choices': choices,
+                'after_sequence': after_sequence,
+            },
+            request=request,
+        )
+        return HttpResponse(html)
+
+    def post(self, request, cable_pk):
+        cable = get_object_or_404(Cable, pk=cable_pk)
+        pathway_id = request.POST.get('pathway')
+        after_sequence = request.POST.get('after_sequence')
+
+        pathway = get_object_or_404(models.Pathway, pk=pathway_id) if pathway_id else None
+
+        if after_sequence:
+            sequence = int(after_sequence) + 1
+            with transaction.atomic():
+                models.CableSegment.objects.filter(
+                    cable=cable, sequence__gte=sequence,
+                ).update(sequence=F('sequence') + 1)
+                seg = models.CableSegment(cable=cable, pathway=pathway, sequence=sequence)
+                seg.save()
+        else:
+            seg = models.CableSegment(cable=cable, pathway=pathway)
+            seg.save()
+
+        return self._render_table(request, cable)
+
+
+class CableRoutingDeleteSegmentView(CableRoutingMixin, LoginRequiredMixin, PermissionRequiredMixin, View):
+    """HTMX: Delete a segment and return updated table."""
+    permission_required = 'netbox_pathways.delete_cablesegment'
+
+    def post(self, request, cable_pk, segment_pk):
+        cable = get_object_or_404(Cable, pk=cable_pk)
+        seg = get_object_or_404(models.CableSegment, pk=segment_pk, cable=cable)
+        seg.delete()
+        return self._render_table(request, cable)
+
+
+class CableRoutingFindRouteView(CableRoutingMixin, LoginRequiredMixin, View):
+    """HTMX: Find routes between cable A/B terminations."""
+
+    def get(self, request, cable_pk):
+        cable = get_object_or_404(Cable, pk=cable_pk)
+        start_node = self._start_node(cable)
+        end_node = self._end_node(cable)
+
+        routes = []
+        if start_node and end_node:
+            graph = PathwayGraph.build()
+            routes = graph.all_routes(start_node, end_node, max_depth=20, max_routes=10)
+
+        enriched_routes = []
+        for cost, pathway_ids in routes:
+            pathways = models.Pathway.objects.filter(
+                pk__in=pathway_ids,
+            ).select_related('start_structure', 'end_structure')
+            pw_map = {pw.pk: pw for pw in pathways}
+            enriched_routes.append({
+                'cost': cost,
+                'hop_count': len(pathway_ids),
+                'pathways': [pw_map.get(pid) for pid in pathway_ids if pw_map.get(pid)],
+                'pathway_ids': ','.join(str(pid) for pid in pathway_ids),
+            })
+
+        existing_count = models.CableSegment.objects.filter(cable=cable).count()
+
+        html = render_to_string(
+            'netbox_pathways/inc/cable_route_finder_results.html',
+            {
+                'cable': cable,
+                'routes': enriched_routes,
+                'existing_count': existing_count,
+            },
+            request=request,
+        )
+        return HttpResponse(html)
+
+
+class CableRoutingApplyRouteView(CableRoutingMixin, LoginRequiredMixin, PermissionRequiredMixin, View):
+    """HTMX: Apply a found route -- create segments from pathway IDs."""
+    permission_required = ('netbox_pathways.add_cablesegment', 'netbox_pathways.delete_cablesegment')
+
+    def post(self, request, cable_pk):
+        cable = get_object_or_404(Cable, pk=cable_pk)
+        pathway_ids_str = request.POST.get('pathway_ids', '')
+        pathway_ids = [int(pid) for pid in pathway_ids_str.split(',') if pid.strip()]
+
+        with transaction.atomic():
+            models.CableSegment.objects.filter(cable=cable).delete()
+            for i, pw_id in enumerate(pathway_ids, start=1):
+                seg = models.CableSegment(cable=cable, pathway_id=pw_id, sequence=i)
+                seg.save()
+
+        return self._render_table(request, cable)
+
+
+class CableRoutingTableView(CableRoutingMixin, LoginRequiredMixin, View):
+    """HTMX: Re-render the segment table (used by Cancel button)."""
+
+    def get(self, request, cable_pk):
+        cable = get_object_or_404(Cable, pk=cable_pk)
+        return self._render_table(request, cable)

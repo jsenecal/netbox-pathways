@@ -1,1 +1,32 @@
 {% extends 'generic/object.html' %}
+
+{% block content %}
+{% if prev_segment or next_segment %}
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    {% if prev_segment %}
+    <a class="nav-link" href="{{ prev_segment.get_absolute_url }}">
+      <i class="mdi mdi-chevron-left"></i> {{ prev_segment.pathway|default:"Segment" }}
+    </a>
+    {% else %}
+    <span class="nav-link disabled"></span>
+    {% endif %}
+  </li>
+  <li class="nav-item">
+    <span class="nav-link active">
+      Segment {{ segment_ordinal }} of {{ segment_total }}
+    </span>
+  </li>
+  <li class="nav-item">
+    {% if next_segment %}
+    <a class="nav-link" href="{{ next_segment.get_absolute_url }}">
+      {{ next_segment.pathway|default:"Segment" }} <i class="mdi mdi-chevron-right"></i>
+    </a>
+    {% else %}
+    <span class="nav-link disabled"></span>
+    {% endif %}
+  </li>
+</ul>
+{% endif %}
+{{ block.super }}
+{% endblock %}
