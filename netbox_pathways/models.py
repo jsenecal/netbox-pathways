@@ -164,6 +164,10 @@ class CircuitGeometry(NetBoxModel):
 
 
 class Pathway(NetBoxModel):
+    prerequisite_models = (
+        'netbox_pathways.Structure',
+    )
+
     label = models.CharField(max_length=100, blank=True)
     pathway_type = models.CharField(max_length=50, choices=PathwayTypeChoices, editable=False)
     path = models.LineStringField(srid=get_srid(), help_text="Geographic path")
@@ -469,6 +473,10 @@ class DirectBuried(Pathway):
 
 
 class Innerduct(Pathway):
+    prerequisite_models = (
+        'netbox_pathways.Conduit',
+    )
+
     def get_absolute_url(self):
         return reverse('plugins:netbox_pathways:innerduct', args=[self.pk])
 
@@ -500,6 +508,10 @@ class Innerduct(Pathway):
 
 
 class ConduitJunction(NetBoxModel):
+    prerequisite_models = (
+        'netbox_pathways.Conduit',
+    )
+
     label = models.CharField(max_length=100, blank=True)
     trunk_conduit = models.ForeignKey(
         Conduit, on_delete=models.CASCADE, related_name='junctions_on_trunk',
@@ -570,6 +582,10 @@ class PathwayLocation(NetBoxModel):
     Records that a pathway passes through a specific location or site along its length.
     Ordered waypoints between the start and end endpoints.
     """
+    prerequisite_models = (
+        'netbox_pathways.Pathway',
+    )
+
     pathway = models.ForeignKey(
         Pathway, on_delete=models.CASCADE, related_name='waypoints',
     )
@@ -605,6 +621,10 @@ class PathwayLocation(NetBoxModel):
 
 
 class CableSegment(NetBoxModel):
+    prerequisite_models = (
+        'netbox_pathways.Pathway',
+    )
+
     cable = models.ForeignKey(Cable, on_delete=models.CASCADE, related_name='pathway_segments')
     pathway = models.ForeignKey(
         Pathway, on_delete=models.SET_NULL, null=True, blank=True, related_name='cable_segments',
@@ -659,6 +679,10 @@ class CableSegment(NetBoxModel):
 
 
 class SlackLoop(NetBoxModel):
+    prerequisite_models = (
+        'netbox_pathways.Structure',
+    )
+
     cable = models.ForeignKey(Cable, on_delete=models.CASCADE, related_name='slack_loops')
     structure = models.ForeignKey(Structure, on_delete=models.CASCADE, related_name='slack_loops')
     pathway = models.ForeignKey(
