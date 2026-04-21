@@ -157,4 +157,7 @@ urlpatterns = [
     # Graph Traversal Tools
     path('route-finder/', views.RouteFinderView.as_view(), name='route_finder'),
     path('neighbors/', views.NeighborsView.as_view(), name='neighbors'),
+
+    # Adjacency API for pathway filtering
+    path('adjacency/', views.AdjacencyView.as_view(), name='adjacency'),
 ]

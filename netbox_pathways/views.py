@@ -2,21 +2,22 @@ from dcim.models import Cable, Site
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, Exists, OuterRef, Q, Sum
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.text import slugify
 from django.views import View
 from extras.ui.panels import CustomFieldsPanel, TagsPanel
+from netbox.object_actions import CloneObject, DeleteObject, EditObject, ObjectAction
 from netbox.ui import layout
 from netbox.ui.panels import CommentsPanel, ObjectsTablePanel, TemplatePanel
-from netbox.object_actions import CloneObject, DeleteObject, EditObject, ObjectAction
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from netbox_pathways.registry import registry as map_layer_registry
 
 from . import filterforms, filters, forms, models, tables
-from .graph import PathwayGraph, batch_resolve_nodes
+from .graph import PathwayGraph, batch_resolve_nodes, node_to_label
 from .ui import panels
 
 
@@ -1225,3 +1226,37 @@ class NeighborsView(LoginRequiredMixin, View):
 
         context['geo_data'] = geo_data
         return render(request, 'netbox_pathways/neighbors.html', context)
+
+
+class AdjacencyView(LoginRequiredMixin, View):
+    """Return pathways connected to a given node as JSON."""
+
+    def get(self, request):
+        node_type = request.GET.get('node_type')
+        node_id = request.GET.get('node_id')
+        if not node_type or not node_id:
+            return JsonResponse(
+                {'error': 'node_type and node_id are required'}, status=400,
+            )
+        try:
+            node_id = int(node_id)
+        except (ValueError, TypeError):
+            return JsonResponse({'error': 'node_id must be an integer'}, status=400)
+
+        node = (node_type, node_id)
+        graph = PathwayGraph.build()
+        connected = graph.connected_pathways(node)
+
+        results = []
+        for edge in connected:
+            pw_info = graph.pathways.get(edge['pathway_id'], {})
+            dest_label = node_to_label(edge['destination'])
+            results.append({
+                'pathway_id': edge['pathway_id'],
+                'label': pw_info.get('name', ''),
+                'destination': dest_label,
+                'length': edge['weight'],
+                'pathway_type': edge['pathway_type'],
+            })
+
+        return JsonResponse(results, safe=False)

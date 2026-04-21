@@ -1,6 +1,15 @@
 import pytest
+from django.contrib.auth import get_user_model
 
 from netbox_pathways.registry import LayerDetail, LayerStyle, registry
+
+
+@pytest.fixture
+def admin_user(db):
+    user_model = get_user_model()
+    return user_model.objects.create_superuser(
+        username='testadmin', password='testpass123',  # noqa: S106
+    )
 
 
 @pytest.fixture(autouse=True)
