@@ -189,17 +189,5 @@ menu = PluginMenu(
                 ),
             ),
         )),
-        ('Tools', (
-            PluginMenuItem(
-                link='plugins:netbox_pathways:route_finder',
-                link_text='Route Finder',
-                permissions=['netbox_pathways.view_pathway'],
-            ),
-            PluginMenuItem(
-                link='plugins:netbox_pathways:neighbors',
-                link_text='Neighbors',
-                permissions=['netbox_pathways.view_structure'],
-            ),
-        )),
     ),
 )

@@ -12,7 +12,7 @@ from .geo import (
     PathwayGeoViewSet,
     StructureGeoViewSet,
 )
-from .traversal import CableTraceView, NeighborsView, RouteFinderView
+from .traversal import CableTraceView
 
 router = NetBoxRouter()
 router.register('structures', views.StructureViewSet)
@@ -42,7 +42,5 @@ urlpatterns = router.urls + [
     # External plugin map layer endpoint
     path('geo/external/<str:layer_name>/', ExternalLayerGeoView.as_view(), name='external-geo'),
     # Graph traversal endpoints
-    path('traversal/routes/', RouteFinderView.as_view(), name='traversal-routes'),
     path('traversal/cable-trace/', CableTraceView.as_view(), name='traversal-cable-trace'),
-    path('traversal/neighbors/', NeighborsView.as_view(), name='traversal-neighbors'),
 ]
