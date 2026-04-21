@@ -262,7 +262,7 @@ class CoreModelMapExtension(PluginTemplateExtension):
             pathways = models.Pathway.objects.filter(
                 Q(start_structure__site=obj) | Q(end_structure__site=obj),
             ).only(
-                'name', 'pathway_type', 'path',
+                'label', 'pathway_type', 'path',
             )[:500]
             for p in pathways:
                 line = _pathway_line(p)
@@ -275,7 +275,7 @@ class CoreModelMapExtension(PluginTemplateExtension):
             ).select_related(
                 'start_structure', 'end_structure',
             ).only(
-                'name', 'pathway_type', 'path',
+                'label', 'pathway_type', 'path',
                 'start_structure_id', 'end_structure_id',
                 'start_structure__name', 'start_structure__structure_type',
                 'start_structure__location',
