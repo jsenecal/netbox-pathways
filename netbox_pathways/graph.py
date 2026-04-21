@@ -5,9 +5,9 @@ Nodes: ('structure', pk), ('location', pk), ('junction', pk) tuples.
 Edges: Pathway instances connecting endpoints, weighted by length.
 """
 
-import heapq
-from collections import defaultdict
+import math
 
+import networkx as nx
 from django.db.models import OuterRef, Q, Subquery
 
 from . import models
@@ -41,24 +41,30 @@ def _endpoint_nodes(pathway):
 
 
 class PathwayGraph:
-    """In-memory adjacency list built from Pathway queryset."""
+    """NetworkX-backed graph of the pathway network."""
 
     def __init__(self):
-        self.adj = defaultdict(list)  # node -> [(neighbor, pathway_id, weight)]
-        self.pathways = {}  # pathway_id -> {id, name, type, length, path_coords}
+        self.graph = nx.Graph()
+        self.pathways = {}  # pathway_id -> {id, name, type, length, coords, url}
+
+    @property
+    def node_count(self):
+        return self.graph.number_of_nodes()
+
+    @property
+    def edge_count(self):
+        return self.graph.number_of_edges()
 
     @classmethod
     def build(cls, site_id=None):
-        """
-        Build graph from all pathways. Optionally scope to a site.
-        """
-        graph = cls()
+        """Build graph from all pathways. Optionally scope to a site."""
+        instance = cls()
 
         qs = models.Pathway.objects.select_related(
             'start_structure', 'end_structure',
             'start_location', 'end_location',
         ).only(
-            'id', 'name', 'pathway_type', 'path', 'length',
+            'id', 'label', 'pathway_type', 'path', 'length',
             'start_structure', 'end_structure',
             'start_location', 'end_location',
         )
@@ -83,7 +89,7 @@ class PathwayGraph:
             weight = pw.length or 0
             coords = linestring_to_coords(pw.path)
 
-            graph.pathways[pw.pk] = {
+            instance.pathways[pw.pk] = {
                 'id': pw.pk,
                 'name': str(pw),
                 'pathway_type': pw.pathway_type,
@@ -92,88 +98,87 @@ class PathwayGraph:
                 'url': pw.get_absolute_url(),
             }
 
-            graph.adj[start].append((end, pw.pk, weight))
-            graph.adj[end].append((start, pw.pk, weight))
+            # Store geo for A* heuristic on structure nodes
+            for node in (start, end):
+                if node not in instance.graph and node[0] == 'structure':
+                    geo = None
+                    if node == start and pw.start_structure:
+                        geo = point_to_latlon(pw.start_structure.centroid)
+                    elif node == end and pw.end_structure:
+                        geo = point_to_latlon(pw.end_structure.centroid)
+                    instance.graph.add_node(node, geo=geo)
 
-        return graph
+            instance.graph.add_edge(
+                start, end,
+                pathway_id=pw.pk,
+                weight=weight,
+                pathway_type=pw.pathway_type,
+            )
+
+        return instance
 
     def shortest_path(self, start_node, end_node):
-        """
-        Dijkstra's algorithm. Returns (total_cost, [pathway_ids]) or None.
-        """
-        if start_node not in self.adj or end_node not in self.adj:
+        """Dijkstra shortest path. Returns (total_cost, [pathway_ids]) or None."""
+        try:
+            path_nodes = nx.shortest_path(
+                self.graph, start_node, end_node, weight='weight',
+            )
+        except (nx.NodeNotFound, nx.NetworkXNoPath):
             return None
+        return self._extract_route(path_nodes)
 
-        dist = {start_node: 0}
-        prev = {}  # node -> (prev_node, pathway_id)
-        heap = [(0, start_node)]
-
-        while heap:
-            cost, node = heapq.heappop(heap)
-            if node == end_node:
-                # Reconstruct path
-                path_ids = []
-                cur = end_node
-                while cur in prev:
-                    prev_node, pw_id = prev[cur]
-                    path_ids.append(pw_id)
-                    cur = prev_node
-                path_ids.reverse()
-                return cost, path_ids
-
-            if cost > dist.get(node, float('inf')):
-                continue
-
-            for neighbor, pw_id, weight in self.adj[node]:
-                new_cost = cost + weight
-                if new_cost < dist.get(neighbor, float('inf')):
-                    dist[neighbor] = new_cost
-                    prev[neighbor] = (node, pw_id)
-                    heapq.heappush(heap, (new_cost, neighbor))
-
-        return None
+    def astar_path(self, start_node, end_node):
+        """A* shortest path with haversine heuristic. Returns (total_cost, [pathway_ids]) or None."""
+        try:
+            path_nodes = nx.astar_path(
+                self.graph, start_node, end_node,
+                heuristic=self._haversine_heuristic,
+                weight='weight',
+            )
+        except (nx.NodeNotFound, nx.NetworkXNoPath):
+            return None
+        return self._extract_route(path_nodes)
 
     def all_routes(self, start_node, end_node, max_depth=20, max_routes=10):
-        """
-        BFS/DFS to find all simple routes between two nodes.
-        Returns list of (total_cost, [pathway_ids]).
-        """
-        if start_node not in self.adj or end_node not in self.adj:
+        """Find all simple routes. Returns list of (total_cost, [pathway_ids])."""
+        if start_node not in self.graph or end_node not in self.graph:
             return []
 
         results = []
-        # Stack: (current_node, visited_nodes, path_ids, total_cost)
-        stack = [(start_node, {start_node}, [], 0)]
-
-        while stack and len(results) < max_routes:
-            node, visited, path_ids, cost = stack.pop()
-
-            if node == end_node and path_ids:
-                results.append((cost, list(path_ids)))
-                continue
-
-            if len(path_ids) >= max_depth:
-                continue
-
-            for neighbor, pw_id, weight in self.adj[node]:
-                if neighbor not in visited:
-                    new_visited = visited | {neighbor}
-                    stack.append((
-                        neighbor,
-                        new_visited,
-                        path_ids + [pw_id],
-                        cost + weight,
-                    ))
+        for path_nodes in nx.all_simple_paths(
+            self.graph, start_node, end_node, cutoff=max_depth,
+        ):
+            route = self._extract_route(path_nodes)
+            if route:
+                results.append(route)
+            if len(results) >= max_routes:
+                break
 
         results.sort(key=lambda r: r[0])
         return results
+
+    def connected_pathways(self, node):
+        """Return all pathways connected to a node."""
+        if node not in self.graph:
+            return []
+
+        result = []
+        for neighbor in self.graph.neighbors(node):
+            edge_data = self.graph.edges[node, neighbor]
+            result.append({
+                'pathway_id': edge_data['pathway_id'],
+                'destination': neighbor,
+                'weight': edge_data.get('weight', 0),
+                'pathway_type': edge_data.get('pathway_type', ''),
+            })
+        return result
 
     def neighbors(self, start_node, max_hops=3):
         """
         BFS to find all reachable structures within max_hops.
         Returns dict: node -> (distance, hops, [pathway_ids_to_reach]).
         """
-        if start_node not in self.adj:
+        if start_node not in self.graph:
             return {}
 
         result = {}
@@ -190,17 +195,41 @@ class PathwayGraph:
             if hops >= max_hops:
                 continue
 
-            for neighbor, pw_id, weight in self.adj[node]:
+            for neighbor in self.graph.neighbors(node):
                 if neighbor not in visited:
                     visited.add(neighbor)
+                    edge = self.graph.edges[node, neighbor]
                     queue.append((
                         neighbor,
                         hops + 1,
-                        dist + weight,
-                        path_ids + [pw_id],
+                        dist + edge.get('weight', 0),
+                        path_ids + [edge['pathway_id']],
                     ))
 
         return result
+
+    def _extract_route(self, path_nodes):
+        """Convert a list of nodes to (total_cost, [pathway_ids])."""
+        path_ids = []
+        total_cost = 0
+        for i in range(len(path_nodes) - 1):
+            edge = self.graph.edges[path_nodes[i], path_nodes[i + 1]]
+            path_ids.append(edge['pathway_id'])
+            total_cost += edge.get('weight', 0)
+        return total_cost, path_ids
+
+    def _haversine_heuristic(self, u, v):
+        """Haversine distance in meters between two nodes. Returns 0 if geo unknown."""
+        u_geo = self.graph.nodes[u].get('geo') if u in self.graph else None
+        v_geo = self.graph.nodes[v].get('geo') if v in self.graph else None
+        if not u_geo or not v_geo:
+            return 0
+        lat1, lon1 = math.radians(u_geo[0]), math.radians(u_geo[1])
+        lat2, lon2 = math.radians(v_geo[0]), math.radians(v_geo[1])
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+        return 6371000 * 2 * math.asin(math.sqrt(a))
 
 
 def trace_cable(cable_id):
