@@ -88,7 +88,7 @@ def validate_cable_route(cable_id):
                 'before_pathway': str(nxt.pathway),
                 'detail': (
                     f"No shared endpoint between "
-                    f"'{cur.pathway.name}' and '{nxt.pathway.name}'"
+                    f"'{cur.pathway}' and '{nxt.pathway}'"
                 ),
             })
 

@@ -27,9 +27,9 @@ class TestValidateCableRoute:
     def cable(self):
         return Cable.objects.create(label="CABLE-R-001")
 
-    def _make_conduit(self, name, s_from, s_to, srid):
+    def _make_conduit(self, label, s_from, s_to, srid):
         return Conduit.objects.create(
-            name=name, start_structure=s_from, end_structure=s_to,
+            label=label, start_structure=s_from, end_structure=s_to,
             path=LineString((0, 0), (1, 1), srid=srid),
         )
 
