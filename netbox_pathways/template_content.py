@@ -301,59 +301,6 @@ class CoreModelMapExtension(PluginTemplateExtension):
         return data
 
 
-class CableRoutingPanelExtension(PluginTemplateExtension):
-    """Full cable routing panel on Cable detail pages."""
-
-    models = ['dcim.cable']
-
-    def full_width_page(self):
-        from dcim.models import CableTermination
-        from django.template.loader import render_to_string
-
-        cable = self.context['object']
-
-        # Only show if cable has both A and B terminations
-        a_exists = CableTermination.objects.filter(cable=cable, cable_end='A').exists()
-        b_exists = CableTermination.objects.filter(cable=cable, cable_end='B').exists()
-        if not (a_exists and b_exists):
-            return ''
-
-        segments_qs = (
-            models.CableSegment.objects
-            .filter(cable=cable)
-            .select_related(
-                'pathway', 'pathway__start_structure', 'pathway__end_structure',
-                'pathway__start_location', 'pathway__end_location',
-            )
-            .order_by('sequence')
-        )
-        segments = list(segments_qs)
-
-        # Annotate segments with gap info and ordinal position
-        for i, seg in enumerate(segments):
-            seg.ordinal = i + 1
-            seg.gap_before = (i > 0 and seg.sequence != segments[i - 1].sequence + 1)
-            seg.prev_sequence = segments[i - 1].sequence if i > 0 else 0
-            seg.start_name = str(seg.pathway.start_endpoint) if seg.pathway and seg.pathway.start_endpoint else None
-            seg.end_name = str(seg.pathway.end_endpoint) if seg.pathway and seg.pathway.end_endpoint else None
-
-        route = validate_cable_route(cable.pk)
-        total_length = sum(s.pathway.length or 0 for s in segments if s.pathway)
-
-        return render_to_string(
-            'netbox_pathways/inc/cable_routing_panel.html',
-            {
-                'cable': cable,
-                'segments': segments,
-                'segment_count': len(segments),
-                'total_length': total_length,
-                'route_valid': route['valid'],
-                'gap_count': len(route['gaps']),
-            },
-            request=self.context.get('request'),
-        )
-
-
 class CableSlackLoopExtension(PluginTemplateExtension):
     """Slack loops table on Cable detail pages."""
 
@@ -432,7 +379,6 @@ template_extensions = [
     LeafletHeadExtension,
     PluginModelMapExtension,
     CoreModelMapExtension,
-    CableRoutingPanelExtension,
     CableSlackLoopExtension,
     StructureSlackLoopExtension,
 ]

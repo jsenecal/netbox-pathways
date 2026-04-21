@@ -19,7 +19,7 @@ from utilities.views import ViewTab, register_model_view
 from netbox_pathways.registry import registry as map_layer_registry
 
 from . import filterforms, filters, forms, models, tables
-from .graph import PathwayGraph, _endpoint_nodes, node_to_label
+from .graph import PathwayGraph, _endpoint_nodes, connected_pathways_db, node_to_label
 from .ui import panels
 
 
@@ -1065,22 +1065,71 @@ class AdjacencyView(LoginRequiredMixin, View):
             return JsonResponse({'error': 'node_id must be an integer'}, status=400)
 
         node = (node_type, node_id)
-        graph = PathwayGraph.build()
-        connected = graph.connected_pathways(node)
+        pathways = connected_pathways_db(node)
 
         results = []
-        for edge in connected:
-            pw_info = graph.pathways.get(edge['pathway_id'], {})
-            dest_label = node_to_label(edge['destination'])
+        for pw in pathways:
+            dest = pw.end_endpoint or pw.start_endpoint
             results.append({
-                'pathway_id': edge['pathway_id'],
-                'label': pw_info.get('name', ''),
-                'destination': dest_label,
-                'length': edge['weight'],
-                'pathway_type': edge['pathway_type'],
+                'pathway_id': pw.pk,
+                'label': str(pw),
+                'destination': str(dest) if dest else '',
+                'length': pw.length or 0,
+                'pathway_type': pw.pathway_type,
             })
 
         return JsonResponse(results, safe=False)
+
+
+# --- Cable Routing Tab (on dcim.Cable detail page) ---
+
+
+@register_model_view(Cable, 'route', path='route')
+class CableRouteView(generic.ObjectView):
+    queryset = Cable.objects.all()
+    template_name = 'netbox_pathways/cable_route_tab.html'
+    tab = ViewTab(
+        label='Route',
+        badge=lambda obj: obj.pathway_segments.count() or None,
+    )
+
+    def get_extra_context(self, request, instance):
+        from .routing import validate_cable_route
+
+        segments_qs = (
+            models.CableSegment.objects.filter(cable=instance)
+            .select_related(
+                'pathway', 'pathway__start_structure', 'pathway__end_structure',
+                'pathway__start_location', 'pathway__end_location',
+            )
+            .order_by('sequence')
+        )
+        segments = list(segments_qs)
+
+        for i, seg in enumerate(segments):
+            seg.ordinal = i + 1
+            seg.gap_before = (i > 0 and seg.sequence != segments[i - 1].sequence + 1)
+            seg.prev_sequence = segments[i - 1].sequence if i > 0 else 0
+            seg.start_name = str(seg.pathway.start_endpoint) if seg.pathway and seg.pathway.start_endpoint else None
+            seg.end_name = str(seg.pathway.end_endpoint) if seg.pathway and seg.pathway.end_endpoint else None
+
+        route = validate_cable_route(instance.pk)
+        total_length = sum(s.pathway.length or 0 for s in segments if s.pathway)
+
+        # Check routability
+        from dcim.models import CableTermination
+        a_exists = CableTermination.objects.filter(cable=instance, cable_end='A').exists()
+        b_exists = CableTermination.objects.filter(cable=instance, cable_end='B').exists()
+
+        return {
+            'cable': instance,
+            'segments': segments,
+            'segment_count': len(segments),
+            'total_length': total_length,
+            'route_valid': route['valid'],
+            'gap_count': len(route['gaps']),
+            'routable': a_exists and b_exists,
+        }
 
 
 # --- Cable Routing Panel HTMX Views ---
@@ -1178,12 +1227,7 @@ class CableRoutingAddSegmentView(CableRoutingMixin, LoginRequiredMixin, Permissi
         else:
             node = self._start_node(cable)
 
-        graph = PathwayGraph.build()
-        connected = graph.connected_pathways(node) if node else []
-        pathway_ids = [c['pathway_id'] for c in connected]
-        pathways = models.Pathway.objects.filter(pk__in=pathway_ids).select_related(
-            'start_structure', 'end_structure',
-        )
+        pathways = connected_pathways_db(node) if node else models.Pathway.objects.none()
 
         choices = []
         for pw in pathways:
@@ -1245,18 +1289,12 @@ class CableRoutingFindRouteView(CableRoutingMixin, LoginRequiredMixin, View):
 
         routes = []
         if start_node and end_node:
-            graph = PathwayGraph.build()
-            # Try A* first (fast, geo-aware), fall back to all_routes
+            graph = PathwayGraph.build_topology()
+            # Try A* first (fast, geo-aware)
             astar_result = graph.astar_path(start_node, end_node)
             if astar_result:
                 routes = [astar_result]
-                # Also find alternatives
-                alt_routes = graph.all_routes(start_node, end_node, max_depth=20, max_routes=5)
-                for r in alt_routes:
-                    if r[1] != astar_result[1]:  # different path
-                        routes.append(r)
-            else:
-                routes = graph.all_routes(start_node, end_node, max_depth=20, max_routes=10)
+            # No all_routes fallback — too slow on large networks
 
         enriched_routes = []
         for cost, pathway_ids in routes:

@@ -58,7 +58,7 @@
   </tbody>
 </table>
 
-<div class="mt-2">
+<div class="mt-2 d-flex gap-2">
   <button class="btn btn-sm btn-green"
           hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/add-segment/"
           hx-target="#pw-segment-table"
@@ -66,16 +66,38 @@
           title="Add segment at end">
     <i class="mdi mdi-plus"></i> Add Segment
   </button>
+  <button class="btn btn-sm btn-primary"
+          hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/find-route/"
+          hx-target="#pw-route-finder-results"
+          hx-swap="innerHTML"
+          hx-indicator="#pw-route-spinner">
+    <i class="mdi mdi-map-search-outline"></i> Find Route
+  </button>
+  <span id="pw-route-spinner" class="htmx-indicator">
+    <span class="spinner-border spinner-border-sm" role="status"></span>
+  </span>
 </div>
 
 {% else %}
 <div class="text-center text-muted py-3">
   <p>No segments in this cable's route.</p>
-  <button class="btn btn-sm btn-green"
-          hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/add-segment/"
-          hx-target="#pw-segment-table"
-          hx-swap="innerHTML">
-    <i class="mdi mdi-plus"></i> Add First Segment
-  </button>
+  <div class="d-flex justify-content-center gap-2">
+    <button class="btn btn-sm btn-green"
+            hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/add-segment/"
+            hx-target="#pw-segment-table"
+            hx-swap="innerHTML">
+      <i class="mdi mdi-plus"></i> Add First Segment
+    </button>
+    <button class="btn btn-sm btn-primary"
+            hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/find-route/"
+            hx-target="#pw-route-finder-results"
+            hx-swap="innerHTML"
+            hx-indicator="#pw-route-spinner">
+      <i class="mdi mdi-map-search-outline"></i> Find Route
+    </button>
+    <span id="pw-route-spinner" class="htmx-indicator">
+      <span class="spinner-border spinner-border-sm" role="status"></span>
+    </span>
+  </div>
 </div>
 {% endif %}

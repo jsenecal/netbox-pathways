@@ -1,0 +1,43 @@
+{% extends 'dcim/cable.html' %}
+
+{% block content %}
+  {% if not routable %}
+  <div class="alert alert-warning d-flex align-items-center" role="alert">
+    <span class="text-warning fs-1">
+      <i class="mdi mdi-alert"></i>
+    </span>
+    <span class="flex-fill">
+      Cable must have both A and B terminations before routing segments.
+    </span>
+  </div>
+  {% else %}
+  <div class="card mb-3" id="pw-routing-panel">
+    <h2 class="card-header">Cable Route</h2>
+
+    <div class="card-body">
+      <div class="d-flex align-items-center mb-3 gap-2">
+        {% if segments %}
+        <span>{{ segment_count }} segment{{ segment_count|pluralize }}</span>
+        <span class="text-muted">|</span>
+        <span>{{ total_length|floatformat:1 }} m</span>
+        {% if route_valid %}
+          <span class="badge text-bg-green">Complete</span>
+        {% elif gap_count %}
+          <span class="badge text-bg-yellow">{{ gap_count }} gap{{ gap_count|pluralize }}</span>
+        {% endif %}
+        <span class="text-muted">|</span>
+        <a href="/plugins/pathways/pull-sheets/{{ cable.pk }}/" class="btn btn-sm btn-outline-secondary">
+          <i class="mdi mdi-file-document-outline"></i> Pull Sheet
+        </a>
+        {% endif %}
+      </div>
+
+      <div id="pw-segment-table">
+        {% include "netbox_pathways/inc/cable_segment_table.html" %}
+      </div>
+
+      <div id="pw-route-finder-results"></div>
+    </div>
+  </div>
+  {% endif %}
+{% endblock %}
