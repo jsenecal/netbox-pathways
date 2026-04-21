@@ -1246,7 +1246,17 @@ class CableRoutingFindRouteView(CableRoutingMixin, LoginRequiredMixin, View):
         routes = []
         if start_node and end_node:
             graph = PathwayGraph.build()
-            routes = graph.all_routes(start_node, end_node, max_depth=20, max_routes=10)
+            # Try A* first (fast, geo-aware), fall back to all_routes
+            astar_result = graph.astar_path(start_node, end_node)
+            if astar_result:
+                routes = [astar_result]
+                # Also find alternatives
+                alt_routes = graph.all_routes(start_node, end_node, max_depth=20, max_routes=5)
+                for r in alt_routes:
+                    if r[1] != astar_result[1]:  # different path
+                        routes.append(r)
+            else:
+                routes = graph.all_routes(start_node, end_node, max_depth=20, max_routes=10)
 
         enriched_routes = []
         for cost, pathway_ids in routes:

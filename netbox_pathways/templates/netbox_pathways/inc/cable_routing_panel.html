@@ -1,37 +1,35 @@
 {% load static %}
 
 <div class="card mb-3" id="pw-routing-panel">
-  <div class="card-header d-flex justify-content-between align-items-center px-3 py-2">
-    <span class="fw-bold">
-Cable Route
-    </span>
-    <div>
-      {% if segments %}
-      <a href="/plugins/pathways/pull-sheets/{{ cable.pk }}/" class="btn btn-sm btn-outline-secondary me-1">
-        <i class="mdi mdi-file-document-outline"></i> Pull Sheet
-      </a>
-      {% endif %}
-      <button class="btn btn-sm btn-primary"
-              hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/find-route/"
-              hx-target="#pw-route-finder-results"
-              hx-swap="innerHTML">
-        <i class="mdi mdi-map-search-outline"></i> Find Route
-      </button>
-    </div>
-  </div>
+  <h2 class="card-header">Cable Route</h2>
 
   <div class="card-body">
-    {% if segments %}
-    <div class="d-flex align-items-center mb-3 gap-3">
+    <div class="d-flex align-items-center mb-3 gap-2">
+      {% if segments %}
       <span>{{ segment_count }} segment{{ segment_count|pluralize }}</span>
+      <span class="text-muted">|</span>
       <span>{{ total_length|floatformat:1 }} m</span>
       {% if route_valid %}
         <span class="badge text-bg-green">Complete</span>
       {% elif gap_count %}
         <span class="badge text-bg-yellow">{{ gap_count }} gap{{ gap_count|pluralize }}</span>
       {% endif %}
+      <span class="text-muted">|</span>
+      <a href="/plugins/pathways/pull-sheets/{{ cable.pk }}/" class="btn btn-sm btn-outline-secondary">
+        <i class="mdi mdi-file-document-outline"></i> Pull Sheet
+      </a>
+      {% endif %}
+      <button class="btn btn-sm btn-primary"
+              hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/find-route/"
+              hx-target="#pw-route-finder-results"
+              hx-swap="innerHTML"
+              hx-indicator="#pw-route-spinner">
+        <i class="mdi mdi-map-search-outline"></i> Find Route
+      </button>
+      <span id="pw-route-spinner" class="htmx-indicator ms-2">
+        <span class="spinner-border spinner-border-sm" role="status"></span>
+      </span>
     </div>
-    {% endif %}
 
     <div id="pw-segment-table">
       {% include "netbox_pathways/inc/cable_segment_table.html" %}
