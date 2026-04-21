@@ -301,64 +301,57 @@ class CoreModelMapExtension(PluginTemplateExtension):
         return data
 
 
-class CableRouteStatusExtension(PluginTemplateExtension):
-    """Route status panel on Cable detail pages."""
+class CableRoutingPanelExtension(PluginTemplateExtension):
+    """Full cable routing panel on Cable detail pages."""
 
     models = ['dcim.cable']
 
-    def left_page(self):
-        from django.utils.html import format_html, mark_safe
+    def full_width_page(self):
+        from dcim.models import CableTermination
+        from django.template.loader import render_to_string
 
-        obj = self.context['object']
-        route = validate_cable_route(obj.pk)
+        cable = self.context['object']
 
-        if route['segment_count'] == 0:
+        # Only show if cable has both A and B terminations
+        a_exists = CableTermination.objects.filter(cable=cable, cable_end='A').exists()
+        b_exists = CableTermination.objects.filter(cable=cable, cable_end='B').exists()
+        if not (a_exists and b_exists):
             return ''
 
-        # Build status badge
-        if route['valid']:
-            badge = '<span class="badge text-bg-green">Complete</span>'
-            pullsheet_link = format_html(
-                ' <a href="{}" class="btn btn-sm btn-outline-secondary ms-2">'
-                '<i class="mdi mdi-file-document-outline"></i> Pull Sheet</a>',
-                f'/plugins/pathways/pull-sheets/{obj.pk}/',
+        segments_qs = (
+            models.CableSegment.objects
+            .filter(cable=cable)
+            .select_related(
+                'pathway', 'pathway__start_structure', 'pathway__end_structure',
+                'pathway__start_location', 'pathway__end_location',
             )
-        else:
-            gap_count = len(route['gaps'])
-            badge = f'<span class="badge text-bg-yellow">{gap_count} gap{"s" if gap_count != 1 else ""}</span>'
-            pullsheet_link = ''
-
-        # Build gap details
-        gap_html = ''
-        if route['gaps']:
-            gap_rows = []
-            for gap in route['gaps']:
-                gap_rows.append(
-                    f'<tr><td>{gap.get("after_pathway") or "—"}</td>'
-                    f'<td>{gap.get("before_pathway") or "—"}</td>'
-                    f'<td>{gap["detail"]}</td></tr>'
-                )
-            gap_html = (
-                '<table class="table table-sm table-hover mt-2 mb-0">'
-                '<thead><tr><th>After</th><th>Before</th><th>Detail</th></tr></thead>'
-                '<tbody>' + ''.join(gap_rows) + '</tbody></table>'
-            )
-
-        html = format_html(
-            '<div class="card mb-3">'
-            '<div class="card-header"><h5 class="card-title mb-0">Route Status</h5></div>'
-            '<div class="card-body">'
-            '<div class="d-flex align-items-center">'
-            '<span class="me-2">{} segment{}</span> {}{}'
-            '</div>{}'
-            '</div></div>',
-            route['segment_count'],
-            's' if route['segment_count'] != 1 else '',
-            mark_safe(badge),
-            mark_safe(pullsheet_link),
-            mark_safe(gap_html),
+            .order_by('sequence')
         )
-        return html
+        segments = list(segments_qs)
+
+        # Annotate segments with gap info and ordinal position
+        for i, seg in enumerate(segments):
+            seg.ordinal = i + 1
+            seg.gap_before = (i > 0 and seg.sequence != segments[i - 1].sequence + 1)
+            seg.prev_sequence = segments[i - 1].sequence if i > 0 else 0
+            seg.start_name = str(seg.pathway.start_endpoint) if seg.pathway and seg.pathway.start_endpoint else None
+            seg.end_name = str(seg.pathway.end_endpoint) if seg.pathway and seg.pathway.end_endpoint else None
+
+        route = validate_cable_route(cable.pk)
+        total_length = sum(s.pathway.length or 0 for s in segments if s.pathway)
+
+        return render_to_string(
+            'netbox_pathways/inc/cable_routing_panel.html',
+            {
+                'cable': cable,
+                'segments': segments,
+                'segment_count': len(segments),
+                'total_length': total_length,
+                'route_valid': route['valid'],
+                'gap_count': len(route['gaps']),
+            },
+            request=self.context.get('request'),
+        )
 
 
 class CableSlackLoopExtension(PluginTemplateExtension):
@@ -435,65 +428,11 @@ class StructureSlackLoopExtension(PluginTemplateExtension):
         )
 
 
-class CableRouteMapExtension(PluginTemplateExtension):
-    """Map panel on Cable detail pages showing pathway route."""
-
-    models = ['dcim.cable']
-
-    def right_page(self):
-        obj = self.context['object']
-        segments = models.CableSegment.objects.filter(
-            cable=obj,
-        ).select_related(
-            'pathway',
-            'pathway__start_structure',
-            'pathway__end_structure',
-        ).order_by('sequence')
-
-        if not segments.exists():
-            return ''
-
-        segment_colors = [
-            '#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4',
-            '#42d4f4', '#f032e6', '#bfef45', '#fabebe', '#469990',
-        ]
-        data = {'points': [], 'lines': []}
-        for i, seg in enumerate(segments):
-            pw = seg.pathway
-            if pw and pw.path:
-                data['lines'].append({
-                    'coords': linestring_to_coords(pw.path),
-                    'name': str(pw),
-                    'color': segment_colors[i % len(segment_colors)],
-                    'url': pw.get_absolute_url(),
-                })
-            if pw and pw.start_structure_id:
-                pt = _structure_point(pw.start_structure, color='green')
-                if pt:
-                    data['points'].append(pt)
-            if pw and pw.end_structure_id:
-                pt = _structure_point(pw.end_structure, color='red')
-                if pt:
-                    data['points'].append(pt)
-
-        if not data['points'] and not data['lines']:
-            return ''
-
-        map_id = f'geo-cable-{obj.pk}'
-        return self.render('netbox_pathways/inc/geo_map_panel.html', extra_context={
-            'geo_data': data,
-            'map_id': map_id,
-            'data_id': f'{map_id}-data',
-            'panel_title': 'Pathway Route',
-        })
-
-
 template_extensions = [
     LeafletHeadExtension,
     PluginModelMapExtension,
     CoreModelMapExtension,
-    CableRouteStatusExtension,
+    CableRoutingPanelExtension,
     CableSlackLoopExtension,
     StructureSlackLoopExtension,
-    CableRouteMapExtension,
 ]

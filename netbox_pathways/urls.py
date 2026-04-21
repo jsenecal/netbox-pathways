@@ -156,4 +156,11 @@ urlpatterns = [
 
     # Adjacency API for pathway filtering
     path('adjacency/', views.AdjacencyView.as_view(), name='adjacency'),
+
+    # Cable routing panel HTMX endpoints
+    path('cable-routing/<int:cable_pk>/add-segment/', views.CableRoutingAddSegmentView.as_view(), name='cable_routing_add'),
+    path('cable-routing/<int:cable_pk>/delete-segment/<int:segment_pk>/', views.CableRoutingDeleteSegmentView.as_view(), name='cable_routing_delete'),
+    path('cable-routing/<int:cable_pk>/find-route/', views.CableRoutingFindRouteView.as_view(), name='cable_routing_find'),
+    path('cable-routing/<int:cable_pk>/apply-route/', views.CableRoutingApplyRouteView.as_view(), name='cable_routing_apply'),
+    path('cable-routing/<int:cable_pk>/table/', views.CableRoutingTableView.as_view(), name='cable_routing_table'),
 ]

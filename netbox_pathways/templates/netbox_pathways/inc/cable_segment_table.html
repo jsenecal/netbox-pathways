@@ -1,0 +1,81 @@
+{% if segments %}
+<table class="table table-hover table-sm mb-0">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Pathway</th>
+      <th>Type</th>
+      <th>From</th>
+      <th>To</th>
+      <th>Length</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for seg in segments %}
+    {% if seg.gap_before %}
+    <tr class="table-warning">
+      <td colspan="6" class="text-center text-muted">
+        <i class="mdi mdi-alert-outline"></i> Gap
+      </td>
+      <td>
+        <button class="btn btn-sm btn-green"
+                hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/add-segment/?after_sequence={{ seg.prev_sequence }}"
+                hx-target="#pw-segment-table"
+                hx-swap="innerHTML"
+                title="Insert segment">
+          <i class="mdi mdi-plus"></i>
+        </button>
+      </td>
+    </tr>
+    {% endif %}
+    <tr>
+      <td>{{ seg.ordinal }}</td>
+      <td>
+        {% if seg.pathway %}
+          <a href="{{ seg.pathway.get_absolute_url }}">{{ seg.pathway }}</a>
+        {% else %}
+          <span class="text-muted">&mdash;</span>
+        {% endif %}
+      </td>
+      <td>{{ seg.pathway.get_pathway_type_display|default:"&mdash;" }}</td>
+      <td>{{ seg.start_name|default:"&mdash;" }}</td>
+      <td>{{ seg.end_name|default:"&mdash;" }}</td>
+      <td>{% if seg.pathway and seg.pathway.length %}{{ seg.pathway.length|floatformat:1 }}{% else %}&mdash;{% endif %}</td>
+      <td>
+        <button class="btn btn-sm btn-red"
+                hx-post="/plugins/pathways/cable-routing/{{ cable.pk }}/delete-segment/{{ seg.pk }}/"
+                hx-target="#pw-segment-table"
+                hx-swap="innerHTML"
+                hx-confirm="Delete this segment?"
+                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                title="Delete">
+          <i class="mdi mdi-trash-can-outline"></i>
+        </button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="mt-2">
+  <button class="btn btn-sm btn-green"
+          hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/add-segment/"
+          hx-target="#pw-segment-table"
+          hx-swap="innerHTML"
+          title="Add segment at end">
+    <i class="mdi mdi-plus"></i> Add Segment
+  </button>
+</div>
+
+{% else %}
+<div class="text-center text-muted py-3">
+  <p>No segments in this cable's route.</p>
+  <button class="btn btn-sm btn-green"
+          hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/add-segment/"
+          hx-target="#pw-segment-table"
+          hx-swap="innerHTML">
+    <i class="mdi mdi-plus"></i> Add First Segment
+  </button>
+</div>
+{% endif %}

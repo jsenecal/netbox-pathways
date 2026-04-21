@@ -1,0 +1,47 @@
+<div class="card mt-3">
+  <div class="card-header">
+    <h6 class="card-title mb-0">Route Options</h6>
+  </div>
+  <div class="card-body p-0">
+    {% if routes %}
+    <table class="table table-hover table-sm mb-0">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Hops</th>
+          <th>Length</th>
+          <th>Pathways</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for route in routes %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td>{{ route.hop_count }}</td>
+          <td>{{ route.cost|floatformat:1 }} m</td>
+          <td>
+            {% for pw in route.pathways %}
+              {{ pw }}{% if not forloop.last %} &rarr; {% endif %}
+            {% endfor %}
+          </td>
+          <td>
+            <form hx-post="/plugins/pathways/cable-routing/{{ cable.pk }}/apply-route/"
+                  hx-target="#pw-segment-table"
+                  hx-swap="innerHTML"
+                  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                  {% if existing_count %}hx-confirm="Replace {{ existing_count }} existing segment{{ existing_count|pluralize }}?"{% endif %}
+                  style="display:inline">
+              <input type="hidden" name="pathway_ids" value="{{ route.pathway_ids }}">
+              <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="p-3 text-muted">No route found between cable termination sites.</div>
+    {% endif %}
+  </div>
+</div>
