@@ -1,10 +1,10 @@
 {% load static %}
 
 <div class="card mb-3" id="pw-routing-panel">
-  <div class="card-header d-flex justify-content-between align-items-center">
-    <h5 class="card-title mb-0">
-      <i class="mdi mdi-routes"></i> Cable Route
-    </h5>
+  <div class="card-header d-flex justify-content-between align-items-center px-3 py-2">
+    <span class="fw-bold">
+Cable Route
+    </span>
     <div>
       {% if segments %}
       <a href="/plugins/pathways/pull-sheets/{{ cable.pk }}/" class="btn btn-sm btn-outline-secondary me-1">
