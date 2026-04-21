@@ -81,6 +81,15 @@ function _featureId(entry: FeatureEntry): string {
     return entry.featureType + '-' + (entry.props.id || '');
 }
 
+/** Mix a hex colour toward white by `amount` (0 = original, 1 = white). */
+function _lighten(hex: string, amount: number): string {
+    const n = parseInt(hex.replace('#', ''), 16);
+    const r = Math.round(((n >> 16) & 0xff) + (255 - ((n >> 16) & 0xff)) * amount);
+    const g = Math.round(((n >> 8) & 0xff) + (255 - ((n >> 8) & 0xff)) * amount);
+    const b = Math.round((n & 0xff) + (255 - (n & 0xff)) * amount);
+    return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+}
+
 // ---------------------------------------------------------------------------
 // Highlight logic
 // ---------------------------------------------------------------------------
@@ -127,15 +136,6 @@ function _applyHighlightVisuals(entry: FeatureEntry): void {
         }));
     } else {
         const polyline = layer as L.Polyline & { _origStyle?: L.PathOptions };
-        const latlngs = polyline.getLatLngs() as L.LatLng[];
-        if (latlngs && latlngs.length > 0 && _map) {
-            _highlightOutline = L.polyline(latlngs, {
-                color: '#ffeb3b',
-                weight: 12,
-                opacity: 0.5,
-                interactive: false,
-            }).addTo(_map);
-        }
         const origStyle = (polyline as any).options || {};
         polyline._origStyle = {
             weight: origStyle.weight || 3,
@@ -143,6 +143,16 @@ function _applyHighlightVisuals(entry: FeatureEntry): void {
             color: origStyle.color,
             dashArray: origStyle.dashArray,
         };
+        const latlngs = polyline.getLatLngs() as L.LatLng[];
+        if (latlngs && latlngs.length > 0 && _map) {
+            // Glow: lighten the feature's own color toward white
+            _highlightOutline = L.polyline(latlngs, {
+                color: _lighten(origStyle.color || '#888', 0.55),
+                weight: 12,
+                opacity: 0.5,
+                interactive: false,
+            }).addTo(_map);
+        }
         polyline.setStyle({ weight: 6, opacity: 1, dashArray: '' });
     }
 }
@@ -347,6 +357,30 @@ function _applyFilters(): void {
 // ---------------------------------------------------------------------------
 // API helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Build the UI detail-page URL for a native feature client-side.
+ *
+ * The GeoJSON geo endpoints intentionally omit a ``url`` property because
+ * computing get_absolute_url() per row calls django.urls.reverse(), which
+ * triggers lazy URL-pattern population (including the Strawberry GraphQL
+ * schema). That single import adds ~12 s per 1000 features, making the
+ * geo API unusably slow.  Building the URL here costs nothing.
+ */
+function _detailPageUrl(entry: FeatureEntry): string {
+    const id = entry.props.id;
+    if (!_isNativeType(entry.featureType) || id == null) return '';
+    const base = '/plugins/pathways/';
+    switch (entry.featureType) {
+        case 'structure':     return base + 'structures/' + id + '/';
+        case 'conduit_bank':  return base + 'conduit-banks/' + id + '/';
+        case 'conduit':       return base + 'conduits/' + id + '/';
+        case 'aerial':        return base + 'aerial-spans/' + id + '/';
+        case 'direct_buried': return base + 'direct-buried/' + id + '/';
+        case 'circuit':       return base + 'circuit-geometries/' + id + '/';
+        default:              return base + 'pathways/' + id + '/';
+    }
+}
 
 function _apiUrlForFeature(entry: FeatureEntry): string {
     if (entry.props.url) {
@@ -1150,9 +1184,10 @@ function _renderDetail(entry: FeatureEntry): void {
     body.appendChild(badgeRow);
 
     // View Details button
-    if (p.url) {
+    const detailUrl = _detailPageUrl(entry);
+    if (detailUrl) {
         const link = document.createElement('a');
-        link.href = p.url;
+        link.href = detailUrl;
         link.className = 'btn btn-sm btn-primary w-100 mb-3';
         const icon = document.createElement('i');
         icon.className = 'mdi mdi-open-in-new';

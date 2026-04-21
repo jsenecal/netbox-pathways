@@ -1,7 +1,7 @@
 from dcim.models import Cable, Site
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Exists, OuterRef, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.text import slugify
@@ -174,7 +174,7 @@ class StructureConduitBanksView(generic.ObjectChildrenView):
     def get_children(self, request, parent):
         return models.ConduitBank.objects.filter(
             Q(start_structure=parent) | Q(end_structure=parent)
-        )
+        ).annotate(conduit_count=Count('conduits'))
 
 
 @register_model_view(models.Structure, 'conduits')
@@ -194,6 +194,9 @@ class StructureConduitsView(generic.ObjectChildrenView):
     def get_children(self, request, parent):
         return models.Conduit.objects.filter(
             Q(start_structure=parent) | Q(end_structure=parent)
+        ).annotate(
+            cables_routed=Count('cable_segments'),
+            in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef('pk'))),
         )
 
 
@@ -214,6 +217,9 @@ class StructureAerialSpansView(generic.ObjectChildrenView):
     def get_children(self, request, parent):
         return models.AerialSpan.objects.filter(
             Q(start_structure=parent) | Q(end_structure=parent)
+        ).annotate(
+            cables_routed=Count('cable_segments'),
+            in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef('pk'))),
         )
 
 
@@ -234,6 +240,9 @@ class StructureDirectBuriedView(generic.ObjectChildrenView):
     def get_children(self, request, parent):
         return models.DirectBuried.objects.filter(
             Q(start_structure=parent) | Q(end_structure=parent)
+        ).annotate(
+            cables_routed=Count('cable_segments'),
+            in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef('pk'))),
         )
 
 
@@ -242,7 +251,10 @@ class StructureDirectBuriedView(generic.ObjectChildrenView):
 class PathwayListView(generic.ObjectListView):
     queryset = models.Pathway.objects.select_related(
         'start_structure', 'end_structure', 'start_location', 'end_location', 'tenant',
-    ).annotate(cables_routed=Count('cable_segments'))
+    ).annotate(
+        cables_routed=Count('cable_segments'),
+        in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef('pk'))),
+    )
     table = tables.PathwayTable
     filterset = filters.PathwayFilterSet
     filterset_form = filterforms.PathwayFilterForm
@@ -274,7 +286,10 @@ class ConduitListView(generic.ObjectListView):
     queryset = models.Conduit.objects.select_related(
         'start_structure', 'end_structure', 'start_location', 'end_location',
         'conduit_bank', 'tenant',
-    ).annotate(cables_routed=Count('cable_segments'))
+    ).annotate(
+        cables_routed=Count('cable_segments'),
+        in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef('pk'))),
+    )
     table = tables.ConduitTable
     filterset_form = filterforms.ConduitFilterForm
     filterset = filters.ConduitFilterSet
@@ -343,7 +358,10 @@ class ConduitInnerductsView(generic.ObjectChildrenView):
     )
 
     def get_children(self, request, parent):
-        return parent.innerducts.all()
+        return parent.innerducts.annotate(
+            cables_routed=Count('cable_segments'),
+            in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef('pk'))),
+        )
 
 
 # --- Aerial Span ---
@@ -351,7 +369,10 @@ class ConduitInnerductsView(generic.ObjectChildrenView):
 class AerialSpanListView(generic.ObjectListView):
     queryset = models.AerialSpan.objects.select_related(
         'start_structure', 'end_structure', 'start_location', 'end_location', 'tenant',
-    ).annotate(cables_routed=Count('cable_segments'))
+    ).annotate(
+        cables_routed=Count('cable_segments'),
+        in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef('pk'))),
+    )
     table = tables.AerialSpanTable
     filterset = filters.AerialSpanFilterSet
     filterset_form = filterforms.AerialSpanFilterForm
@@ -408,7 +429,10 @@ class AerialSpanBulkDeleteView(generic.BulkDeleteView):
 class DirectBuriedListView(generic.ObjectListView):
     queryset = models.DirectBuried.objects.select_related(
         'start_structure', 'end_structure', 'start_location', 'end_location', 'tenant',
-    ).annotate(cables_routed=Count('cable_segments'))
+    ).annotate(
+        cables_routed=Count('cable_segments'),
+        in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef('pk'))),
+    )
     table = tables.DirectBuriedTable
     filterset = filters.DirectBuriedFilterSet
     filterset_form = filterforms.DirectBuriedFilterForm
@@ -448,6 +472,7 @@ class DirectBuriedDeleteView(generic.ObjectDeleteView):
 class InnerductListView(generic.ObjectListView):
     queryset = models.Innerduct.objects.select_related('parent_conduit').annotate(
         cables_routed=Count('cable_segments'),
+        in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef('pk'))),
     )
     table = tables.InnerductTable
     filterset = filters.InnerductFilterSet
@@ -529,14 +554,14 @@ class ConduitBankBulkImportView(generic.BulkImportView):
 
 
 class ConduitBankBulkEditView(generic.BulkEditView):
-    queryset = models.ConduitBank.objects.all()
+    queryset = models.ConduitBank.objects.annotate(conduit_count=Count('conduits'))
     filterset = filters.ConduitBankFilterSet
     table = tables.ConduitBankTable
     form = forms.ConduitBankBulkEditForm
 
 
 class ConduitBankBulkDeleteView(generic.BulkDeleteView):
-    queryset = models.ConduitBank.objects.all()
+    queryset = models.ConduitBank.objects.annotate(conduit_count=Count('conduits'))
     table = tables.ConduitBankTable
 
 

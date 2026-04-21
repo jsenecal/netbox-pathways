@@ -10,10 +10,12 @@ cluster centroids + counts instead of individual features, dramatically
 reducing payload size at low zoom levels.
 """
 
+import hashlib
+
 from django.contrib.gis.db.models import Collect
 from django.contrib.gis.db.models.functions import Centroid, SnapToGrid, Transform
 from django.contrib.gis.geos import Polygon
-from django.db.models import Count
+from django.db.models import Count, Max
 from rest_framework import serializers as drf_serializers
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
@@ -23,7 +25,7 @@ from rest_framework_gis.serializers import GeoFeatureModelSerializer
 from .. import filters, models
 from ..geo import LEAFLET_SRID, get_srid
 
-MAX_GEO_RESULTS = 1000
+MAX_GEO_RESULTS = 2000
 
 
 def _grid_size_for_zoom(zoom):
@@ -34,20 +36,14 @@ def _grid_size_for_zoom(zoom):
 # --- GeoJSON Serializers ---
 # geo_field points to an annotated field (already WGS84), declared explicitly
 # so DRF doesn't try to introspect the model for it.
+#
+# NOTE: These serializers intentionally omit ``url`` (get_absolute_url).
+# Calling reverse() per row is extremely expensive (~12 s / 1000 rows) due to
+# lazy URL-pattern population.  The map client constructs detail URLs itself
+# from featureType + id, so the field is not needed.
 
 
-class _UrlMixin(metaclass=drf_serializers.SerializerMetaclass):
-    url = drf_serializers.SerializerMethodField()
-    name = drf_serializers.SerializerMethodField()
-
-    def get_url(self, obj):
-        return obj.get_absolute_url()
-
-    def get_name(self, obj):
-        return str(obj)
-
-
-class StructureGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
+class StructureGeoSerializer(GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
     name = drf_serializers.CharField(read_only=True)
     site_name = drf_serializers.SerializerMethodField()
@@ -55,59 +51,59 @@ class StructureGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
     class Meta:
         model = models.Structure
         geo_field = 'geo_4326'
-        fields = ['id', 'name', 'structure_type', 'site_name', 'url']
+        fields = ["id", "name", "structure_type", "site_name"]
 
     def get_site_name(self, obj):
         return obj.site.name if obj.site_id else None
 
 
-class PathwayGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
+class PathwayGeoSerializer(GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
 
     class Meta:
         model = models.Pathway
         geo_field = 'geo_4326'
-        fields = ["id", "name", "label", "pathway_type", "url"]
+        fields = ["id", "label", "pathway_type"]
 
 
-class ConduitBankGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
+class ConduitBankGeoSerializer(GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
     conduit_count = drf_serializers.IntegerField(read_only=True)
 
     class Meta:
         model = models.ConduitBank
         geo_field = "geo_4326"
-        fields = ["id", "name", "label", "pathway_type", "configuration", "conduit_count", "url"]
+        fields = ["id", "label", "pathway_type", "configuration", "conduit_count"]
 
 
-class ConduitGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
+class ConduitGeoSerializer(GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
 
     class Meta:
         model = models.Conduit
         geo_field = 'geo_4326'
-        fields = ["id", "name", "label", "pathway_type", "url"]
+        fields = ["id", "label", "pathway_type"]
 
 
-class AerialSpanGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
+class AerialSpanGeoSerializer(GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
 
     class Meta:
         model = models.AerialSpan
         geo_field = 'geo_4326'
-        fields = ["id", "name", "label", "pathway_type", "url"]
+        fields = ["id", "label", "pathway_type"]
 
 
-class DirectBuriedGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
+class DirectBuriedGeoSerializer(GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
 
     class Meta:
         model = models.DirectBuried
         geo_field = 'geo_4326'
-        fields = ["id", "name", "label", "pathway_type", "url"]
+        fields = ["id", "label", "pathway_type"]
 
 
-class CircuitGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
+class CircuitGeoSerializer(GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
     cid = drf_serializers.CharField(source='circuit.cid', read_only=True)
     provider = drf_serializers.CharField(source='circuit.provider.name', read_only=True)
@@ -117,7 +113,7 @@ class CircuitGeoSerializer(_UrlMixin, GeoFeatureModelSerializer):
     class Meta:
         model = models.CircuitGeometry
         geo_field = 'geo_4326'
-        fields = ['id', 'cid', 'provider', 'circuit_type', 'status', 'provider_reference', 'url']
+        fields = ["id", "cid", "provider", "circuit_type", "status", "provider_reference"]
 
 
 # --- Bbox filtering mixin ---
@@ -155,11 +151,25 @@ class BboxFilterMixin:
         qs = super().get_queryset()
         return self._apply_bbox(qs)
 
+    def _etag_for_queryset(self, queryset):
+        """Lightweight ETag from max(last_updated) + count."""
+        agg = queryset.aggregate(t=Max("last_updated"), c=Count("id"))
+        raw = f"{agg['t']}:{agg['c']}"
+        return hashlib.md5(raw.encode()).hexdigest()
+
     def list(self, request, *args, **kwargs):
-        # Apply the result cap after all filtering (bbox + filterset)
-        queryset = self.filter_queryset(self.get_queryset())[:MAX_GEO_RESULTS]
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+        queryset = self.filter_queryset(self.get_queryset())
+
+        # ETag: cheap aggregate check before expensive serialization
+        etag = self._etag_for_queryset(queryset)
+        if request.META.get("HTTP_IF_NONE_MATCH") == etag:
+            return Response(status=304)
+
+        # Apply the result cap after ETag check
+        serializer = self.get_serializer(queryset[:MAX_GEO_RESULTS], many=True)
+        response = Response(serializer.data)
+        response["ETag"] = etag
+        return response
 
 
 # --- GeoJSON ViewSets (read-only, unpaginated) ---
@@ -177,10 +187,17 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     def list(self, request, *args, **kwargs):
         zoom = self._parse_zoom()
         if zoom is not None:
-            # Count features in bbox; cluster if over the cap
-            count = self.filter_queryset(self.get_queryset()).count()
-            if count > MAX_GEO_RESULTS:
-                return self._clustered_response(zoom)
+            qs = self.filter_queryset(self.get_queryset())
+            # ETag check before expensive count/serialize
+            etag = self._etag_for_queryset(qs)
+            if request.META.get("HTTP_IF_NONE_MATCH") == etag:
+                return Response(status=304)
+            if qs.count() > MAX_GEO_RESULTS:
+                return self._clustered_response(zoom, etag)
+            serializer = self.get_serializer(qs[:MAX_GEO_RESULTS], many=True)
+            response = Response(serializer.data)
+            response["ETag"] = etag
+            return response
         return super().list(request, *args, **kwargs)
 
     def _parse_zoom(self):
@@ -189,7 +206,7 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
         except (KeyError, ValueError, TypeError):
             return None
 
-    def _clustered_response(self, zoom):
+    def _clustered_response(self, zoom, etag=None):
         # Get bbox-filtered queryset WITHOUT the result cap (aggregation reduces rows)
         qs = self._apply_bbox(
             models.Structure.objects.only('id', 'location').order_by()
@@ -230,11 +247,16 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
                 },
             })
 
-        return Response({
-            'type': 'FeatureCollection',
-            'features': features,
-            'total_count': total,
-        })
+        response = Response(
+            {
+                "type": "FeatureCollection",
+                "features": features,
+                "total_count": total,
+            }
+        )
+        if etag:
+            response["ETag"] = etag
+        return response
 
 
 class PathwayGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):

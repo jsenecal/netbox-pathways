@@ -143,7 +143,7 @@ class StructureForm(NetBoxModelForm):
         FieldSet('name', 'status', 'structure_type', 'site', 'tenant', 'installation_date', name='Structure'),
         FieldSet('height', 'width', 'length', 'depth', 'elevation', name='Dimensions'),
         FieldSet('location', name='Geometry'),
-        FieldSet('access_notes', 'comments', 'tags', name='Details'),
+        FieldSet('access_notes', 'tags', name='Details'),
     )
 
     class Meta:
@@ -209,7 +209,7 @@ class PathwayForm(PathwayEndpointFormMixin, NetBoxModelForm):
         FieldSet('label', 'tenant', 'length', 'installation_date', name='Pathway'),
         FieldSet('start_structure', 'end_structure', 'start_location', 'end_location', name='Endpoints'),
         FieldSet('path', name='Geometry'),
-        FieldSet('comments', 'tags', name='Details'),
+        FieldSet('tags', name='Details'),
     )
 
     class Meta:
@@ -256,7 +256,7 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
         FieldSet('inner_diameter', 'outer_diameter', 'depth', name='Dimensions'),
         FieldSet('conduit_bank', 'bank_position', name='Conduit Bank'),
         FieldSet('path', name='Geometry'),
-        FieldSet('comments', 'tags', name='Details'),
+        FieldSet('tags', name='Details'),
     )
 
     class Meta:
@@ -325,7 +325,7 @@ class AerialSpanForm(PathwayEndpointFormMixin, NetBoxModelForm):
         FieldSet('attachment_height', 'sag', 'messenger_size', name='Physical'),
         FieldSet('wind_loading', 'ice_loading', name='Loading'),
         FieldSet('path', name='Geometry'),
-        FieldSet('comments', 'tags', name='Details'),
+        FieldSet('tags', name='Details'),
     )
 
     class Meta:
@@ -392,7 +392,7 @@ class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
         FieldSet('start_structure', 'end_structure', 'start_location', 'end_location', name='Endpoints'),
         FieldSet('burial_depth', 'warning_tape', 'tracer_wire', 'armor_type', name='Physical'),
         FieldSet('path', name='Geometry'),
-        FieldSet('comments', 'tags', name='Details'),
+        FieldSet('tags', name='Details'),
     )
 
     class Meta:
@@ -436,7 +436,7 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
         FieldSet('start_structure', 'end_structure', 'start_location', 'end_location', name='Endpoints'),
         FieldSet('length', 'installation_date', name='Physical'),
         FieldSet('path', name='Geometry'),
-        FieldSet('comments', 'tags', name='Details'),
+        FieldSet('tags', name='Details'),
     )
 
     class Meta:
@@ -467,7 +467,7 @@ class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
         FieldSet('label', 'tenant', name='Conduit Bank'),
         FieldSet('start_structure', 'start_face', 'end_structure', 'end_face', name='Endpoints'),
         FieldSet('configuration', 'total_conduits', 'encasement_type', name='Configuration'),
-        FieldSet('path', 'installation_date', 'comments', 'tags', name='Details'),
+        FieldSet('path', 'length', 'installation_date', 'tags', name='Details'),
     )
 
     class Meta:
@@ -476,7 +476,7 @@ class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
             'label', 'tenant',
             'start_structure', 'start_face', 'end_structure', 'end_face',
             'configuration', 'total_conduits', 'encasement_type',
-            'path', 'installation_date', 'comments', 'tags',
+            'path', 'length', 'installation_date', 'comments', 'tags',
         ]
         widgets = {
             'path': PathwaysMapWidget(),
@@ -532,7 +532,7 @@ class ConduitJunctionForm(NetBoxModelForm):
     fieldsets = (
         FieldSet('label', name='Junction'),
         FieldSet('trunk_conduit', 'branch_conduit', 'towards_structure', 'position_on_trunk', name='Configuration'),
-        FieldSet('comments', 'tags', name='Details'),
+        FieldSet('tags', name='Details'),
     )
 
     class Meta:
@@ -554,7 +554,7 @@ class CableSegmentForm(NetBoxModelForm):
 
     fieldsets = (
         FieldSet('cable', 'pathway', name='Cable Segment'),
-        FieldSet('comments', 'tags', name='Details'),
+        FieldSet('tags', name='Details'),
     )
 
     class Meta:
@@ -584,7 +584,7 @@ class SlackLoopForm(NetBoxModelForm):
 
     fieldsets = (
         FieldSet('cable', 'structure', 'pathway', 'length', name='Slack Loop'),
-        FieldSet('comments', 'tags', name='Details'),
+        FieldSet('tags', name='Details'),
     )
 
     class Meta:
@@ -607,7 +607,7 @@ class PathwayLocationForm(NetBoxModelForm):
 
     fieldsets = (
         FieldSet('pathway', 'site', 'location', 'sequence', name='Waypoint'),
-        FieldSet('comments', 'tags', name='Details'),
+        FieldSet('tags', name='Details'),
     )
 
     class Meta:
@@ -630,7 +630,7 @@ class SiteGeometryForm(NetBoxModelForm):
     fieldsets = (
         FieldSet('site', 'structure', name='Site Geometry'),
         FieldSet('geometry', name='Geometry'),
-        FieldSet('comments', 'tags', name='Details'),
+        FieldSet('tags', name='Details'),
     )
 
     class Meta:
@@ -651,7 +651,7 @@ class CircuitGeometryForm(NetBoxModelForm):
     fieldsets = (
         FieldSet('circuit', 'provider_reference', name='Circuit Route'),
         FieldSet('path', name='Route Geometry'),
-        FieldSet('comments', 'tags', name='Details'),
+        FieldSet('tags', name='Details'),
     )
 
     class Meta:

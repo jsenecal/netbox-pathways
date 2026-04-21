@@ -23,7 +23,7 @@ _LINKED_RECORD = '<a href="{{ record.get_absolute_url }}">{{ record }}</a>'
 _MAP_BUTTON = (
     '<a href="{% url \'plugins:netbox_pathways:map\' %}?select='
     '{% if record.pathway_type %}{{ record.pathway_type }}{% else %}structure{% endif %}'
-    '-{{ record.pk }}" class="btn btn-sm btn-primary" title="Show on Map">'
+    '-{{ record.pk }}" class="btn btn-sm btn-primary me-1" title="Show on Map">'
     '<i class="mdi mdi-map-marker-radius"></i></a>'
 )
 
@@ -57,6 +57,7 @@ class PathwayTable(NetBoxTable):
     end_location = tables.Column(linkify=True)
     tenant = tables.Column(linkify=True)
     cables_routed = tables.Column(verbose_name='Cables', orderable=True)
+    in_use = columns.BooleanColumn(verbose_name='In Use', orderable=True)
     actions = columns.ActionsColumn(actions=('edit', 'delete'), extra_buttons=_MAP_BUTTON)
 
     class Meta(NetBoxTable.Meta):
@@ -65,10 +66,11 @@ class PathwayTable(NetBoxTable):
             'pk', 'id', 'pathway', 'label', 'pathway_type',
             'start_structure', 'end_structure',
             'start_location', 'end_location', 'tenant', 'length',
-            'cables_routed', 'installation_date', 'actions',
+            'cables_routed', 'in_use', 'installation_date', 'actions',
         )
         default_columns = (
-            'pathway', 'pathway_type', 'start_structure', 'end_structure', 'cables_routed',
+            'pathway', 'pathway_type', 'start_structure', 'end_structure',
+            'in_use', 'cables_routed',
         )
 
 
@@ -83,6 +85,7 @@ class ConduitTable(NetBoxTable):
     end_location = tables.Column(linkify=True)
     conduit_bank = tables.Column(linkify=True)
     cables_routed = tables.Column(verbose_name='Cables', orderable=True)
+    in_use = columns.BooleanColumn(verbose_name='In Use', orderable=True)
     actions = columns.ActionsColumn(actions=('edit', 'delete'), extra_buttons=_MAP_BUTTON)
 
     class Meta(NetBoxTable.Meta):
@@ -92,11 +95,11 @@ class ConduitTable(NetBoxTable):
             'start_structure', 'end_structure',
             'start_location', 'end_location',
             'conduit_bank', 'bank_position',
-            'length', 'cables_routed', 'installation_date', 'actions',
+            'length', 'cables_routed', 'in_use', 'installation_date', 'actions',
         )
         default_columns = (
             'conduit', 'material', 'start_structure', 'end_structure',
-            'conduit_bank', 'cables_routed',
+            'conduit_bank', 'in_use', 'cables_routed',
         )
 
 
@@ -110,6 +113,7 @@ class AerialSpanTable(NetBoxTable):
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
     cables_routed = tables.Column(verbose_name='Cables', orderable=True)
+    in_use = columns.BooleanColumn(verbose_name='In Use', orderable=True)
     actions = columns.ActionsColumn(actions=('edit', 'delete'), extra_buttons=_MAP_BUTTON)
 
     class Meta(NetBoxTable.Meta):
@@ -119,10 +123,11 @@ class AerialSpanTable(NetBoxTable):
             'start_structure', 'end_structure',
             'start_location', 'end_location',
             'attachment_height', 'length',
-            'cables_routed', 'installation_date', 'actions',
+            'cables_routed', 'in_use', 'installation_date', 'actions',
         )
         default_columns = (
-            'aerial_span', 'aerial_type', 'start_structure', 'end_structure', 'cables_routed',
+            'aerial_span', 'aerial_type', 'start_structure', 'end_structure',
+            'in_use', 'cables_routed',
         )
 
 
@@ -135,6 +140,7 @@ class DirectBuriedTable(NetBoxTable):
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
     cables_routed = tables.Column(verbose_name='Cables', orderable=True)
+    in_use = columns.BooleanColumn(verbose_name='In Use', orderable=True)
     actions = columns.ActionsColumn(actions=('edit', 'delete'), extra_buttons=_MAP_BUTTON)
 
     class Meta(NetBoxTable.Meta):
@@ -144,10 +150,11 @@ class DirectBuriedTable(NetBoxTable):
             'start_structure', 'end_structure',
             'start_location', 'end_location',
             'burial_depth', 'warning_tape', 'tracer_wire',
-            'length', 'cables_routed', 'installation_date', 'actions',
+            'length', 'cables_routed', 'in_use', 'installation_date', 'actions',
         )
         default_columns = (
-            'direct_buried', 'start_structure', 'end_structure', 'burial_depth', 'cables_routed',
+            'direct_buried', 'start_structure', 'end_structure', 'burial_depth',
+            'in_use', 'cables_routed',
         )
 
 
@@ -157,6 +164,7 @@ class InnerductTable(NetBoxTable):
     )
     parent_conduit = tables.Column(linkify=True)
     cables_routed = tables.Column(verbose_name='Cables', orderable=True)
+    in_use = columns.BooleanColumn(verbose_name='In Use', orderable=True)
     actions = columns.ActionsColumn(actions=('edit', 'delete'))
 
     class Meta(NetBoxTable.Meta):
@@ -164,9 +172,9 @@ class InnerductTable(NetBoxTable):
         fields = (
             'pk', 'id', 'innerduct', 'label', 'parent_conduit',
             'size', 'color', 'position',
-            'cables_routed', 'installation_date', 'actions',
+            'cables_routed', 'in_use', 'installation_date', 'actions',
         )
-        default_columns = ('innerduct', 'parent_conduit', 'size', 'color', 'cables_routed')
+        default_columns = ('innerduct', 'parent_conduit', 'size', 'color', 'in_use', 'cables_routed')
 
 
 class ConduitBankTable(NetBoxTable):
@@ -192,11 +200,11 @@ class ConduitBankTable(NetBoxTable):
             'pk', 'id', 'conduit_bank', 'label', 'start_structure', 'end_structure',
             'start_face', 'end_face', 'tenant',
             'configuration', 'total_conduits', 'conduit_count',
-            'encasement_type', 'installation_date', 'actions',
+            'encasement_type', 'length', 'installation_date', 'actions',
         )
         default_columns = (
             'conduit_bank', 'start_structure', 'end_structure',
-            'configuration', 'total_conduits', 'conduit_count',
+            'configuration', 'conduit_count', 'length',
         )
 
 

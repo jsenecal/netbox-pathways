@@ -155,11 +155,17 @@ function _haversine(lat1: number, lon1: number, lat2: number, lon2: number): num
 
 const _inflightControllers: Record<string, AbortController> = {};
 
+interface FetchResult {
+    data: GeoJSON.FeatureCollection | null;  // null on 304
+    etag: string;
+}
+
 async function _fetchGeoJSON(
     endpoint: string,
     bbox: string,
-    callback: (data: GeoJSON.FeatureCollection) => void,
+    callback: (result: FetchResult) => void,
     extraParams?: Record<string, string | number>,
+    ifNoneMatch?: string,
 ): Promise<void> {
     // Abort any in-flight request for this endpoint
     if (_inflightControllers[endpoint]) {
@@ -179,13 +185,17 @@ async function _fetchGeoJSON(
     const headers: Record<string, string> = { 'Accept': 'application/json' };
     const csrfToken = _getCookie('csrftoken');
     if (csrfToken) headers['X-CSRFToken'] = csrfToken;
+    if (ifNoneMatch) headers['If-None-Match'] = ifNoneMatch;
 
     try {
         const response = await fetch(url, { headers, signal: controller.signal });
         _inflightControllers[endpoint] = undefined!;
-        if (response.ok) {
+        const etag = response.headers.get('ETag') || '';
+        if (response.status === 304) {
+            callback({ data: null, etag });
+        } else if (response.ok) {
             const data = await response.json() as GeoJSON.FeatureCollection;
-            callback(data);
+            callback({ data, etag });
         }
     } catch (e) {
         _inflightControllers[endpoint] = undefined!;
@@ -862,6 +872,145 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
     }
     _buildSidebarLayerToggles();
 
+    // --- GeoJSON viewport cache ---
+    // Overfetch a bbox 50% larger than the viewport and cache the response.
+    // When the user pans back to a previously-viewed area at the same zoom,
+    // the cached response is reused instantly instead of re-fetching.
+    // FIFO eviction keeps memory bounded (≤ GEO_CACHE_SIZE entries per endpoint).
+
+    const GEO_CACHE_SIZE = 12;
+    const OVERFETCH = 0.5;      // fraction of viewport width/height to pad each side
+
+    interface GeoCacheEntry {
+        west: number; south: number; east: number; north: number;
+        zoom: number;
+        extraKey: string;
+        etag: string;
+        data: GeoJSON.FeatureCollection;
+    }
+
+    const _geoCache: Record<string, GeoCacheEntry[]> = {};
+
+    /** Find a cache entry that covers a given viewport at a given zoom. */
+    function _findCovering(
+        endpoint: string, zoom: number, extraKey: string,
+        west: number, south: number, east: number, north: number,
+    ): GeoCacheEntry | null {
+        const entries = _geoCache[endpoint];
+        if (!entries) return null;
+        for (let i = entries.length - 1; i >= 0; i--) {
+            const e = entries[i];
+            if (e.zoom === zoom && e.extraKey === extraKey &&
+                west >= e.west && south >= e.south &&
+                east <= e.east && north <= e.north) {
+                return e;
+            }
+        }
+        return null;
+    }
+
+    function _storeInCache(
+        endpoint: string, west: number, south: number, east: number, north: number,
+        zoom: number, extraKey: string, etag: string, data: GeoJSON.FeatureCollection,
+    ): void {
+        if (!_geoCache[endpoint]) _geoCache[endpoint] = [];
+        const cache = _geoCache[endpoint];
+        cache.push({ west, south, east, north, zoom, extraKey, etag, data });
+        if (cache.length > GEO_CACHE_SIZE) cache.shift();
+    }
+
+    function _cachedFetch(
+        endpoint: string,
+        callback: (data: GeoJSON.FeatureCollection) => void,
+        extraParams?: Record<string, string | number>,
+    ): void {
+        const b = map.getBounds();
+        const west = b.getWest(), south = b.getSouth();
+        const east = b.getEast(), north = b.getNorth();
+        const zoom = map.getZoom();
+        const extraKey = extraParams ? JSON.stringify(extraParams) : '';
+
+        const cached = _findCovering(endpoint, zoom, extraKey, west, south, east, north);
+        if (cached) {
+            callback(cached.data);
+            return;
+        }
+
+        // Cache miss — expand bbox and fetch
+        const dw = (east - west) * OVERFETCH;
+        const dh = (north - south) * OVERFETCH;
+        const fw = west - dw, fs = south - dh, fe = east + dw, fn = north + dh;
+        const fetchBbox = fw + ',' + fs + ',' + fe + ',' + fn;
+
+        _fetchGeoJSON(endpoint, fetchBbox, function (result: FetchResult) {
+            if (result.data) {
+                _storeInCache(endpoint, fw, fs, fe, fn, zoom, extraKey, result.etag, result.data);
+                callback(result.data);
+            }
+        }, extraParams);
+    }
+
+    // After the visible viewport loads, prefetch the 4 cardinal neighbors
+    // so panning in any direction hits warm cache.  Runs at idle priority
+    // and skips regions already cached.
+
+    let _preloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+    type PreloadSpec = { endpoint: string; extraParams?: Record<string, string | number> };
+
+    const MIN_PRELOAD_ZOOM = 14;  // don't preload at low zoom — user is likely to zoom, not pan
+
+    function _preloadNeighbors(specs: PreloadSpec[]): void {
+        if (_preloadTimer) clearTimeout(_preloadTimer);
+
+        const zoom = map.getZoom();
+        if (zoom < MIN_PRELOAD_ZOOM) return;
+
+        const b = map.getBounds();
+        const vw = b.getEast() - b.getWest();
+        const vh = b.getNorth() - b.getSouth();
+
+        // Cardinal offsets: right, left, down, up
+        const offsets: [number, number][] = [[vw, 0], [-vw, 0], [0, -vh], [0, vh]];
+
+        // Build a queue of {endpoint, bbox} pairs, skipping already-cached regions
+        const queue: { endpoint: string; bbox: string; fw: number; fs: number; fe: number; fn: number; zoom: number; extraKey: string; extraParams?: Record<string, string | number> }[] = [];
+        for (const spec of specs) {
+            const extraKey = spec.extraParams ? JSON.stringify(spec.extraParams) : '';
+            for (const [dx, dy] of offsets) {
+                const cw = b.getWest() + dx, cs = b.getSouth() + dy;
+                const ce = b.getEast() + dx, cn = b.getNorth() + dy;
+                if (_findCovering(spec.endpoint, zoom, extraKey, cw, cs, ce, cn)) continue;
+                const dw = vw * OVERFETCH, dh = vh * OVERFETCH;
+                const fw = cw - dw, fs = cs - dh, fe = ce + dw, fn = cn + dh;
+                queue.push({
+                    endpoint: spec.endpoint,
+                    bbox: fw + ',' + fs + ',' + fe + ',' + fn,
+                    fw, fs, fe, fn, zoom, extraKey,
+                    extraParams: spec.extraParams,
+                });
+            }
+        }
+
+        // Drain the queue one at a time to avoid flooding the server
+        let idx = 0;
+        function _next(): void {
+            if (idx >= queue.length) return;
+            // Abort if the user has moved (zoom changed or panned significantly)
+            if (map.getZoom() !== zoom) return;
+            const q = queue[idx++];
+            _fetchGeoJSON(q.endpoint, q.bbox, function (result: FetchResult) {
+                if (result.data) {
+                    _storeInCache(q.endpoint, q.fw, q.fs, q.fe, q.fn, q.zoom, q.extraKey, result.etag, result.data);
+                }
+                _preloadTimer = setTimeout(_next, 50);
+            }, q.extraParams);
+        }
+
+        // Start after a short idle delay so visible data renders first
+        _preloadTimer = setTimeout(_next, 200);
+    }
+
     // --- Data loading ---
 
     function _loadData(): void {
@@ -927,6 +1076,18 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
                     Sidebar.selectById(_pendingSelectId);
                     _pendingSelectId = '';
                 }
+                // Prefetch cardinal neighbors for all active endpoints
+                const specs: PreloadSpec[] = [];
+                if (map.hasLayer(structuresLayer)) {
+                    specs.push({ endpoint: 'structures/', extraParams: { zoom: zoom } });
+                }
+                pathwayConfigs.forEach(function (cfg) {
+                    const [endpoint, layer, , , minZoom] = cfg;
+                    if (map.hasLayer(layer) && (!minZoom || zoom >= minZoom)) {
+                        specs.push({ endpoint });
+                    }
+                });
+                _preloadNeighbors(specs);
             }
         }
 
@@ -957,7 +1118,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
         // Structures
         if (map.hasLayer(structuresLayer)) {
-            _fetchGeoJSON('structures/', bbox, function (data: GeoJSON.FeatureCollection) {
+            _cachedFetch('structures/', function (data: GeoJSON.FeatureCollection) {
                 structuresLayer.clearLayers();
                 markerClusterGroup.clearLayers();
 
@@ -974,7 +1135,9 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
                         const latlng = L.latLng(geom.coordinates[1], geom.coordinates[0]);
                         const marker = L.marker(latlng, { icon: _clusterIcon(count) });
                         marker.on('click', function () {
-                            map.setView(latlng, 15);
+                            // Zoom in progressively — 3 levels deeper per click
+                            const nextZoom = Math.min(map.getZoom() + 3, map.getMaxZoom());
+                            map.setView(latlng, nextZoom);
                         });
                         structuresLayer.addLayer(marker);
                     });
@@ -1015,7 +1178,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
                     }
                 }
                 _checkAllLoaded();
-            }, { zoom: String(zoom) });
+            }, { zoom: zoom });
         }
 
         if (pendingPathway === 0) _updatePathwayStats();
@@ -1025,11 +1188,14 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
             return {
                 style: function () { return styleObj; },
                 onEachFeature: function (feature: GeoJSON.Feature, layer: L.Layer) {
-                    if (feature.id != null && (feature.properties as GeoJSONProperties).id == null) {
-                        (feature.properties as GeoJSONProperties).id = feature.id as number;
+                    const props = feature.properties as GeoJSONProperties;
+                    if (feature.id != null && props.id == null) {
+                        props.id = feature.id as number;
                     }
+                    // Normalise: pathways use "label", map UI expects "name"
+                    if (!props.name && props.label) props.name = props.label;
                     const entry: FeatureEntry = {
-                        props: feature.properties as GeoJSONProperties,
+                        props: props,
                         featureType: featureType,
                         layer: layer,
                         latlng: (layer as L.Polyline).getBounds().getCenter(),
@@ -1053,7 +1219,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
             const [endpoint, layer, ftype, style, minZoom] = cfg;
             if (!map.hasLayer(layer)) return;
             if (minZoom && zoom < minZoom) { layer.clearLayers(); return; }
-            _fetchGeoJSON(endpoint, bbox, function (data: GeoJSON.FeatureCollection) {
+            _cachedFetch(endpoint, function (data: GeoJSON.FeatureCollection) {
                 layer.clearLayers();
                 const geoLayer = L.geoJSON(data, _makePathwayOpts(ftype, style));
                 geoLayer.addTo(layer);
@@ -1116,10 +1282,10 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
     const debouncedUrlUpdate = _debounce(_updateUrl, 300);
 
-    // Load data on move/zoom with debounce
-    const debouncedLoad = _debounce(_loadData, 500);
+    // Load data on every moveend — AbortController in _fetchGeoJSON cancels
+    // stale in-flight requests, so no debounce needed.
     map.on('moveend', function () {
-        debouncedLoad();
+        _loadData();
         debouncedUrlUpdate();
     });
 
