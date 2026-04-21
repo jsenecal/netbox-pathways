@@ -642,6 +642,21 @@ class CableSegment(NetBoxModel):
             self.sequence = max_seq + 1
         super().save(*args, **kwargs)
 
+    def clean(self):
+        super().clean()
+        if self.cable_id:
+            from dcim.models import CableTermination
+            a_exists = CableTermination.objects.filter(
+                cable=self.cable, cable_end='A',
+            ).exists()
+            b_exists = CableTermination.objects.filter(
+                cable=self.cable, cable_end='B',
+            ).exists()
+            if not (a_exists and b_exists):
+                raise ValidationError({
+                    'cable': "Cable must have both A and B terminations before routing.",
+                })
+
 
 class SlackLoop(NetBoxModel):
     cable = models.ForeignKey(Cable, on_delete=models.CASCADE, related_name='slack_loops')

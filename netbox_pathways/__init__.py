@@ -84,5 +84,8 @@ class NetBoxPathwaysConfig(PluginConfig):
 
         super().ready()
 
+        # Register signals
+        from . import signals  # noqa: F401
+
 
 config = NetBoxPathwaysConfig

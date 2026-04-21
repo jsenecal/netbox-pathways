@@ -1,6 +1,7 @@
 import pytest
 from dcim.models import Cable
 from django.contrib.gis.geos import LineString, Point
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 
 from netbox_pathways.geo import get_srid
@@ -9,6 +10,16 @@ from netbox_pathways.models import CableSegment, Conduit, Structure
 
 @pytest.mark.django_db
 class TestCableSegmentSequence:
+    @pytest.fixture(autouse=True)
+    def _disable_routability_signal(self):
+        """Disable routability signal for sequence tests (no terminations needed)."""
+        from django.db.models.signals import pre_save
+
+        from netbox_pathways.signals import enforce_cable_routability
+        pre_save.disconnect(enforce_cable_routability, sender=CableSegment)
+        yield
+        pre_save.connect(enforce_cable_routability, sender=CableSegment)
+
     @pytest.fixture
     def structures(self):
         srid = get_srid()
@@ -23,7 +34,7 @@ class TestCableSegmentSequence:
     def pathway(self, structures):
         srid = get_srid()
         return Conduit.objects.create(
-            name="C-1",
+            label="C-1",
             start_structure=structures[0],
             end_structure=structures[1],
             path=LineString((0, 0), (1, 1), srid=srid),
@@ -33,7 +44,7 @@ class TestCableSegmentSequence:
     def pathway2(self, structures):
         srid = get_srid()
         return Conduit.objects.create(
-            name="C-2",
+            label="C-2",
             start_structure=structures[1],
             end_structure=structures[2],
             path=LineString((1, 1), (2, 2), srid=srid),
@@ -70,3 +81,38 @@ class TestCableSegmentSequence:
         field_names = [f.name for f in CableSegment._meta.get_fields()]
         assert 'slack_loop_location' not in field_names
         assert 'slack_length' not in field_names
+
+
+@pytest.mark.django_db
+class TestCableSegmentRoutability:
+    @pytest.fixture
+    def structures(self):
+        srid = get_srid()
+        return [
+            Structure.objects.create(
+                name=f"MH-RT-{i}", location=Point(i, i, srid=srid),
+            ) for i in range(2)
+        ]
+
+    @pytest.fixture
+    def pathway(self, structures):
+        srid = get_srid()
+        return Conduit.objects.create(
+            label="C-RT-1",
+            start_structure=structures[0],
+            end_structure=structures[1],
+            path=LineString((0, 0), (1, 1), srid=srid),
+        )
+
+    def test_cable_without_terminations_fails_clean(self, pathway):
+        cable = Cable.objects.create(label="NO-TERM-CABLE")
+        seg = CableSegment(cable=cable, pathway=pathway)
+        with pytest.raises(ValidationError, match="termination"):
+            seg.clean()
+
+    def test_cable_without_terminations_fails_save(self, pathway):
+        """Pre-save signal also blocks saving."""
+        cable = Cable.objects.create(label="NO-TERM-CABLE-2")
+        seg = CableSegment(cable=cable, pathway=pathway, sequence=1)
+        with pytest.raises(ValidationError, match="termination"):
+            seg.save()
