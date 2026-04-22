@@ -482,10 +482,14 @@
         window.addEventListener('resize', sizeMap);
 
         // --- Constraint builder ---
-        document.querySelectorAll('.pw-add-constraint').forEach(function(el) {
+        var constraintLinks = document.querySelectorAll('.pw-add-constraint');
+        console.log('[pathways] Constraint links found:', constraintLinks.length);
+        constraintLinks.forEach(function(el) {
             el.addEventListener('click', function(e) {
                 e.preventDefault();
+                e.stopPropagation();
                 var type = this.dataset.type;
+                console.log('[pathways] Constraint clicked:', type);
                 var cards = document.getElementById('constraint-cards');
                 if (cards.querySelector('[data-constraint-type="' + type + '"]')) return;
                 var url = '{% url "plugins:netbox_pathways:route_planner_constraint" %}?type=' + type;
