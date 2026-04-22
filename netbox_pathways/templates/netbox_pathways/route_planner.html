@@ -481,35 +481,29 @@
         setTimeout(sizeMap, 500);
         window.addEventListener('resize', sizeMap);
 
-        // --- Constraint builder ---
-        var constraintLinks = document.querySelectorAll('.pw-add-constraint');
-        console.log('[pathways] Constraint links found:', constraintLinks.length);
-        constraintLinks.forEach(function(el) {
-            el.addEventListener('click', function(e) {
+        // --- Constraint builder (event delegation on the dropdown menu) ---
+        var constraintMenu = document.querySelector('.pw-add-constraint-menu');
+        if (constraintMenu) {
+            constraintMenu.addEventListener('click', function(e) {
+                var link = e.target.closest('.pw-add-constraint');
+                if (!link) return;
                 e.preventDefault();
-                e.stopPropagation();
-                var type = this.dataset.type;
-                console.log('[pathways] Constraint clicked:', type);
+                var type = link.dataset.type;
+                if (!type) return;
                 var cards = document.getElementById('constraint-cards');
-                if (!cards) { console.error('[pathways] #constraint-cards not found'); return; }
-                if (cards.querySelector('[data-constraint-type="' + type + '"]')) {
-                    console.log('[pathways] Constraint already exists, skipping');
-                    return;
-                }
+                if (!cards) return;
+                if (cards.querySelector('[data-constraint-type="' + type + '"]')) return;
                 var url = '{% url "plugins:netbox_pathways:route_planner_constraint" %}?type=' + type;
-                console.log('[pathways] Fetching:', url);
-                fetch(url, { credentials: 'same-origin' })
-                    .then(function(resp) {
-                        console.log('[pathways] Response:', resp.status);
-                        return resp.text();
-                    })
-                    .then(function(html) {
-                        console.log('[pathways] Got HTML, length:', html.length);
-                        cards.insertAdjacentHTML('beforeend', html);
-                    })
-                    .catch(function(err) { console.error('[pathways] Fetch error:', err); });
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', url, true);
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        cards.insertAdjacentHTML('beforeend', xhr.responseText);
+                    }
+                };
+                xhr.send();
             });
-        });
+        }
 
         // Remove constraint card on close button click (delegated)
         document.getElementById('constraint-cards').addEventListener('click', function(e) {
