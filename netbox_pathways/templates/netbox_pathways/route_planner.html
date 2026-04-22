@@ -492,10 +492,16 @@
                 fetch(url, {
                     credentials: 'same-origin',
                     headers: {'X-Requested-With': 'XMLHttpRequest'}
-                }).then(function(resp) { return resp.text(); })
-                  .then(function(html) {
-                    cards.insertAdjacentHTML('beforeend', html);
-                });
+                }).then(function(resp) {
+                    console.log('Constraint response:', resp.status, resp.url);
+                    if (!resp.ok) return '';
+                    return resp.text();
+                }).then(function(html) {
+                    if (html) {
+                        console.log('Constraint HTML length:', html.length);
+                        cards.insertAdjacentHTML('beforeend', html);
+                    }
+                }).catch(function(err) { console.error('Constraint fetch error:', err); });
             });
         });
 
