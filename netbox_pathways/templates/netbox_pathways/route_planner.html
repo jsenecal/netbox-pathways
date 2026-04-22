@@ -237,7 +237,7 @@
                 <div id="pathways-map" style="min-height: 400px; position: relative;"></div>
 
                 <div class="pw-sidebar">
-                    <form id="route-planner-form" method="post"
+                    <form id="route-planner-form"
                           hx-post="{% url 'plugins:netbox_pathways:route_planner_find' %}"
                           hx-target="#planner-results"
                           hx-swap="innerHTML"
@@ -403,29 +403,21 @@
             minZoom: CONFIG.minZoom || 1
         });
 
-        // Add base tile layer (first configured layer)
+        // Add base tile layers
         var baseLayers = CONFIG.baseLayers || [];
         if (baseLayers.length > 0) {
-            var first = baseLayers[0];
-            L.tileLayer(first.url, {
-                maxZoom: first.maxZoom || 22,
-                maxNativeZoom: first.maxNativeZoom || 19,
-                attribution: first.attribution || ''
-            }).addTo(map);
-            // Add layer control if multiple base layers
-            if (baseLayers.length > 1) {
-                var layers = {};
-                baseLayers.forEach(function(bl) {
-                    layers[bl.name] = L.tileLayer(bl.url, {
-                        maxZoom: bl.maxZoom || 22,
-                        maxNativeZoom: bl.maxNativeZoom || 19,
-                        attribution: bl.attribution || ''
-                    });
+            var layerControl = {};
+            baseLayers.forEach(function(bl, idx) {
+                var tl = L.tileLayer(bl.url, {
+                    maxZoom: bl.maxZoom || 22,
+                    maxNativeZoom: bl.maxNativeZoom || 19,
+                    attribution: bl.attribution || ''
                 });
-                // First is already added; add control
-                var firstKey = baseLayers[0].name;
-                layers[firstKey] = map.eachLayer(function(l) { return l; });
-                L.control.layers(layers, null, {collapsed: true}).addTo(map);
+                layerControl[bl.name] = tl;
+                if (idx === 0) tl.addTo(map);
+            });
+            if (baseLayers.length > 1) {
+                L.control.layers(layerControl, null, {collapsed: true}).addTo(map);
             }
         } else {
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
