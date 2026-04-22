@@ -167,24 +167,68 @@
         color: var(--tblr-muted-color, #667382);
         font-size: 0.85em;
     }
-    /* Result route table in sidebar */
-    .pw-route-table {
-        width: 100%;
-        font-size: 0.8em;
-    }
-    .pw-route-table th {
-        font-weight: 600;
-        padding: 4px 6px;
-        border-bottom: 1px solid var(--tblr-border-color, #dee2e6);
-        color: var(--tblr-muted-color, #667382);
+    /* Hop list — interleaved structures + pathways */
+    .pw-hop-list {
         font-size: 0.85em;
+    }
+    .pw-hop-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 0;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: background 0.1s;
+    }
+    .pw-hop-item:hover {
+        background: var(--tblr-border-color-translucent, rgba(0,0,0,0.06));
+    }
+    .pw-hop-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-left: 4px;
+    }
+    .pw-hop-start .pw-hop-dot { width: 12px; height: 12px; }
+    .pw-hop-end .pw-hop-dot { width: 12px; height: 12px; }
+    .pw-hop-line {
+        width: 2px;
+        height: 16px;
+        background: var(--tblr-border-color, #dee2e6);
+        flex-shrink: 0;
+        margin-left: 8px;
+    }
+    .pw-hop-label {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .pw-hop-label a {
+        color: inherit;
+        text-decoration: none;
+    }
+    .pw-hop-label a:hover {
+        text-decoration: underline;
+    }
+    .pw-hop-type {
+        font-size: 0.75em;
         text-transform: uppercase;
         letter-spacing: 0.03em;
+        color: var(--tblr-muted-color, #667382);
+        flex-shrink: 0;
     }
-    .pw-route-table td {
-        padding: 4px 6px;
-        border-bottom: 1px solid var(--tblr-border-color-translucent, rgba(0,0,0,0.06));
-        vertical-align: middle;
+    .pw-hop-length {
+        font-size: 0.8em;
+        color: var(--tblr-muted-color, #667382);
+        flex-shrink: 0;
+    }
+    .pw-hop-structure {
+        font-weight: 600;
+    }
+    .pw-hop-pathway {
+        padding-left: 2px;
     }
     .pw-route-summary {
         display: flex;
@@ -372,7 +416,11 @@
                         <div id="planner-results">
                             <div class="pw-results-empty">
                                 <i class="mdi mdi-map-search-outline" style="font-size: 2rem; opacity: 0.3;"></i>
+                                {% if cable %}
+                                <p class="mt-1 mb-0">Click <strong>Find Route</strong> to plan the cable's route.</p>
+                                {% else %}
                                 <p class="mt-1 mb-0">Select endpoints and click <strong>Find Route</strong>.</p>
+                                {% endif %}
                             </div>
                         </div>
                     </div>

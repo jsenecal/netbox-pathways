@@ -159,25 +159,42 @@ function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): vo
     window._rpRouteLayer = null;
     window._rpMarkerLayer = null;
 
-    // Listen for HTMX results
-    const resultsEl = document.getElementById('planner-results');
-    if (resultsEl) {
-        resultsEl.addEventListener('htmx:afterSettle', function () {
-            // Clear previous
-            if (window._rpRouteLayer) { map.removeLayer(window._rpRouteLayer); window._rpRouteLayer = null; }
-            if (window._rpMarkerLayer) { map.removeLayer(window._rpMarkerLayer); window._rpMarkerLayer = null; }
+    // Listen for HTMX results — htmx:afterSettle fires on the triggering
+    // element (the form), not the swap target, so listen on document.body.
+    document.body.addEventListener('htmx:afterSettle', function (evt: Event) {
+        const detail = (evt as CustomEvent).detail;
+        // Only react to swaps targeting #planner-results
+        if (!detail || !detail.target || detail.target.id !== 'planner-results') return;
 
-            const dataEl = document.getElementById('route-geometry-data');
-            if (!dataEl) return;
+        // Clear previous
+        if (window._rpRouteLayer) { map.removeLayer(window._rpRouteLayer); window._rpRouteLayer = null; }
+        if (window._rpMarkerLayer) { map.removeLayer(window._rpMarkerLayer); window._rpMarkerLayer = null; }
 
-            let data: RouteGeometryData;
-            try {
-                data = JSON.parse(dataEl.textContent || '{}') as RouteGeometryData;
-            } catch (e) { return; }
+        const dataEl = document.getElementById('route-geometry-data');
+        if (!dataEl) return;
 
-            _renderRouteOverlay(map, data);
+        let data: RouteGeometryData;
+        try {
+            data = JSON.parse(dataEl.textContent || '{}') as RouteGeometryData;
+        } catch (e) { return; }
+
+        _renderRouteOverlay(map, data);
+
+        // Wire up click-to-center on hop list items
+        const hopItems = document.querySelectorAll('[data-hop-lat][data-hop-lon]');
+        hopItems.forEach(function (item) {
+            (item as HTMLElement).style.cursor = 'pointer';
+            item.addEventListener('click', function (e) {
+                // Don't intercept link clicks
+                if ((e.target as HTMLElement).closest('a')) return;
+                const lat = parseFloat((item as HTMLElement).dataset.hopLat || '0');
+                const lon = parseFloat((item as HTMLElement).dataset.hopLon || '0');
+                if (lat && lon) {
+                    map.flyTo([lat, lon], 18, { duration: 0.5 });
+                }
+            });
         });
-    }
+    });
 
     // Leaflet calculates size at init; force a recheck after layout settles
     setTimeout(function () { map.invalidateSize(); }, 100);

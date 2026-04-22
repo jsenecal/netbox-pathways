@@ -9,26 +9,29 @@
             <i class="mdi mdi-transit-connection-variant"></i> {{ route.hop_count }} hop{{ route.hop_count|pluralize }}
         </span>
     </div>
-    <table class="pw-route-table">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>Pathway</th>
-                <th>Type</th>
-                <th>Length</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for pw in route.pathways %}
-            <tr>
-                <td>{{ forloop.counter }}</td>
-                <td><a href="{{ pw.get_absolute_url }}">{{ pw }}</a></td>
-                <td>{{ pw.get_pathway_type_display }}</td>
-                <td>{% if pw.length %}{{ pw.length|floatformat:1 }}{% else %}&mdash;{% endif %}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+
+    {# Interleaved hop list: structure → pathway → structure → ... #}
+    <div class="pw-hop-list">
+        {% for hop in route.hops %}
+        {% if hop.kind == "structure" %}
+        <div class="pw-hop-item pw-hop-structure{% if hop.role == 'start' %} pw-hop-start{% elif hop.role == 'end' %} pw-hop-end{% endif %}"
+             {% if hop.geo %}data-hop-lat="{{ hop.geo.0 }}" data-hop-lon="{{ hop.geo.1 }}"{% endif %}>
+            <span class="pw-hop-dot"
+                  style="background:{% if hop.role == 'start' %}#2fb344{% elif hop.role == 'end' %}#d63939{% else %}#206bc4{% endif %};"></span>
+            <span class="pw-hop-label">{{ hop.label }}</span>
+            <span class="pw-hop-type">{{ hop.type }}</span>
+        </div>
+        {% elif hop.kind == "pathway" %}
+        <div class="pw-hop-item pw-hop-pathway"
+             {% if hop.geo %}data-hop-lat="{{ hop.geo.0 }}" data-hop-lon="{{ hop.geo.1 }}"{% endif %}>
+            <span class="pw-hop-line"></span>
+            <span class="pw-hop-label"><a href="/plugins/pathways/pathways/{{ hop.pk }}/">{{ hop.label }}</a></span>
+            <span class="pw-hop-length">{% if hop.length %}{{ hop.length|floatformat:0 }}m{% endif %}</span>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+
     <div class="d-flex flex-wrap gap-2 mt-3">
         {% if cable_pk %}
         <form method="post" action="{% url 'plugins:netbox_pathways:cable_routing_apply' cable_pk=cable_pk %}" style="display:inline">

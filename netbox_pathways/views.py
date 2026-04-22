@@ -1182,6 +1182,37 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
                     })
             route_geometry['structures'] = route_structures
 
+            # Build interleaved hop list: structure → pathway → structure → ...
+            struct_map = {s['pk']: s for s in route_structures}
+            hops = []
+            seen_structures = set()
+            for pw in ordered:
+                # Add start structure if not already listed
+                ss = pw.start_structure
+                if ss and ss.pk not in seen_structures and ss.pk in struct_map:
+                    seen_structures.add(ss.pk)
+                    hops.append({'kind': 'structure', **struct_map[ss.pk]})
+                # Add the pathway
+                mid = linestring_to_coords(pw.path)
+                pw_geo = None
+                if mid:
+                    mid_idx = len(mid) // 2
+                    pw_geo = (mid[mid_idx][1], mid[mid_idx][0])  # lat, lon
+                hops.append({
+                    'kind': 'pathway',
+                    'pk': pw.pk,
+                    'label': str(pw),
+                    'type': pw.get_pathway_type_display() if pw.pathway_type else '',
+                    'length': pw.length,
+                    'geo': pw_geo,
+                })
+                # Add end structure
+                es = pw.end_structure
+                if es and es.pk not in seen_structures and es.pk in struct_map:
+                    seen_structures.add(es.pk)
+                    hops.append({'kind': 'structure', **struct_map[es.pk]})
+            routes[0]['hops'] = hops
+
         html = render_to_string(
             'netbox_pathways/inc/planner_results.html',
             {
