@@ -489,6 +489,7 @@
                 if (cards.querySelector('[data-constraint-type="' + type + '"]')) return;
                 var url = '{% url "plugins:netbox_pathways:route_planner_constraint" %}?type=' + type;
                 fetch(url, {
+                    credentials: 'same-origin',
                     headers: {'X-Requested-With': 'XMLHttpRequest'}
                 }).then(function(resp) { return resp.text(); })
                   .then(function(html) {
