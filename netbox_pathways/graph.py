@@ -220,13 +220,28 @@ class PathwayGraph:
 
     def shortest_path(self, start_node, end_node):
         """Dijkstra shortest path. Returns (total_cost, [pathway_ids]) or None."""
+        result = self.shortest_path_nodes(start_node, end_node)
+        if result is None:
+            return None
+        cost, pathway_ids, _nodes = result
+        return cost, pathway_ids
+
+    def shortest_path_nodes(self, start_node, end_node):
+        """Dijkstra shortest path returning node list too.
+
+        Returns (total_cost, [pathway_ids], [nodes]) or None.
+        """
         try:
             path_nodes = nx.shortest_path(
                 self.graph, start_node, end_node, weight='weight',
             )
         except (nx.NodeNotFound, nx.NetworkXNoPath):
             return None
-        return self._extract_route(path_nodes)
+        route = self._extract_route(path_nodes)
+        if route is None:
+            return None
+        cost, pathway_ids = route
+        return cost, pathway_ids, path_nodes
 
     def astar_path(self, start_node, end_node):
         """A* shortest path with haversine heuristic. Returns (total_cost, [pathway_ids]) or None."""

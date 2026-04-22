@@ -229,15 +229,29 @@ def _apply_in_use_preference(graph, factor):
 
 
 def _chained_shortest_path(graph, start, end, waypoints):
-    """Find shortest path through ordered waypoints by chaining segments."""
-    nodes = [start] + [('structure', wp) for wp in waypoints] + [end]
+    """Find shortest path through ordered waypoints by chaining segments.
+
+    After each segment, intermediate nodes are removed from the graph so
+    later segments cannot revisit them (a route must never cross the same
+    structure twice).  Only the upcoming waypoints/endpoint are preserved.
+    """
+    stops = [start] + [('structure', wp) for wp in waypoints] + [end]
     all_pathway_ids = []
     total_cost = 0
-    for i in range(len(nodes) - 1):
-        segment = graph.shortest_path(nodes[i], nodes[i + 1])
-        if segment is None:
+
+    for i in range(len(stops) - 1):
+        result = graph.shortest_path_nodes(stops[i], stops[i + 1])
+        if result is None:
             return None
-        cost, pathway_ids = segment
+        cost, pathway_ids, path_nodes = result
         total_cost += cost
         all_pathway_ids.extend(pathway_ids)
+
+        # Remove traversed nodes so subsequent segments can't revisit them.
+        if i < len(stops) - 2:  # skip cleanup after the last segment
+            remaining = set(stops[i + 1:])
+            for node in path_nodes:
+                if node not in remaining and node in graph.graph:
+                    graph.graph.remove_node(node)
+
     return total_cost, all_pathway_ids

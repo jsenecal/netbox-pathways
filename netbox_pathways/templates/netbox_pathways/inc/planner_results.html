@@ -1,13 +1,20 @@
 {% if routes %}
 {% for route in routes %}
 <div style="padding: 12px 14px;">
-    <div class="pw-route-summary">
-        <span class="pw-route-stat">
-            <i class="mdi mdi-map-marker-distance"></i> {{ route.cost|floatformat:1 }} m
-        </span>
-        <span class="pw-route-stat">
-            <i class="mdi mdi-transit-connection-variant"></i> {{ route.hop_count }} hop{{ route.hop_count|pluralize }}
-        </span>
+    <div style="display:flex; align-items:center; gap:8px;">
+        <div class="pw-route-summary" style="margin-bottom:0;">
+            <span class="pw-route-stat">
+                <i class="mdi mdi-map-marker-distance"></i> {{ route.cost|floatformat:1 }} m
+            </span>
+            <span class="pw-route-stat">
+                <i class="mdi mdi-transit-connection-variant"></i> {{ route.hop_count }} hop{{ route.hop_count|pluralize }}
+            </span>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-danger pw-clear-results"
+                style="margin-left:auto; padding:1px 6px; font-size:0.7rem; line-height:1.4;"
+                title="Clear results">
+            <i class="mdi mdi-close"></i> Clear
+        </button>
     </div>
 
     {# Interleaved hop list: structure → pathway → structure → ... #}

@@ -470,12 +470,15 @@
     document.addEventListener('DOMContentLoaded', function() {
         sizeMap();
 
-        // Initialize the route planner map (shared map + data layers from bundles)
-        window.initializeRoutePlannerMap('pathways-map', {
-            center: CENTER,
-            zoom: ZOOM,
-            bounds: BOUNDS
-        });
+        try {
+            window.initializeRoutePlannerMap('pathways-map', {
+                center: CENTER,
+                zoom: ZOOM,
+                bounds: BOUNDS
+            });
+        } catch (err) {
+            console.error('[pathways] Map init failed:', err);
+        }
 
         setTimeout(sizeMap, 200);
         setTimeout(sizeMap, 500);
@@ -499,6 +502,8 @@
                 xhr.onload = function() {
                     if (xhr.status === 200) {
                         cards.insertAdjacentHTML('beforeend', xhr.responseText);
+                        // Trigger NetBox's re-initialization for TomSelect/api-select widgets
+                        document.dispatchEvent(new CustomEvent('htmx:afterSettle'));
                     }
                 };
                 xhr.send();
@@ -539,6 +544,31 @@
             if (savedInactive === 'true') inactiveCheck.checked = true;
             inactiveCheck.addEventListener('change', function() {
                 localStorage.setItem('pw_include_inactive', this.checked);
+            });
+        }
+
+        // --- Clear results (delegated — button lives inside results HTML) ---
+        var resultsDiv = document.getElementById('planner-results');
+        if (resultsDiv) {
+            resultsDiv.addEventListener('click', function(e) {
+                if (!e.target.closest('.pw-clear-results')) return;
+                // Rebuild empty-state placeholder
+                while (resultsDiv.firstChild) resultsDiv.removeChild(resultsDiv.firstChild);
+                var emptyDiv = document.createElement('div');
+                emptyDiv.className = 'pw-results-empty';
+                var icon = document.createElement('i');
+                icon.className = 'mdi mdi-map-search-outline';
+                icon.style.cssText = 'font-size:2rem;opacity:0.3;';
+                emptyDiv.appendChild(icon);
+                var p = document.createElement('p');
+                p.className = 'mt-1 mb-0';
+                p.textContent = 'Select endpoints and click Find Route.';
+                emptyDiv.appendChild(p);
+                resultsDiv.appendChild(emptyDiv);
+                // Clear map layers
+                if (window._rpRouteLayer) { window._rpRouteLayer.remove(); window._rpRouteLayer = null; }
+                if (window._rpMarkerLayer) { window._rpMarkerLayer.remove(); window._rpMarkerLayer = null; }
+                try { sessionStorage.removeItem('pw_route_cache'); } catch (_e) {}
             });
         }
     });

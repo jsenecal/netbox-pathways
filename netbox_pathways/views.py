@@ -1339,14 +1339,25 @@ class RoutePlannerConstraintView(LoginRequiredMixin, View):
         elif cfg['kind'] == 'model':
             qs_factory = self.MODEL_MAP.get(cfg['model'])
             if qs_factory:
+                # Use .none() queryset — the APISelect widget fetches options
+                # on-demand via the REST API.  Passing the full queryset would
+                # cause Django to materialise every row as <option> tags,
+                # consuming gigabytes of RAM on large datasets.
+                qs = qs_factory().none()
                 field = DynamicModelMultipleChoiceField(
-                    queryset=qs_factory(),
+                    queryset=qs,
                     required=False,
                 )
+                from utilities.views import get_action_url
+                api_url = get_action_url(qs.model, action='list', rest_api=True)
                 widget_html = field.widget.render(
                     name=constraint_type,
                     value=[],
-                    attrs={'id': f'id_{constraint_type}', 'class': 'form-select'},
+                    attrs={
+                        'id': f'id_{constraint_type}',
+                        'class': 'form-select api-select',
+                        'data-url': api_url,
+                    },
                 )
                 ctx['widget_html'] = mark_safe(widget_html)  # noqa: S308
 
