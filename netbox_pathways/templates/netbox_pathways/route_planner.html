@@ -480,17 +480,20 @@
         setTimeout(sizeMap, 500);
         window.addEventListener('resize', sizeMap);
 
-        // --- Constraint builder (HTMX) ---
+        // --- Constraint builder ---
         document.querySelectorAll('.pw-add-constraint').forEach(function(el) {
             el.addEventListener('click', function(e) {
                 e.preventDefault();
                 var type = this.dataset.type;
                 var cards = document.getElementById('constraint-cards');
-                // Prevent duplicate
                 if (cards.querySelector('[data-constraint-type="' + type + '"]')) return;
-                // Fetch constraint card via HTMX
                 var url = '{% url "plugins:netbox_pathways:route_planner_constraint" %}?type=' + type;
-                htmx.ajax('GET', url, {target: '#constraint-cards', swap: 'beforeend'});
+                fetch(url, {
+                    headers: {'X-Requested-With': 'XMLHttpRequest'}
+                }).then(function(resp) { return resp.text(); })
+                  .then(function(html) {
+                    cards.insertAdjacentHTML('beforeend', html);
+                });
             });
         });
 
