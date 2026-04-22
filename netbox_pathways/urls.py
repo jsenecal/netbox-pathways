@@ -155,8 +155,15 @@ urlpatterns = [
         path('', views.PlannedRouteView.as_view(), name='plannedroute'),
         path('edit/', views.PlannedRouteEditView.as_view(), name='plannedroute_edit'),
         path('delete/', views.PlannedRouteDeleteView.as_view(), name='plannedroute_delete'),
+        path('split/', views.PlannedRouteSplitView.as_view(), name='plannedroute_split'),
+        path('apply/', views.PlannedRouteApplyView.as_view(), name='plannedroute_apply'),
         *get_model_urls('netbox_pathways', 'plannedroute'),
     ])),
+
+    # Route Planner
+    path('route-planner/', views.RoutePlannerView.as_view(), name='route_planner'),
+    path('route-planner/find/', views.RoutePlannerFindView.as_view(), name='route_planner_find'),
+    path('route-planner/save/', views.RoutePlannerSaveView.as_view(), name='route_planner_save'),
 
     # Pull Sheets
     path('pull-sheets/', views.PullSheetListView.as_view(), name='pullsheet_list'),

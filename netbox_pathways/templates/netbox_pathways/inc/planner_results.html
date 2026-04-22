@@ -1,0 +1,68 @@
+{% if routes %}
+{% for route in routes %}
+<div class="card mb-3">
+  <h2 class="card-header d-flex justify-content-between align-items-center">
+    <span>Shortest Route</span>
+    <span class="text-muted" style="font-size: 0.8em;">{{ route.cost|floatformat:1 }} m &middot; {{ route.hop_count }} hop{{ route.hop_count|pluralize }}</span>
+  </h2>
+  <div class="card-body p-0">
+    <table class="table table-hover table-sm mb-0">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Pathway</th>
+          <th>Type</th>
+          <th>From</th>
+          <th>To</th>
+          <th>Length</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pw in route.pathways %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td><a href="{{ pw.get_absolute_url }}">{{ pw }}</a></td>
+          <td>{{ pw.get_pathway_type_display }}</td>
+          <td>{{ pw.start_endpoint|default:"&mdash;" }}</td>
+          <td>{{ pw.end_endpoint|default:"&mdash;" }}</td>
+          <td>{% if pw.length %}{{ pw.length|floatformat:1 }}{% else %}&mdash;{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-footer">
+    <div class="d-flex gap-2 align-items-center">
+      {% if cable_pk %}
+      <form method="post" action="{% url 'plugins:netbox_pathways:cable_routing_apply' cable_pk=cable_pk %}" style="display:inline">
+        {% csrf_token %}
+        <input type="hidden" name="pathway_ids" value="{{ route.pathway_ids }}">
+        <button type="submit" class="btn btn-sm btn-green">
+          <i class="mdi mdi-cable-data"></i> Apply to Cable
+        </button>
+      </form>
+      {% endif %}
+      <form method="post" action="{% url 'plugins:netbox_pathways:route_planner_save' %}"
+            class="d-flex gap-2 align-items-center" style="display:inline">
+        {% csrf_token %}
+        <input type="hidden" name="pathway_ids" value="{{ route.pathway_ids }}">
+        <input type="hidden" name="start_structure" value="{{ start_structure_pk }}">
+        <input type="hidden" name="end_structure" value="{{ end_structure_pk }}">
+        <input type="text" name="name" class="form-control form-control-sm"
+               placeholder="Route name..." required style="width: 180px;">
+        <button type="submit" class="btn btn-sm btn-primary">
+          <i class="mdi mdi-content-save"></i> Save as Planned Route
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="card">
+  <div class="card-body text-center text-muted py-4">
+    <i class="mdi mdi-alert-circle-outline" style="font-size: 2rem; opacity: 0.3;"></i>
+    <p class="mt-2 mb-0">No route found with the given constraints.</p>
+  </div>
+</div>
+{% endif %}

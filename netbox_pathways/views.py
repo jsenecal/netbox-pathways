@@ -19,7 +19,7 @@ from utilities.views import ViewTab, register_model_view
 from netbox_pathways.registry import registry as map_layer_registry
 
 from . import filterforms, filters, forms, models, tables
-from .graph import PathwayGraph, _endpoint_nodes, connected_pathways_db, node_to_label
+from .graph import PathwayGraph, _endpoint_nodes, connected_pathways_db
 from .ui import panels
 
 
@@ -797,8 +797,27 @@ class PlannedRouteListView(generic.ObjectListView):
     filterset_form = filterforms.PlannedRouteFilterForm
 
 
+class SplitRoute(ObjectAction):
+    label = 'Split'
+    template_name = 'netbox_pathways/buttons/split_route.html'
+
+    @classmethod
+    def get_url(cls, obj):
+        return reverse('plugins:netbox_pathways:plannedroute_split', args=[obj.pk])
+
+
+class ApplyRouteToCable(ObjectAction):
+    label = 'Apply to Cable'
+    template_name = 'netbox_pathways/buttons/apply_route.html'
+
+    @classmethod
+    def get_url(cls, obj):
+        return reverse('plugins:netbox_pathways:plannedroute_apply', args=[obj.pk])
+
+
 class PlannedRouteView(generic.ObjectView):
     queryset = models.PlannedRoute.objects.all()
+    actions = (SplitRoute, ApplyRouteToCable, CloneObject, EditObject, DeleteObject)
     layout = layout.SimpleLayout(
         left_panels=[
             panels.PlannedRoutePanel(),
@@ -808,6 +827,18 @@ class PlannedRouteView(generic.ObjectView):
         ],
         right_panels=[],
     )
+
+    def get_extra_context(self, request, instance):
+        ctx = super().get_extra_context(request, instance)
+        if instance.pathway_ids:
+            pathways = models.Pathway.objects.filter(
+                pk__in=instance.pathway_ids,
+            ).select_related('start_structure', 'end_structure')
+            pw_map = {pw.pk: pw for pw in pathways}
+            ctx['pathways'] = [pw_map[pid] for pid in instance.pathway_ids if pid in pw_map]
+        else:
+            ctx['pathways'] = []
+        return ctx
 
 
 class PlannedRouteEditView(generic.ObjectEditView):
@@ -822,6 +853,262 @@ class PlannedRouteDeleteView(generic.ObjectDeleteView):
 class PlannedRouteBulkDeleteView(generic.BulkDeleteView):
     queryset = models.PlannedRoute.objects.all()
     table = tables.PlannedRouteTable
+
+
+class PlannedRouteSplitView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    """Split a planned route at a mid-route structure into two routes."""
+
+    permission_required = 'netbox_pathways.add_plannedroute'
+
+    def get(self, request, pk):
+        route = get_object_or_404(models.PlannedRoute, pk=pk)
+        pathways = models.Pathway.objects.filter(
+            pk__in=route.pathway_ids,
+        ).select_related('start_structure', 'end_structure')
+
+        mid_structures = set()
+        for pw in pathways:
+            if pw.start_structure and pw.start_structure != route.start_structure:
+                mid_structures.add(pw.start_structure)
+            if pw.end_structure and pw.end_structure != route.end_structure:
+                mid_structures.add(pw.end_structure)
+        mid_structures.discard(route.end_structure)
+
+        return render(request, 'netbox_pathways/plannedroute_split.html', {
+            'route': route,
+            'mid_structures': sorted(mid_structures, key=lambda s: str(s)),
+        })
+
+    def post(self, request, pk):
+        route = get_object_or_404(models.PlannedRoute, pk=pk)
+        split_structure_pk = int(request.POST.get('split_structure'))
+        name_first = request.POST.get('name_first', f'{route.name} (part 1)')
+        name_second = request.POST.get('name_second', f'{route.name} (part 2)')
+
+        split_structure = get_object_or_404(models.Structure, pk=split_structure_pk)
+
+        pathways = models.Pathway.objects.filter(
+            pk__in=route.pathway_ids,
+        ).select_related('start_structure', 'end_structure')
+        pw_map = {pw.pk: pw for pw in pathways}
+
+        first_ids = []
+        second_ids = []
+        past_split = False
+        for pid in route.pathway_ids:
+            pw = pw_map.get(pid)
+            if not pw:
+                continue
+            if not past_split:
+                first_ids.append(pid)
+                if split_structure in (pw.end_structure, pw.start_structure):
+                    past_split = True
+            else:
+                second_ids.append(pid)
+
+        models.PlannedRoute.objects.create(
+            name=name_first,
+            start_structure=route.start_structure,
+            start_location=route.start_location,
+            end_structure=split_structure,
+            pathway_ids=first_ids,
+            tenant=route.tenant,
+        )
+        models.PlannedRoute.objects.create(
+            name=name_second,
+            start_structure=split_structure,
+            end_structure=route.end_structure,
+            end_location=route.end_location,
+            pathway_ids=second_ids,
+            tenant=route.tenant,
+        )
+
+        route.status = 'archived'
+        route.save()
+
+        messages.success(request, f'Route split into "{name_first}" and "{name_second}".')
+        return redirect('plugins:netbox_pathways:plannedroute_list')
+
+
+class PlannedRouteApplyView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    """Apply a planned route to a cable as CableSegments."""
+
+    permission_required = (
+        'netbox_pathways.change_plannedroute',
+        'netbox_pathways.add_cablesegment',
+    )
+
+    def get(self, request, pk):
+        route = get_object_or_404(models.PlannedRoute, pk=pk)
+
+        pathways = models.Pathway.objects.filter(
+            pk__in=route.pathway_ids,
+        ).select_related('start_structure', 'end_structure')
+        pw_map = {pw.pk: pw for pw in pathways}
+        pw_ordered = [pw_map[pid] for pid in route.pathway_ids if pid in pw_map]
+
+        apply_form = forms.PlannedRouteApplyForm(
+            initial={'cable': route.cable_id} if route.cable_id else None,
+        )
+
+        return render(request, 'netbox_pathways/plannedroute_apply.html', {
+            'route': route,
+            'pathways': pw_ordered,
+            'apply_form': apply_form,
+        })
+
+    def post(self, request, pk):
+        route = get_object_or_404(models.PlannedRoute, pk=pk)
+        cable_pk = request.POST.get('cable')
+        cable = get_object_or_404(Cable, pk=cable_pk)
+
+        with transaction.atomic():
+            models.CableSegment.objects.filter(cable=cable).delete()
+            for i, pw_id in enumerate(route.pathway_ids, start=1):
+                seg = models.CableSegment(cable=cable, pathway_id=pw_id, sequence=i)
+                seg.save()
+
+            route.cable = cable
+            route.status = 'assigned'
+            route.save()
+
+        messages.success(request, f'Route applied to cable {cable}.')
+        return redirect(f'/dcim/cables/{cable.pk}/')
+
+
+# --- Route Planner ---
+
+
+class RoutePlannerView(LoginRequiredMixin, View):
+    """Route planner page with constraint builder."""
+
+    def get(self, request):
+        from .choices import PathwayTypeChoices, StructureTypeChoices
+
+        cable_pk = request.GET.get('cable')
+        cable = None
+        initial = {}
+
+        if cable_pk:
+            cable = get_object_or_404(Cable, pk=cable_pk)
+            start = self._resolve_termination(cable, 'A')
+            end = self._resolve_termination(cable, 'B')
+            if start:
+                initial['start_structure'] = start.pk
+            if end:
+                initial['end_structure'] = end.pk
+
+        form = forms.RoutePlannerEndpointForm(initial=initial)
+
+        return render(request, 'netbox_pathways/route_planner.html', {
+            'form': form,
+            'cable': cable,
+            'pathway_type_choices': PathwayTypeChoices.CHOICES,
+            'structure_type_choices': StructureTypeChoices.CHOICES,
+        })
+
+    def _resolve_termination(self, cable, end):
+        from dcim.models import CableTermination
+
+        term = CableTermination.objects.filter(cable=cable, cable_end=end).first()
+        if not term or not term._site_id:
+            return None
+        structures = models.Structure.objects.filter(site_id=term._site_id)
+        return structures.first()
+
+
+class RoutePlannerFindView(LoginRequiredMixin, View):
+    """HTMX: Run constraint-based route finding."""
+
+    def post(self, request):
+        from .route_engine import find_route
+
+        start_pk = request.POST.get('start_structure')
+        end_pk = request.POST.get('end_structure')
+        if not start_pk or not end_pk:
+            return HttpResponse(
+                '<div class="card"><div class="card-body text-center text-muted py-3">'
+                'Select both start and end structures.</div></div>',
+            )
+
+        # Parse constraints from form
+        avoid_pathway_types = request.POST.getlist('avoid_pathway_types') or None
+        avoid_structure_types = request.POST.getlist('avoid_structure_types') or None
+
+        avoid_structures_csv = request.POST.get('avoid_structures_csv', '')
+        avoid_structures = [
+            int(x.strip()) for x in avoid_structures_csv.split(',') if x.strip()
+        ] or None
+
+        must_pass_through_csv = request.POST.get('must_pass_through_csv', '')
+        must_pass_through = [
+            int(x.strip()) for x in must_pass_through_csv.split(',') if x.strip()
+        ] or None
+
+        prefer_in_use = int(request.POST.get('prefer_in_use', 0))
+        include_inactive = request.POST.get('include_inactive') == 'on'
+
+        start_node = ('structure', int(start_pk))
+        end_node = ('structure', int(end_pk))
+
+        result = find_route(
+            start_node=start_node,
+            end_node=end_node,
+            avoid_pathway_types=avoid_pathway_types,
+            avoid_structure_types=avoid_structure_types,
+            include_inactive=include_inactive,
+            avoid_structures=avoid_structures,
+            must_pass_through=must_pass_through,
+            prefer_in_use_factor=prefer_in_use,
+        )
+
+        routes = []
+        if result:
+            cost, pathway_ids = result
+            pathways = models.Pathway.objects.filter(
+                pk__in=pathway_ids,
+            ).select_related('start_structure', 'end_structure')
+            pw_map = {pw.pk: pw for pw in pathways}
+            ordered = [pw_map[pid] for pid in pathway_ids if pid in pw_map]
+            routes.append({
+                'cost': cost,
+                'hop_count': len(pathway_ids),
+                'pathways': ordered,
+                'pathway_ids': ','.join(str(pid) for pid in pathway_ids),
+            })
+
+        html = render_to_string(
+            'netbox_pathways/inc/planner_results.html',
+            {
+                'routes': routes,
+                'cable_pk': request.POST.get('cable_pk'),
+                'start_structure_pk': start_pk,
+                'end_structure_pk': end_pk,
+            },
+            request=request,
+        )
+        return HttpResponse(html)
+
+
+class RoutePlannerSaveView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    """Save a found route as a PlannedRoute."""
+
+    permission_required = 'netbox_pathways.add_plannedroute'
+
+    def post(self, request):
+        pathway_ids_str = request.POST.get('pathway_ids', '')
+        pathway_ids = [int(pid) for pid in pathway_ids_str.split(',') if pid.strip()]
+        start_pk = request.POST.get('start_structure')
+        end_pk = request.POST.get('end_structure')
+        name = request.POST.get('name', '').strip() or 'Unnamed Route'
+
+        route = models.PlannedRoute.objects.create(
+            name=name,
+            start_structure_id=int(start_pk) if start_pk else None,
+            end_structure_id=int(end_pk) if end_pk else None,
+            pathway_ids=pathway_ids,
+        )
+        return redirect(route.get_absolute_url())
 
 
 # --- Map View ---

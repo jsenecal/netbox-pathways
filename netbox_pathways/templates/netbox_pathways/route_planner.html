@@ -1,0 +1,226 @@
+{% extends 'base/layout.html' %}
+{% load static %}
+
+{% block title %}Route Planner{% endblock %}
+
+{% block content %}
+<div class="row">
+  {# Left: Form #}
+  <div class="col-lg-4">
+    <form id="route-planner-form" method="post"
+          hx-post="{% url 'plugins:netbox_pathways:route_planner_find' %}"
+          hx-target="#planner-results" hx-swap="innerHTML"
+          hx-indicator="#planner-spinner">
+      {% csrf_token %}
+      {% if cable %}
+      <input type="hidden" name="cable_pk" value="{{ cable.pk }}">
+      {% endif %}
+
+      {# Endpoints #}
+      <div class="card mb-3">
+        <h2 class="card-header">Endpoints</h2>
+        <div class="card-body">
+          {% if cable %}
+          <div class="alert alert-info mb-3 py-2">
+            <small>
+              <i class="mdi mdi-cable-data"></i>
+              Planning route for cable
+              <a href="/dcim/cables/{{ cable.pk }}/">{{ cable }}</a>
+            </small>
+          </div>
+          {% endif %}
+          <div class="mb-3">
+            <label for="id_start_structure" class="form-label">Start Structure</label>
+            {{ form.start_structure }}
+          </div>
+          <div class="mb-3">
+            <label for="id_end_structure" class="form-label">End Structure</label>
+            {{ form.end_structure }}
+          </div>
+        </div>
+      </div>
+
+      {# Constraints #}
+      <div class="card mb-3">
+        <h2 class="card-header">Constraints</h2>
+        <div class="card-body">
+          <div id="constraint-cards"></div>
+          <div class="dropdown">
+            <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle"
+                    data-bs-toggle="dropdown">
+              <i class="mdi mdi-plus"></i> Add Constraint
+            </button>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="#" data-constraint="avoid_pathway_types">
+                Avoid Pathway Types</a></li>
+              <li><a class="dropdown-item" href="#" data-constraint="avoid_structure_types">
+                Avoid Structure Types</a></li>
+              <li><a class="dropdown-item" href="#" data-constraint="avoid_structures">
+                Avoid Structures (by ID)</a></li>
+              <li><a class="dropdown-item" href="#" data-constraint="must_pass_through">
+                Must Pass Through (by ID)</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {# Preferences #}
+      <div class="card mb-3">
+        <h2 class="card-header">Preferences</h2>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label d-flex justify-content-between">
+              Prefer shared pathways
+              <span id="prefer-in-use-value" class="text-muted">0%</span>
+            </label>
+            <input type="range" class="form-range" name="prefer_in_use"
+                   min="0" max="100" value="0" id="prefer-in-use-slider">
+          </div>
+          <div class="form-check">
+            <input type="checkbox" class="form-check-input" name="include_inactive"
+                   id="include-inactive">
+            <label class="form-check-label" for="include-inactive">
+              Include inactive/retired structures
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mb-3">
+        <button type="submit" class="btn btn-primary">
+          <i class="mdi mdi-map-search-outline"></i> Find Route
+        </button>
+        <span id="planner-spinner" class="htmx-indicator">
+          <span class="spinner-border spinner-border-sm" role="status"></span>
+        </span>
+      </div>
+    </form>
+  </div>
+
+  {# Right: Results #}
+  <div class="col-lg-8">
+    <div id="planner-results">
+      <div class="card">
+        <div class="card-body text-center text-muted py-5">
+          <i class="mdi mdi-map-search-outline" style="font-size: 3rem; opacity: 0.3;"></i>
+          <p class="mt-2 mb-0">Select start and end structures, then click <strong>Find Route</strong>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Hidden constraint card templates #}
+<template id="tpl-avoid-pathway-types">
+  <div class="constraint-card border-start border-3 border-warning p-2 mb-2 rounded"
+       data-constraint-type="avoid_pathway_types">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <strong class="text-warning" style="font-size: 0.85em;">Avoid Pathway Types</strong>
+      <button type="button" class="btn-close" style="font-size: 0.6em;"
+              onclick="this.closest('.constraint-card').remove()"></button>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      {% for value, label, color in pathway_type_choices %}
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="checkbox" name="avoid_pathway_types"
+               value="{{ value }}" id="apt-{{ value }}">
+        <label class="form-check-label" for="apt-{{ value }}">{{ label }}</label>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</template>
+
+<template id="tpl-avoid-structure-types">
+  <div class="constraint-card border-start border-3 border-danger p-2 mb-2 rounded"
+       data-constraint-type="avoid_structure_types">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <strong class="text-danger" style="font-size: 0.85em;">Avoid Structure Types</strong>
+      <button type="button" class="btn-close" style="font-size: 0.6em;"
+              onclick="this.closest('.constraint-card').remove()"></button>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      {% for value, label, color in structure_type_choices %}
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="checkbox" name="avoid_structure_types"
+               value="{{ value }}" id="ast-{{ value }}">
+        <label class="form-check-label" for="ast-{{ value }}">{{ label }}</label>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</template>
+
+<template id="tpl-avoid-structures">
+  <div class="constraint-card border-start border-3 border-red p-2 mb-2 rounded"
+       data-constraint-type="avoid_structures">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <strong class="text-red" style="font-size: 0.85em;">Avoid Structures</strong>
+      <button type="button" class="btn-close" style="font-size: 0.6em;"
+              onclick="this.closest('.constraint-card').remove()"></button>
+    </div>
+    <input type="text" class="form-control form-control-sm" name="avoid_structures_csv"
+           placeholder="Structure IDs (comma-separated, e.g. 123,456)">
+  </div>
+</template>
+
+<template id="tpl-must-pass-through">
+  <div class="constraint-card border-start border-3 border-info p-2 mb-2 rounded"
+       data-constraint-type="must_pass_through">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <strong class="text-info" style="font-size: 0.85em;">Must Pass Through</strong>
+      <button type="button" class="btn-close" style="font-size: 0.6em;"
+              onclick="this.closest('.constraint-card').remove()"></button>
+    </div>
+    <input type="text" class="form-control form-control-sm" name="must_pass_through_csv"
+           placeholder="Structure IDs in order (comma-separated, e.g. 789,101)">
+  </div>
+</template>
+
+<script>
+(function() {
+  // Constraint builder: clone template on dropdown click
+  document.querySelectorAll('[data-constraint]').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      e.preventDefault();
+      var type = this.dataset.constraint;
+      var tplId = 'tpl-' + type.replace(/_/g, '-');
+      var tpl = document.getElementById(tplId);
+      if (!tpl) return;
+      var cards = document.getElementById('constraint-cards');
+      // Prevent duplicate
+      if (cards.querySelector('[data-constraint-type="' + type + '"]')) return;
+      cards.appendChild(tpl.content.cloneNode(true));
+    });
+  });
+
+  // Slider value display
+  var slider = document.getElementById('prefer-in-use-slider');
+  var display = document.getElementById('prefer-in-use-value');
+  if (slider && display) {
+    slider.addEventListener('input', function() {
+      display.textContent = slider.value + '%';
+    });
+    // Restore from localStorage
+    var saved = localStorage.getItem('pw_prefer_in_use');
+    if (saved !== null) {
+      slider.value = saved;
+      display.textContent = saved + '%';
+    }
+    slider.addEventListener('change', function() {
+      localStorage.setItem('pw_prefer_in_use', slider.value);
+    });
+  }
+
+  // Restore include_inactive from localStorage
+  var inactive = document.getElementById('include-inactive');
+  if (inactive) {
+    var savedInactive = localStorage.getItem('pw_include_inactive');
+    if (savedInactive === 'true') inactive.checked = true;
+    inactive.addEventListener('change', function() {
+      localStorage.setItem('pw_include_inactive', inactive.checked);
+    });
+  }
+})();
+</script>
+{% endblock %}

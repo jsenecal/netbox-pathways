@@ -1,1 +1,37 @@
 {% extends 'generic/object.html' %}
+
+{% block content %}
+  {{ block.super }}
+
+  {% if pathways %}
+  <div class="card mt-3">
+    <h2 class="card-header">Route Pathways ({{ pathways|length }} hops)</h2>
+    <div class="card-body p-0">
+      <table class="table table-hover table-sm mb-0">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Pathway</th>
+            <th>Type</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Length</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for pw in pathways %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td><a href="{{ pw.get_absolute_url }}">{{ pw }}</a></td>
+            <td>{{ pw.get_pathway_type_display }}</td>
+            <td>{{ pw.start_endpoint|default:"&mdash;" }}</td>
+            <td>{{ pw.end_endpoint|default:"&mdash;" }}</td>
+            <td>{% if pw.length %}{{ pw.length|floatformat:1 }}{% else %}&mdash;{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+{% endblock %}

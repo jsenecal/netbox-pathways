@@ -699,3 +699,24 @@ class PlannedRouteForm(NetBoxModelForm):
             'end_structure', 'end_location',
             'tenant', 'cable', 'comments', 'tags',
         ]
+
+
+# --- Route Planner ---
+
+class RoutePlannerEndpointForm(forms.Form):
+    """Endpoint selection for the route planner."""
+
+    start_structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), required=False, label='Start Structure',
+    )
+    end_structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), required=False, label='End Structure',
+    )
+
+
+class PlannedRouteApplyForm(forms.Form):
+    """Cable selection for applying a planned route."""
+
+    cable = DynamicModelChoiceField(
+        queryset=Cable.objects.all(), required=True, label='Cable',
+    )

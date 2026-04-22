@@ -66,16 +66,9 @@
           title="Add segment at end">
     <i class="mdi mdi-plus"></i> Add Segment
   </button>
-  <button class="btn btn-sm btn-primary"
-          hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/find-route/"
-          hx-target="#pw-route-finder-results"
-          hx-swap="innerHTML"
-          hx-indicator="#pw-route-spinner">
-    <i class="mdi mdi-map-search-outline"></i> Find Route
-  </button>
-  <span id="pw-route-spinner" class="htmx-indicator">
-    <span class="spinner-border spinner-border-sm" role="status"></span>
-  </span>
+  <a href="/plugins/pathways/route-planner/?cable={{ cable.pk }}" class="btn btn-sm btn-primary">
+    <i class="mdi mdi-map-search-outline"></i> Plan Route
+  </a>
 </div>
 
 {% else %}
@@ -88,16 +81,9 @@
             hx-swap="innerHTML">
       <i class="mdi mdi-plus"></i> Add First Segment
     </button>
-    <button class="btn btn-sm btn-primary"
-            hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/find-route/"
-            hx-target="#pw-route-finder-results"
-            hx-swap="innerHTML"
-            hx-indicator="#pw-route-spinner">
-      <i class="mdi mdi-map-search-outline"></i> Find Route
-    </button>
-    <span id="pw-route-spinner" class="htmx-indicator">
-      <span class="spinner-border spinner-border-sm" role="status"></span>
-    </span>
+    <a href="/plugins/pathways/route-planner/?cable={{ cable.pk }}" class="btn btn-sm btn-primary">
+      <i class="mdi mdi-map-search-outline"></i> Plan Route
+    </a>
   </div>
 </div>
 {% endif %}

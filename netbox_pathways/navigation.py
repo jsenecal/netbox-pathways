@@ -163,6 +163,11 @@ menu = PluginMenu(
                 ),
             ),
             PluginMenuItem(
+                link='plugins:netbox_pathways:route_planner',
+                link_text='Route Planner',
+                permissions=['netbox_pathways.view_plannedroute'],
+            ),
+            PluginMenuItem(
                 link='plugins:netbox_pathways:pullsheet_list',
                 link_text='Pull Sheets',
                 permissions=['netbox_pathways.view_cablesegment'],

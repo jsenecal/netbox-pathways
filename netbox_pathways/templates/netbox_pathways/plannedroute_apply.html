@@ -1,0 +1,55 @@
+{% extends 'base/layout.html' %}
+
+{% block title %}Apply Route: {{ route.name }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card mb-3">
+      <h2 class="card-header">Apply Route to Cable</h2>
+      <div class="card-body">
+        <p>Apply <strong>{{ route.name }}</strong> ({{ pathways|length }} hops) as cable segments. This will <strong>replace</strong> any existing segments on the selected cable.</p>
+
+        <table class="table table-sm table-hover mb-3">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Pathway</th>
+              <th>Type</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Length</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for pw in pathways %}
+            <tr>
+              <td>{{ forloop.counter }}</td>
+              <td><a href="{{ pw.get_absolute_url }}">{{ pw }}</a></td>
+              <td>{{ pw.get_pathway_type_display }}</td>
+              <td>{{ pw.start_endpoint|default:"&mdash;" }}</td>
+              <td>{{ pw.end_endpoint|default:"&mdash;" }}</td>
+              <td>{% if pw.length %}{{ pw.length|floatformat:1 }}{% else %}&mdash;{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label for="id_cable" class="form-label">Cable</label>
+            {{ apply_form.cable }}
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-green">
+              <i class="mdi mdi-cable-data"></i> Apply Route
+            </button>
+            <a href="{{ route.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
