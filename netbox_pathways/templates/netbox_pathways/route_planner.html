@@ -491,21 +491,23 @@
                 var type = this.dataset.type;
                 console.log('[pathways] Constraint clicked:', type);
                 var cards = document.getElementById('constraint-cards');
-                if (cards.querySelector('[data-constraint-type="' + type + '"]')) return;
+                if (!cards) { console.error('[pathways] #constraint-cards not found'); return; }
+                if (cards.querySelector('[data-constraint-type="' + type + '"]')) {
+                    console.log('[pathways] Constraint already exists, skipping');
+                    return;
+                }
                 var url = '{% url "plugins:netbox_pathways:route_planner_constraint" %}?type=' + type;
-                fetch(url, {
-                    credentials: 'same-origin',
-                    headers: {'X-Requested-With': 'XMLHttpRequest'}
-                }).then(function(resp) {
-                    console.log('Constraint response:', resp.status, resp.url);
-                    if (!resp.ok) return '';
-                    return resp.text();
-                }).then(function(html) {
-                    if (html) {
-                        console.log('Constraint HTML length:', html.length);
+                console.log('[pathways] Fetching:', url);
+                fetch(url, { credentials: 'same-origin' })
+                    .then(function(resp) {
+                        console.log('[pathways] Response:', resp.status);
+                        return resp.text();
+                    })
+                    .then(function(html) {
+                        console.log('[pathways] Got HTML, length:', html.length);
                         cards.insertAdjacentHTML('beforeend', html);
-                    }
-                }).catch(function(err) { console.error('Constraint fetch error:', err); });
+                    })
+                    .catch(function(err) { console.error('[pathways] Fetch error:', err); });
             });
         });
 
