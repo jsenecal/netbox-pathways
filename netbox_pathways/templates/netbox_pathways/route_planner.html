@@ -387,15 +387,16 @@
 {{ block.super }}
 <link rel="stylesheet" href="{% static 'netbox_pathways/vendor/leaflet/leaflet.css' %}" />
 <script src="{% static 'netbox_pathways/vendor/leaflet/leaflet.js' %}"></script>
+<script src="{% static 'netbox_pathways/dist/route-planner-map.min.js' %}"></script>
 <script>
 (function() {
-    // --- Tile / map config ---
-    var CONFIG = {{ pathways_config_json|safe }};
+    // --- Config ---
+    window.PATHWAYS_CONFIG = {{ pathways_config_json|safe }};
     var CENTER = [{{ map_center_lat }}, {{ map_center_lon }}];
     var ZOOM = {{ map_zoom }};
     var BOUNDS = {{ map_bounds|default:"null" }};
 
-    // --- Viewport sizing (same pattern as infrastructure map) ---
+    // --- Viewport sizing ---
     function sizeMap() {
         var wrapper = document.querySelector('.pathways-map-wrapper');
         var el = document.getElementById('pathways-map');
@@ -414,49 +415,15 @@
         if (window._rpMap) window._rpMap.invalidateSize();
     }
 
-    // --- Init Leaflet map ---
     document.addEventListener('DOMContentLoaded', function() {
         sizeMap();
 
-        var map = L.map('pathways-map', {
+        // Initialize the route planner map (shared map + data layers from bundles)
+        window.initializeRoutePlannerMap('pathways-map', {
             center: CENTER,
             zoom: ZOOM,
-            maxZoom: CONFIG.maxZoom || 22,
-            minZoom: CONFIG.minZoom || 1
+            bounds: BOUNDS
         });
-
-        // Add base tile layers
-        var baseLayers = CONFIG.baseLayers || [];
-        if (baseLayers.length > 0) {
-            var layerControl = {};
-            baseLayers.forEach(function(bl, idx) {
-                var tl = L.tileLayer(bl.url, {
-                    maxZoom: bl.maxZoom || 22,
-                    maxNativeZoom: bl.maxNativeZoom || 19,
-                    attribution: bl.attribution || ''
-                });
-                layerControl[bl.name] = tl;
-                if (idx === 0) tl.addTo(map);
-            });
-            if (baseLayers.length > 1) {
-                L.control.layers(layerControl, null, {collapsed: true}).addTo(map);
-            }
-        } else {
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 22,
-                maxNativeZoom: 19,
-                attribution: '&copy; OpenStreetMap contributors'
-            }).addTo(map);
-        }
-
-        // Fit to data bounds if available
-        if (BOUNDS) {
-            map.fitBounds(BOUNDS);
-        }
-
-        window._rpMap = map;
-        window._rpRouteLayer = null;
-        window._rpMarkerLayer = null;
 
         setTimeout(sizeMap, 200);
         setTimeout(sizeMap, 500);
@@ -512,90 +479,6 @@
                 localStorage.setItem('pw_include_inactive', this.checked);
             });
         }
-
-        // --- Render route on map after HTMX result ---
-        document.getElementById('planner-results').addEventListener('htmx:afterSettle', function() {
-            // Clear previous route
-            if (window._rpRouteLayer) { map.removeLayer(window._rpRouteLayer); window._rpRouteLayer = null; }
-            if (window._rpMarkerLayer) { map.removeLayer(window._rpMarkerLayer); window._rpMarkerLayer = null; }
-
-            var dataEl = document.getElementById('route-geometry-data');
-            if (!dataEl) return;
-
-            try {
-                var data = JSON.parse(dataEl.textContent);
-            } catch(e) { return; }
-
-            if (!data.pathways || data.pathways.length === 0) return;
-
-            var routeGroup = L.featureGroup();
-            var markerGroup = L.featureGroup();
-
-            // Draw each pathway segment
-            data.pathways.forEach(function(pw) {
-                if (pw.coords && pw.coords.length > 1) {
-                    var latlngs = pw.coords.map(function(c) { return [c[1], c[0]]; });
-                    L.polyline(latlngs, {
-                        color: '#206bc4',
-                        weight: 4,
-                        opacity: 0.85
-                    }).bindPopup('<strong>' + (pw.label || 'Pathway') + '</strong><br>' + (pw.type || ''))
-                      .addTo(routeGroup);
-                }
-            });
-
-            // Structure markers — match main map style (SVG shapes + type colors)
-            var structureColors = {{ structure_colors_json|safe }};
-            var structureShapes = {{ structure_shapes_json|safe }};
-
-            if (data.structures) {
-                data.structures.forEach(function(s) {
-                    if (!s.geo) return;
-                    var stype = s.structure_type || '';
-                    var fill = structureColors[stype] || '#666';
-                    var shape = structureShapes[stype] || '<circle cx="10" cy="10" r="7"/>';
-                    var isEndpoint = (s.role === 'start' || s.role === 'end');
-                    var sz = isEndpoint ? 24 : 20;
-                    var ringColor = s.role === 'start' ? '#2fb344' : (s.role === 'end' ? '#d63939' : 'none');
-                    var ring = isEndpoint
-                        ? '<circle cx="' + (sz/2) + '" cy="' + (sz/2) + '" r="' + (sz/2 - 1) + '" fill="none" stroke="' + ringColor + '" stroke-width="3"/>'
-                        : '';
-                    // Scale the inner shape to fit
-                    var innerOffset = isEndpoint ? 2 : 0;
-                    var innerScale = isEndpoint ? (sz - 4) / 20 : 1;
-                    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + sz + '" height="' + sz + '">'
-                        + ring
-                        + '<g transform="translate(' + innerOffset + ',' + innerOffset + ') scale(' + innerScale + ')" '
-                        + 'fill="' + fill + '" stroke="' + fill + '">'
-                        + shape + '</g></svg>';
-                    var icon = L.divIcon({
-                        html: svg,
-                        className: '',
-                        iconSize: [sz, sz],
-                        iconAnchor: [sz/2, sz/2],
-                        popupAnchor: [0, -sz/2]
-                    });
-                    L.marker([s.geo[0], s.geo[1]], {icon: icon})
-                      .bindPopup(
-                          '<strong>' + s.label + '</strong>' +
-                          (s.type ? '<br><small>' + s.type + '</small>' : '')
-                      ).addTo(markerGroup);
-                });
-            }
-
-            routeGroup.addTo(map);
-            markerGroup.addTo(map);
-            window._rpRouteLayer = routeGroup;
-            window._rpMarkerLayer = markerGroup;
-
-            // Fit map to route bounds
-            var allBounds = routeGroup.getBounds();
-            if (allBounds.isValid()) {
-                map.fitBounds(allBounds.pad(0.15));
-            }
-        });
-
-        // (Cable mode: endpoint selects are hidden in template, hidden inputs carry values)
     });
 })();
 </script>

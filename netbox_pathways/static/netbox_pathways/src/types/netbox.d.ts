@@ -33,6 +33,10 @@ declare global {
   interface Window {
     PATHWAYS_CONFIG?: PathwaysConfig;
     initializePathwaysMap?: (mapId: string, config: Record<string, unknown>) => void;
+    initializeRoutePlannerMap?: (mapId: string, config: Record<string, unknown>) => void;
+    _rpMap?: L.Map;
+    _rpRouteLayer?: L.FeatureGroup | null;
+    _rpMarkerLayer?: L.FeatureGroup | null;
   }
 }
 
