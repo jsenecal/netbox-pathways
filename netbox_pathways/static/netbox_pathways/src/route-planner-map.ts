@@ -134,6 +134,9 @@ interface RenderedFeature {
     latlng: L.LatLng;
 }
 
+// Callback set after rendering to handle selection from either map click or hop list click
+let _onSelect: ((kind: string, pk: number) => void) | null = null;
+
 function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeature[] {
     // Clear previous route layers
     if (window._rpRouteLayer) { map.removeLayer(window._rpRouteLayer); window._rpRouteLayer = null; }
@@ -155,6 +158,10 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeatu
         polyline.on('mouseover', function (e: L.LeafletMouseEvent) { Popover.show(e.latlng, props as any); });
         polyline.on('mousemove', function (e: L.LeafletMouseEvent) { Popover.show(e.latlng, props as any); });
         polyline.on('mouseout', function () { Popover.hide(); });
+        polyline.on('click', function (e: L.LeafletMouseEvent) {
+            if (e.originalEvent) (e.originalEvent as any)._featureClick = true;
+            if (_onSelect) _onSelect('pathway', pw.pk);
+        });
         (polyline as any)._rpPk = pw.pk;
         const mid = latlngs[Math.floor(latlngs.length / 2)];
         features.push({
@@ -195,6 +202,10 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeatu
                 const sProps = { id: s.pk, name: s.label, structure_type: stype };
                 marker.on('mouseover', function (e: L.LeafletMouseEvent) { Popover.show(e.latlng || marker.getLatLng(), sProps as any); });
                 marker.on('mouseout', function () { Popover.hide(); });
+                marker.on('click', function (e: L.LeafletMouseEvent) {
+                    if (e.originalEvent) (e.originalEvent as any)._featureClick = true;
+                    if (_onSelect) _onSelect('structure', s.pk);
+                });
                 (marker as any)._rpPk = s.pk;
                 features.push({
                     layer: marker,
@@ -207,6 +218,10 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeatu
                 const sProps = { id: s.pk, name: s.label, structure_type: stype };
                 marker.on('mouseover', function (e: L.LeafletMouseEvent) { Popover.show(e.latlng || marker.getLatLng(), sProps as any); });
                 marker.on('mouseout', function () { Popover.hide(); });
+                marker.on('click', function (e: L.LeafletMouseEvent) {
+                    if (e.originalEvent) (e.originalEvent as any)._featureClick = true;
+                    if (_onSelect) _onSelect('structure', s.pk);
+                });
                 (marker as any)._rpPk = s.pk;
                 features.push({
                     layer: marker,
@@ -255,44 +270,69 @@ function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): vo
     // Session storage key — scoped to the current URL so different cables don't collide
     const CACHE_KEY = 'pw_route_result_' + window.location.pathname + window.location.search;
 
-    // Wire up hop list click-to-center + highlight after route is rendered.
-    function _wireHopList(features: RenderedFeature[]): void {
+    // Shared select handler: center map, highlight feature, sync hop list.
+    // Called from both map feature clicks and hop list clicks.
+    function _selectFeature(kind: string, pk: number, featureMap: Record<string, RenderedFeature>): void {
+        const feat = featureMap[kind + '-' + pk];
+        if (!feat) return;
+
+        // Center
+        const zoom = map.getZoom();
+        const minZoom = kind === 'structure' ? 18 : 16;
+        if (zoom < minZoom) {
+            map.flyTo(feat.latlng, minZoom, { duration: 0.5 });
+        } else {
+            map.panTo(feat.latlng);
+        }
+
+        // Highlight on map
+        if (feat.kind === 'structure') {
+            _highlightStructure(map, feat.layer as L.Marker, feat.structureType || '');
+        } else {
+            _highlightPathway(map, feat.layer as L.Polyline);
+        }
+
+        // Sync hop list active state
+        const hopItems = document.querySelectorAll('[data-hop-kind][data-hop-pk]');
+        hopItems.forEach(function (h) {
+            const hKind = (h as HTMLElement).dataset.hopKind;
+            const hPk = (h as HTMLElement).dataset.hopPk;
+            h.classList.toggle('pw-hop-active', hKind === kind && hPk === String(pk));
+        });
+    }
+
+    // Wire up hop list clicks + set the global _onSelect for map feature clicks.
+    function _wireInteractions(features: RenderedFeature[]): void {
         const featureMap: Record<string, RenderedFeature> = {};
         features.forEach(function (f) {
             const pk = (f.layer as any)._rpPk;
             if (pk != null) featureMap[f.kind + '-' + pk] = f;
         });
 
+        // Map feature clicks use this callback
+        _onSelect = function (kind: string, pk: number) {
+            _selectFeature(kind, pk, featureMap);
+        };
+
+        // Hop list clicks
         const hopItems = document.querySelectorAll('[data-hop-kind][data-hop-pk]');
         hopItems.forEach(function (item) {
             item.addEventListener('click', function (e) {
                 if ((e.target as HTMLElement).closest('a')) return;
                 const kind = (item as HTMLElement).dataset.hopKind || '';
-                const pk = (item as HTMLElement).dataset.hopPk || '';
-                const feat = featureMap[kind + '-' + pk];
-                if (!feat) return;
-
-                map.flyTo(feat.latlng, Math.max(map.getZoom(), 16), { duration: 0.5 });
-
-                if (feat.kind === 'structure') {
-                    _highlightStructure(map, feat.layer as L.Marker, feat.structureType || '');
-                } else {
-                    _highlightPathway(map, feat.layer as L.Polyline);
-                }
-
-                hopItems.forEach(function (h) { h.classList.remove('pw-hop-active'); });
-                item.classList.add('pw-hop-active');
+                const pk = parseInt((item as HTMLElement).dataset.hopPk || '0', 10);
+                _selectFeature(kind, pk, featureMap);
             });
         });
     }
 
-    // Render route + wire hops. Used by both HTMX handler and cache restore.
+    // Render route + wire interactions. Used by both HTMX handler and cache restore.
     function _applyRoute(data: RouteGeometryData): void {
         map.setMaxBounds(null as unknown as L.LatLngBoundsExpression);
         map.setMinZoom(1);
         _unhighlight(map);
         const features = _renderRouteOverlay(map, data);
-        _wireHopList(features);
+        _wireInteractions(features);
     }
 
     // Listen for HTMX results — save to sessionStorage + render
@@ -345,11 +385,14 @@ function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): vo
         }
     } catch (_e) { /* ignore parse errors */ }
 
-    // Click on map clears highlight
-    map.on('click', function () {
+    // Click on empty map clears highlight + hop list active state
+    map.on('click', function (e: L.LeafletMouseEvent) {
+        // Don't clear if a feature click handler already ran
+        if ((e.originalEvent as any)?._featureClick) return;
         _unhighlight(map);
-        const items = document.querySelectorAll('.pw-hop-active');
-        items.forEach(function (item) { item.classList.remove('pw-hop-active'); });
+        document.querySelectorAll('.pw-hop-active').forEach(function (el) {
+            el.classList.remove('pw-hop-active');
+        });
     });
 
     // Leaflet size recalc
