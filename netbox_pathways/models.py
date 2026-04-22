@@ -14,6 +14,7 @@ from .choices import (
     ConduitMaterialChoices,
     EncasementTypeChoices,
     PathwayTypeChoices,
+    PlannedRouteStatusChoices,
     StructureStatusChoices,
     StructureTypeChoices,
 )
@@ -700,3 +701,91 @@ class SlackLoop(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse('plugins:netbox_pathways:slackloop', args=[self.pk])
+
+
+class PlannedRoute(NetBoxModel):
+    name = models.CharField(max_length=200)
+    status = models.CharField(
+        max_length=50, choices=PlannedRouteStatusChoices,
+        default=PlannedRouteStatusChoices.STATUS_DRAFT,
+    )
+    start_structure = models.ForeignKey(
+        Structure, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='planned_routes_from',
+    )
+    end_structure = models.ForeignKey(
+        Structure, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='planned_routes_to',
+    )
+    start_location = models.ForeignKey(
+        Location, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='planned_routes_from',
+    )
+    end_location = models.ForeignKey(
+        Location, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='planned_routes_to',
+    )
+    pathway_ids = models.JSONField(
+        default=list, help_text="Ordered list of pathway PKs defining the route",
+    )
+    constraints = models.JSONField(
+        default=dict, blank=True,
+        help_text="Snapshot of constraints used to generate this route",
+    )
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='planned_routes',
+    )
+    cable = models.ForeignKey(
+        Cable, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='planned_routes',
+    )
+    comments = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-created']
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_pathways:plannedroute', args=[self.pk])
+
+    @property
+    def start_endpoint(self):
+        return self.start_structure or self.start_location
+
+    @property
+    def end_endpoint(self):
+        return self.end_structure or self.end_location
+
+    @property
+    def hop_count(self):
+        return len(self.pathway_ids)
+
+    @property
+    def total_length(self):
+        if not self.pathway_ids:
+            return 0
+        lengths = Pathway.objects.filter(
+            pk__in=self.pathway_ids,
+        ).values_list('length', flat=True)
+        return sum(v for v in lengths if v)
+
+    def validate_route(self):
+        """Check all pathway IDs still exist. Returns list of missing IDs."""
+        existing = set(
+            Pathway.objects.filter(pk__in=self.pathway_ids).values_list('pk', flat=True)
+        )
+        return [pid for pid in self.pathway_ids if pid not in existing]
+
+    def clean(self):
+        super().clean()
+        if self.start_structure and self.start_location:
+            raise ValidationError("Set either start_structure or start_location, not both.")
+        if not self.start_structure and not self.start_location:
+            raise ValidationError("A start endpoint (structure or location) is required.")
+        if self.end_structure and self.end_location:
+            raise ValidationError("Set either end_structure or end_location, not both.")
+        if not self.end_structure and not self.end_location:
+            raise ValidationError("An end endpoint (structure or location) is required.")

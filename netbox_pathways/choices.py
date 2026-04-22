@@ -102,3 +102,19 @@ class EncasementTypeChoices(ChoiceSet):
         ('bridge_attachment', 'Bridge Attachment', 'green'),
         ('tunnel', 'Tunnel', 'black'),
     ]
+
+
+class PlannedRouteStatusChoices(ChoiceSet):
+    key = 'PlannedRoute.status'
+
+    STATUS_DRAFT = 'draft'
+    STATUS_APPROVED = 'approved'
+    STATUS_ASSIGNED = 'assigned'
+    STATUS_ARCHIVED = 'archived'
+
+    CHOICES = [
+        (STATUS_DRAFT, 'Draft', 'blue'),
+        (STATUS_APPROVED, 'Approved', 'green'),
+        (STATUS_ASSIGNED, 'Assigned', 'cyan'),
+        (STATUS_ARCHIVED, 'Archived', 'gray'),
+    ]
