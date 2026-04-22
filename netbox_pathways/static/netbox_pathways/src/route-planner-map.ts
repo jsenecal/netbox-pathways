@@ -148,8 +148,10 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeatu
         if (!pw.coords || pw.coords.length < 2) return;
         const latlngs = pw.coords.map(function (c) { return [c[1], c[0]] as [number, number]; });
         const style = _pathwayStyle(pw.pathway_type || '');
+        const tooltipText = (pw.label || 'Pathway') + (pw.type ? ' (' + pw.type + ')' : '');
         const polyline = L.polyline(latlngs, style)
             .bindPopup('<strong>' + (pw.label || 'Pathway') + '</strong><br>' + (pw.type || ''))
+            .bindTooltip(tooltipText, { sticky: true, direction: 'top', offset: [0, -8] })
             .addTo(routeGroup);
         (polyline as any)._rpPk = pw.pk;
         const mid = latlngs[Math.floor(latlngs.length / 2)];
@@ -187,9 +189,11 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeatu
                     iconAnchor: [half, half] as [number, number],
                     popupAnchor: [0, -(half + 2)] as [number, number],
                 });
+                const sTooltip = s.label + (s.type ? ' (' + s.type + ')' : '');
                 const marker = L.marker([s.geo[0], s.geo[1]], { icon: ringIcon })
                     .bindPopup('<strong>' + s.label + '</strong>' +
                         (s.type ? '<br><small>' + s.type + '</small>' : ''))
+                    .bindTooltip(sTooltip, { direction: 'top', offset: [0, -sz / 2] })
                     .addTo(markerGroup);
                 (marker as any)._rpPk = s.pk;
                 features.push({
@@ -199,9 +203,11 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeatu
                     latlng: L.latLng(s.geo[0], s.geo[1]),
                 });
             } else {
+                const sTooltip = s.label + (s.type ? ' (' + s.type + ')' : '');
                 const marker = L.marker([s.geo[0], s.geo[1]], { icon })
                     .bindPopup('<strong>' + s.label + '</strong>' +
                         (s.type ? '<br><small>' + s.type + '</small>' : ''))
+                    .bindTooltip(sTooltip, { direction: 'top', offset: [0, -sz / 2] })
                     .addTo(markerGroup);
                 (marker as any)._rpPk = s.pk;
                 features.push({

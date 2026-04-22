@@ -18,7 +18,7 @@
              data-hop-kind="structure" data-hop-pk="{{ hop.pk }}">
             <span class="pw-hop-dot"
                   style="background:{% if hop.role == 'start' %}#2fb344{% elif hop.role == 'end' %}#d63939{% else %}#206bc4{% endif %};"></span>
-            <span class="pw-hop-label">{{ hop.label }}</span>
+            <span class="pw-hop-label"><a href="/plugins/pathways/structures/{{ hop.pk }}/">{{ hop.label }}</a></span>
             <span class="pw-hop-type">{{ hop.type }}</span>
         </div>
         {% elif hop.kind == "pathway" %}
