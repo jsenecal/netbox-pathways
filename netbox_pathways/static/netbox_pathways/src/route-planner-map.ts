@@ -1,9 +1,9 @@
 /**
  * Route planner map entry point.
  *
- * Reuses map-core for base layers/controls and data-layers for
- * infrastructure rendering.  Adds route overlay rendering driven
- * by HTMX results.
+ * Tiles + legend only. No infrastructure data layers.
+ * Route overlay (pathways + structures) rendered after HTMX results.
+ * Map bounds are locked to the route extent once found.
  */
 
 import {
@@ -12,14 +12,8 @@ import {
 } from './map-core';
 import type { MapInitConfig } from './map-core';
 import {
-    createDataLayers,
-    loadDataLayers,
-    MIN_DATA_ZOOM,
-} from './data-layers';
-import {
     STRUCTURE_COLORS,
     STRUCTURE_SHAPES,
-    structureIcon as _structureIcon,
 } from './map-utils';
 
 // ---------------------------------------------------------------------------
@@ -70,20 +64,19 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): void {
         }
     });
 
-    // Structure markers -- match main map style (SVG shapes + type colors)
+    // Structure markers — SVG icons matching main map style
     if (data.structures) {
         data.structures.forEach(function (s) {
             if (!s.geo) return;
             const stype = s.structure_type || '';
             const fill = STRUCTURE_COLORS[stype] || '#666';
-            const shape = STRUCTURE_SHAPES[stype] || '<circle cx="10" cy="10" r="7"/>';
+            const shape = STRUCTURE_SHAPES[stype] || '<circle cx="10" cy="10" r="8"/>';
             const isEndpoint = (s.role === 'start' || s.role === 'end');
             const sz = isEndpoint ? 24 : 20;
             const ringColor = s.role === 'start' ? '#2fb344' : (s.role === 'end' ? '#d63939' : 'none');
             const ring = isEndpoint
                 ? '<circle cx="' + (sz / 2) + '" cy="' + (sz / 2) + '" r="' + (sz / 2 - 1) + '" fill="none" stroke="' + ringColor + '" stroke-width="3"/>'
                 : '';
-            // Scale the inner shape to fit
             const innerOffset = isEndpoint ? 2 : 0;
             const innerScale = isEndpoint ? (sz - 4) / 20 : 1;
             const svgHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="' + sz + '" height="' + sz + '">'
@@ -92,7 +85,7 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): void {
                 + 'fill="' + fill + '" stroke="' + fill + '">'
                 + shape + '</g></svg>';
             const icon = L.divIcon({
-                html: svgHtml, // Trusted: built from compile-time STRUCTURE_COLORS/STRUCTURE_SHAPES constants
+                html: svgHtml,
                 className: '',
                 iconSize: [sz, sz] as [number, number],
                 iconAnchor: [sz / 2, sz / 2] as [number, number],
@@ -111,10 +104,13 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): void {
     window._rpRouteLayer = routeGroup;
     window._rpMarkerLayer = markerGroup;
 
-    // Fit map to route bounds
+    // Fit and lock bounds to the route
     const allBounds = routeGroup.getBounds();
     if (allBounds.isValid()) {
-        map.fitBounds(allBounds.pad(0.15));
+        const padded = allBounds.pad(0.15);
+        map.fitBounds(padded);
+        map.setMaxBounds(padded.pad(0.5));  // allow slight panning beyond route
+        map.setMinZoom(map.getBoundsZoom(padded.pad(0.5)));
     }
 }
 
@@ -123,52 +119,27 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): void {
 // ---------------------------------------------------------------------------
 
 function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): void {
-    const { map, baseLayers, layerControl } = createMap(elementId, config);
+    const { map } = createMap(elementId, config);
 
-    // Legend
+    // Legend only — no data layers, no infrastructure features
     createLegend(map);
-
-    // Infrastructure data layers (same rendering as main map, no sidebar/popover)
-    const dataLayers = createDataLayers();
-
-    // Add all infrastructure layers to the map and layer control
-    const layerNames: Record<string, L.LayerGroup> = {
-        'Structures': dataLayers.structures,
-        'Conduit Banks': dataLayers.conduitBanks,
-        'Conduits': dataLayers.conduits,
-        'Aerial Spans': dataLayers.aerialSpans,
-        'Direct Buried': dataLayers.directBuried,
-        'Circuit Routes': dataLayers.circuits,
-    };
-
-    for (const lname in layerNames) {
-        layerNames[lname].addTo(map);
-        layerControl.addOverlay(layerNames[lname], lname);
-    }
-
-    // Load data on map move
-    function _loadData(): void {
-        loadDataLayers(map, dataLayers, null, {});
-    }
-
-    map.on('moveend', _loadData);
-    _loadData();
 
     // Expose map reference for the inline form JS
     window._rpMap = map;
     window._rpRouteLayer = null;
     window._rpMarkerLayer = null;
 
-    // Listen for HTMX results — htmx:afterSettle fires on the triggering
-    // element (the form), not the swap target, so listen on document.body.
+    // Listen for HTMX results
     document.body.addEventListener('htmx:afterSettle', function (evt: Event) {
         const detail = (evt as CustomEvent).detail;
-        // Only react to swaps targeting #planner-results
         if (!detail || !detail.target || detail.target.id !== 'planner-results') return;
 
         // Clear previous
         if (window._rpRouteLayer) { map.removeLayer(window._rpRouteLayer); window._rpRouteLayer = null; }
         if (window._rpMarkerLayer) { map.removeLayer(window._rpMarkerLayer); window._rpMarkerLayer = null; }
+        // Reset bounds lock from previous route
+        map.setMaxBounds(null as unknown as L.LatLngBoundsExpression);
+        map.setMinZoom(1);
 
         const dataEl = document.getElementById('route-geometry-data');
         if (!dataEl) return;
@@ -185,7 +156,6 @@ function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): vo
         hopItems.forEach(function (item) {
             (item as HTMLElement).style.cursor = 'pointer';
             item.addEventListener('click', function (e) {
-                // Don't intercept link clicks
                 if ((e.target as HTMLElement).closest('a')) return;
                 const lat = parseFloat((item as HTMLElement).dataset.hopLat || '0');
                 const lon = parseFloat((item as HTMLElement).dataset.hopLon || '0');
@@ -196,7 +166,7 @@ function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): vo
         });
     });
 
-    // Leaflet calculates size at init; force a recheck after layout settles
+    // Leaflet size recalc after layout settles
     setTimeout(function () { map.invalidateSize(); }, 100);
     window.addEventListener('resize', function () { map.invalidateSize(); });
 }
