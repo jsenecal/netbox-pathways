@@ -980,10 +980,12 @@ class PlannedRouteApplyView(LoginRequiredMixin, PermissionRequiredMixin, View):
 
 
 class RoutePlannerView(LoginRequiredMixin, View):
-    """Route planner page with constraint builder."""
+    """Route planner page with map + sidebar constraint builder."""
 
     def get(self, request):
-        from .choices import PathwayTypeChoices, StructureTypeChoices
+        import json
+
+        from django.conf import settings
 
         cable_pk = request.GET.get('cable')
         cable = None
@@ -1000,12 +1002,45 @@ class RoutePlannerView(LoginRequiredMixin, View):
 
         form = forms.RoutePlannerEndpointForm(initial=initial)
 
-        return render(request, 'netbox_pathways/route_planner.html', {
+        # Build tile / map config (same pattern as MapView)
+        plugin_cfg = settings.PLUGINS_CONFIG.get('netbox_pathways', {})
+
+        from . import NetBoxPathwaysConfig
+        map_config = NetBoxPathwaysConfig._map_config or {}
+
+        pathways_config = {
+            'baseLayers': map_config.get('baseLayers', []),
+            'maxZoom': map_config.get('maxZoom', 22),
+            'minZoom': map_config.get('minZoom', 1),
+        }
+
+        # Compute data extent for initial bounds
+        extent = MapView._data_extent(MapView())
+        default_lat = plugin_cfg.get('map_center_lat', 45.5017)
+        default_lon = plugin_cfg.get('map_center_lon', -73.5673)
+        default_zoom = plugin_cfg.get('map_zoom', 10)
+
+        ctx = {
             'form': form,
             'cable': cable,
-            'pathway_type_choices': PathwayTypeChoices.CHOICES,
-            'structure_type_choices': StructureTypeChoices.CHOICES,
-        })
+            'pathways_config_json': json.dumps(pathways_config),
+        }
+
+        if extent:
+            ctx['map_center_lat'] = (extent[1] + extent[3]) / 2
+            ctx['map_center_lon'] = (extent[0] + extent[2]) / 2
+            ctx['map_zoom'] = default_zoom
+            ctx['map_bounds'] = json.dumps([
+                [extent[1], extent[0]],
+                [extent[3], extent[2]],
+            ])
+        else:
+            ctx['map_center_lat'] = default_lat
+            ctx['map_center_lon'] = default_lon
+            ctx['map_zoom'] = default_zoom
+            ctx['map_bounds'] = ''
+
+        return render(request, 'netbox_pathways/route_planner.html', ctx)
 
     def _resolve_termination(self, cable, end):
         from dcim.models import CableTermination
@@ -1020,30 +1055,53 @@ class RoutePlannerView(LoginRequiredMixin, View):
 class RoutePlannerFindView(LoginRequiredMixin, View):
     """HTMX: Run constraint-based route finding."""
 
+    @staticmethod
+    def _parse_int_list(raw):
+        """Parse a comma-separated or multi-value list of integer PKs."""
+        if not raw:
+            return None
+        if isinstance(raw, list):
+            items = []
+            for item in raw:
+                for part in str(item).split(','):
+                    part = part.strip()
+                    if part:
+                        try:
+                            items.append(int(part))
+                        except (ValueError, TypeError):
+                            pass
+            return items or None
+        parts = [p.strip() for p in str(raw).split(',') if p.strip()]
+        try:
+            return [int(p) for p in parts] or None
+        except (ValueError, TypeError):
+            return None
+
     def post(self, request):
+        import json
+
+        from .geo import linestring_to_coords, point_to_latlon
         from .route_engine import find_route
 
         start_pk = request.POST.get('start_structure')
         end_pk = request.POST.get('end_structure')
         if not start_pk or not end_pk:
             return HttpResponse(
-                '<div class="card"><div class="card-body text-center text-muted py-3">'
-                'Select both start and end structures.</div></div>',
+                '<div class="pw-results-empty" style="padding:20px 14px;">'
+                '<p class="mb-0">Select both start and end structures.</p></div>',
             )
 
         # Parse constraints from form
         avoid_pathway_types = request.POST.getlist('avoid_pathway_types') or None
         avoid_structure_types = request.POST.getlist('avoid_structure_types') or None
-
-        avoid_structures_csv = request.POST.get('avoid_structures_csv', '')
-        avoid_structures = [
-            int(x.strip()) for x in avoid_structures_csv.split(',') if x.strip()
-        ] or None
-
-        must_pass_through_csv = request.POST.get('must_pass_through_csv', '')
-        must_pass_through = [
-            int(x.strip()) for x in must_pass_through_csv.split(',') if x.strip()
-        ] or None
+        avoid_structures = self._parse_int_list(request.POST.getlist('avoid_structures'))
+        avoid_cables = self._parse_int_list(request.POST.getlist('avoid_cables'))
+        avoid_circuits = self._parse_int_list(request.POST.getlist('avoid_circuits'))
+        avoid_circuit_geometries = self._parse_int_list(
+            request.POST.getlist('avoid_circuit_geometries'),
+        )
+        avoid_tenants = self._parse_int_list(request.POST.getlist('avoid_tenants'))
+        must_pass_through = self._parse_int_list(request.POST.getlist('must_pass_through'))
 
         prefer_in_use = int(request.POST.get('prefer_in_use', 0))
         include_inactive = request.POST.get('include_inactive') == 'on'
@@ -1058,11 +1116,16 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
             avoid_structure_types=avoid_structure_types,
             include_inactive=include_inactive,
             avoid_structures=avoid_structures,
+            avoid_cables=avoid_cables,
+            avoid_circuits=avoid_circuits,
+            avoid_circuit_geometries=avoid_circuit_geometries,
+            avoid_tenants=avoid_tenants,
             must_pass_through=must_pass_through,
             prefer_in_use_factor=prefer_in_use,
         )
 
         routes = []
+        route_geometry = {'pathways': [], 'start': None, 'end': None}
         if result:
             cost, pathway_ids = result
             pathways = models.Pathway.objects.filter(
@@ -1077,6 +1140,28 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
                 'pathway_ids': ','.join(str(pid) for pid in pathway_ids),
             })
 
+            # Build route geometry for map rendering
+            for pw in ordered:
+                coords = linestring_to_coords(pw.path) if pw.path else []
+                route_geometry['pathways'].append({
+                    'pk': pw.pk,
+                    'label': str(pw),
+                    'type': pw.get_pathway_type_display() if pw.pathway_type else '',
+                    'coords': coords,
+                })
+
+            # Start/end structure markers
+            try:
+                start_struct = models.Structure.objects.get(pk=int(start_pk))
+                route_geometry['start'] = point_to_latlon(start_struct.location)
+            except (models.Structure.DoesNotExist, ValueError, TypeError):
+                pass
+            try:
+                end_struct = models.Structure.objects.get(pk=int(end_pk))
+                route_geometry['end'] = point_to_latlon(end_struct.location)
+            except (models.Structure.DoesNotExist, ValueError, TypeError):
+                pass
+
         html = render_to_string(
             'netbox_pathways/inc/planner_results.html',
             {
@@ -1084,6 +1169,7 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
                 'cable_pk': request.POST.get('cable_pk'),
                 'start_structure_pk': start_pk,
                 'end_structure_pk': end_pk,
+                'route_geometry_json': json.dumps(route_geometry),
             },
             request=request,
         )
@@ -1109,6 +1195,115 @@ class RoutePlannerSaveView(LoginRequiredMixin, PermissionRequiredMixin, View):
             pathway_ids=pathway_ids,
         )
         return redirect(route.get_absolute_url())
+
+
+class RoutePlannerConstraintView(LoginRequiredMixin, View):
+    """HTMX: Return a constraint card HTML fragment for the route planner."""
+
+    # Constraint type definitions: (type_key, group, label, kind, extra)
+    # kind: 'model' (DynamicModelMultipleChoiceField) or 'enum' (checkboxes)
+    CONSTRAINT_TYPES = {
+        'must_pass_through': {
+            'group': 'include',
+            'label': 'Pass through structure(s)',
+            'kind': 'model',
+            'model': 'netbox_pathways.Structure',
+        },
+        'avoid_structures': {
+            'group': 'avoid',
+            'label': 'Avoid structure(s)',
+            'kind': 'model',
+            'model': 'netbox_pathways.Structure',
+        },
+        'avoid_cables': {
+            'group': 'avoid',
+            'label': 'Avoid cable(s)',
+            'kind': 'model',
+            'model': 'dcim.Cable',
+        },
+        'avoid_circuits': {
+            'group': 'avoid',
+            'label': 'Avoid circuit(s)',
+            'kind': 'model',
+            'model': 'circuits.Circuit',
+        },
+        'avoid_circuit_geometries': {
+            'group': 'avoid',
+            'label': 'Avoid circuit geometry(s)',
+            'kind': 'model',
+            'model': 'netbox_pathways.CircuitGeometry',
+        },
+        'avoid_pathway_types': {
+            'group': 'avoid',
+            'label': 'Avoid pathway type(s)',
+            'kind': 'enum',
+            'choices_class': 'PathwayTypeChoices',
+        },
+        'avoid_structure_types': {
+            'group': 'avoid',
+            'label': 'Avoid structure type(s)',
+            'kind': 'enum',
+            'choices_class': 'StructureTypeChoices',
+        },
+        'avoid_tenants': {
+            'group': 'avoid',
+            'label': 'Avoid tenant(s)',
+            'kind': 'model',
+            'model': 'tenancy.Tenant',
+        },
+    }
+
+    MODEL_MAP = {
+        'netbox_pathways.Structure': lambda: models.Structure.objects.all(),
+        'dcim.Cable': lambda: Cable.objects.all(),
+        'circuits.Circuit': lambda: __import__(
+            'circuits.models', fromlist=['Circuit'],
+        ).Circuit.objects.all(),
+        'netbox_pathways.CircuitGeometry': lambda: models.CircuitGeometry.objects.all(),
+        'tenancy.Tenant': lambda: __import__(
+            'tenancy.models', fromlist=['Tenant'],
+        ).Tenant.objects.all(),
+    }
+
+    def get(self, request):
+        from django.utils.safestring import mark_safe
+        from utilities.forms.fields import DynamicModelMultipleChoiceField
+
+        constraint_type = request.GET.get('type', '')
+        cfg = self.CONSTRAINT_TYPES.get(constraint_type)
+        if not cfg:
+            return HttpResponse('', status=400)
+
+        ctx = {
+            'constraint_type': constraint_type,
+            'group': cfg['group'],
+            'label': cfg['label'],
+        }
+
+        if cfg['kind'] == 'enum':
+            from . import choices as choice_module
+            choices_cls = getattr(choice_module, cfg['choices_class'])
+            ctx['choices'] = choices_cls.CHOICES
+        elif cfg['kind'] == 'model':
+            qs_factory = self.MODEL_MAP.get(cfg['model'])
+            if qs_factory:
+                field = DynamicModelMultipleChoiceField(
+                    queryset=qs_factory(),
+                    required=False,
+                )
+                widget_html = field.widget.render(
+                    name=constraint_type,
+                    value=[],
+                    attrs={'id': f'id_{constraint_type}', 'class': 'form-select'},
+                )
+                ctx['widget_html'] = mark_safe(widget_html)  # noqa: S308
+
+        html = render_to_string(
+            'netbox_pathways/inc/constraint_card.html',
+            ctx,
+            request=request,
+        )
+        return HttpResponse(html)
 
 
 # --- Map View ---

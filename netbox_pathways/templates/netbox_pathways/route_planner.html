@@ -4,223 +4,566 @@
 {% block title %}Route Planner{% endblock %}
 
 {% block content %}
-<div class="row">
-  {# Left: Form #}
-  <div class="col-lg-4">
-    <form id="route-planner-form" method="post"
-          hx-post="{% url 'plugins:netbox_pathways:route_planner_find' %}"
-          hx-target="#planner-results" hx-swap="innerHTML"
-          hx-indicator="#planner-spinner">
-      {% csrf_token %}
-      {% if cable %}
-      <input type="hidden" name="cable_pk" value="{{ cable.pk }}">
-      {% endif %}
+<style>
+    /* Map card fills full viewport below the navbar */
+    .pathways-map-wrapper {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+    }
+    .pathways-map-wrapper .card {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
+        margin: 0;
+    }
+    .pathways-map-wrapper .card-body {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        padding: 0 !important;
+    }
+    #pathways-map .leaflet-container {
+        width: 100% !important;
+    }
+    .pw-map-flex {
+        display: flex;
+        width: 100%;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+    }
+    .pw-map-flex #pathways-map {
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+    }
 
-      {# Endpoints #}
-      <div class="card mb-3">
-        <h2 class="card-header">Endpoints</h2>
-        <div class="card-body">
-          {% if cable %}
-          <div class="alert alert-info mb-3 py-2">
-            <small>
-              <i class="mdi mdi-cable-data"></i>
-              Planning route for cable
-              <a href="/dcim/cables/{{ cable.pk }}/">{{ cable }}</a>
-            </small>
-          </div>
-          {% endif %}
-          <div class="mb-3">
-            <label for="id_start_structure" class="form-label">Start Structure</label>
-            {{ form.start_structure }}
-          </div>
-          <div class="mb-3">
-            <label for="id_end_structure" class="form-label">End Structure</label>
-            {{ form.end_structure }}
-          </div>
+    /* --- Sidebar --- */
+    .pw-sidebar {
+        width: 380px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--tblr-card-bg, var(--tblr-body-bg, #fff));
+        color: var(--tblr-body-color, inherit);
+        border-left: 1px solid var(--tblr-border-color, #dee2e6);
+        overflow-y: auto;
+    }
+    .pw-sidebar-section {
+        border-bottom: 1px solid var(--tblr-border-color, #dee2e6);
+        padding: 12px 14px;
+    }
+    .pw-sidebar-section:last-child {
+        border-bottom: none;
+    }
+    .pw-section-title {
+        font-size: 0.8em;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--tblr-muted-color, #667382);
+        margin-bottom: 10px;
+    }
+    .pw-constraint-card {
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        background: var(--tblr-bg-surface, #fff);
+        position: relative;
+    }
+    .pw-constraint-include {
+        border: 1px solid var(--tblr-green, #2fb344);
+        border-left: 3px solid var(--tblr-green, #2fb344);
+    }
+    .pw-constraint-avoid {
+        border: 1px solid var(--tblr-red, #d63939);
+        border-left: 3px solid var(--tblr-red, #d63939);
+    }
+    .pw-constraint-card .pw-constraint-label {
+        font-size: 0.8em;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+    .pw-constraint-include .pw-constraint-label { color: var(--tblr-green, #2fb344); }
+    .pw-constraint-avoid .pw-constraint-label { color: var(--tblr-red, #d63939); }
+    .pw-constraint-card .btn-close {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        font-size: 0.55em;
+    }
+    .pw-add-constraint-menu .dropdown-header {
+        font-size: 0.7em;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 6px 16px 4px;
+    }
+    .pw-add-constraint-menu .dropdown-item {
+        font-size: 0.85em;
+        padding: 4px 16px;
+    }
+    .pw-add-constraint-menu .dropdown-item i {
+        width: 18px;
+        display: inline-block;
+        text-align: center;
+    }
+    .pw-pref-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+    .pw-pref-row label {
+        font-size: 0.85em;
+        white-space: nowrap;
+        margin: 0;
+    }
+    .pw-pref-row .form-range {
+        flex: 1;
+    }
+    .pw-pref-row .pw-pref-value {
+        font-size: 0.8em;
+        color: var(--tblr-muted-color, #667382);
+        min-width: 36px;
+        text-align: right;
+    }
+    .pw-check-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 6px;
+        font-size: 0.85em;
+    }
+    #planner-results-section {
+        min-height: 0;
+        flex-shrink: 0;
+    }
+    /* Empty state in the results area */
+    .pw-results-empty {
+        text-align: center;
+        padding: 16px 14px;
+        color: var(--tblr-muted-color, #667382);
+        font-size: 0.85em;
+    }
+    /* Result route table in sidebar */
+    .pw-route-table {
+        width: 100%;
+        font-size: 0.8em;
+    }
+    .pw-route-table th {
+        font-weight: 600;
+        padding: 4px 6px;
+        border-bottom: 1px solid var(--tblr-border-color, #dee2e6);
+        color: var(--tblr-muted-color, #667382);
+        font-size: 0.85em;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .pw-route-table td {
+        padding: 4px 6px;
+        border-bottom: 1px solid var(--tblr-border-color-translucent, rgba(0,0,0,0.06));
+        vertical-align: middle;
+    }
+    .pw-route-summary {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+        font-size: 0.85em;
+    }
+    .pw-route-stat {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 10px;
+        border-radius: 4px;
+        font-weight: 600;
+        background: var(--tblr-border-color-translucent, rgba(0,0,0,0.06));
+    }
+    .pw-cable-info {
+        font-size: 0.85em;
+        padding: 8px 10px;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        background: var(--tblr-azure-lt, rgba(32,107,196,0.08));
+        border: 1px solid var(--tblr-azure, #206bc4);
+    }
+    .pw-cable-info i { margin-right: 4px; }
+    /* Style constraint checkboxes inline */
+    .pw-constraint-checks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 10px;
+    }
+    .pw-constraint-checks .form-check {
+        margin: 0;
+        padding-left: 1.5em;
+    }
+    .pw-constraint-checks .form-check-label {
+        font-size: 0.8em;
+    }
+    /* Spinner */
+    .pw-find-spinner {
+        display: none;
+    }
+    .htmx-request .pw-find-spinner {
+        display: inline-block;
+    }
+    .htmx-request .pw-find-text {
+        display: none;
+    }
+</style>
+
+<div class="pathways-map-wrapper">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title mb-0">
+                <i class="mdi mdi-map-search-outline"></i> Route Planner
+            </h3>
         </div>
-      </div>
+        <div class="card-body p-0">
+            <div class="pw-map-flex">
+                <div id="pathways-map" style="min-height: 400px; position: relative;"></div>
 
-      {# Constraints #}
-      <div class="card mb-3">
-        <h2 class="card-header">Constraints</h2>
-        <div class="card-body">
-          <div id="constraint-cards"></div>
-          <div class="dropdown">
-            <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle"
-                    data-bs-toggle="dropdown">
-              <i class="mdi mdi-plus"></i> Add Constraint
-            </button>
-            <ul class="dropdown-menu">
-              <li><a class="dropdown-item" href="#" data-constraint="avoid_pathway_types">
-                Avoid Pathway Types</a></li>
-              <li><a class="dropdown-item" href="#" data-constraint="avoid_structure_types">
-                Avoid Structure Types</a></li>
-              <li><a class="dropdown-item" href="#" data-constraint="avoid_structures">
-                Avoid Structures (by ID)</a></li>
-              <li><a class="dropdown-item" href="#" data-constraint="must_pass_through">
-                Must Pass Through (by ID)</a></li>
-            </ul>
-          </div>
+                <div class="pw-sidebar">
+                    <form id="route-planner-form" method="post"
+                          hx-post="{% url 'plugins:netbox_pathways:route_planner_find' %}"
+                          hx-target="#planner-results"
+                          hx-swap="innerHTML"
+                          hx-indicator="#route-planner-form">
+                        {% csrf_token %}
+                        {% if cable %}
+                        <input type="hidden" name="cable_pk" value="{{ cable.pk }}">
+                        {% endif %}
+
+                        {# === Endpoints === #}
+                        <div class="pw-sidebar-section">
+                            <div class="pw-section-title">Endpoints</div>
+                            {% if cable %}
+                            <div class="pw-cable-info">
+                                <i class="mdi mdi-cable-data"></i>
+                                Route for cable <a href="/dcim/cables/{{ cable.pk }}/">{{ cable }}</a>
+                            </div>
+                            {% endif %}
+                            <div class="mb-2">
+                                <label class="form-label" style="font-size:0.85em;" for="id_start_structure">Start</label>
+                                {{ form.start_structure }}
+                            </div>
+                            <div>
+                                <label class="form-label" style="font-size:0.85em;" for="id_end_structure">End</label>
+                                {{ form.end_structure }}
+                            </div>
+                        </div>
+
+                        {# === Constraints === #}
+                        <div class="pw-sidebar-section">
+                            <div class="pw-section-title">Constraints</div>
+                            <div id="constraint-cards"></div>
+                            <div class="dropdown">
+                                <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle"
+                                        data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="mdi mdi-plus"></i> Add Constraint
+                                </button>
+                                <ul class="dropdown-menu pw-add-constraint-menu">
+                                    <li><span class="dropdown-header text-green">
+                                        <i class="mdi mdi-check-circle"></i> Must include</span></li>
+                                    <li><a class="dropdown-item pw-add-constraint" href="#"
+                                           data-type="must_pass_through">
+                                        <i class="mdi mdi-map-marker-path"></i> Pass through structure(s)</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><span class="dropdown-header text-red">
+                                        <i class="mdi mdi-close-circle"></i> Must avoid</span></li>
+                                    <li><a class="dropdown-item pw-add-constraint" href="#"
+                                           data-type="avoid_structures">
+                                        <i class="mdi mdi-office-building"></i> Structure(s)</a></li>
+                                    <li><a class="dropdown-item pw-add-constraint" href="#"
+                                           data-type="avoid_cables">
+                                        <i class="mdi mdi-cable-data"></i> Cable(s)</a></li>
+                                    <li><a class="dropdown-item pw-add-constraint" href="#"
+                                           data-type="avoid_circuits">
+                                        <i class="mdi mdi-swap-horizontal"></i> Circuit(s)</a></li>
+                                    <li><a class="dropdown-item pw-add-constraint" href="#"
+                                           data-type="avoid_circuit_geometries">
+                                        <i class="mdi mdi-vector-polyline"></i> Circuit geometry(s)</a></li>
+                                    <li><a class="dropdown-item pw-add-constraint" href="#"
+                                           data-type="avoid_pathway_types">
+                                        <i class="mdi mdi-road-variant"></i> Pathway type(s)</a></li>
+                                    <li><a class="dropdown-item pw-add-constraint" href="#"
+                                           data-type="avoid_structure_types">
+                                        <i class="mdi mdi-shape"></i> Structure type(s)</a></li>
+                                    <li><a class="dropdown-item pw-add-constraint" href="#"
+                                           data-type="avoid_tenants">
+                                        <i class="mdi mdi-account-group"></i> Tenant(s)</a></li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        {# === Preferences === #}
+                        <div class="pw-sidebar-section">
+                            <div class="pw-section-title">Preferences</div>
+                            <div class="pw-pref-row">
+                                <label for="prefer-in-use-slider">Prefer shared</label>
+                                <input type="range" class="form-range" name="prefer_in_use"
+                                       min="0" max="100" value="0" id="prefer-in-use-slider">
+                                <span class="pw-pref-value" id="prefer-in-use-value">0%</span>
+                            </div>
+                            <div class="pw-pref-row">
+                                <label for="max-divergence-slider">Max divergence</label>
+                                <input type="range" class="form-range" name="max_divergence"
+                                       min="100" max="500" step="10" value="200" id="max-divergence-slider">
+                                <span class="pw-pref-value" id="max-divergence-value">200%</span>
+                            </div>
+                            <div class="pw-check-row">
+                                <input type="checkbox" class="form-check-input" name="include_inactive"
+                                       id="include-inactive">
+                                <label for="include-inactive">Include inactive/retired</label>
+                            </div>
+                        </div>
+
+                        {# === Find Route Button === #}
+                        <div class="pw-sidebar-section" style="padding-top:8px; padding-bottom:8px;">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <span class="pw-find-text">
+                                    <i class="mdi mdi-map-search-outline"></i> Find Route
+                                </span>
+                                <span class="pw-find-spinner">
+                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                    Finding...
+                                </span>
+                            </button>
+                        </div>
+                    </form>
+
+                    {# === Results === #}
+                    <div id="planner-results-section" class="pw-sidebar-section" style="padding:0;">
+                        <div id="planner-results">
+                            <div class="pw-results-empty">
+                                <i class="mdi mdi-map-search-outline" style="font-size: 2rem; opacity: 0.3;"></i>
+                                <p class="mt-1 mb-0">Select endpoints and click <strong>Find Route</strong>.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-
-      {# Preferences #}
-      <div class="card mb-3">
-        <h2 class="card-header">Preferences</h2>
-        <div class="card-body">
-          <div class="mb-3">
-            <label class="form-label d-flex justify-content-between">
-              Prefer shared pathways
-              <span id="prefer-in-use-value" class="text-muted">0%</span>
-            </label>
-            <input type="range" class="form-range" name="prefer_in_use"
-                   min="0" max="100" value="0" id="prefer-in-use-slider">
-          </div>
-          <div class="form-check">
-            <input type="checkbox" class="form-check-input" name="include_inactive"
-                   id="include-inactive">
-            <label class="form-check-label" for="include-inactive">
-              Include inactive/retired structures
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <div class="d-flex gap-2 mb-3">
-        <button type="submit" class="btn btn-primary">
-          <i class="mdi mdi-map-search-outline"></i> Find Route
-        </button>
-        <span id="planner-spinner" class="htmx-indicator">
-          <span class="spinner-border spinner-border-sm" role="status"></span>
-        </span>
-      </div>
-    </form>
-  </div>
-
-  {# Right: Results #}
-  <div class="col-lg-8">
-    <div id="planner-results">
-      <div class="card">
-        <div class="card-body text-center text-muted py-5">
-          <i class="mdi mdi-map-search-outline" style="font-size: 3rem; opacity: 0.3;"></i>
-          <p class="mt-2 mb-0">Select start and end structures, then click <strong>Find Route</strong>.</p>
-        </div>
-      </div>
     </div>
-  </div>
 </div>
+{% endblock %}
 
-{# Hidden constraint card templates #}
-<template id="tpl-avoid-pathway-types">
-  <div class="constraint-card border-start border-3 border-warning p-2 mb-2 rounded"
-       data-constraint-type="avoid_pathway_types">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <strong class="text-warning" style="font-size: 0.85em;">Avoid Pathway Types</strong>
-      <button type="button" class="btn-close" style="font-size: 0.6em;"
-              onclick="this.closest('.constraint-card').remove()"></button>
-    </div>
-    <div class="d-flex flex-wrap gap-2">
-      {% for value, label, color in pathway_type_choices %}
-      <div class="form-check form-check-inline">
-        <input class="form-check-input" type="checkbox" name="avoid_pathway_types"
-               value="{{ value }}" id="apt-{{ value }}">
-        <label class="form-check-label" for="apt-{{ value }}">{{ label }}</label>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-</template>
-
-<template id="tpl-avoid-structure-types">
-  <div class="constraint-card border-start border-3 border-danger p-2 mb-2 rounded"
-       data-constraint-type="avoid_structure_types">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <strong class="text-danger" style="font-size: 0.85em;">Avoid Structure Types</strong>
-      <button type="button" class="btn-close" style="font-size: 0.6em;"
-              onclick="this.closest('.constraint-card').remove()"></button>
-    </div>
-    <div class="d-flex flex-wrap gap-2">
-      {% for value, label, color in structure_type_choices %}
-      <div class="form-check form-check-inline">
-        <input class="form-check-input" type="checkbox" name="avoid_structure_types"
-               value="{{ value }}" id="ast-{{ value }}">
-        <label class="form-check-label" for="ast-{{ value }}">{{ label }}</label>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-</template>
-
-<template id="tpl-avoid-structures">
-  <div class="constraint-card border-start border-3 border-red p-2 mb-2 rounded"
-       data-constraint-type="avoid_structures">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <strong class="text-red" style="font-size: 0.85em;">Avoid Structures</strong>
-      <button type="button" class="btn-close" style="font-size: 0.6em;"
-              onclick="this.closest('.constraint-card').remove()"></button>
-    </div>
-    <input type="text" class="form-control form-control-sm" name="avoid_structures_csv"
-           placeholder="Structure IDs (comma-separated, e.g. 123,456)">
-  </div>
-</template>
-
-<template id="tpl-must-pass-through">
-  <div class="constraint-card border-start border-3 border-info p-2 mb-2 rounded"
-       data-constraint-type="must_pass_through">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <strong class="text-info" style="font-size: 0.85em;">Must Pass Through</strong>
-      <button type="button" class="btn-close" style="font-size: 0.6em;"
-              onclick="this.closest('.constraint-card').remove()"></button>
-    </div>
-    <input type="text" class="form-control form-control-sm" name="must_pass_through_csv"
-           placeholder="Structure IDs in order (comma-separated, e.g. 789,101)">
-  </div>
-</template>
-
+{% block javascript %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'netbox_pathways/vendor/leaflet/leaflet.css' %}" />
+<script src="{% static 'netbox_pathways/vendor/leaflet/leaflet.js' %}"></script>
 <script>
 (function() {
-  // Constraint builder: clone template on dropdown click
-  document.querySelectorAll('[data-constraint]').forEach(function(el) {
-    el.addEventListener('click', function(e) {
-      e.preventDefault();
-      var type = this.dataset.constraint;
-      var tplId = 'tpl-' + type.replace(/_/g, '-');
-      var tpl = document.getElementById(tplId);
-      if (!tpl) return;
-      var cards = document.getElementById('constraint-cards');
-      // Prevent duplicate
-      if (cards.querySelector('[data-constraint-type="' + type + '"]')) return;
-      cards.appendChild(tpl.content.cloneNode(true));
-    });
-  });
+    // --- Tile / map config ---
+    var CONFIG = {{ pathways_config_json|safe }};
+    var CENTER = [{{ map_center_lat }}, {{ map_center_lon }}];
+    var ZOOM = {{ map_zoom }};
+    var BOUNDS = {{ map_bounds|default:"null" }};
 
-  // Slider value display
-  var slider = document.getElementById('prefer-in-use-slider');
-  var display = document.getElementById('prefer-in-use-value');
-  if (slider && display) {
-    slider.addEventListener('input', function() {
-      display.textContent = slider.value + '%';
-    });
-    // Restore from localStorage
-    var saved = localStorage.getItem('pw_prefer_in_use');
-    if (saved !== null) {
-      slider.value = saved;
-      display.textContent = saved + '%';
+    // --- Viewport sizing (same pattern as infrastructure map) ---
+    function sizeMap() {
+        var wrapper = document.querySelector('.pathways-map-wrapper');
+        var el = document.getElementById('pathways-map');
+        if (!wrapper || !el) return;
+        var gap = 8;
+        var wrapRect = wrapper.getBoundingClientRect();
+        var wrapH = Math.max(400, window.innerHeight - wrapRect.top - gap);
+        wrapper.style.height = wrapH + 'px';
+        var flexWrap = el.parentElement;
+        if (flexWrap) {
+            var flexRect = flexWrap.getBoundingClientRect();
+            var flexH = Math.max(300, window.innerHeight - flexRect.top - gap);
+            flexWrap.style.height = flexH + 'px';
+            el.style.height = flexH + 'px';
+        }
+        if (window._rpMap) window._rpMap.invalidateSize();
     }
-    slider.addEventListener('change', function() {
-      localStorage.setItem('pw_prefer_in_use', slider.value);
-    });
-  }
 
-  // Restore include_inactive from localStorage
-  var inactive = document.getElementById('include-inactive');
-  if (inactive) {
-    var savedInactive = localStorage.getItem('pw_include_inactive');
-    if (savedInactive === 'true') inactive.checked = true;
-    inactive.addEventListener('change', function() {
-      localStorage.setItem('pw_include_inactive', inactive.checked);
+    // --- Init Leaflet map ---
+    document.addEventListener('DOMContentLoaded', function() {
+        sizeMap();
+
+        var map = L.map('pathways-map', {
+            center: CENTER,
+            zoom: ZOOM,
+            maxZoom: CONFIG.maxZoom || 22,
+            minZoom: CONFIG.minZoom || 1
+        });
+
+        // Add base tile layer (first configured layer)
+        var baseLayers = CONFIG.baseLayers || [];
+        if (baseLayers.length > 0) {
+            var first = baseLayers[0];
+            L.tileLayer(first.url, {
+                maxZoom: first.maxZoom || 22,
+                maxNativeZoom: first.maxNativeZoom || 19,
+                attribution: first.attribution || ''
+            }).addTo(map);
+            // Add layer control if multiple base layers
+            if (baseLayers.length > 1) {
+                var layers = {};
+                baseLayers.forEach(function(bl) {
+                    layers[bl.name] = L.tileLayer(bl.url, {
+                        maxZoom: bl.maxZoom || 22,
+                        maxNativeZoom: bl.maxNativeZoom || 19,
+                        attribution: bl.attribution || ''
+                    });
+                });
+                // First is already added; add control
+                var firstKey = baseLayers[0].name;
+                layers[firstKey] = map.eachLayer(function(l) { return l; });
+                L.control.layers(layers, null, {collapsed: true}).addTo(map);
+            }
+        } else {
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 22,
+                maxNativeZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+        }
+
+        // Fit to data bounds if available
+        if (BOUNDS) {
+            map.fitBounds(BOUNDS);
+        }
+
+        window._rpMap = map;
+        window._rpRouteLayer = null;
+        window._rpMarkerLayer = null;
+
+        setTimeout(sizeMap, 200);
+        setTimeout(sizeMap, 500);
+        window.addEventListener('resize', sizeMap);
+
+        // --- Constraint builder (HTMX) ---
+        document.querySelectorAll('.pw-add-constraint').forEach(function(el) {
+            el.addEventListener('click', function(e) {
+                e.preventDefault();
+                var type = this.dataset.type;
+                var cards = document.getElementById('constraint-cards');
+                // Prevent duplicate
+                if (cards.querySelector('[data-constraint-type="' + type + '"]')) return;
+                // Fetch constraint card via HTMX
+                var url = '{% url "plugins:netbox_pathways:route_planner_constraint" %}?type=' + type;
+                htmx.ajax('GET', url, {target: '#constraint-cards', swap: 'beforeend'});
+            });
+        });
+
+        // Remove constraint card on close button click (delegated)
+        document.getElementById('constraint-cards').addEventListener('click', function(e) {
+            var closeBtn = e.target.closest('.btn-close');
+            if (closeBtn) {
+                var card = closeBtn.closest('.pw-constraint-card');
+                if (card) card.remove();
+            }
+        });
+
+        // --- Preferences: localStorage persistence ---
+        var preferSlider = document.getElementById('prefer-in-use-slider');
+        var preferDisplay = document.getElementById('prefer-in-use-value');
+        if (preferSlider && preferDisplay) {
+            var savedPrefer = localStorage.getItem('pw_prefer_in_use');
+            if (savedPrefer !== null) { preferSlider.value = savedPrefer; preferDisplay.textContent = savedPrefer + '%'; }
+            preferSlider.addEventListener('input', function() { preferDisplay.textContent = this.value + '%'; });
+            preferSlider.addEventListener('change', function() { localStorage.setItem('pw_prefer_in_use', this.value); });
+        }
+
+        var divSlider = document.getElementById('max-divergence-slider');
+        var divDisplay = document.getElementById('max-divergence-value');
+        if (divSlider && divDisplay) {
+            var savedDiv = localStorage.getItem('pw_max_divergence');
+            if (savedDiv !== null) { divSlider.value = savedDiv; divDisplay.textContent = savedDiv + '%'; }
+            divSlider.addEventListener('input', function() { divDisplay.textContent = this.value + '%'; });
+            divSlider.addEventListener('change', function() { localStorage.setItem('pw_max_divergence', this.value); });
+        }
+
+        var inactiveCheck = document.getElementById('include-inactive');
+        if (inactiveCheck) {
+            var savedInactive = localStorage.getItem('pw_include_inactive');
+            if (savedInactive === 'true') inactiveCheck.checked = true;
+            inactiveCheck.addEventListener('change', function() {
+                localStorage.setItem('pw_include_inactive', this.checked);
+            });
+        }
+
+        // --- Render route on map after HTMX result ---
+        document.getElementById('planner-results').addEventListener('htmx:afterSettle', function() {
+            // Clear previous route
+            if (window._rpRouteLayer) { map.removeLayer(window._rpRouteLayer); window._rpRouteLayer = null; }
+            if (window._rpMarkerLayer) { map.removeLayer(window._rpMarkerLayer); window._rpMarkerLayer = null; }
+
+            var dataEl = document.getElementById('route-geometry-data');
+            if (!dataEl) return;
+
+            try {
+                var data = JSON.parse(dataEl.textContent);
+            } catch(e) { return; }
+
+            if (!data.pathways || data.pathways.length === 0) return;
+
+            var routeGroup = L.featureGroup();
+            var markerGroup = L.featureGroup();
+
+            // Draw each pathway segment
+            data.pathways.forEach(function(pw) {
+                if (pw.coords && pw.coords.length > 1) {
+                    // coords are [lon, lat], Leaflet needs [lat, lon]
+                    var latlngs = pw.coords.map(function(c) { return [c[1], c[0]]; });
+                    L.polyline(latlngs, {
+                        color: '#206bc4',
+                        weight: 4,
+                        opacity: 0.85
+                    }).bindPopup('<strong>' + (pw.label || 'Pathway') + '</strong><br>' + (pw.type || ''))
+                      .addTo(routeGroup);
+                }
+            });
+
+            // Start marker (green)
+            if (data.start) {
+                L.circleMarker([data.start[0], data.start[1]], {
+                    radius: 8, color: '#fff', weight: 2, fillColor: '#2fb344', fillOpacity: 1
+                }).bindPopup('Start').addTo(markerGroup);
+            }
+            // End marker (red)
+            if (data.end) {
+                L.circleMarker([data.end[0], data.end[1]], {
+                    radius: 8, color: '#fff', weight: 2, fillColor: '#d63939', fillOpacity: 1
+                }).bindPopup('End').addTo(markerGroup);
+            }
+
+            routeGroup.addTo(map);
+            markerGroup.addTo(map);
+            window._rpRouteLayer = routeGroup;
+            window._rpMarkerLayer = markerGroup;
+
+            // Fit map to route bounds
+            var allBounds = routeGroup.getBounds();
+            if (allBounds.isValid()) {
+                map.fitBounds(allBounds.pad(0.15));
+            }
+        });
+
+        {% if cable %}
+        // Disable endpoint fields when in cable mode
+        var startField = document.getElementById('id_start_structure');
+        var endField = document.getElementById('id_end_structure');
+        if (startField) startField.setAttribute('disabled', 'disabled');
+        if (endField) endField.setAttribute('disabled', 'disabled');
+        {% endif %}
     });
-  }
 })();
 </script>
 {% endblock %}

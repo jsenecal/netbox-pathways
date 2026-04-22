@@ -1,0 +1,22 @@
+{% comment %}
+HTMX fragment: a single constraint card returned by RoutePlannerConstraintView.
+Variables: constraint_type, group ("include" or "avoid"), label, widget_html (optional), choices (optional)
+{% endcomment %}
+<div class="pw-constraint-card pw-constraint-{{ group }}" data-constraint-type="{{ constraint_type }}">
+    <button type="button" class="btn-close" aria-label="Remove"></button>
+    <div class="pw-constraint-label">{{ label }}</div>
+    {% if choices %}
+    <div class="pw-constraint-checks">
+        {% for value, choice_label, color in choices %}
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox"
+                   name="{{ constraint_type }}" value="{{ value }}"
+                   id="{{ constraint_type }}-{{ value }}">
+            <label class="form-check-label" for="{{ constraint_type }}-{{ value }}">{{ choice_label }}</label>
+        </div>
+        {% endfor %}
+    </div>
+    {% elif widget_html %}
+    {{ widget_html }}
+    {% endif %}
+</div>

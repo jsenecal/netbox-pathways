@@ -164,6 +164,7 @@ urlpatterns = [
     path('route-planner/', views.RoutePlannerView.as_view(), name='route_planner'),
     path('route-planner/find/', views.RoutePlannerFindView.as_view(), name='route_planner_find'),
     path('route-planner/save/', views.RoutePlannerSaveView.as_view(), name='route_planner_save'),
+    path('route-planner/constraint/', views.RoutePlannerConstraintView.as_view(), name='route_planner_constraint'),
 
     # Pull Sheets
     path('pull-sheets/', views.PullSheetListView.as_view(), name='pullsheet_list'),
