@@ -252,43 +252,17 @@ function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): vo
     window._rpRouteLayer = null;
     window._rpMarkerLayer = null;
 
-    // Track rendered features for highlight on hop click
-    let renderedFeatures: RenderedFeature[] = [];
+    // Session storage key — scoped to the current URL so different cables don't collide
+    const CACHE_KEY = 'pw_route_result_' + window.location.pathname + window.location.search;
 
-    // Listen for HTMX results
-    document.body.addEventListener('htmx:afterSettle', function (evt: Event) {
-        const detail = (evt as CustomEvent).detail;
-        if (!detail || !detail.target || detail.target.id !== 'planner-results') return;
-
-        // Reset bounds lock from previous route
-        map.setMaxBounds(null as unknown as L.LatLngBoundsExpression);
-        map.setMinZoom(1);
-        _unhighlight(map);
-
-        const dataEl = document.getElementById('route-geometry-data');
-        if (!dataEl) {
-            // No route found — clear
-            if (window._rpRouteLayer) { map.removeLayer(window._rpRouteLayer); window._rpRouteLayer = null; }
-            if (window._rpMarkerLayer) { map.removeLayer(window._rpMarkerLayer); window._rpMarkerLayer = null; }
-            renderedFeatures = [];
-            return;
-        }
-
-        let data: RouteGeometryData;
-        try {
-            data = JSON.parse(dataEl.textContent || '{}') as RouteGeometryData;
-        } catch (e) { return; }
-
-        renderedFeatures = _renderRouteOverlay(map, data);
-
-        // Build lookup maps: kind+pk -> RenderedFeature
+    // Wire up hop list click-to-center + highlight after route is rendered.
+    function _wireHopList(features: RenderedFeature[]): void {
         const featureMap: Record<string, RenderedFeature> = {};
-        renderedFeatures.forEach(function (f) {
+        features.forEach(function (f) {
             const pk = (f.layer as any)._rpPk;
             if (pk != null) featureMap[f.kind + '-' + pk] = f;
         });
 
-        // Wire up click-to-center + highlight on hop list items
         const hopItems = document.querySelectorAll('[data-hop-kind][data-hop-pk]');
         hopItems.forEach(function (item) {
             item.addEventListener('click', function (e) {
@@ -298,22 +272,78 @@ function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): vo
                 const feat = featureMap[kind + '-' + pk];
                 if (!feat) return;
 
-                // Center on feature
                 map.flyTo(feat.latlng, Math.max(map.getZoom(), 16), { duration: 0.5 });
 
-                // Highlight
                 if (feat.kind === 'structure') {
                     _highlightStructure(map, feat.layer as L.Marker, feat.structureType || '');
                 } else {
                     _highlightPathway(map, feat.layer as L.Polyline);
                 }
 
-                // Highlight the list item
                 hopItems.forEach(function (h) { h.classList.remove('pw-hop-active'); });
                 item.classList.add('pw-hop-active');
             });
         });
+    }
+
+    // Render route + wire hops. Used by both HTMX handler and cache restore.
+    function _applyRoute(data: RouteGeometryData): void {
+        map.setMaxBounds(null as unknown as L.LatLngBoundsExpression);
+        map.setMinZoom(1);
+        _unhighlight(map);
+        const features = _renderRouteOverlay(map, data);
+        _wireHopList(features);
+    }
+
+    // Listen for HTMX results — save to sessionStorage + render
+    document.body.addEventListener('htmx:afterSettle', function (evt: Event) {
+        const detail = (evt as CustomEvent).detail;
+        if (!detail || !detail.target || detail.target.id !== 'planner-results') return;
+
+        const dataEl = document.getElementById('route-geometry-data');
+        if (!dataEl) {
+            if (window._rpRouteLayer) { map.removeLayer(window._rpRouteLayer); window._rpRouteLayer = null; }
+            if (window._rpMarkerLayer) { map.removeLayer(window._rpMarkerLayer); window._rpMarkerLayer = null; }
+            try { sessionStorage.removeItem(CACHE_KEY); } catch (_e) { /* ignore */ }
+            return;
+        }
+
+        let data: RouteGeometryData;
+        try {
+            data = JSON.parse(dataEl.textContent || '{}') as RouteGeometryData;
+        } catch (e) { return; }
+
+        // Save geometry + results HTML for back-navigation restore.
+        // The HTML originates from our own Django template (server-rendered,
+        // not user input), so restoring it from sessionStorage is safe.
+        try {
+            const resultsEl = document.getElementById('planner-results');
+            sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+                geometry: data,
+                resultsHtml: resultsEl ? resultsEl.innerHTML : '',  // eslint-disable-line no-unsanitized/property
+            }));
+        } catch (_e) { /* ignore quota errors */ }
+
+        _applyRoute(data);
     });
+
+    // Restore route from sessionStorage on page load (back-navigation).
+    // The cached HTML was originally rendered by our Django template, not user input.
+    try {
+        const cached = sessionStorage.getItem(CACHE_KEY);
+        if (cached) {
+            const parsed = JSON.parse(cached) as { geometry: RouteGeometryData; resultsHtml: string };
+            if (parsed.geometry && parsed.geometry.pathways && parsed.geometry.pathways.length > 0) {
+                const resultsEl = document.getElementById('planner-results');
+                if (resultsEl && parsed.resultsHtml) {
+                    resultsEl.innerHTML = parsed.resultsHtml;  // eslint-disable-line no-unsanitized/property
+                }
+                setTimeout(function () {
+                    _applyRoute(parsed.geometry);
+                }, 100);
+            }
+        }
+    } catch (_e) { /* ignore parse errors */ }
 
     // Click on map clears highlight
     map.on('click', function () {
