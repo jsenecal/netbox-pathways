@@ -1290,11 +1290,9 @@ class CableRoutingFindRouteView(CableRoutingMixin, LoginRequiredMixin, View):
         routes = []
         if start_node and end_node:
             graph = PathwayGraph.build_topology()
-            # Try A* first (fast, geo-aware)
-            astar_result = graph.astar_path(start_node, end_node)
-            if astar_result:
-                routes = [astar_result]
-            # No all_routes fallback — too slow on large networks
+            result = graph.shortest_path(start_node, end_node)
+            if result:
+                routes = [result]
 
         enriched_routes = []
         for cost, pathway_ids in routes:
