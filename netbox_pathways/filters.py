@@ -13,6 +13,7 @@ from .choices import (
     ConduitMaterialChoices,
     EncasementTypeChoices,
     PathwayTypeChoices,
+    PlannedRouteStatusChoices,
     StructureStatusChoices,
     StructureTypeChoices,
 )
@@ -27,6 +28,7 @@ from .models import (
     Innerduct,
     Pathway,
     PathwayLocation,
+    PlannedRoute,
     SiteGeometry,
     SlackLoop,
     Structure,
@@ -575,4 +577,52 @@ class CircuitGeometryFilterSet(NetBoxModelFilterSet):
         return queryset.filter(
             Q(circuit__cid__icontains=value)
             | Q(provider_reference__icontains=value)
+        )
+
+
+class PlannedRouteFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
+    status = django_filters.MultipleChoiceFilter(
+        choices=PlannedRouteStatusChoices,
+        distinct=False,
+    )
+    start_structure_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='start_structure',
+        queryset=Structure.objects.all(),
+        distinct=False,
+        label='Start Structure (ID)',
+    )
+    end_structure_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='end_structure',
+        queryset=Structure.objects.all(),
+        distinct=False,
+        label='End Structure (ID)',
+    )
+    start_location_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='start_location',
+        queryset=Location.objects.all(),
+        distinct=False,
+        label='Start Location (ID)',
+    )
+    end_location_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='end_location',
+        queryset=Location.objects.all(),
+        distinct=False,
+        label='End Location (ID)',
+    )
+    cable_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='cable',
+        queryset=Cable.objects.all(),
+        distinct=False,
+        label='Cable (ID)',
+    )
+
+    class Meta:
+        model = PlannedRoute
+        fields = ['id', 'name', 'status']
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value) | Q(comments__icontains=value)
         )

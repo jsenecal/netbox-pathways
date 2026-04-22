@@ -15,6 +15,7 @@ from .choices import (
     ConduitMaterialChoices,
     EncasementTypeChoices,
     PathwayTypeChoices,
+    PlannedRouteStatusChoices,
     StructureStatusChoices,
     StructureTypeChoices,
 )
@@ -29,6 +30,7 @@ from .models import (
     Innerduct,
     Pathway,
     PathwayLocation,
+    PlannedRoute,
     SiteGeometry,
     SlackLoop,
     Structure,
@@ -278,5 +280,35 @@ class CircuitGeometryFilterForm(NetBoxModelFilterSetForm):
     )
     provider_id = DynamicModelMultipleChoiceField(
         queryset=Provider.objects.all(), required=False, label='Provider',
+    )
+    tag = TagFilterField(model)
+
+
+class PlannedRouteFilterForm(NetBoxModelFilterSetForm):
+    model = PlannedRoute
+    fieldsets = (
+        FieldSet('q', 'filter_id', 'tag'),
+        FieldSet('status', name='Attributes'),
+        FieldSet('start_structure_id', 'end_structure_id', 'start_location_id', 'end_location_id', name='Endpoints'),
+        FieldSet('tenant_id', 'cable_id', name='Assignment'),
+    )
+    status = forms.MultipleChoiceField(choices=PlannedRouteStatusChoices, required=False)
+    start_structure_id = DynamicModelMultipleChoiceField(
+        queryset=Structure.objects.all(), required=False, label='Start Structure',
+    )
+    end_structure_id = DynamicModelMultipleChoiceField(
+        queryset=Structure.objects.all(), required=False, label='End Structure',
+    )
+    start_location_id = DynamicModelMultipleChoiceField(
+        queryset=Location.objects.all(), required=False, label='Start Location',
+    )
+    end_location_id = DynamicModelMultipleChoiceField(
+        queryset=Location.objects.all(), required=False, label='End Location',
+    )
+    tenant_id = DynamicModelMultipleChoiceField(
+        queryset=Tenant.objects.all(), required=False, null_option='None', label='Tenant',
+    )
+    cable_id = DynamicModelMultipleChoiceField(
+        queryset=Cable.objects.all(), required=False, label='Cable',
     )
     tag = TagFilterField(model)

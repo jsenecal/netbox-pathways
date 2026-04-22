@@ -28,6 +28,7 @@ router.register('cable-segments', views.CableSegmentViewSet)
 router.register('slack-loops', views.SlackLoopViewSet)
 router.register('site-geometries', views.SiteGeometryViewSet)
 router.register('circuit-geometries', views.CircuitGeometryViewSet)
+router.register('planned-routes', views.PlannedRouteViewSet)
 
 # GeoJSON endpoints for QGIS / GIS client consumption
 router.register('geo/structures', StructureGeoViewSet, basename='geo-structure')

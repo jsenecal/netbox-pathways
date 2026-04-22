@@ -141,3 +141,14 @@ class SiteGeometryPanel(ObjectAttributesPanel):
 class CircuitGeometryPanel(ObjectAttributesPanel):
     circuit = attrs.RelatedObjectAttr('circuit', linkify=True, label=_('Circuit'))
     provider_reference = attrs.TextAttr('provider_reference', label=_('Provider Reference'))
+
+
+class PlannedRoutePanel(ObjectAttributesPanel):
+    name = attrs.TextAttr('name', label=_('Name'))
+    status = attrs.ChoiceAttr('status', label=_('Status'))
+    start_structure = attrs.RelatedObjectAttr('start_structure', linkify=True, label=_('Start structure'))
+    end_structure = attrs.RelatedObjectAttr('end_structure', linkify=True, label=_('End structure'))
+    start_location = attrs.RelatedObjectAttr('start_location', linkify=True, label=_('Start location'))
+    end_location = attrs.RelatedObjectAttr('end_location', linkify=True, label=_('End location'))
+    tenant = attrs.RelatedObjectAttr('tenant', linkify=True, label=_('Tenant'))
+    cable = attrs.RelatedObjectAttr('cable', linkify=True, label=_('Cable'))

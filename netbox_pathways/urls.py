@@ -147,6 +147,17 @@ urlpatterns = [
         *get_model_urls('netbox_pathways', 'circuitgeometry'),
     ])),
 
+    # Planned Routes
+    path('planned-routes/', views.PlannedRouteListView.as_view(), name='plannedroute_list'),
+    path('planned-routes/add/', views.PlannedRouteEditView.as_view(), name='plannedroute_add'),
+    path('planned-routes/delete/', views.PlannedRouteBulkDeleteView.as_view(), name='plannedroute_bulk_delete'),
+    path('planned-routes/<int:pk>/', include([
+        path('', views.PlannedRouteView.as_view(), name='plannedroute'),
+        path('edit/', views.PlannedRouteEditView.as_view(), name='plannedroute_edit'),
+        path('delete/', views.PlannedRouteDeleteView.as_view(), name='plannedroute_delete'),
+        *get_model_urls('netbox_pathways', 'plannedroute'),
+    ])),
+
     # Pull Sheets
     path('pull-sheets/', views.PullSheetListView.as_view(), name='pullsheet_list'),
     path('pull-sheets/<int:cable_pk>/', views.PullSheetDetailView.as_view(), name='pullsheet_detail'),

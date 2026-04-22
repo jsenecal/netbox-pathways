@@ -13,6 +13,7 @@ from .models import (
     Innerduct,
     Pathway,
     PathwayLocation,
+    PlannedRoute,
     SiteGeometry,
     SlackLoop,
     Structure,
@@ -307,3 +308,23 @@ class CircuitGeometryTable(NetBoxTable):
         model = CircuitGeometry
         fields = ('pk', 'id', 'circuit', 'provider_reference', 'actions')
         default_columns = ('circuit', 'provider_reference')
+
+
+class PlannedRouteTable(NetBoxTable):
+    name = tables.Column(linkify=True)
+    status = columns.ChoiceFieldColumn()
+    start_structure = tables.Column(linkify=True)
+    end_structure = tables.Column(linkify=True)
+    tenant = tables.Column(linkify=True)
+    cable = tables.Column(linkify=True)
+    hop_count = tables.Column(verbose_name='Hops', accessor='hop_count', orderable=False)
+
+    class Meta(NetBoxTable.Meta):
+        model = PlannedRoute
+        fields = (
+            'pk', 'name', 'status', 'start_structure', 'end_structure',
+            'tenant', 'cable', 'hop_count', 'created', 'actions',
+        )
+        default_columns = (
+            'name', 'status', 'start_structure', 'end_structure', 'hop_count',
+        )

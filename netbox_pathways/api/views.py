@@ -99,3 +99,12 @@ class CircuitGeometryViewSet(NetBoxModelViewSet):
     queryset = models.CircuitGeometry.objects.select_related('circuit', 'circuit__provider')
     serializer_class = serializers.CircuitGeometrySerializer
     filterset_class = filters.CircuitGeometryFilterSet
+
+
+class PlannedRouteViewSet(NetBoxModelViewSet):
+    queryset = models.PlannedRoute.objects.select_related(
+        'start_structure', 'end_structure', 'start_location', 'end_location',
+        'tenant', 'cable',
+    )
+    serializer_class = serializers.PlannedRouteSerializer
+    filterset_class = filters.PlannedRouteFilterSet

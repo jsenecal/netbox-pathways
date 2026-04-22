@@ -785,6 +785,45 @@ class SlackLoopBulkDeleteView(generic.BulkDeleteView):
     table = tables.SlackLoopTable
 
 
+# --- Planned Route ---
+
+class PlannedRouteListView(generic.ObjectListView):
+    queryset = models.PlannedRoute.objects.select_related(
+        'start_structure', 'end_structure', 'start_location', 'end_location',
+        'tenant', 'cable',
+    )
+    table = tables.PlannedRouteTable
+    filterset = filters.PlannedRouteFilterSet
+    filterset_form = filterforms.PlannedRouteFilterForm
+
+
+class PlannedRouteView(generic.ObjectView):
+    queryset = models.PlannedRoute.objects.all()
+    layout = layout.SimpleLayout(
+        left_panels=[
+            panels.PlannedRoutePanel(),
+            TagsPanel(),
+            CustomFieldsPanel(),
+            CommentsPanel(),
+        ],
+        right_panels=[],
+    )
+
+
+class PlannedRouteEditView(generic.ObjectEditView):
+    queryset = models.PlannedRoute.objects.all()
+    form = forms.PlannedRouteForm
+
+
+class PlannedRouteDeleteView(generic.ObjectDeleteView):
+    queryset = models.PlannedRoute.objects.all()
+
+
+class PlannedRouteBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.PlannedRoute.objects.all()
+    table = tables.PlannedRouteTable
+
+
 # --- Map View ---
 
 

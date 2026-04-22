@@ -13,6 +13,7 @@ from ..choices import (
     ConduitMaterialChoices,
     EncasementTypeChoices,
     PathwayTypeChoices,
+    PlannedRouteStatusChoices,
     StructureStatusChoices,
     StructureTypeChoices,
 )
@@ -27,6 +28,7 @@ from ..models import (
     Innerduct,
     Pathway,
     PathwayLocation,
+    PlannedRoute,
     SiteGeometry,
     SlackLoop,
     Structure,
@@ -315,3 +317,26 @@ class CircuitGeometrySerializer(NetBoxModelSerializer):
             'provider_reference', 'comments', 'tags', 'created', 'last_updated',
         ]
         brief_fields = ('id', 'url', 'display_url', 'display', 'circuit')
+
+
+class PlannedRouteSerializer(NetBoxModelSerializer):
+    url = drf_serializers.HyperlinkedIdentityField(
+        view_name='plugins-api:netbox_pathways-api:plannedroute-detail',
+    )
+    status = ChoiceField(choices=PlannedRouteStatusChoices, required=False)
+    start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
+    end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
+    start_location = LocationSerializer(nested=True, required=False, allow_null=True)
+    end_location = LocationSerializer(nested=True, required=False, allow_null=True)
+    tenant = TenantSerializer(nested=True, required=False, allow_null=True)
+    cable = CableSerializer(nested=True, required=False, allow_null=True)
+
+    class Meta:
+        model = PlannedRoute
+        fields = [
+            'id', 'url', 'display_url', 'display', 'name', 'status',
+            'start_structure', 'end_structure', 'start_location', 'end_location',
+            'pathway_ids', 'constraints',
+            'tenant', 'cable', 'comments', 'tags', 'created', 'last_updated',
+        ]
+        brief_fields = ('id', 'url', 'display_url', 'display', 'name', 'status')

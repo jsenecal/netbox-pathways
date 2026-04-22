@@ -149,6 +149,20 @@ menu = PluginMenu(
                 ),
             ),
             PluginMenuItem(
+                link='plugins:netbox_pathways:plannedroute_list',
+                link_text='Planned Routes',
+                permissions=['netbox_pathways.view_plannedroute'],
+                buttons=(
+                    PluginMenuButton(
+                        link='plugins:netbox_pathways:plannedroute_add',
+                        title='Add',
+                        icon_class='mdi mdi-plus-thick',
+                        color=ButtonColorChoices.GREEN,
+                        permissions=['netbox_pathways.add_plannedroute'],
+                    ),
+                ),
+            ),
+            PluginMenuItem(
                 link='plugins:netbox_pathways:pullsheet_list',
                 link_text='Pull Sheets',
                 permissions=['netbox_pathways.view_cablesegment'],

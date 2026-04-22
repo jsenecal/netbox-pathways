@@ -129,3 +129,13 @@ class CircuitGeometryIndex(SearchIndex):
         ('comments', 5000),
     )
     display_attrs = ('circuit', 'provider_reference')
+
+
+@register_search
+class PlannedRouteIndex(SearchIndex):
+    model = models.PlannedRoute
+    fields = (
+        ('name', 100),
+        ('comments', 5000),
+    )
+    display_attrs = ('status', 'start_structure', 'end_structure')

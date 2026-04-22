@@ -69,6 +69,7 @@ from .models import (
     Innerduct,
     Pathway,
     PathwayLocation,
+    PlannedRoute,
     SiteGeometry,
     SlackLoop,
     Structure,
@@ -660,3 +661,41 @@ class CircuitGeometryForm(NetBoxModelForm):
         widgets = {
             'path': PathwaysMapWidget(),
         }
+
+
+# --- Planned Route ---
+
+class PlannedRouteForm(NetBoxModelForm):
+    start_structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), required=False, selector=True,
+    )
+    end_structure = DynamicModelChoiceField(
+        queryset=Structure.objects.all(), required=False, selector=True,
+    )
+    start_location = DynamicModelChoiceField(
+        queryset=Location.objects.all(), required=False, selector=True,
+    )
+    end_location = DynamicModelChoiceField(
+        queryset=Location.objects.all(), required=False, selector=True,
+    )
+    tenant = DynamicModelChoiceField(
+        queryset=Tenant.objects.all(), required=False, selector=True,
+    )
+    cable = DynamicModelChoiceField(
+        queryset=Cable.objects.all(), required=False, selector=True,
+    )
+
+    fieldsets = (
+        FieldSet('name', 'status', 'tenant', name='Planned Route'),
+        FieldSet('start_structure', 'start_location', 'end_structure', 'end_location', name='Endpoints'),
+        FieldSet('cable', name='Assignment'),
+        FieldSet('tags', name='Details'),
+    )
+
+    class Meta:
+        model = PlannedRoute
+        fields = [
+            'name', 'status', 'start_structure', 'start_location',
+            'end_structure', 'end_location',
+            'tenant', 'cable', 'comments', 'tags',
+        ]
