@@ -17,7 +17,9 @@ import {
     STRUCTURE_SHAPES,
     structureIcon as _structureIcon,
     pathwayStyle as _pathwayStyle,
+    titleCase as _titleCase,
 } from './map-utils';
+import { Popover } from './popover';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -148,11 +150,11 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeatu
         if (!pw.coords || pw.coords.length < 2) return;
         const latlngs = pw.coords.map(function (c) { return [c[1], c[0]] as [number, number]; });
         const style = _pathwayStyle(pw.pathway_type || '');
-        const tooltipText = (pw.label || 'Pathway') + (pw.type ? ' (' + pw.type + ')' : '');
-        const polyline = L.polyline(latlngs, style)
-            .bindPopup('<strong>' + (pw.label || 'Pathway') + '</strong><br>' + (pw.type || ''))
-            .bindTooltip(tooltipText, { sticky: true, direction: 'top', offset: [0, -8] })
-            .addTo(routeGroup);
+        const props = { id: pw.pk, name: pw.label || '', pathway_type: pw.pathway_type || '' };
+        const polyline = L.polyline(latlngs, style).addTo(routeGroup);
+        polyline.on('mouseover', function (e: L.LeafletMouseEvent) { Popover.show(e.latlng, props as any); });
+        polyline.on('mousemove', function (e: L.LeafletMouseEvent) { Popover.show(e.latlng, props as any); });
+        polyline.on('mouseout', function () { Popover.hide(); });
         (polyline as any)._rpPk = pw.pk;
         const mid = latlngs[Math.floor(latlngs.length / 2)];
         features.push({
@@ -189,12 +191,10 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeatu
                     iconAnchor: [half, half] as [number, number],
                     popupAnchor: [0, -(half + 2)] as [number, number],
                 });
-                const sTooltip = s.label + (s.type ? ' (' + s.type + ')' : '');
-                const marker = L.marker([s.geo[0], s.geo[1]], { icon: ringIcon })
-                    .bindPopup('<strong>' + s.label + '</strong>' +
-                        (s.type ? '<br><small>' + s.type + '</small>' : ''))
-                    .bindTooltip(sTooltip, { direction: 'top', offset: [0, -sz / 2] })
-                    .addTo(markerGroup);
+                const marker = L.marker([s.geo[0], s.geo[1]], { icon: ringIcon }).addTo(markerGroup);
+                const sProps = { id: s.pk, name: s.label, structure_type: stype };
+                marker.on('mouseover', function (e: L.LeafletMouseEvent) { Popover.show(e.latlng || marker.getLatLng(), sProps as any); });
+                marker.on('mouseout', function () { Popover.hide(); });
                 (marker as any)._rpPk = s.pk;
                 features.push({
                     layer: marker,
@@ -203,12 +203,10 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeatu
                     latlng: L.latLng(s.geo[0], s.geo[1]),
                 });
             } else {
-                const sTooltip = s.label + (s.type ? ' (' + s.type + ')' : '');
-                const marker = L.marker([s.geo[0], s.geo[1]], { icon })
-                    .bindPopup('<strong>' + s.label + '</strong>' +
-                        (s.type ? '<br><small>' + s.type + '</small>' : ''))
-                    .bindTooltip(sTooltip, { direction: 'top', offset: [0, -sz / 2] })
-                    .addTo(markerGroup);
+                const marker = L.marker([s.geo[0], s.geo[1]], { icon }).addTo(markerGroup);
+                const sProps = { id: s.pk, name: s.label, structure_type: stype };
+                marker.on('mouseover', function (e: L.LeafletMouseEvent) { Popover.show(e.latlng || marker.getLatLng(), sProps as any); });
+                marker.on('mouseout', function () { Popover.hide(); });
                 (marker as any)._rpPk = s.pk;
                 features.push({
                     layer: marker,
@@ -244,8 +242,10 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeatu
 function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): void {
     const { map } = createMap(elementId, config);
 
-    // Legend only — no data layers
+    // Legend + popover (same hover tooltip as the infrastructure map)
     createLegend(map);
+    Popover.setDeps({ titleCase: _titleCase });
+    Popover.init(map);
 
     // Expose map reference
     window._rpMap = map;
