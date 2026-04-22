@@ -991,14 +991,17 @@ class RoutePlannerView(LoginRequiredMixin, View):
         cable = None
         initial = {}
 
+        start_structure = None
+        end_structure = None
+
         if cable_pk:
             cable = get_object_or_404(Cable, pk=cable_pk)
-            start = self._resolve_termination(cable, 'A')
-            end = self._resolve_termination(cable, 'B')
-            if start:
-                initial['start_structure'] = start.pk
-            if end:
-                initial['end_structure'] = end.pk
+            start_structure = self._resolve_termination(cable, 'A')
+            end_structure = self._resolve_termination(cable, 'B')
+            if start_structure:
+                initial['start_structure'] = start_structure.pk
+            if end_structure:
+                initial['end_structure'] = end_structure.pk
 
         form = forms.RoutePlannerEndpointForm(initial=initial)
 
@@ -1020,10 +1023,38 @@ class RoutePlannerView(LoginRequiredMixin, View):
         default_lon = plugin_cfg.get('map_center_lon', -73.5673)
         default_zoom = plugin_cfg.get('map_zoom', 10)
 
+        # Structure colors/shapes for map markers (mirrors map-utils.ts constants)
+        structure_colors = {
+            'pole': '#2e7d32', 'manhole': '#1565c0', 'handhole': '#00838f',
+            'cabinet': '#e65100', 'vault': '#6a1b9a', 'pedestal': '#f9a825',
+            'building_entrance': '#c62828', 'splice_closure': '#795548',
+            'tower': '#b71c1c', 'roof': '#616161', 'equipment_room': '#00796b',
+            'telecom_closet': '#283593', 'riser_room': '#ad1457',
+        }
+        structure_shapes = {
+            'pole': '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/><circle cx="10" cy="10" r="2.5"/>',
+            'manhole': '<circle cx="10" cy="10" r="8"/>',
+            'handhole': '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/>',
+            'cabinet': '<rect x="2" y="2" width="16" height="16" rx="4"/>',
+            'vault': '<rect x="2" y="2" width="16" height="16" rx="2"/>',
+            'pedestal': '<rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke-width="2.5"/>',
+            'building_entrance': '<rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke-width="2.5"/><circle cx="10" cy="10" r="2.5"/>',
+            'splice_closure': '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/><circle cx="10" cy="10" r="2.5"/>',
+            'tower': '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/><line x1="10" y1="2" x2="10" y2="18" stroke-width="1.5"/><line x1="2" y1="10" x2="18" y2="10" stroke-width="1.5"/>',
+            'roof': '<polygon points="10,2 18,17 2,17"/>',
+            'equipment_room': '<rect x="3" y="3" width="14" height="14" rx="4" fill="none" stroke-width="2.5"/>',
+            'telecom_closet': '<rect x="3" y="3" width="10" height="10" rx="1" transform="rotate(45 10 10)"/>',
+            'riser_room': '<rect x="3.5" y="3.5" width="9" height="9" rx="1" fill="none" stroke-width="2.5" transform="rotate(45 10 10)"/>',
+        }
+
         ctx = {
             'form': form,
             'cable': cable,
+            'start_structure': start_structure,
+            'end_structure': end_structure,
             'pathways_config_json': json.dumps(pathways_config),
+            'structure_colors_json': json.dumps(structure_colors),
+            'structure_shapes_json': json.dumps(structure_shapes),
         }
 
         if extent:
@@ -1141,6 +1172,8 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
             })
 
             # Build route geometry for map rendering
+            # Collect all structures along the route
+            structure_pks = set()
             for pw in ordered:
                 coords = linestring_to_coords(pw.path) if pw.path else []
                 route_geometry['pathways'].append({
@@ -1149,18 +1182,30 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
                     'type': pw.get_pathway_type_display() if pw.pathway_type else '',
                     'coords': coords,
                 })
+                if pw.start_structure_id:
+                    structure_pks.add(pw.start_structure_id)
+                if pw.end_structure_id:
+                    structure_pks.add(pw.end_structure_id)
 
-            # Start/end structure markers
-            try:
-                start_struct = models.Structure.objects.get(pk=int(start_pk))
-                route_geometry['start'] = point_to_latlon(start_struct.location)
-            except (models.Structure.DoesNotExist, ValueError, TypeError):
-                pass
-            try:
-                end_struct = models.Structure.objects.get(pk=int(end_pk))
-                route_geometry['end'] = point_to_latlon(end_struct.location)
-            except (models.Structure.DoesNotExist, ValueError, TypeError):
-                pass
+            # Fetch all route structures for markers
+            structures = models.Structure.objects.filter(
+                pk__in=structure_pks,
+            ).only('pk', 'name', 'structure_type', 'location')
+            route_structures = []
+            for s in structures:
+                geo = point_to_latlon(s.location)
+                if geo:
+                    is_start = (s.pk == int(start_pk))
+                    is_end = (s.pk == int(end_pk))
+                    route_structures.append({
+                        'pk': s.pk,
+                        'label': str(s),
+                        'type': s.get_structure_type_display() if s.structure_type else '',
+                        'structure_type': s.structure_type or '',
+                        'geo': geo,
+                        'role': 'start' if is_start else ('end' if is_end else 'mid'),
+                    })
+            route_geometry['structures'] = route_structures
 
         html = render_to_string(
             'netbox_pathways/inc/planner_results.html',

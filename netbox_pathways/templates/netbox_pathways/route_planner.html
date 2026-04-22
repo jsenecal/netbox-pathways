@@ -60,12 +60,15 @@
         border-left: 1px solid var(--tblr-border-color, #dee2e6);
         overflow-y: auto;
     }
-    /* Constrain TomSelect dropdowns inside the sidebar */
-    .pw-sidebar .ts-dropdown {
-        max-height: 180px;
+    /* TomSelect dropdowns: overlay instead of pushing content down */
+    .pw-sidebar .ts-wrapper {
+        position: relative;
     }
-    .pw-sidebar .ts-dropdown-content {
-        max-height: 160px;
+    .pw-sidebar .ts-dropdown {
+        position: absolute;
+        z-index: 1000;
+        max-height: 200px;
+        overflow-y: auto;
     }
     .pw-sidebar-section {
         border-bottom: 1px solid var(--tblr-border-color, #dee2e6);
@@ -262,7 +265,18 @@
                                 <i class="mdi mdi-cable-data"></i>
                                 Route for cable <a href="/dcim/cables/{{ cable.pk }}/">{{ cable }}</a>
                             </div>
+                            <div class="pw-cable-info" style="background: var(--tblr-bg-surface-secondary, rgba(0,0,0,0.03)); border-color: var(--tblr-border-color, #dee2e6);">
+                                <div><small class="text-muted">Start:</small> <strong>{{ start_structure|default:"(unresolved)" }}</strong></div>
+                                <div><small class="text-muted">End:</small> <strong>{{ end_structure|default:"(unresolved)" }}</strong></div>
+                            </div>
+                            {# Hidden inputs carry the values since selects are omitted #}
+                            {% if start_structure %}
+                            <input type="hidden" name="start_structure" value="{{ start_structure.pk }}">
                             {% endif %}
+                            {% if end_structure %}
+                            <input type="hidden" name="end_structure" value="{{ end_structure.pk }}">
+                            {% endif %}
+                            {% else %}
                             <div class="mb-2">
                                 <label class="form-label" style="font-size:0.85em;" for="id_start_structure">Start</label>
                                 {{ form.start_structure }}
@@ -271,6 +285,7 @@
                                 <label class="form-label" style="font-size:0.85em;" for="id_end_structure">End</label>
                                 {{ form.end_structure }}
                             </div>
+                            {% endif %}
                         </div>
 
                         {# === Constraints === #}
@@ -519,7 +534,6 @@
             // Draw each pathway segment
             data.pathways.forEach(function(pw) {
                 if (pw.coords && pw.coords.length > 1) {
-                    // coords are [lon, lat], Leaflet needs [lat, lon]
                     var latlngs = pw.coords.map(function(c) { return [c[1], c[0]]; });
                     L.polyline(latlngs, {
                         color: '#206bc4',
@@ -530,17 +544,43 @@
                 }
             });
 
-            // Start marker (green)
-            if (data.start) {
-                L.circleMarker([data.start[0], data.start[1]], {
-                    radius: 8, color: '#fff', weight: 2, fillColor: '#2fb344', fillOpacity: 1
-                }).bindPopup('Start').addTo(markerGroup);
-            }
-            // End marker (red)
-            if (data.end) {
-                L.circleMarker([data.end[0], data.end[1]], {
-                    radius: 8, color: '#fff', weight: 2, fillColor: '#d63939', fillOpacity: 1
-                }).bindPopup('End').addTo(markerGroup);
+            // Structure markers — match main map style (SVG shapes + type colors)
+            var structureColors = {{ structure_colors_json|safe }};
+            var structureShapes = {{ structure_shapes_json|safe }};
+
+            if (data.structures) {
+                data.structures.forEach(function(s) {
+                    if (!s.geo) return;
+                    var stype = s.structure_type || '';
+                    var fill = structureColors[stype] || '#666';
+                    var shape = structureShapes[stype] || '<circle cx="10" cy="10" r="7"/>';
+                    var isEndpoint = (s.role === 'start' || s.role === 'end');
+                    var sz = isEndpoint ? 24 : 20;
+                    var ringColor = s.role === 'start' ? '#2fb344' : (s.role === 'end' ? '#d63939' : 'none');
+                    var ring = isEndpoint
+                        ? '<circle cx="' + (sz/2) + '" cy="' + (sz/2) + '" r="' + (sz/2 - 1) + '" fill="none" stroke="' + ringColor + '" stroke-width="3"/>'
+                        : '';
+                    // Scale the inner shape to fit
+                    var innerOffset = isEndpoint ? 2 : 0;
+                    var innerScale = isEndpoint ? (sz - 4) / 20 : 1;
+                    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + sz + '" height="' + sz + '">'
+                        + ring
+                        + '<g transform="translate(' + innerOffset + ',' + innerOffset + ') scale(' + innerScale + ')" '
+                        + 'fill="' + fill + '" stroke="' + fill + '">'
+                        + shape + '</g></svg>';
+                    var icon = L.divIcon({
+                        html: svg,
+                        className: '',
+                        iconSize: [sz, sz],
+                        iconAnchor: [sz/2, sz/2],
+                        popupAnchor: [0, -sz/2]
+                    });
+                    L.marker([s.geo[0], s.geo[1]], {icon: icon})
+                      .bindPopup(
+                          '<strong>' + s.label + '</strong>' +
+                          (s.type ? '<br><small>' + s.type + '</small>' : '')
+                      ).addTo(markerGroup);
+                });
             }
 
             routeGroup.addTo(map);
@@ -555,28 +595,7 @@
             }
         });
 
-        {% if cable %}
-        // Lock endpoint fields in cable mode: use hidden inputs for values,
-        // lock TomSelect visually. Disabled fields are excluded from FormData,
-        // so we use hidden inputs instead.
-        (function() {
-            var ids = ['id_start_structure', 'id_end_structure'];
-            ids.forEach(function(id) {
-                var sel = document.getElementById(id);
-                if (!sel) return;
-                var ts = sel.tomselect;
-                if (ts) {
-                    ts.lock();
-                } else {
-                    // TomSelect not yet initialized; use a MutationObserver
-                    var obs = new MutationObserver(function() {
-                        if (sel.tomselect) { sel.tomselect.lock(); obs.disconnect(); }
-                    });
-                    obs.observe(sel.parentElement, {childList: true, subtree: true});
-                }
-            });
-        })();
-        {% endif %}
+        // (Cable mode: endpoint selects are hidden in template, hidden inputs carry values)
     });
 })();
 </script>
