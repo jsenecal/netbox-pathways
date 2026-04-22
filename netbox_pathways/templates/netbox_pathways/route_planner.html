@@ -555,17 +555,27 @@
             }
         });
 
-        // Debug: log HTMX form values before submission
-        document.getElementById('route-planner-form').addEventListener('htmx:configRequest', function(evt) {
-            console.log('HTMX request params:', evt.detail.parameters);
-        });
-
         {% if cable %}
-        // Disable endpoint fields when in cable mode
-        var startField = document.getElementById('id_start_structure');
-        var endField = document.getElementById('id_end_structure');
-        if (startField) startField.setAttribute('disabled', 'disabled');
-        if (endField) endField.setAttribute('disabled', 'disabled');
+        // Lock endpoint fields in cable mode: use hidden inputs for values,
+        // lock TomSelect visually. Disabled fields are excluded from FormData,
+        // so we use hidden inputs instead.
+        (function() {
+            var ids = ['id_start_structure', 'id_end_structure'];
+            ids.forEach(function(id) {
+                var sel = document.getElementById(id);
+                if (!sel) return;
+                var ts = sel.tomselect;
+                if (ts) {
+                    ts.lock();
+                } else {
+                    // TomSelect not yet initialized; use a MutationObserver
+                    var obs = new MutationObserver(function() {
+                        if (sel.tomselect) { sel.tomselect.lock(); obs.disconnect(); }
+                    });
+                    obs.observe(sel.parentElement, {childList: true, subtree: true});
+                }
+            });
+        })();
         {% endif %}
     });
 })();
