@@ -71,23 +71,27 @@ class PathwayGraph:
     _TOPO_TTL = 300  # seconds
 
     @classmethod
-    def build_topology(cls):
+    def build_topology(cls, pathway_qs=None):
         """Build lightweight graph for route-finding only.
 
         Uses values_list() to skip ORM model instantiation entirely.
-        Cached for 5 minutes — subsequent calls are instant.
+        Cached for 5 minutes when using the default queryset (pathway_qs is None).
+        When pathway_qs is provided, the cache is bypassed entirely.
         """
         import time
 
-        now = time.time()
-        if cls._topo_cache and (now - cls._topo_cache_time) < cls._TOPO_TTL:
-            return cls._topo_cache
+        use_cache = pathway_qs is None
+        if use_cache:
+            now = time.time()
+            if cls._topo_cache and (now - cls._topo_cache_time) < cls._TOPO_TTL:
+                return cls._topo_cache
 
         instance = cls()
 
         # Fast path: raw tuples, no model instances, no joins for geo
+        base_qs = pathway_qs if pathway_qs is not None else models.Pathway.objects.all()
         rows = (
-            models.Pathway.objects
+            base_qs
             .exclude(start_structure__isnull=True, start_location__isnull=True)
             .exclude(end_structure__isnull=True, end_location__isnull=True)
             .values_list(
@@ -146,8 +150,9 @@ class PathwayGraph:
         # (2ms on 37k edges). A* heuristic would require 30k coordinate
         # transforms which takes longer than the Dijkstra itself.
 
-        cls._topo_cache = instance
-        cls._topo_cache_time = now
+        if use_cache:
+            cls._topo_cache = instance
+            cls._topo_cache_time = now
         return instance
 
     @classmethod
