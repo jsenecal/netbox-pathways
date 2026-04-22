@@ -155,7 +155,7 @@ class BboxFilterMixin:
         """Lightweight ETag from max(last_updated) + count."""
         agg = queryset.aggregate(t=Max("last_updated"), c=Count("id"))
         raw = f"{agg['t']}:{agg['c']}"
-        return hashlib.md5(raw.encode()).hexdigest()
+        return hashlib.md5(raw.encode(), usedforsecurity=False).hexdigest()
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())

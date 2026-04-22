@@ -5,7 +5,6 @@ Usage:
     python manage.py generate_sample_data --flush   # delete existing sample data first
 """
 
-import math
 import random
 
 from dcim.models import Cable, Location, Site
@@ -126,10 +125,10 @@ class Command(BaseCommand):
         direct_buried = self._create_direct_buried(structures, tenants)
 
         self.stdout.write('Creating innerducts (500)...')
-        innerducts = self._create_innerducts(conduits)
+        self._create_innerducts(conduits)
 
         self.stdout.write('Creating conduit junctions (200)...')
-        junctions = self._create_conduit_junctions(conduits, structures)
+        self._create_conduit_junctions(conduits, structures)
 
         self.stdout.write('Creating cables (300)...')
         cables = self._create_cables()
@@ -179,7 +178,7 @@ class Command(BaseCommand):
 
     def _create_sites(self):
         sites = []
-        for i, city in enumerate(CITY_NAMES):
+        for _i, city in enumerate(CITY_NAMES):
             name = f'Site-{city}'
             site, _ = Site.objects.get_or_create(
                 name=name, defaults={'slug': f'site-{city.lower().replace(" ", "-")}'},
@@ -419,7 +418,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING('  No pathways available for cable segments.'))
             return []
         segments = []
-        for i in range(500):
+        for _i in range(500):
             cable = random.choice(cables)
             pathway = random.choice(pathways)
             segments.append(CableSegment(
@@ -433,7 +432,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING('  No cables/structures available for slack loops.'))
             return []
         loops = []
-        for i in range(100):
+        for _i in range(100):
             cable = random.choice(cables)
             structure = random.choice(structures)
             length = round(random.uniform(1, 15), 1)
@@ -452,7 +451,7 @@ class Command(BaseCommand):
             return []
         waypoints = []
         used_keys = set()
-        for i in range(500):
+        for _i in range(500):
             pathway = random.choice(pathways)
             seq = random.randint(0, 10)
             key = (pathway.pk, seq)

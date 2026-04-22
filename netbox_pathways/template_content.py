@@ -5,7 +5,6 @@ from netbox.plugins.templates import PluginTemplateExtension
 
 from . import models
 from .geo import linestring_to_coords, point_to_latlon
-from .routing import validate_cable_route
 
 
 def _leaflet_head():
@@ -307,6 +306,8 @@ class CableSlackLoopExtension(PluginTemplateExtension):
     models = ['dcim.cable']
 
     def left_page(self):
+        from django.utils.html import format_html, mark_safe
+
         obj = self.context['object']
         slack_loops = models.SlackLoop.objects.filter(cable=obj).select_related('structure', 'pathway')
         if not slack_loops.exists():
@@ -314,18 +315,14 @@ class CableSlackLoopExtension(PluginTemplateExtension):
 
         rows = []
         for sl in slack_loops:
-            pw_name = str(sl.pathway) if sl.pathway else '—'
-            rows.append(
-                f'<tr>'
-                f'<td><a href="{sl.structure.get_absolute_url()}">{sl.structure.name}</a></td>'
-                f'<td>{pw_name}</td>'
-                f'<td>{sl.length} m</td>'
-                f'</tr>'
-            )
+            pw_name = str(sl.pathway) if sl.pathway else '\u2014'
+            rows.append(format_html(
+                '<tr><td><a href="{}">{}</a></td><td>{}</td><td>{} m</td></tr>',
+                sl.structure.get_absolute_url(), sl.structure.name, pw_name, sl.length,
+            ))
 
         total = sum(sl.length for sl in slack_loops)
 
-        from django.utils.html import format_html, mark_safe
         return format_html(
             '<div class="card mb-3">'
             '<div class="card-header"><h5 class="card-title mb-0">Slack Loops</h5></div>'
@@ -335,7 +332,7 @@ class CableSlackLoopExtension(PluginTemplateExtension):
             '<tbody>{}</tbody>'
             '<tfoot><tr><td colspan="2"><strong>Total</strong></td><td><strong>{} m</strong></td></tr></tfoot>'
             '</table></div></div>',
-            mark_safe(''.join(rows)),
+            mark_safe(''.join(rows)),  # noqa: S308 — rows built via format_html (pre-escaped)
             total,
         )
 
@@ -346,6 +343,8 @@ class StructureSlackLoopExtension(PluginTemplateExtension):
     models = ['netbox_pathways.structure']
 
     def right_page(self):
+        from django.utils.html import format_html, mark_safe
+
         obj = self.context['object']
         slack_loops = models.SlackLoop.objects.filter(structure=obj).select_related('cable', 'pathway')
         if not slack_loops.exists():
@@ -353,16 +352,12 @@ class StructureSlackLoopExtension(PluginTemplateExtension):
 
         rows = []
         for sl in slack_loops:
-            pw_name = str(sl.pathway) if sl.pathway else '—'
-            rows.append(
-                f'<tr>'
-                f'<td><a href="#">{sl.cable.label}</a></td>'
-                f'<td>{pw_name}</td>'
-                f'<td>{sl.length} m</td>'
-                f'</tr>'
-            )
+            pw_name = str(sl.pathway) if sl.pathway else '\u2014'
+            rows.append(format_html(
+                '<tr><td><a href="#">{}</a></td><td>{}</td><td>{} m</td></tr>',
+                sl.cable.label, pw_name, sl.length,
+            ))
 
-        from django.utils.html import format_html, mark_safe
         return format_html(
             '<div class="card mb-3">'
             '<div class="card-header"><h5 class="card-title mb-0">Slack Loops</h5></div>'
@@ -371,7 +366,7 @@ class StructureSlackLoopExtension(PluginTemplateExtension):
             '<thead><tr><th>Cable</th><th>Pathway</th><th>Length</th></tr></thead>'
             '<tbody>{}</tbody>'
             '</table></div></div>',
-            mark_safe(''.join(rows)),
+            mark_safe(''.join(rows)),  # noqa: S308 — rows built via format_html (pre-escaped)
         )
 
 

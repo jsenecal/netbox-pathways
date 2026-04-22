@@ -23,7 +23,8 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import yaml
 from django.contrib.gis.gdal import DataSource
 from django.core.management.base import BaseCommand, CommandError
-from django.db import connections, models as db_models
+from django.db import connections
+from django.db import models as db_models
 
 from netbox_pathways.geo import get_srid
 from netbox_pathways.models import (
@@ -164,7 +165,7 @@ class Command(BaseCommand):
         try:
             ds = DataSource(options['source'])
         except Exception as e:
-            raise CommandError(f"Cannot open geodata source: {e}")
+            raise CommandError(f"Cannot open geodata source: {e}") from e
 
         layer_index = schema.get('layer', 0)
         layer = ds[layer_index]
@@ -185,7 +186,7 @@ class Command(BaseCommand):
 
         temp_dir = None
         if source_srid != storage_srid:
-            self._log(f'  Reprojecting via ogr2ogr...')
+            self._log('  Reprojecting via ogr2ogr...')
             temp_dir = tempfile.mkdtemp(prefix='geodata_import_')
             src_path = options['source']
             base = os.path.splitext(os.path.basename(src_path))[0]
@@ -568,10 +569,10 @@ class Command(BaseCommand):
         try:
             with open(path) as f:
                 return yaml.safe_load(f)
-        except FileNotFoundError:
-            raise CommandError(f"Schema file not found: {path}")
+        except FileNotFoundError as e:
+            raise CommandError(f"Schema file not found: {path}") from e
         except yaml.YAMLError as e:
-            raise CommandError(f"Invalid YAML in schema file: {e}")
+            raise CommandError(f"Invalid YAML in schema file: {e}") from e
 
     def _resolve_srid(self, schema, layer):
         source_srid = schema.get('source_srid', 'auto')
@@ -585,7 +586,7 @@ class Command(BaseCommand):
                     srs.identify_epsg()
                 if srs.srid:
                     return srs.srid
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
 
         raise CommandError(
@@ -617,8 +618,8 @@ class Command(BaseCommand):
         if isinstance(value, int):
             try:
                 return model.objects.get(pk=value)
-            except model.DoesNotExist:
-                raise CommandError(f"{model.__name__} with pk={value} not found")
+            except model.DoesNotExist as e:
+                raise CommandError(f"{model.__name__} with pk={value} not found") from e
 
         # Try slug
         try:
@@ -627,7 +628,7 @@ class Command(BaseCommand):
                 return model.objects.get(slug=value)
             except model.DoesNotExist:
                 pass
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
         # Try name
@@ -637,7 +638,7 @@ class Command(BaseCommand):
                 return model.objects.get(name=value)
             except model.DoesNotExist:
                 pass
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
         raise CommandError(

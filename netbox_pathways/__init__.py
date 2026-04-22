@@ -39,7 +39,7 @@ class NetBoxPathwaysConfig(PluginConfig):
         if base_layers:
             tiles = []
             for layer in base_layers:
-                tile = {k: v for k, v in layer.items()}
+                tile = dict(layer.items())
                 tile.setdefault('maxZoom', max_zoom)
                 tiles.append(tile)
         else:

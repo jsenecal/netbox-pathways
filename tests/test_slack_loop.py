@@ -1,6 +1,7 @@
 import pytest
 from dcim.models import Cable
 from django.contrib.gis.geos import Point
+from django.db import IntegrityError
 
 from netbox_pathways.geo import get_srid
 from netbox_pathways.models import SlackLoop, Structure
@@ -26,7 +27,7 @@ class TestSlackLoop:
         assert sl.length == 3.5
 
     def test_structure_required(self, cable):
-        with pytest.raises(Exception):
+        with pytest.raises(IntegrityError):
             SlackLoop.objects.create(cable=cable, structure=None, length=1.0)
 
     def test_str_representation(self, cable, structure):

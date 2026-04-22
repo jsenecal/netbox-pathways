@@ -11,6 +11,33 @@ from tenancy.models import Tenant
 from utilities.forms.fields import CSVModelChoiceField, DynamicModelChoiceField
 from utilities.forms.rendering import FieldSet
 
+from .choices import (
+    AerialTypeChoices,
+    BankFaceChoices,
+    ConduitBankConfigChoices,
+    ConduitMaterialChoices,
+    EncasementTypeChoices,
+    StructureStatusChoices,
+    StructureTypeChoices,
+)
+from .geo import get_srid, to_leaflet
+from .models import (
+    AerialSpan,
+    CableSegment,
+    CircuitGeometry,
+    Conduit,
+    ConduitBank,
+    ConduitJunction,
+    DirectBuried,
+    Innerduct,
+    Pathway,
+    PathwayLocation,
+    PlannedRoute,
+    SiteGeometry,
+    SlackLoop,
+    Structure,
+)
+
 
 class PathwaysMapWidget(BaseGeometryWidget):
     """Map widget using Leaflet + geoman for geometry editing."""
@@ -45,35 +72,8 @@ class PathwaysMapWidget(BaseGeometryWidget):
     def get_context(self, name, value, attrs):
         context = super().get_context(name, value, attrs)
         if self.endpoint_geojson:
-            context['endpoint_json'] = mark_safe(json.dumps(self.endpoint_geojson))
+            context['endpoint_json'] = mark_safe(json.dumps(self.endpoint_geojson))  # noqa: S308
         return context
-
-from .choices import (
-    AerialTypeChoices,
-    BankFaceChoices,
-    ConduitBankConfigChoices,
-    ConduitMaterialChoices,
-    EncasementTypeChoices,
-    StructureStatusChoices,
-    StructureTypeChoices,
-)
-from .geo import get_srid, to_leaflet
-from .models import (
-    AerialSpan,
-    CableSegment,
-    CircuitGeometry,
-    Conduit,
-    ConduitBank,
-    ConduitJunction,
-    DirectBuried,
-    Innerduct,
-    Pathway,
-    PathwayLocation,
-    PlannedRoute,
-    SiteGeometry,
-    SlackLoop,
-    Structure,
-)
 
 
 class PathwayEndpointFormMixin:

@@ -1,6 +1,5 @@
 """Tests for MapView — kiosk param, URL params, parse_box, safe casts."""
 
-import json
 from unittest.mock import patch
 
 import pytest

@@ -1233,7 +1233,7 @@ class MapView(LoginRequiredMixin, View):
             bbox = result.get('bbox')
             if bbox:
                 return bbox  # (west, south, east, north)
-        except Exception:
+        except Exception:  # noqa: S110
             pass
         return None
 
