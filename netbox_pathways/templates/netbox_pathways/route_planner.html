@@ -60,6 +60,13 @@
         border-left: 1px solid var(--tblr-border-color, #dee2e6);
         overflow-y: auto;
     }
+    /* Constrain TomSelect dropdowns inside the sidebar */
+    .pw-sidebar .ts-dropdown {
+        max-height: 180px;
+    }
+    .pw-sidebar .ts-dropdown-content {
+        max-height: 160px;
+    }
     .pw-sidebar-section {
         border-bottom: 1px solid var(--tblr-border-color, #dee2e6);
         padding: 12px 14px;
@@ -546,6 +553,11 @@
             if (allBounds.isValid()) {
                 map.fitBounds(allBounds.pad(0.15));
             }
+        });
+
+        // Debug: log HTMX form values before submission
+        document.getElementById('route-planner-form').addEventListener('htmx:configRequest', function(evt) {
+            console.log('HTMX request params:', evt.detail.parameters);
         });
 
         {% if cable %}
