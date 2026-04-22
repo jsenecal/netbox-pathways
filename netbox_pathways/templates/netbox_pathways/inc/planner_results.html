@@ -15,7 +15,7 @@
         {% for hop in route.hops %}
         {% if hop.kind == "structure" %}
         <div class="pw-hop-item pw-hop-structure{% if hop.role == 'start' %} pw-hop-start{% elif hop.role == 'end' %} pw-hop-end{% endif %}"
-             {% if hop.geo %}data-hop-lat="{{ hop.geo.0 }}" data-hop-lon="{{ hop.geo.1 }}"{% endif %}>
+             data-hop-kind="structure" data-hop-pk="{{ hop.pk }}">
             <span class="pw-hop-dot"
                   style="background:{% if hop.role == 'start' %}#2fb344{% elif hop.role == 'end' %}#d63939{% else %}#206bc4{% endif %};"></span>
             <span class="pw-hop-label">{{ hop.label }}</span>
@@ -23,7 +23,7 @@
         </div>
         {% elif hop.kind == "pathway" %}
         <div class="pw-hop-item pw-hop-pathway"
-             {% if hop.geo %}data-hop-lat="{{ hop.geo.0 }}" data-hop-lon="{{ hop.geo.1 }}"{% endif %}>
+             data-hop-kind="pathway" data-hop-pk="{{ hop.pk }}">
             <span class="pw-hop-line"></span>
             <span class="pw-hop-label"><a href="/plugins/pathways/pathways/{{ hop.pk }}/">{{ hop.label }}</a></span>
             <span class="pw-hop-length">{% if hop.length %}{{ hop.length|floatformat:0 }}m{% endif %}</span>

@@ -1155,6 +1155,7 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
                     'pk': pw.pk,
                     'label': str(pw),
                     'type': pw.get_pathway_type_display() if pw.pathway_type else '',
+                    'pathway_type': pw.pathway_type or '',
                     'coords': coords,
                 })
                 if pw.start_structure_id:

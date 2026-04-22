@@ -38,6 +38,32 @@ export const PATHWAY_COLORS: Record<string, string> = {
     'tray': '#2e7d32', 'raceway': '#00838f', 'submarine': '#1a237e',
 };
 
+export const PATHWAY_DASH: Record<string, string> = {
+    'conduit': '5,5', 'conduit_bank': '', 'aerial': '10,5',
+    'direct_buried': '2,4', 'innerduct': '8,3', 'microduct': '1,3',
+    'tray': '', 'raceway': '12,4', 'submarine': '6,2,2,2',
+};
+
+export interface PathwayStyleDef {
+    color: string;
+    weight: number;
+    opacity: number;
+    dashArray: string;
+}
+
+/** Return the polyline style for a given pathway_type key. */
+export function pathwayStyle(pathwayType: string): PathwayStyleDef {
+    const color = PATHWAY_COLORS[pathwayType] || '#888';
+    const dash = PATHWAY_DASH[pathwayType] || '';
+    const isBanks = pathwayType === 'conduit_bank';
+    return {
+        color,
+        weight: isBanks ? 5 : 3,
+        opacity: isBanks ? 0.8 : 0.7,
+        dashArray: dash,
+    };
+}
+
 // ---------------------------------------------------------------------------
 // Marker helpers
 // ---------------------------------------------------------------------------

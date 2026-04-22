@@ -9,6 +9,7 @@ import {
     STRUCTURE_COLORS,
     STRUCTURE_SHAPES,
     PATHWAY_COLORS,
+    PATHWAY_DASH,
     titleCase as _titleCase,
 } from './map-utils';
 
@@ -111,12 +112,6 @@ export function createZoomHint(map: L.Map): HTMLDivElement {
 // ---------------------------------------------------------------------------
 // Legend control
 // ---------------------------------------------------------------------------
-
-const PATHWAY_DASH: Record<string, string> = {
-    'conduit': '5,5', 'conduit_bank': '', 'aerial': '10,5',
-    'direct_buried': '2,4', 'innerduct': '8,3', 'microduct': '1,3',
-    'tray': '', 'raceway': '12,4', 'submarine': '6,2,2,2',
-};
 
 /**
  * Inject trusted static SVG markup into an element.

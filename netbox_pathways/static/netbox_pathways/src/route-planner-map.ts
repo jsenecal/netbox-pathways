@@ -2,7 +2,8 @@
  * Route planner map entry point.
  *
  * Tiles + legend only. No infrastructure data layers.
- * Route overlay (pathways + structures) rendered after HTMX results.
+ * Route overlay (pathways + structures) rendered after HTMX results,
+ * using the same styling as the main infrastructure map.
  * Map bounds are locked to the route extent once found.
  */
 
@@ -14,16 +15,19 @@ import type { MapInitConfig } from './map-core';
 import {
     STRUCTURE_COLORS,
     STRUCTURE_SHAPES,
+    structureIcon as _structureIcon,
+    pathwayStyle as _pathwayStyle,
 } from './map-utils';
 
 // ---------------------------------------------------------------------------
-// Route overlay rendering
+// Types
 // ---------------------------------------------------------------------------
 
 interface RoutePlannerPathway {
     pk: number;
     label?: string;
-    type?: string;
+    type?: string;        // display name
+    pathway_type?: string; // raw key for style lookup
     coords: [number, number][];
 }
 
@@ -41,61 +45,172 @@ interface RouteGeometryData {
     structures: RoutePlannerStructure[];
 }
 
-function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): void {
+// ---------------------------------------------------------------------------
+// Highlight state
+// ---------------------------------------------------------------------------
+
+let _highlightedLayer: L.Layer | null = null;
+let _highlightOutline: L.Polyline | null = null;
+
+function _lighten(hex: string, amount: number): string {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const r = Math.min(255, ((num >> 16) & 0xff) + Math.round(255 * amount));
+    const g = Math.min(255, ((num >> 8) & 0xff) + Math.round(255 * amount));
+    const b = Math.min(255, (num & 0xff) + Math.round(255 * amount));
+    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
+function _unhighlight(map: L.Map): void {
+    if (_highlightOutline) {
+        _highlightOutline.remove();
+        _highlightOutline = null;
+    }
+    if (_highlightedLayer) {
+        const layer = _highlightedLayer as Record<string, any>;
+        if (layer._origIcon) {
+            (layer as any).setIcon(layer._origIcon);
+            delete layer._origIcon;
+        }
+        if (layer._origStyle && typeof (layer as any).setStyle === 'function') {
+            (layer as any).setStyle(layer._origStyle);
+            delete layer._origStyle;
+        }
+        _highlightedLayer = null;
+    }
+}
+
+function _highlightStructure(map: L.Map, marker: L.Marker, structureType: string): void {
+    _unhighlight(map);
+    _highlightedLayer = marker;
+    const m = marker as L.Marker & { _origIcon?: L.Icon | L.DivIcon };
+    m._origIcon = (m as any).getIcon();
+    const color = STRUCTURE_COLORS[structureType] || '#616161';
+    const shape = STRUCTURE_SHAPES[structureType] || '<circle cx="10" cy="10" r="8"/>';
+    const isOutline = shape.includes('fill="none"');
+    m.setIcon(L.divIcon({
+        className: 'pw-marker pw-marker-selected',
+        html: '<svg class="pw-marker-svg" viewBox="0 0 20 20" width="26" height="26"' +
+              ' stroke="' + (isOutline ? color : 'white') +
+              '" fill="' + color + '">' + shape + '</svg>',
+        iconSize: [26, 26] as [number, number],
+        iconAnchor: [13, 13] as [number, number],
+        popupAnchor: [0, -14] as [number, number],
+    }));
+}
+
+function _highlightPathway(map: L.Map, polyline: L.Polyline): void {
+    _unhighlight(map);
+    _highlightedLayer = polyline;
+    const pl = polyline as L.Polyline & { _origStyle?: L.PathOptions };
+    const opts = (pl as any).options || {};
+    pl._origStyle = {
+        weight: opts.weight || 3,
+        opacity: opts.opacity || 0.7,
+        color: opts.color,
+        dashArray: opts.dashArray,
+    };
+    const latlngs = pl.getLatLngs() as L.LatLng[];
+    if (latlngs && latlngs.length > 0) {
+        _highlightOutline = L.polyline(latlngs, {
+            color: _lighten(opts.color || '#888', 0.55),
+            weight: 12,
+            opacity: 0.5,
+            interactive: false,
+        }).addTo(map);
+    }
+    pl.setStyle({ weight: 6, opacity: 1, dashArray: '' });
+}
+
+// ---------------------------------------------------------------------------
+// Route overlay rendering
+// ---------------------------------------------------------------------------
+
+interface RenderedFeature {
+    layer: L.Layer;
+    kind: 'structure' | 'pathway';
+    structureType?: string;
+    latlng: L.LatLng;
+}
+
+function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeature[] {
     // Clear previous route layers
     if (window._rpRouteLayer) { map.removeLayer(window._rpRouteLayer); window._rpRouteLayer = null; }
     if (window._rpMarkerLayer) { map.removeLayer(window._rpMarkerLayer); window._rpMarkerLayer = null; }
 
-    if (!data.pathways || data.pathways.length === 0) return;
+    const features: RenderedFeature[] = [];
+    if (!data.pathways || data.pathways.length === 0) return features;
 
     const routeGroup = L.featureGroup();
     const markerGroup = L.featureGroup();
 
-    // Draw each pathway segment
+    // Draw each pathway segment with proper style
     data.pathways.forEach(function (pw) {
-        if (pw.coords && pw.coords.length > 1) {
-            const latlngs = pw.coords.map(function (c) { return [c[1], c[0]] as [number, number]; });
-            L.polyline(latlngs, {
-                color: '#206bc4',
-                weight: 4,
-                opacity: 0.85,
-            }).bindPopup('<strong>' + (pw.label || 'Pathway') + '</strong><br>' + (pw.type || ''))
-              .addTo(routeGroup);
-        }
+        if (!pw.coords || pw.coords.length < 2) return;
+        const latlngs = pw.coords.map(function (c) { return [c[1], c[0]] as [number, number]; });
+        const style = _pathwayStyle(pw.pathway_type || '');
+        const polyline = L.polyline(latlngs, style)
+            .bindPopup('<strong>' + (pw.label || 'Pathway') + '</strong><br>' + (pw.type || ''))
+            .addTo(routeGroup);
+        (polyline as any)._rpPk = pw.pk;
+        const mid = latlngs[Math.floor(latlngs.length / 2)];
+        features.push({
+            layer: polyline,
+            kind: 'pathway',
+            latlng: L.latLng(mid[0], mid[1]),
+        });
     });
 
-    // Structure markers — SVG icons matching main map style
+    // Structure markers — proper icons matching main map
     if (data.structures) {
         data.structures.forEach(function (s) {
             if (!s.geo) return;
             const stype = s.structure_type || '';
-            const fill = STRUCTURE_COLORS[stype] || '#666';
-            const shape = STRUCTURE_SHAPES[stype] || '<circle cx="10" cy="10" r="8"/>';
             const isEndpoint = (s.role === 'start' || s.role === 'end');
             const sz = isEndpoint ? 24 : 20;
-            const ringColor = s.role === 'start' ? '#2fb344' : (s.role === 'end' ? '#d63939' : 'none');
-            const ring = isEndpoint
-                ? '<circle cx="' + (sz / 2) + '" cy="' + (sz / 2) + '" r="' + (sz / 2 - 1) + '" fill="none" stroke="' + ringColor + '" stroke-width="3"/>'
-                : '';
-            const innerOffset = isEndpoint ? 2 : 0;
-            const innerScale = isEndpoint ? (sz - 4) / 20 : 1;
-            const svgHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="' + sz + '" height="' + sz + '">'
-                + ring
-                + '<g transform="translate(' + innerOffset + ',' + innerOffset + ') scale(' + innerScale + ')" '
-                + 'fill="' + fill + '" stroke="' + fill + '">'
-                + shape + '</g></svg>';
-            const icon = L.divIcon({
-                html: svgHtml,
-                className: '',
-                iconSize: [sz, sz] as [number, number],
-                iconAnchor: [sz / 2, sz / 2] as [number, number],
-                popupAnchor: [0, -sz / 2] as [number, number],
-            });
-            L.marker([s.geo[0], s.geo[1]], { icon: icon })
-              .bindPopup(
-                  '<strong>' + s.label + '</strong>' +
-                  (s.type ? '<br><small>' + s.type + '</small>' : ''),
-              ).addTo(markerGroup);
+            const icon = _structureIcon(stype, sz);
+
+            // For start/end, wrap with a colored ring
+            if (isEndpoint) {
+                const fill = STRUCTURE_COLORS[stype] || '#616161';
+                const shape = STRUCTURE_SHAPES[stype] || '<circle cx="10" cy="10" r="8"/>';
+                const isOutline = shape.includes('fill="none"');
+                const ringColor = s.role === 'start' ? '#2fb344' : '#d63939';
+                const half = sz / 2;
+                const ringIcon = L.divIcon({
+                    className: 'pw-marker',
+                    html: '<svg xmlns="http://www.w3.org/2000/svg" width="' + sz + '" height="' + sz + '">'
+                        + '<circle cx="' + half + '" cy="' + half + '" r="' + (half - 1) + '" fill="none" stroke="' + ringColor + '" stroke-width="3"/>'
+                        + '<g transform="translate(2,2) scale(' + ((sz - 4) / 20) + ')"'
+                        + ' fill="' + fill + '" stroke="' + (isOutline ? fill : 'white') + '">'
+                        + shape + '</g></svg>',
+                    iconSize: [sz, sz] as [number, number],
+                    iconAnchor: [half, half] as [number, number],
+                    popupAnchor: [0, -(half + 2)] as [number, number],
+                });
+                const marker = L.marker([s.geo[0], s.geo[1]], { icon: ringIcon })
+                    .bindPopup('<strong>' + s.label + '</strong>' +
+                        (s.type ? '<br><small>' + s.type + '</small>' : ''))
+                    .addTo(markerGroup);
+                (marker as any)._rpPk = s.pk;
+                features.push({
+                    layer: marker,
+                    kind: 'structure',
+                    structureType: stype,
+                    latlng: L.latLng(s.geo[0], s.geo[1]),
+                });
+            } else {
+                const marker = L.marker([s.geo[0], s.geo[1]], { icon })
+                    .bindPopup('<strong>' + s.label + '</strong>' +
+                        (s.type ? '<br><small>' + s.type + '</small>' : ''))
+                    .addTo(markerGroup);
+                (marker as any)._rpPk = s.pk;
+                features.push({
+                    layer: marker,
+                    kind: 'structure',
+                    structureType: stype,
+                    latlng: L.latLng(s.geo[0], s.geo[1]),
+                });
+            }
         });
     }
 
@@ -109,9 +224,11 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): void {
     if (allBounds.isValid()) {
         const padded = allBounds.pad(0.15);
         map.fitBounds(padded);
-        map.setMaxBounds(padded.pad(0.5));  // allow slight panning beyond route
+        map.setMaxBounds(padded.pad(0.5));
         map.setMinZoom(map.getBoundsZoom(padded.pad(0.5)));
     }
+
+    return features;
 }
 
 // ---------------------------------------------------------------------------
@@ -121,52 +238,85 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): void {
 function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): void {
     const { map } = createMap(elementId, config);
 
-    // Legend only — no data layers, no infrastructure features
+    // Legend only — no data layers
     createLegend(map);
 
-    // Expose map reference for the inline form JS
+    // Expose map reference
     window._rpMap = map;
     window._rpRouteLayer = null;
     window._rpMarkerLayer = null;
+
+    // Track rendered features for highlight on hop click
+    let renderedFeatures: RenderedFeature[] = [];
 
     // Listen for HTMX results
     document.body.addEventListener('htmx:afterSettle', function (evt: Event) {
         const detail = (evt as CustomEvent).detail;
         if (!detail || !detail.target || detail.target.id !== 'planner-results') return;
 
-        // Clear previous
-        if (window._rpRouteLayer) { map.removeLayer(window._rpRouteLayer); window._rpRouteLayer = null; }
-        if (window._rpMarkerLayer) { map.removeLayer(window._rpMarkerLayer); window._rpMarkerLayer = null; }
         // Reset bounds lock from previous route
         map.setMaxBounds(null as unknown as L.LatLngBoundsExpression);
         map.setMinZoom(1);
+        _unhighlight(map);
 
         const dataEl = document.getElementById('route-geometry-data');
-        if (!dataEl) return;
+        if (!dataEl) {
+            // No route found — clear
+            if (window._rpRouteLayer) { map.removeLayer(window._rpRouteLayer); window._rpRouteLayer = null; }
+            if (window._rpMarkerLayer) { map.removeLayer(window._rpMarkerLayer); window._rpMarkerLayer = null; }
+            renderedFeatures = [];
+            return;
+        }
 
         let data: RouteGeometryData;
         try {
             data = JSON.parse(dataEl.textContent || '{}') as RouteGeometryData;
         } catch (e) { return; }
 
-        _renderRouteOverlay(map, data);
+        renderedFeatures = _renderRouteOverlay(map, data);
 
-        // Wire up click-to-center on hop list items
-        const hopItems = document.querySelectorAll('[data-hop-lat][data-hop-lon]');
+        // Build lookup maps: kind+pk -> RenderedFeature
+        const featureMap: Record<string, RenderedFeature> = {};
+        renderedFeatures.forEach(function (f) {
+            const pk = (f.layer as any)._rpPk;
+            if (pk != null) featureMap[f.kind + '-' + pk] = f;
+        });
+
+        // Wire up click-to-center + highlight on hop list items
+        const hopItems = document.querySelectorAll('[data-hop-kind][data-hop-pk]');
         hopItems.forEach(function (item) {
-            (item as HTMLElement).style.cursor = 'pointer';
             item.addEventListener('click', function (e) {
                 if ((e.target as HTMLElement).closest('a')) return;
-                const lat = parseFloat((item as HTMLElement).dataset.hopLat || '0');
-                const lon = parseFloat((item as HTMLElement).dataset.hopLon || '0');
-                if (lat && lon) {
-                    map.flyTo([lat, lon], 18, { duration: 0.5 });
+                const kind = (item as HTMLElement).dataset.hopKind || '';
+                const pk = (item as HTMLElement).dataset.hopPk || '';
+                const feat = featureMap[kind + '-' + pk];
+                if (!feat) return;
+
+                // Center on feature
+                map.flyTo(feat.latlng, Math.max(map.getZoom(), 16), { duration: 0.5 });
+
+                // Highlight
+                if (feat.kind === 'structure') {
+                    _highlightStructure(map, feat.layer as L.Marker, feat.structureType || '');
+                } else {
+                    _highlightPathway(map, feat.layer as L.Polyline);
                 }
+
+                // Highlight the list item
+                hopItems.forEach(function (h) { h.classList.remove('pw-hop-active'); });
+                item.classList.add('pw-hop-active');
             });
         });
     });
 
-    // Leaflet size recalc after layout settles
+    // Click on map clears highlight
+    map.on('click', function () {
+        _unhighlight(map);
+        const items = document.querySelectorAll('.pw-hop-active');
+        items.forEach(function (item) { item.classList.remove('pw-hop-active'); });
+    });
+
+    // Leaflet size recalc
     setTimeout(function () { map.invalidateSize(); }, 100);
     window.addEventListener('resize', function () { map.invalidateSize(); });
 }
