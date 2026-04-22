@@ -460,11 +460,14 @@ export function loadDataLayers(
 
     // Structures
     if (map.hasLayer(dataLayers.structures)) {
-        const markerClusterGroup = L.markerClusterGroup({
-            maxClusterRadius: 35,
-            spiderfyOnMaxZoom: true,
-            disableClusteringAtZoom: 18,
-        });
+        // MarkerCluster is optional — the route planner doesn't load it
+        const hasClusterPlugin = typeof L.markerClusterGroup === 'function';
+        if (!hasClusterPlugin) {
+            console.info('[pathways] MarkerCluster plugin not loaded — client-side clustering disabled');
+        }
+        const clusterGroup = hasClusterPlugin
+            ? L.markerClusterGroup({ maxClusterRadius: 35, spiderfyOnMaxZoom: true, disableClusteringAtZoom: 18 })
+            : null;
 
         cachedFetch(map, 'structures/', function (data: GeoJSON.FeatureCollection) {
             dataLayers.structures.clearLayers();
@@ -482,7 +485,6 @@ export function loadDataLayers(
                     const latlng = L.latLng(geom.coordinates[1], geom.coordinates[0]);
                     const marker = L.marker(latlng, { icon: _clusterIcon(count) });
                     marker.on('click', function () {
-                        // Zoom in progressively -- 3 levels deeper per click
                         const nextZoom = Math.min(map.getZoom() + 3, map.getMaxZoom());
                         map.setView(latlng, nextZoom);
                     });
@@ -519,8 +521,12 @@ export function loadDataLayers(
                         });
                     },
                 });
-                markerClusterGroup.addLayers(geoLayer.getLayers());
-                dataLayers.structures.addLayer(markerClusterGroup);
+                if (clusterGroup) {
+                    clusterGroup.addLayers(geoLayer.getLayers());
+                    dataLayers.structures.addLayer(clusterGroup);
+                } else {
+                    geoLayer.addTo(dataLayers.structures);
+                }
                 if (callbacks.onStructuresLoaded) {
                     callbacks.onStructuresLoaded(data.features ? data.features.length : 0);
                 }
