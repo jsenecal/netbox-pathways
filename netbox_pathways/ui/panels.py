@@ -152,3 +152,4 @@ class PlannedRoutePanel(ObjectAttributesPanel):
     end_location = attrs.RelatedObjectAttr('end_location', linkify=True, label=_('End location'))
     tenant = attrs.RelatedObjectAttr('tenant', linkify=True, label=_('Tenant'))
     cable = attrs.RelatedObjectAttr('cable', linkify=True, label=_('Cable'))
+    parent = attrs.RelatedObjectAttr('parent', linkify=True, label=_('Split from'))

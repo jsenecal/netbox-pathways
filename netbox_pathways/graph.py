@@ -92,6 +92,7 @@ class PathwayGraph:
         base_qs = pathway_qs if pathway_qs is not None else models.Pathway.objects.all()
         rows = (
             base_qs
+            .exclude(pathway_type='conduit_bank')  # banks are containers, not routable
             .exclude(start_structure__isnull=True, start_location__isnull=True)
             .exclude(end_structure__isnull=True, end_location__isnull=True)
             .values_list(
@@ -159,7 +160,9 @@ class PathwayGraph:
     def _build_base(cls, site_id=None, include_metadata=True):
         instance = cls()
 
-        qs = models.Pathway.objects.select_related(
+        qs = models.Pathway.objects.exclude(
+            pathway_type='conduit_bank',  # banks are containers, not routable
+        ).select_related(
             'start_structure', 'end_structure',
             'start_location', 'end_location',
         ).only(

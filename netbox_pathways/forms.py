@@ -17,6 +17,7 @@ from .choices import (
     ConduitBankConfigChoices,
     ConduitMaterialChoices,
     EncasementTypeChoices,
+    PlannedRouteStatusChoices,
     StructureStatusChoices,
     StructureTypeChoices,
 )
@@ -374,6 +375,19 @@ class AerialSpanBulkEditForm(NetBoxModelBulkEditForm):
 
 # --- Direct Buried ---
 
+class DirectBuriedBulkEditForm(NetBoxModelBulkEditForm):
+    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
+    warning_tape = forms.NullBooleanField(required=False)
+    tracer_wire = forms.NullBooleanField(required=False)
+    armor_type = forms.CharField(max_length=100, required=False)
+
+    model = DirectBuried
+    fieldsets = (
+        FieldSet('tenant', 'warning_tape', 'tracer_wire', 'armor_type'),
+    )
+    nullable_fields = ('tenant', 'armor_type')
+
+
 class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
     start_structure = DynamicModelChoiceField(
         queryset=Structure.objects.all(), required=False, selector=True, quick_add=True,
@@ -410,6 +424,20 @@ class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
 
 
 # --- Innerduct ---
+
+class InnerductBulkEditForm(NetBoxModelBulkEditForm):
+    parent_conduit = DynamicModelChoiceField(
+        queryset=Conduit.objects.all(), required=False, selector=True,
+    )
+    color = forms.CharField(max_length=50, required=False)
+    size = forms.CharField(max_length=50, required=False)
+
+    model = Innerduct
+    fieldsets = (
+        FieldSet('parent_conduit', 'size', 'color'),
+    )
+    nullable_fields = ('color',)
+
 
 class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
     parent_conduit = DynamicModelChoiceField(
@@ -574,6 +602,18 @@ class CableSegmentImportForm(NetBoxModelImportForm):
         ]
 
 
+class CableSegmentBulkEditForm(NetBoxModelBulkEditForm):
+    pathway = DynamicModelChoiceField(
+        queryset=Pathway.objects.all(), required=False, selector=True,
+    )
+
+    model = CableSegment
+    fieldsets = (
+        FieldSet('pathway'),
+    )
+    nullable_fields = ('pathway',)
+
+
 # --- Slack Loop ---
 
 class SlackLoopForm(NetBoxModelForm):
@@ -591,6 +631,19 @@ class SlackLoopForm(NetBoxModelForm):
     class Meta:
         model = SlackLoop
         fields = ['cable', 'structure', 'pathway', 'length', 'comments', 'tags']
+
+
+class SlackLoopBulkEditForm(NetBoxModelBulkEditForm):
+    structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False, selector=True)
+    pathway = DynamicModelChoiceField(
+        queryset=Pathway.objects.all(), required=False, selector=True,
+    )
+
+    model = SlackLoop
+    fieldsets = (
+        FieldSet('structure', 'pathway'),
+    )
+    nullable_fields = ('pathway',)
 
 
 # --- Pathway Location ---
@@ -701,6 +754,17 @@ class PlannedRouteForm(NetBoxModelForm):
         ]
 
 
+class PlannedRouteBulkEditForm(NetBoxModelBulkEditForm):
+    status = forms.ChoiceField(choices=PlannedRouteStatusChoices, required=False)
+    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
+
+    model = PlannedRoute
+    fieldsets = (
+        FieldSet('status', 'tenant'),
+    )
+    nullable_fields = ('tenant',)
+
+
 # --- Route Planner ---
 
 class RoutePlannerEndpointForm(forms.Form):
@@ -708,9 +772,11 @@ class RoutePlannerEndpointForm(forms.Form):
 
     start_structure = DynamicModelChoiceField(
         queryset=Structure.objects.all(), required=False, label='Start Structure',
+        context={'disabled': 'no_pathways', 'description': 'description'},
     )
     end_structure = DynamicModelChoiceField(
         queryset=Structure.objects.all(), required=False, label='End Structure',
+        context={'disabled': 'no_pathways', 'description': 'description'},
     )
 
 

@@ -10,7 +10,16 @@ from django.urls import reverse
 from django.utils.text import slugify
 from django.views import View
 from extras.ui.panels import CustomFieldsPanel, TagsPanel
-from netbox.object_actions import CloneObject, DeleteObject, EditObject, ObjectAction
+from netbox.object_actions import (
+    AddObject,
+    BulkDelete,
+    BulkEdit,
+    BulkExport,
+    CloneObject,
+    DeleteObject,
+    EditObject,
+    ObjectAction,
+)
 from netbox.ui import layout
 from netbox.ui.panels import CommentsPanel, ObjectsTablePanel, TemplatePanel
 from netbox.views import generic
@@ -19,6 +28,7 @@ from utilities.views import ViewTab, register_model_view
 from netbox_pathways.registry import registry as map_layer_registry
 
 from . import filterforms, filters, forms, models, tables
+from .choices import PlannedRouteStatusChoices
 from .graph import PathwayGraph, _endpoint_nodes, connected_pathways_db
 from .ui import panels
 
@@ -262,6 +272,7 @@ class PathwayListView(generic.ObjectListView):
     table = tables.PathwayTable
     filterset = filters.PathwayFilterSet
     filterset_form = filterforms.PathwayFilterForm
+    actions = (BulkExport,)
 
 
 class PathwayView(generic.ObjectView):
@@ -440,6 +451,7 @@ class DirectBuriedListView(generic.ObjectListView):
     table = tables.DirectBuriedTable
     filterset = filters.DirectBuriedFilterSet
     filterset_form = filterforms.DirectBuriedFilterForm
+    actions = (AddObject, BulkExport, BulkEdit, BulkDelete)
 
 
 class DirectBuriedView(generic.ObjectView):
@@ -471,6 +483,18 @@ class DirectBuriedDeleteView(generic.ObjectDeleteView):
     queryset = models.DirectBuried.objects.all()
 
 
+class DirectBuriedBulkEditView(generic.BulkEditView):
+    queryset = models.DirectBuried.objects.all()
+    filterset = filters.DirectBuriedFilterSet
+    table = tables.DirectBuriedTable
+    form = forms.DirectBuriedBulkEditForm
+
+
+class DirectBuriedBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.DirectBuried.objects.all()
+    table = tables.DirectBuriedTable
+
+
 # --- Innerduct ---
 
 class InnerductListView(generic.ObjectListView):
@@ -481,6 +505,7 @@ class InnerductListView(generic.ObjectListView):
     table = tables.InnerductTable
     filterset = filters.InnerductFilterSet
     filterset_form = filterforms.InnerductFilterForm
+    actions = (AddObject, BulkExport, BulkEdit, BulkDelete)
 
 
 class InnerductView(generic.ObjectView):
@@ -510,6 +535,18 @@ class InnerductEditView(generic.ObjectEditView):
 
 class InnerductDeleteView(generic.ObjectDeleteView):
     queryset = models.Innerduct.objects.all()
+
+
+class InnerductBulkEditView(generic.BulkEditView):
+    queryset = models.Innerduct.objects.all()
+    filterset = filters.InnerductFilterSet
+    table = tables.InnerductTable
+    form = forms.InnerductBulkEditForm
+
+
+class InnerductBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.Innerduct.objects.all()
+    table = tables.InnerductTable
 
 
 # --- Conduit Bank ---
@@ -578,6 +615,7 @@ class ConduitJunctionListView(generic.ObjectListView):
     table = tables.ConduitJunctionTable
     filterset = filters.ConduitJunctionFilterSet
     filterset_form = filterforms.ConduitJunctionFilterForm
+    actions = (AddObject, BulkExport)
 
 
 class ConduitJunctionView(generic.ObjectView):
@@ -652,6 +690,13 @@ class CableSegmentBulkImportView(generic.BulkImportView):
     model_form = forms.CableSegmentImportForm
 
 
+class CableSegmentBulkEditView(generic.BulkEditView):
+    queryset = models.CableSegment.objects.all()
+    filterset = filters.CableSegmentFilterSet
+    table = tables.CableSegmentTable
+    form = forms.CableSegmentBulkEditForm
+
+
 class CableSegmentBulkDeleteView(generic.BulkDeleteView):
     queryset = models.CableSegment.objects.all()
     table = tables.CableSegmentTable
@@ -664,6 +709,7 @@ class PathwayLocationListView(generic.ObjectListView):
     table = tables.PathwayLocationTable
     filterset = filters.PathwayLocationFilterSet
     filterset_form = filterforms.PathwayLocationFilterForm
+    actions = (AddObject, BulkExport)
 
 
 class PathwayLocationView(generic.ObjectView):
@@ -694,6 +740,7 @@ class SiteGeometryListView(generic.ObjectListView):
     table = tables.SiteGeometryTable
     filterset = filters.SiteGeometryFilterSet
     filterset_form = filterforms.SiteGeometryFilterForm
+    actions = (AddObject, BulkExport)
 
 
 class SiteGeometryView(generic.ObjectView):
@@ -726,6 +773,7 @@ class CircuitGeometryListView(generic.ObjectListView):
     table = tables.CircuitGeometryTable
     filterset = filters.CircuitGeometryFilterSet
     filterset_form = filterforms.CircuitGeometryFilterForm
+    actions = (AddObject, BulkExport)
 
 
 class CircuitGeometryView(generic.ObjectView):
@@ -756,6 +804,7 @@ class SlackLoopListView(generic.ObjectListView):
     table = tables.SlackLoopTable
     filterset = filters.SlackLoopFilterSet
     filterset_form = filterforms.SlackLoopFilterForm
+    actions = (AddObject, BulkExport, BulkEdit, BulkDelete)
 
 
 class SlackLoopView(generic.ObjectView):
@@ -780,6 +829,13 @@ class SlackLoopDeleteView(generic.ObjectDeleteView):
     queryset = models.SlackLoop.objects.all()
 
 
+class SlackLoopBulkEditView(generic.BulkEditView):
+    queryset = models.SlackLoop.objects.all()
+    filterset = filters.SlackLoopFilterSet
+    table = tables.SlackLoopTable
+    form = forms.SlackLoopBulkEditForm
+
+
 class SlackLoopBulkDeleteView(generic.BulkDeleteView):
     queryset = models.SlackLoop.objects.all()
     table = tables.SlackLoopTable
@@ -795,6 +851,7 @@ class PlannedRouteListView(generic.ObjectListView):
     table = tables.PlannedRouteTable
     filterset = filters.PlannedRouteFilterSet
     filterset_form = filterforms.PlannedRouteFilterForm
+    actions = (AddObject, BulkExport, BulkEdit, BulkDelete)
 
 
 class SplitRoute(ObjectAction):
@@ -804,6 +861,31 @@ class SplitRoute(ObjectAction):
     @classmethod
     def get_url(cls, obj):
         return reverse('plugins:netbox_pathways:plannedroute_split', args=[obj.pk])
+
+
+class ReplanRoute(ObjectAction):
+    label = 'Re-plan'
+    template_name = 'netbox_pathways/buttons/replan_route.html'
+
+    @classmethod
+    def get_url(cls, obj):
+        params = []
+        if obj.start_structure_id:
+            params.append(f'start={obj.start_structure_id}')
+        if obj.end_structure_id:
+            params.append(f'end={obj.end_structure_id}')
+        qs = '&'.join(params)
+        base = reverse('plugins:netbox_pathways:route_planner')
+        return f'{base}?{qs}' if qs else base
+
+
+class RevertSplit(ObjectAction):
+    label = 'Revert Split'
+    template_name = 'netbox_pathways/buttons/revert_split.html'
+
+    @classmethod
+    def get_url(cls, obj):
+        return reverse('plugins:netbox_pathways:plannedroute_revert', args=[obj.pk])
 
 
 class ApplyRouteToCable(ObjectAction):
@@ -817,7 +899,10 @@ class ApplyRouteToCable(ObjectAction):
 
 class PlannedRouteView(generic.ObjectView):
     queryset = models.PlannedRoute.objects.all()
-    actions = (SplitRoute, ApplyRouteToCable, CloneObject, EditObject, DeleteObject)
+    actions = (
+        ReplanRoute, SplitRoute, RevertSplit, ApplyRouteToCable,
+        CloneObject, EditObject, DeleteObject,
+    )
     layout = layout.SimpleLayout(
         left_panels=[
             panels.PlannedRoutePanel(),
@@ -825,19 +910,65 @@ class PlannedRouteView(generic.ObjectView):
             CustomFieldsPanel(),
             CommentsPanel(),
         ],
-        right_panels=[],
+        right_panels=[
+            TemplatePanel('netbox_pathways/inc/plannedroute_map_panel.html'),
+        ],
     )
 
     def get_extra_context(self, request, instance):
+        import json
+
+        from .geo import linestring_to_coords, point_to_latlon
+
         ctx = super().get_extra_context(request, instance)
+
         if instance.pathway_ids:
             pathways = models.Pathway.objects.filter(
                 pk__in=instance.pathway_ids,
             ).select_related('start_structure', 'end_structure')
             pw_map = {pw.pk: pw for pw in pathways}
-            ctx['pathways'] = [pw_map[pid] for pid in instance.pathway_ids if pid in pw_map]
+            ordered = [pw_map[pid] for pid in instance.pathway_ids if pid in pw_map]
+            ctx['pathways'] = ordered
+
+            # Build route geometry for map rendering
+            route_geometry = {'pathways': [], 'structures': []}
+            structure_pks = set()
+            for pw in ordered:
+                coords = linestring_to_coords(pw.path) if pw.path else []
+                route_geometry['pathways'].append({
+                    'pk': pw.pk,
+                    'label': str(pw),
+                    'pathway_type': pw.pathway_type or '',
+                    'coords': coords,
+                })
+                if pw.start_structure_id:
+                    structure_pks.add(pw.start_structure_id)
+                if pw.end_structure_id:
+                    structure_pks.add(pw.end_structure_id)
+
+            structures = models.Structure.objects.filter(
+                pk__in=structure_pks,
+            ).only('pk', 'name', 'structure_type', 'location')
+            for s in structures:
+                geo = point_to_latlon(s.location)
+                if geo:
+                    route_geometry['structures'].append({
+                        'pk': s.pk,
+                        'label': str(s),
+                        'structure_type': s.structure_type or '',
+                        'geo': geo,
+                        'is_start': s.pk == instance.start_structure_id,
+                        'is_end': s.pk == instance.end_structure_id,
+                    })
+
+            ctx['route_geometry_json'] = json.dumps(route_geometry)
         else:
             ctx['pathways'] = []
+            ctx['route_geometry_json'] = ''
+
+        # Lineage: children of this route (if split)
+        ctx['children'] = instance.children.all() if instance.status == PlannedRouteStatusChoices.STATUS_SPLIT else []
+
         return ctx
 
 
@@ -848,6 +979,13 @@ class PlannedRouteEditView(generic.ObjectEditView):
 
 class PlannedRouteDeleteView(generic.ObjectDeleteView):
     queryset = models.PlannedRoute.objects.all()
+
+
+class PlannedRouteBulkEditView(generic.BulkEditView):
+    queryset = models.PlannedRoute.objects.all()
+    filterset = filters.PlannedRouteFilterSet
+    table = tables.PlannedRouteTable
+    form = forms.PlannedRouteBulkEditForm
 
 
 class PlannedRouteBulkDeleteView(generic.BulkDeleteView):
@@ -865,6 +1003,7 @@ class PlannedRouteSplitView(LoginRequiredMixin, PermissionRequiredMixin, View):
         pathways = models.Pathway.objects.filter(
             pk__in=route.pathway_ids,
         ).select_related('start_structure', 'end_structure')
+        pw_map = {pw.pk: pw for pw in pathways}
 
         mid_structures = set()
         for pw in pathways:
@@ -874,9 +1013,30 @@ class PlannedRouteSplitView(LoginRequiredMixin, PermissionRequiredMixin, View):
                 mid_structures.add(pw.end_structure)
         mid_structures.discard(route.end_structure)
 
+        # Compute hop counts for each split option
+        split_options = []
+        for s in sorted(mid_structures, key=lambda s: str(s)):
+            first_count = 0
+            past_split = False
+            for pid in route.pathway_ids:
+                pw = pw_map.get(pid)
+                if not pw:
+                    continue
+                if not past_split:
+                    first_count += 1
+                    if s in (pw.end_structure, pw.start_structure):
+                        past_split = True
+            second_count = len(route.pathway_ids) - first_count
+            split_options.append({
+                'pk': s.pk,
+                'label': str(s),
+                'first_hops': first_count,
+                'second_hops': second_count,
+            })
+
         return render(request, 'netbox_pathways/plannedroute_split.html', {
             'route': route,
-            'mid_structures': sorted(mid_structures, key=lambda s: str(s)),
+            'split_options': split_options,
         })
 
     def post(self, request, pk):
@@ -913,6 +1073,7 @@ class PlannedRouteSplitView(LoginRequiredMixin, PermissionRequiredMixin, View):
             end_structure=split_structure,
             pathway_ids=first_ids,
             tenant=route.tenant,
+            parent=route,
         )
         models.PlannedRoute.objects.create(
             name=name_second,
@@ -921,13 +1082,37 @@ class PlannedRouteSplitView(LoginRequiredMixin, PermissionRequiredMixin, View):
             end_location=route.end_location,
             pathway_ids=second_ids,
             tenant=route.tenant,
+            parent=route,
         )
 
-        route.status = 'archived'
+        route.status = PlannedRouteStatusChoices.STATUS_SPLIT
         route.save()
 
         messages.success(request, f'Route split into "{name_first}" and "{name_second}".')
         return redirect('plugins:netbox_pathways:plannedroute_list')
+
+
+class PlannedRouteRevertSplitView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    """Revert a split: restore parent to draft, delete children."""
+
+    permission_required = (
+        'netbox_pathways.change_plannedroute',
+        'netbox_pathways.delete_plannedroute',
+    )
+
+    def post(self, request, pk):
+        route = get_object_or_404(models.PlannedRoute, pk=pk)
+        if route.status != PlannedRouteStatusChoices.STATUS_SPLIT:
+            messages.error(request, 'Only split routes can be reverted.')
+            return redirect(route.get_absolute_url())
+
+        child_count = route.children.count()
+        route.children.all().delete()
+        route.status = PlannedRouteStatusChoices.STATUS_DRAFT
+        route.save()
+
+        messages.success(request, f'Split reverted — {child_count} child route(s) removed.')
+        return redirect(route.get_absolute_url())
 
 
 class PlannedRouteApplyView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -996,10 +1181,26 @@ class RoutePlannerView(LoginRequiredMixin, View):
 
         if cable_pk:
             cable = get_object_or_404(Cable, pk=cable_pk)
-            start_structure = self._resolve_termination(cable, 'A')
-            end_structure = self._resolve_termination(cable, 'B')
+
+        # Explicit start/end query params take priority (e.g. gap planning)
+        start_pk = request.GET.get('start')
+        end_pk = request.GET.get('end')
+        if start_pk:
+            start_structure = models.Structure.objects.filter(pk=start_pk).first()
             if start_structure:
                 initial['start_structure'] = start_structure.pk
+        if end_pk:
+            end_structure = models.Structure.objects.filter(pk=end_pk).first()
+            if end_structure:
+                initial['end_structure'] = end_structure.pk
+
+        # Fall back to cable terminations if not explicitly provided
+        if cable and not start_structure:
+            start_structure = self._resolve_termination(cable, 'A')
+            if start_structure:
+                initial['start_structure'] = start_structure.pk
+        if cable and not end_structure:
+            end_structure = self._resolve_termination(cable, 'B')
             if end_structure:
                 initial['end_structure'] = end_structure.pk
 
@@ -1184,15 +1385,28 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
             route_geometry['structures'] = route_structures
 
             # Build interleaved hop list: structure → pathway → structure → ...
+            # Each pathway has a fixed start/end in the DB, but the route may
+            # traverse it in either direction.  Track the "current" node to
+            # determine entry/exit for each pathway.
             struct_map = {s['pk']: s for s in route_structures}
             hops = []
             seen_structures = set()
+            current_pk = int(start_pk)
             for pw in ordered:
-                # Add start structure if not already listed
-                ss = pw.start_structure
-                if ss and ss.pk not in seen_structures and ss.pk in struct_map:
-                    seen_structures.add(ss.pk)
-                    hops.append({'kind': 'structure', **struct_map[ss.pk]})
+                # Determine traversal direction: does the route enter via
+                # start_structure or end_structure?
+                ss_pk = pw.start_structure_id
+                es_pk = pw.end_structure_id
+                if current_pk == es_pk:
+                    entry_pk, exit_pk = es_pk, ss_pk
+                else:
+                    entry_pk, exit_pk = ss_pk, es_pk
+
+                # Add entry structure if not already listed
+                if entry_pk and entry_pk not in seen_structures and entry_pk in struct_map:
+                    seen_structures.add(entry_pk)
+                    hops.append({'kind': 'structure', **struct_map[entry_pk]})
+
                 # Add the pathway
                 mid = linestring_to_coords(pw.path)
                 pw_geo = None
@@ -1207,18 +1421,28 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
                     'length': pw.length,
                     'geo': pw_geo,
                 })
-                # Add end structure
-                es = pw.end_structure
-                if es and es.pk not in seen_structures and es.pk in struct_map:
-                    seen_structures.add(es.pk)
-                    hops.append({'kind': 'structure', **struct_map[es.pk]})
+
+                # Add exit structure
+                if exit_pk and exit_pk not in seen_structures and exit_pk in struct_map:
+                    seen_structures.add(exit_pk)
+                    hops.append({'kind': 'structure', **struct_map[exit_pk]})
+
+                # Advance current position
+                if exit_pk:
+                    current_pk = exit_pk
             routes[0]['hops'] = hops
+
+        cable_pk = request.POST.get('cable_pk')
+        existing_segment_count = 0
+        if cable_pk:
+            existing_segment_count = models.CableSegment.objects.filter(cable_id=cable_pk).count()
 
         html = render_to_string(
             'netbox_pathways/inc/planner_results.html',
             {
                 'routes': routes,
-                'cable_pk': request.POST.get('cable_pk'),
+                'cable_pk': cable_pk,
+                'existing_segment_count': existing_segment_count,
                 'start_structure_pk': start_pk,
                 'end_structure_pk': end_pk,
                 'route_geometry_json': json.dumps(route_geometry),
@@ -1239,12 +1463,14 @@ class RoutePlannerSaveView(LoginRequiredMixin, PermissionRequiredMixin, View):
         start_pk = request.POST.get('start_structure')
         end_pk = request.POST.get('end_structure')
         name = request.POST.get('name', '').strip() or 'Unnamed Route'
+        cable_pk = request.POST.get('cable_pk')
 
         route = models.PlannedRoute.objects.create(
             name=name,
             start_structure_id=int(start_pk) if start_pk else None,
             end_structure_id=int(end_pk) if end_pk else None,
             pathway_ids=pathway_ids,
+            cable_id=int(cable_pk) if cable_pk else None,
         )
         return redirect(route.get_absolute_url())
 
@@ -1335,7 +1561,9 @@ class RoutePlannerConstraintView(LoginRequiredMixin, View):
         if cfg['kind'] == 'enum':
             from . import choices as choice_module
             choices_cls = getattr(choice_module, cfg['choices_class'])
-            ctx['choices'] = choices_cls.CHOICES
+            ctx['choices'] = [
+                c for c in choices_cls.CHOICES if c[0] != 'conduit_bank'
+            ]
         elif cfg['kind'] == 'model':
             qs_factory = self.MODEL_MAP.get(cfg['model'])
             if qs_factory:
@@ -1668,6 +1896,82 @@ class AdjacencyView(LoginRequiredMixin, View):
 # --- Cable Routing Tab (on dcim.Cable detail page) ---
 
 
+def _annotate_segments(segments):
+    """Add display attributes to a list of CableSegment instances.
+
+    Determines traversal direction for each segment so that gap rows link
+    to the correct start/end structures in the route planner.
+    """
+    if not segments:
+        return
+
+    # First pass: determine traversal direction by finding shared structures
+    # between consecutive connected segments.
+    current_pk = None
+    for i, seg in enumerate(segments):
+        seg.ordinal = i + 1
+        seg.gap_before = (i > 0 and seg.sequence != segments[i - 1].sequence + 1)
+        seg.prev_sequence = segments[i - 1].sequence if i > 0 else 0
+
+        pw = seg.pathway
+        if not pw:
+            seg.start_name = None
+            seg.end_name = None
+            continue
+
+        ss = pw.start_structure_id
+        es = pw.end_structure_id
+
+        if current_pk is None and i == 0:
+            # Determine first segment's entry from the next connected segment.
+            # The shared structure between seg 0 and seg 1 is seg 0's EXIT,
+            # so the entry is the opposite end.
+            for j in range(1, len(segments)):
+                if segments[j].sequence != segments[j - 1].sequence + 1:
+                    break  # gap — can't determine from disconnected segment
+                npw = segments[j].pathway
+                if npw:
+                    shared = {ss, es} & {npw.start_structure_id, npw.end_structure_id}
+                    if shared:
+                        exit_pk = shared.pop()
+                        # Entry is the opposite end from exit
+                        current_pk = es if exit_pk == ss else ss
+                        break
+            if current_pk is None:
+                current_pk = ss  # fallback
+
+        # After a gap, re-determine direction from the next connected segment
+        if seg.gap_before and current_pk not in (ss, es):
+            current_pk = None
+            for j in range(i + 1, len(segments)):
+                if segments[j].sequence != segments[j - 1].sequence + 1:
+                    break
+                npw = segments[j].pathway
+                if npw:
+                    shared = {ss, es} & {npw.start_structure_id, npw.end_structure_id}
+                    if shared:
+                        exit_pk = shared.pop()
+                        current_pk = es if exit_pk == ss else ss
+                        break
+            if current_pk is None:
+                current_pk = ss  # fallback
+
+        # Determine entry/exit based on current position
+        if current_pk == es:
+            seg._entry_pk, seg._exit_pk = es, ss
+        else:
+            seg._entry_pk, seg._exit_pk = ss, es
+
+        seg.start_name = str(pw.start_endpoint) if pw.start_endpoint else None
+        seg.end_name = str(pw.end_endpoint) if pw.end_endpoint else None
+
+        # Gap endpoint PKs for "Plan Route" link
+        if seg.gap_before and i > 0:
+            seg.gap_start_pk = segments[i - 1]._exit_pk if hasattr(segments[i - 1], '_exit_pk') else None
+            seg.gap_end_pk = seg._entry_pk
+        current_pk = seg._exit_pk
+
+
 @register_model_view(Cable, 'route', path='route')
 class CableRouteView(generic.ObjectView):
     queryset = Cable.objects.all()
@@ -1690,12 +1994,7 @@ class CableRouteView(generic.ObjectView):
         )
         segments = list(segments_qs)
 
-        for i, seg in enumerate(segments):
-            seg.ordinal = i + 1
-            seg.gap_before = (i > 0 and seg.sequence != segments[i - 1].sequence + 1)
-            seg.prev_sequence = segments[i - 1].sequence if i > 0 else 0
-            seg.start_name = str(seg.pathway.start_endpoint) if seg.pathway and seg.pathway.start_endpoint else None
-            seg.end_name = str(seg.pathway.end_endpoint) if seg.pathway and seg.pathway.end_endpoint else None
+        _annotate_segments(segments)
 
         route = validate_cable_route(instance.pk)
         total_length = sum(s.pathway.length or 0 for s in segments if s.pathway)
@@ -1766,12 +2065,7 @@ class CableRoutingMixin:
             )
             .order_by('sequence')
         )
-        for i, seg in enumerate(segments):
-            seg.ordinal = i + 1
-            seg.gap_before = (i > 0 and seg.sequence != segments[i - 1].sequence + 1)
-            seg.prev_sequence = segments[i - 1].sequence if i > 0 else 0
-            seg.start_name = str(seg.pathway.start_endpoint) if seg.pathway and seg.pathway.start_endpoint else None
-            seg.end_name = str(seg.pathway.end_endpoint) if seg.pathway and seg.pathway.end_endpoint else None
+        _annotate_segments(segments)
 
         html = render_to_string(
             'netbox_pathways/inc/cable_segment_table.html',

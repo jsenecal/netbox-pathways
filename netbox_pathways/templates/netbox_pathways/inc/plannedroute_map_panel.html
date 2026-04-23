@@ -1,0 +1,31 @@
+{% load static %}
+{% if route_geometry_json %}
+<div class="card">
+  <h2 class="card-header d-flex align-items-center">
+    Route Map
+    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto"
+            data-bs-toggle="modal" data-bs-target="#pw-route-map-modal"
+            title="Expand map">
+      <i class="mdi mdi-arrow-expand"></i>
+    </button>
+  </h2>
+  <div class="card-body p-0">
+    <div id="planned-route-map" style="height: 500px;"></div>
+  </div>
+</div>
+
+{# Fullscreen modal #}
+<div class="modal fade" id="pw-route-map-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Route Map</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div id="planned-route-map-modal" style="height: 70vh;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}

@@ -44,7 +44,8 @@
         <form method="post" action="{% url 'plugins:netbox_pathways:cable_routing_apply' cable_pk=cable_pk %}" style="display:inline">
             {% csrf_token %}
             <input type="hidden" name="pathway_ids" value="{{ route.pathway_ids }}">
-            <button type="submit" class="btn btn-sm btn-green">
+            <button type="submit" class="btn btn-sm btn-green"
+                    {% if existing_segment_count %}onclick="return confirm('Replace {{ existing_segment_count }} existing segment{{ existing_segment_count|pluralize }}?')"{% endif %}>
                 <i class="mdi mdi-cable-data"></i> Apply to Cable
             </button>
         </form>
@@ -55,6 +56,7 @@
             <input type="hidden" name="pathway_ids" value="{{ route.pathway_ids }}">
             <input type="hidden" name="start_structure" value="{{ start_structure_pk }}">
             <input type="hidden" name="end_structure" value="{{ end_structure_pk }}">
+            {% if cable_pk %}<input type="hidden" name="cable_pk" value="{{ cable_pk }}">{% endif %}
             <input type="text" name="name" class="form-control form-control-sm"
                    placeholder="Route name..." required style="width: 140px;">
             <button type="submit" class="btn btn-sm btn-primary">

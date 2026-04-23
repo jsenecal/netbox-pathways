@@ -43,6 +43,8 @@ class StructureSerializer(NetBoxModelSerializer):
     structure_type = ChoiceField(choices=StructureTypeChoices, required=False, allow_blank=True)
     site = SiteSerializer(nested=True, required=False, allow_null=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
+    no_pathways = drf_serializers.SerializerMethodField(read_only=True)
+    description = drf_serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Structure
@@ -51,8 +53,22 @@ class StructureSerializer(NetBoxModelSerializer):
             'location', 'height', 'width', 'length', 'depth', 'elevation',
             'installation_date', 'tenant',
             'access_notes', 'comments', 'tags', 'created', 'last_updated',
+            'no_pathways', 'description',
         ]
-        brief_fields = ('id', 'url', 'display_url', 'display', 'label', 'structure_type')
+        brief_fields = (
+            'id', 'url', 'display_url', 'display', 'label', 'structure_type',
+            'no_pathways', 'description',
+        )
+
+    def get_no_pathways(self, obj):
+        if hasattr(obj, '_has_pathways'):
+            return not obj._has_pathways
+        return None
+
+    def get_description(self, obj):
+        if hasattr(obj, '_has_pathways') and not obj._has_pathways:
+            return 'No connected pathways'
+        return None
 
 
 # --- Shared FK field declarations for pathway subtypes ---

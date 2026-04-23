@@ -54,6 +54,8 @@ urlpatterns = [
     # Direct Buried
     path('direct-buried/', views.DirectBuriedListView.as_view(), name='directburied_list'),
     path('direct-buried/add/', views.DirectBuriedEditView.as_view(), name='directburied_add'),
+    path('direct-buried/edit/', views.DirectBuriedBulkEditView.as_view(), name='directburied_bulk_edit'),
+    path('direct-buried/delete/', views.DirectBuriedBulkDeleteView.as_view(), name='directburied_bulk_delete'),
     path('direct-buried/<int:pk>/', include([
         path('', views.DirectBuriedView.as_view(), name='directburied'),
         path('edit/', views.DirectBuriedEditView.as_view(), name='directburied_edit'),
@@ -64,6 +66,8 @@ urlpatterns = [
     # Innerducts
     path('innerducts/', views.InnerductListView.as_view(), name='innerduct_list'),
     path('innerducts/add/', views.InnerductEditView.as_view(), name='innerduct_add'),
+    path('innerducts/edit/', views.InnerductBulkEditView.as_view(), name='innerduct_bulk_edit'),
+    path('innerducts/delete/', views.InnerductBulkDeleteView.as_view(), name='innerduct_bulk_delete'),
     path('innerducts/<int:pk>/', include([
         path('', views.InnerductView.as_view(), name='innerduct'),
         path('edit/', views.InnerductEditView.as_view(), name='innerduct_edit'),
@@ -108,6 +112,7 @@ urlpatterns = [
     path('cable-segments/', views.CableSegmentListView.as_view(), name='cablesegment_list'),
     path('cable-segments/add/', views.CableSegmentEditView.as_view(), name='cablesegment_add'),
     path('cable-segments/import/', views.CableSegmentBulkImportView.as_view(), name='cablesegment_import'),
+    path('cable-segments/edit/', views.CableSegmentBulkEditView.as_view(), name='cablesegment_bulk_edit'),
     path('cable-segments/delete/', views.CableSegmentBulkDeleteView.as_view(), name='cablesegment_bulk_delete'),
     path('cable-segments/<int:pk>/', include([
         path('', views.CableSegmentView.as_view(), name='cablesegment'),
@@ -119,6 +124,7 @@ urlpatterns = [
     # Slack Loops
     path('slack-loops/', views.SlackLoopListView.as_view(), name='slackloop_list'),
     path('slack-loops/add/', views.SlackLoopEditView.as_view(), name='slackloop_add'),
+    path('slack-loops/edit/', views.SlackLoopBulkEditView.as_view(), name='slackloop_bulk_edit'),
     path('slack-loops/delete/', views.SlackLoopBulkDeleteView.as_view(), name='slackloop_bulk_delete'),
     path('slack-loops/<int:pk>/', include([
         path('', views.SlackLoopView.as_view(), name='slackloop'),
@@ -150,12 +156,14 @@ urlpatterns = [
     # Planned Routes
     path('planned-routes/', views.PlannedRouteListView.as_view(), name='plannedroute_list'),
     path('planned-routes/add/', views.PlannedRouteEditView.as_view(), name='plannedroute_add'),
+    path('planned-routes/edit/', views.PlannedRouteBulkEditView.as_view(), name='plannedroute_bulk_edit'),
     path('planned-routes/delete/', views.PlannedRouteBulkDeleteView.as_view(), name='plannedroute_bulk_delete'),
     path('planned-routes/<int:pk>/', include([
         path('', views.PlannedRouteView.as_view(), name='plannedroute'),
         path('edit/', views.PlannedRouteEditView.as_view(), name='plannedroute_edit'),
         path('delete/', views.PlannedRouteDeleteView.as_view(), name='plannedroute_delete'),
         path('split/', views.PlannedRouteSplitView.as_view(), name='plannedroute_split'),
+        path('revert/', views.PlannedRouteRevertSplitView.as_view(), name='plannedroute_revert'),
         path('apply/', views.PlannedRouteApplyView.as_view(), name='plannedroute_apply'),
         *get_model_urls('netbox_pathways', 'plannedroute'),
     ])),

@@ -1,6 +1,11 @@
 {% extends 'dcim/cable.html' %}
 
 {% block content %}
+<style>
+  .pw-gap-row td:first-child {
+    border-left: 5px solid var(--tblr-red, #d63939);
+  }
+</style>
   {% if not routable %}
   <div class="alert alert-warning d-flex align-items-center" role="alert">
     <span class="text-warning fs-1">

@@ -8,24 +8,32 @@
       <th>From</th>
       <th>To</th>
       <th>Length</th>
-      <th></th>
+      <th class="text-end">Actions</th>
     </tr>
   </thead>
   <tbody>
     {% for seg in segments %}
     {% if seg.gap_before %}
-    <tr class="table-warning">
-      <td colspan="6" class="text-center text-muted">
-        <i class="mdi mdi-alert-outline"></i> Gap
+    <tr class="pw-gap-row">
+      <td colspan="5" class="text-center text-muted">
+        <i class="mdi mdi-alert-outline text-red"></i> <span class="text-red">Gap</span>
       </td>
-      <td>
-        <button class="btn btn-sm btn-green"
-                hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/add-segment/?after_sequence={{ seg.prev_sequence }}"
-                hx-target="#pw-segment-table"
-                hx-swap="innerHTML"
-                title="Insert segment">
-          <i class="mdi mdi-plus"></i>
-        </button>
+      <td colspan="2" class="text-end d-print-none">
+        <div class="d-flex gap-1 justify-content-end">
+          {% if seg.gap_start_pk and seg.gap_end_pk %}
+          <a href="/plugins/pathways/route-planner/?cable={{ cable.pk }}&start={{ seg.gap_start_pk }}&end={{ seg.gap_end_pk }}"
+             class="btn btn-sm btn-primary" title="Plan route for this gap">
+            <i class="mdi mdi-map-search-outline"></i>
+          </a>
+          {% endif %}
+          <button class="btn btn-sm btn-green"
+                  hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/add-segment/?after_sequence={{ seg.prev_sequence }}"
+                  hx-target="#pw-segment-table"
+                  hx-swap="innerHTML"
+                  title="Insert segment">
+            <i class="mdi mdi-plus"></i>
+          </button>
+        </div>
       </td>
     </tr>
     {% endif %}
@@ -42,7 +50,7 @@
       <td>{{ seg.start_name|default:"&mdash;" }}</td>
       <td>{{ seg.end_name|default:"&mdash;" }}</td>
       <td>{% if seg.pathway and seg.pathway.length %}{{ seg.pathway.length|floatformat:1 }}{% else %}&mdash;{% endif %}</td>
-      <td>
+      <td class="text-end d-print-none">
         <button class="btn btn-sm btn-red"
                 hx-post="/plugins/pathways/cable-routing/{{ cable.pk }}/delete-segment/{{ seg.pk }}/"
                 hx-target="#pw-segment-table"

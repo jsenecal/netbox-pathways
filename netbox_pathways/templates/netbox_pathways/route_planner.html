@@ -89,7 +89,8 @@
         border-radius: 6px;
         padding: 10px 12px;
         margin-bottom: 8px;
-        background: var(--tblr-bg-surface, #fff);
+        background: var(--tblr-card-bg, var(--tblr-bg-surface, #fff));
+        color: var(--tblr-body-color, #212529);
         position: relative;
     }
     .pw-constraint-include {
@@ -259,16 +260,26 @@
     .pw-cable-info i { margin-right: 4px; }
     /* Style constraint checkboxes inline */
     .pw-constraint-checks {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px 10px;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 4px 8px;
     }
     .pw-constraint-checks .form-check {
         margin: 0;
-        padding-left: 1.5em;
+        padding-left: 1.6em;
+        white-space: nowrap;
     }
     .pw-constraint-checks .form-check-label {
         font-size: 0.8em;
+        color: var(--tblr-body-color, #212529);
+    }
+    .pw-constraint-checks .form-check-input {
+        background-color: var(--tblr-bg-surface-secondary, #f8f9fa);
+        border-color: var(--tblr-border-color, #dee2e6);
+    }
+    .pw-constraint-checks .form-check-input:checked {
+        background-color: var(--tblr-primary, #206bc4);
+        border-color: var(--tblr-primary, #206bc4);
     }
     /* Spinner */
     .pw-find-spinner {
@@ -397,6 +408,11 @@
                                 <input type="checkbox" class="form-check-input" name="include_inactive"
                                        id="include-inactive">
                                 <label for="include-inactive">Include inactive/retired</label>
+                            </div>
+                            <div class="pw-check-row">
+                                <input type="checkbox" class="form-check-input"
+                                       id="show-occupied">
+                                <label for="show-occupied">Show occupied infrastructure</label>
                             </div>
                         </div>
 
@@ -544,6 +560,126 @@
             if (savedInactive === 'true') inactiveCheck.checked = true;
             inactiveCheck.addEventListener('change', function() {
                 localStorage.setItem('pw_include_inactive', this.checked);
+            });
+        }
+
+        // --- Show occupied infrastructure toggle ---
+        var occupiedCheck = document.getElementById('show-occupied');
+        var _occupiedLayer = null;
+        var _apiBase = (window.PATHWAYS_CONFIG || {}).apiBase || '/api/plugins/pathways/geo/';
+
+        function _clearOccupied() {
+            if (_occupiedLayer) {
+                if (window._rpMap) window._rpMap.removeLayer(_occupiedLayer);
+                _occupiedLayer = null;
+            }
+        }
+
+        function _loadOccupied() {
+            _clearOccupied();
+            if (!window._rpMap) return;
+            var map = window._rpMap;
+            var DIM = 0.35;
+            var group = L.featureGroup();
+            var pending = 2;
+
+            function done() {
+                pending--;
+                if (pending <= 0) {
+                    group.addTo(map);
+                    _occupiedLayer = group;
+                }
+            }
+
+            var pop = window.pwPopover;
+            var tc = window.pwTitleCase;
+
+            // Fetch occupied structures — same icons, dimmed, interactive
+            fetch(_apiBase + 'structures/?occupied=true&format=json')
+                .then(function(r) { return r.json(); })
+                .then(function(geojson) {
+                    if (geojson.features) {
+                        geojson.features.forEach(function(f) {
+                            if (!f.geometry || !f.geometry.coordinates) return;
+                            var coords = f.geometry.coordinates;
+                            var props = f.properties || {};
+                            var stype = props.structure_type || '';
+                            var icon = window.pwStructureIcon(stype, 18);
+                            var marker = L.marker([coords[1], coords[0]], {
+                                icon: icon,
+                                opacity: DIM,
+                            });
+                            marker.on('mouseover', function(e) {
+                                pop.show(e.latlng || marker.getLatLng(), {
+                                    id: props.id, name: props.name || '', structure_type: stype
+                                });
+                            });
+                            marker.on('mouseout', function() { pop.hide(); });
+                            marker.on('click', function() {
+                                window.open('/plugins/pathways/structures/' + f.id + '/', '_blank');
+                            });
+                            group.addLayer(marker);
+                        });
+                    }
+                    done();
+                })
+                .catch(function() { done(); });
+
+            // Fetch occupied pathways — same style, dimmed, interactive
+            fetch(_apiBase + 'pathways/?occupied=true&format=json')
+                .then(function(r) { return r.json(); })
+                .then(function(geojson) {
+                    if (geojson.features) {
+                        geojson.features.forEach(function(f) {
+                            if (!f.geometry || !f.geometry.coordinates) return;
+                            var props = f.properties || {};
+                            var ptype = props.pathway_type || '';
+                            var style = window.pwPathwayStyle(ptype);
+                            var latlngs = f.geometry.coordinates.map(function(c) {
+                                return [c[1], c[0]];
+                            });
+                            var polyline = L.polyline(latlngs, {
+                                color: style.color,
+                                weight: style.weight,
+                                opacity: DIM,
+                                dashArray: style.dashArray,
+                            });
+                            polyline.on('mouseover', function(e) {
+                                pop.show(e.latlng, {
+                                    id: props.id, name: props.label || '', pathway_type: ptype
+                                });
+                            });
+                            polyline.on('mousemove', function(e) {
+                                pop.show(e.latlng, {
+                                    id: props.id, name: props.label || '', pathway_type: ptype
+                                });
+                            });
+                            polyline.on('mouseout', function() { pop.hide(); });
+                            polyline.on('click', function() {
+                                window.open('/plugins/pathways/pathways/' + f.id + '/', '_blank');
+                            });
+                            group.addLayer(polyline);
+                        });
+                    }
+                    done();
+                })
+                .catch(function() { done(); });
+        }
+
+        if (occupiedCheck) {
+            var savedOccupied = localStorage.getItem('pw_show_occupied');
+            if (savedOccupied === 'true') {
+                occupiedCheck.checked = true;
+                // Delay until map is ready
+                setTimeout(_loadOccupied, 300);
+            }
+            occupiedCheck.addEventListener('change', function() {
+                localStorage.setItem('pw_show_occupied', this.checked);
+                if (this.checked) {
+                    _loadOccupied();
+                } else {
+                    _clearOccupied();
+                }
             });
         }
 

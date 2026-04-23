@@ -1,7 +1,38 @@
 {% extends 'generic/object.html' %}
+{% load static %}
 
 {% block content %}
   {{ block.super }}
+
+  {% if children %}
+  <div class="card mt-3">
+    <h2 class="card-header">Split Children</h2>
+    <div class="card-body p-0">
+      <table class="table table-hover table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Status</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Hops</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for child in children %}
+          <tr>
+            <td><a href="{{ child.get_absolute_url }}">{{ child.name }}</a></td>
+            <td>{{ child.get_status_display }}</td>
+            <td>{{ child.start_endpoint|default:"&mdash;" }}</td>
+            <td>{{ child.end_endpoint|default:"&mdash;" }}</td>
+            <td>{{ child.hop_count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
 
   {% if pathways %}
   <div class="card mt-3">
@@ -34,4 +65,46 @@
     </div>
   </div>
   {% endif %}
+{% endblock %}
+
+{% block javascript %}
+{{ block.super }}
+{% if route_geometry_json %}
+<link rel="stylesheet" href="{% static 'netbox_pathways/vendor/leaflet/leaflet.css' %}" />
+<link rel="stylesheet" href="{% static 'netbox_pathways/css/leaflet-theme.css' %}" />
+<script src="{% static 'netbox_pathways/vendor/leaflet/leaflet.js' %}"></script>
+<script src="{% static 'netbox_pathways/dist/route-planner-map.min.js' %}"></script>
+<script>
+(function() {
+    var data = {{ route_geometry_json|safe }};
+    document.addEventListener('DOMContentLoaded', function() {
+        // Init the small right-panel map
+        try {
+            window.initializeRoutePlannerMap('planned-route-map', { routeData: data });
+        } catch (err) {
+            console.error('[pathways] Route map init failed:', err);
+        }
+
+        // Init the modal map on first open (destroy + recreate on each open)
+        var modal = document.getElementById('pw-route-map-modal');
+        if (modal) {
+            modal.addEventListener('shown.bs.modal', function() {
+                var container = document.getElementById('planned-route-map-modal');
+                if (!container) return;
+                // Remove any previous Leaflet instance
+                if (container._leaflet_id) {
+                    container._leaflet_id = undefined;
+                    while (container.firstChild) container.removeChild(container.firstChild);
+                }
+                try {
+                    window.initializeRoutePlannerMap('planned-route-map-modal', { routeData: data });
+                } catch (err) {
+                    console.error('[pathways] Modal map init failed:', err);
+                }
+            });
+        }
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}

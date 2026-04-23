@@ -48,11 +48,17 @@ interface RouteGeometryData {
 }
 
 // ---------------------------------------------------------------------------
-// Highlight state
+// Highlight state — per-instance to support multiple maps on one page
 // ---------------------------------------------------------------------------
 
-let _highlightedLayer: L.Layer | null = null;
-let _highlightOutline: L.Polyline | null = null;
+interface HighlightState {
+    layer: L.Layer | null;
+    outline: L.Polyline | null;
+}
+
+function _createHighlightState(): HighlightState {
+    return { layer: null, outline: null };
+}
 
 function _lighten(hex: string, amount: number): string {
     const num = parseInt(hex.replace('#', ''), 16);
@@ -62,13 +68,13 @@ function _lighten(hex: string, amount: number): string {
     return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
-function _unhighlight(map: L.Map): void {
-    if (_highlightOutline) {
-        _highlightOutline.remove();
-        _highlightOutline = null;
+function _unhighlight(map: L.Map, hl: HighlightState): void {
+    if (hl.outline) {
+        hl.outline.remove();
+        hl.outline = null;
     }
-    if (_highlightedLayer) {
-        const layer = _highlightedLayer as Record<string, any>;
+    if (hl.layer) {
+        const layer = hl.layer as Record<string, any>;
         if (layer._origIcon) {
             (layer as any).setIcon(layer._origIcon);
             delete layer._origIcon;
@@ -77,13 +83,13 @@ function _unhighlight(map: L.Map): void {
             (layer as any).setStyle(layer._origStyle);
             delete layer._origStyle;
         }
-        _highlightedLayer = null;
+        hl.layer = null;
     }
 }
 
-function _highlightStructure(map: L.Map, marker: L.Marker, structureType: string): void {
-    _unhighlight(map);
-    _highlightedLayer = marker;
+function _highlightStructure(map: L.Map, hl: HighlightState, marker: L.Marker, structureType: string): void {
+    _unhighlight(map, hl);
+    hl.layer = marker;
     const m = marker as L.Marker & { _origIcon?: L.Icon | L.DivIcon };
     m._origIcon = (m as any).getIcon();
     const color = STRUCTURE_COLORS[structureType] || '#616161';
@@ -100,9 +106,9 @@ function _highlightStructure(map: L.Map, marker: L.Marker, structureType: string
     }));
 }
 
-function _highlightPathway(map: L.Map, polyline: L.Polyline): void {
-    _unhighlight(map);
-    _highlightedLayer = polyline;
+function _highlightPathway(map: L.Map, hl: HighlightState, polyline: L.Polyline): void {
+    _unhighlight(map, hl);
+    hl.layer = polyline;
     const pl = polyline as L.Polyline & { _origStyle?: L.PathOptions };
     const opts = (pl as any).options || {};
     pl._origStyle = {
@@ -113,7 +119,7 @@ function _highlightPathway(map: L.Map, polyline: L.Polyline): void {
     };
     const latlngs = pl.getLatLngs() as L.LatLng[];
     if (latlngs && latlngs.length > 0) {
-        _highlightOutline = L.polyline(latlngs, {
+        hl.outline = L.polyline(latlngs, {
             color: _lighten(opts.color || '#888', 0.55),
             weight: 12,
             opacity: 0.5,
@@ -134,13 +140,19 @@ interface RenderedFeature {
     latlng: L.LatLng;
 }
 
-// Callback set after rendering to handle selection from either map click or hop list click
-let _onSelect: ((kind: string, pk: number) => void) | null = null;
+// Per-instance select callback, set by _renderRouteOverlay's caller
+type OnSelectFn = (kind: string, pk: number) => void;
 
-function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeature[] {
-    // Clear previous route layers
-    if (window._rpRouteLayer) { map.removeLayer(window._rpRouteLayer); window._rpRouteLayer = null; }
-    if (window._rpMarkerLayer) { map.removeLayer(window._rpMarkerLayer); window._rpMarkerLayer = null; }
+interface LayerState {
+    routeLayer: L.FeatureGroup | null;
+    markerLayer: L.FeatureGroup | null;
+    syncToWindow: boolean;  // only the route planner page syncs to window globals
+}
+
+function _renderRouteOverlay(map: L.Map, data: RouteGeometryData, state: LayerState, onSelect?: OnSelectFn): RenderedFeature[] {
+    // Clear previous route layers for THIS map instance
+    if (state.routeLayer) { map.removeLayer(state.routeLayer); state.routeLayer = null; }
+    if (state.markerLayer) { map.removeLayer(state.markerLayer); state.markerLayer = null; }
 
     const features: RenderedFeature[] = [];
     if (!data.pathways || data.pathways.length === 0) return features;
@@ -160,7 +172,7 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeatu
         polyline.on('mouseout', function () { Popover.hide(); });
         polyline.on('click', function (e: L.LeafletMouseEvent) {
             if (e.originalEvent) (e.originalEvent as any)._featureClick = true;
-            if (_onSelect) _onSelect('pathway', pw.pk);
+            if (onSelect) onSelect('pathway', pw.pk);
         });
         (polyline as any)._rpPk = pw.pk;
         const mid = latlngs[Math.floor(latlngs.length / 2)];
@@ -204,7 +216,7 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeatu
                 marker.on('mouseout', function () { Popover.hide(); });
                 marker.on('click', function (e: L.LeafletMouseEvent) {
                     if (e.originalEvent) (e.originalEvent as any)._featureClick = true;
-                    if (_onSelect) _onSelect('structure', s.pk);
+                    if (onSelect) onSelect('structure', s.pk);
                 });
                 (marker as any)._rpPk = s.pk;
                 features.push({
@@ -220,7 +232,7 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeatu
                 marker.on('mouseout', function () { Popover.hide(); });
                 marker.on('click', function (e: L.LeafletMouseEvent) {
                     if (e.originalEvent) (e.originalEvent as any)._featureClick = true;
-                    if (_onSelect) _onSelect('structure', s.pk);
+                    if (onSelect) onSelect('structure', s.pk);
                 });
                 (marker as any)._rpPk = s.pk;
                 features.push({
@@ -235,8 +247,12 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeatu
 
     routeGroup.addTo(map);
     markerGroup.addTo(map);
-    window._rpRouteLayer = routeGroup;
-    window._rpMarkerLayer = markerGroup;
+    state.routeLayer = routeGroup;
+    state.markerLayer = markerGroup;
+    if (state.syncToWindow) {
+        window._rpRouteLayer = routeGroup;
+        window._rpMarkerLayer = markerGroup;
+    }
 
     // Fit and lock bounds to the route
     const allBounds = routeGroup.getBounds();
@@ -257,12 +273,112 @@ function _renderRouteOverlay(map: L.Map, data: RouteGeometryData): RenderedFeatu
 function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): void {
     const { map } = createMap(elementId, config);
 
-    // Legend + popover (same hover tooltip as the infrastructure map)
+    // Static route display (PlannedRoute detail) — per-instance, no singletons
+    if (config.routeData) {
+        // Create a per-instance popover element (not the Popover singleton)
+        const popEl = document.createElement('div');
+        popEl.className = 'pw-popover';
+        popEl.style.display = 'none';
+        map.getContainer().appendChild(popEl);
+
+        function _showPop(latlng: L.LatLng, name: string, typeName: string): void {
+            popEl.textContent = '';
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'pw-popover-name';
+            nameSpan.textContent = name;
+            popEl.appendChild(nameSpan);
+            if (typeName) {
+                const typeSpan = document.createElement('span');
+                typeSpan.className = 'pw-popover-type';
+                typeSpan.textContent = typeName;
+                popEl.appendChild(typeSpan);
+            }
+            const pt = map.latLngToContainerPoint(latlng);
+            const cw = map.getContainer().clientWidth;
+            let x = pt.x + 14;
+            if (x + 200 > cw) x = pt.x - 200;
+            popEl.style.left = x + 'px';
+            popEl.style.top = (pt.y - 10) + 'px';
+            popEl.style.display = '';
+        }
+        function _hidePop(): void { popEl.style.display = 'none'; }
+
+        const staticState: LayerState = { routeLayer: null, markerLayer: null, syncToWindow: false };
+        const hl = _createHighlightState();
+        const rd = config.routeData as RouteGeometryData;
+        if (rd.structures) {
+            rd.structures.forEach(function (s: any) {
+                if (!s.role) {
+                    if (s.is_start) s.role = 'start';
+                    else if (s.is_end) s.role = 'end';
+                    else s.role = 'mid';
+                }
+            });
+        }
+
+        // Build feature map and instance-scoped select callback
+        const featureMap: Record<string, RenderedFeature> = {};
+        const localSelect: OnSelectFn = function (kind, pk) {
+            const feat = featureMap[kind + '-' + pk];
+            if (!feat) return;
+            const zoom = map.getZoom();
+            const minZoom = kind === 'structure' ? 18 : 16;
+            if (zoom < minZoom) {
+                map.flyTo(feat.latlng, minZoom, { duration: 0.5 });
+            } else {
+                map.panTo(feat.latlng);
+            }
+            if (feat.kind === 'structure') {
+                _highlightStructure(map, hl, feat.layer as L.Marker, feat.structureType || '');
+            } else {
+                _highlightPathway(map, hl, feat.layer as L.Polyline);
+            }
+        };
+
+        // Render overlay — click handlers use localSelect via closure
+        const features = _renderRouteOverlay(map, rd, staticState, localSelect);
+        features.forEach(function (f) {
+            const pk = (f.layer as any)._rpPk;
+            if (pk != null) featureMap[f.kind + '-' + pk] = f;
+        });
+
+        // Re-wire hover events to use local popover instead of Popover singleton
+        features.forEach(function (f) {
+            const layer = f.layer as any;
+            const pk = layer._rpPk;
+            let name = '';
+            let typeName = '';
+            if (f.kind === 'structure' && rd.structures) {
+                const s = rd.structures.find(function (s) { return s.pk === pk; });
+                if (s) { name = s.label; typeName = s.structure_type ? _titleCase(s.structure_type) : ''; }
+            } else if (f.kind === 'pathway' && rd.pathways) {
+                const p = rd.pathways.find(function (p) { return p.pk === pk; });
+                if (p) { name = p.label || ''; typeName = p.pathway_type ? _titleCase(p.pathway_type) : ''; }
+            }
+            layer.off('mouseover').off('mousemove').off('mouseout');
+            layer.on('mouseover', function (e: L.LeafletMouseEvent) { _showPop(e.latlng || layer.getLatLng(), name, typeName); });
+            layer.on('mousemove', function (e: L.LeafletMouseEvent) { _showPop(e.latlng || layer.getLatLng(), name, typeName); });
+            layer.on('mouseout', function () { _hidePop(); });
+        });
+
+        // Click on empty map clears highlight
+        map.on('click', function (e: L.LeafletMouseEvent) {
+            if ((e.originalEvent as any)?._featureClick) return;
+            _unhighlight(map, hl);
+        });
+
+        setTimeout(function () { map.invalidateSize(); }, 100);
+        return;
+    }
+
+    // --- Route planner mode (full interactive) ---
     createLegend(map);
     Popover.setDeps({ titleCase: _titleCase });
     Popover.init(map);
 
-    // Expose map reference
+    const layerState: LayerState = { routeLayer: null, markerLayer: null, syncToWindow: true };
+    const rpHl = _createHighlightState();
+
     window._rpMap = map;
     window._rpRouteLayer = null;
     window._rpMarkerLayer = null;
@@ -271,12 +387,10 @@ function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): vo
     const CACHE_KEY = 'pw_route_result_' + window.location.pathname + window.location.search;
 
     // Shared select handler: center map, highlight feature, sync hop list.
-    // Called from both map feature clicks and hop list clicks.
     function _selectFeature(kind: string, pk: number, featureMap: Record<string, RenderedFeature>): void {
         const feat = featureMap[kind + '-' + pk];
         if (!feat) return;
 
-        // Center
         const zoom = map.getZoom();
         const minZoom = kind === 'structure' ? 18 : 16;
         if (zoom < minZoom) {
@@ -285,11 +399,10 @@ function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): vo
             map.panTo(feat.latlng);
         }
 
-        // Highlight on map
         if (feat.kind === 'structure') {
-            _highlightStructure(map, feat.layer as L.Marker, feat.structureType || '');
+            _highlightStructure(map, rpHl, feat.layer as L.Marker, feat.structureType || '');
         } else {
-            _highlightPathway(map, feat.layer as L.Polyline);
+            _highlightPathway(map, rpHl, feat.layer as L.Polyline);
         }
 
         // Sync hop list active state
@@ -301,7 +414,9 @@ function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): vo
         });
     }
 
-    // Wire up hop list clicks + set the global _onSelect for map feature clicks.
+    // Build per-render onSelect callback, wire hop list clicks
+    let _rpOnSelect: OnSelectFn | null = null;
+
     function _wireInteractions(features: RenderedFeature[]): void {
         const featureMap: Record<string, RenderedFeature> = {};
         features.forEach(function (f) {
@@ -309,8 +424,7 @@ function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): vo
             if (pk != null) featureMap[f.kind + '-' + pk] = f;
         });
 
-        // Map feature clicks use this callback
-        _onSelect = function (kind: string, pk: number) {
+        _rpOnSelect = function (kind: string, pk: number) {
             _selectFeature(kind, pk, featureMap);
         };
 
@@ -330,8 +444,9 @@ function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): vo
     function _applyRoute(data: RouteGeometryData): void {
         map.setMaxBounds(null as unknown as L.LatLngBoundsExpression);
         map.setMinZoom(1);
-        _unhighlight(map);
-        const features = _renderRouteOverlay(map, data);
+        _unhighlight(map, rpHl);
+        const rpSelect: OnSelectFn = function (kind, pk) { if (_rpOnSelect) _rpOnSelect(kind, pk); };
+        const features = _renderRouteOverlay(map, data, layerState, rpSelect);
         _wireInteractions(features);
     }
 
@@ -342,8 +457,9 @@ function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): vo
 
         const dataEl = document.getElementById('route-geometry-data');
         if (!dataEl) {
-            if (window._rpRouteLayer) { map.removeLayer(window._rpRouteLayer); window._rpRouteLayer = null; }
-            if (window._rpMarkerLayer) { map.removeLayer(window._rpMarkerLayer); window._rpMarkerLayer = null; }
+            if (layerState.routeLayer) { map.removeLayer(layerState.routeLayer); layerState.routeLayer = null; }
+            if (layerState.markerLayer) { map.removeLayer(layerState.markerLayer); layerState.markerLayer = null; }
+            if (layerState.syncToWindow) { window._rpRouteLayer = null; window._rpMarkerLayer = null; }
             try { sessionStorage.removeItem(CACHE_KEY); } catch (_e) { /* ignore */ }
             return;
         }
@@ -389,7 +505,7 @@ function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): vo
     map.on('click', function (e: L.LeafletMouseEvent) {
         // Don't clear if a feature click handler already ran
         if ((e.originalEvent as any)?._featureClick) return;
-        _unhighlight(map);
+        _unhighlight(map, rpHl);
         document.querySelectorAll('.pw-hop-active').forEach(function (el) {
             el.classList.remove('pw-hop-active');
         });
@@ -402,3 +518,7 @@ function initializeRoutePlannerMap(elementId: string, config: MapInitConfig): vo
 
 // Expose globally
 window.initializeRoutePlannerMap = initializeRoutePlannerMap;
+window.pwStructureIcon = _structureIcon;
+window.pwPathwayStyle = _pathwayStyle;
+window.pwPopover = Popover;
+window.pwTitleCase = _titleCase;

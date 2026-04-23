@@ -1,0 +1,9 @@
+{% if url and object.status == "split" %}
+  <form method="post" action="{{ url }}" style="display:inline">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-yellow"
+            onclick="return confirm('Revert split? This will delete all child routes and restore this route to Draft.')">
+      <i class="mdi mdi-undo" aria-hidden="true"></i> Revert Split
+    </button>
+  </form>
+{% endif %}

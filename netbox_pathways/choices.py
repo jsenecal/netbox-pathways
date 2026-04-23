@@ -110,11 +110,13 @@ class PlannedRouteStatusChoices(ChoiceSet):
     STATUS_DRAFT = 'draft'
     STATUS_APPROVED = 'approved'
     STATUS_ASSIGNED = 'assigned'
+    STATUS_SPLIT = 'split'
     STATUS_ARCHIVED = 'archived'
 
     CHOICES = [
         (STATUS_DRAFT, 'Draft', 'blue'),
         (STATUS_APPROVED, 'Approved', 'green'),
         (STATUS_ASSIGNED, 'Assigned', 'cyan'),
+        (STATUS_SPLIT, 'Split', 'purple'),
         (STATUS_ARCHIVED, 'Archived', 'gray'),
     ]

@@ -64,10 +64,47 @@ class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
     length = MultiValueNumberFilter()
     depth = MultiValueNumberFilter()
     elevation = MultiValueNumberFilter()
+    occupied = django_filters.BooleanFilter(
+        method='filter_occupied',
+        label='Occupied (has routed cables)',
+    )
+    has_pathways = django_filters.BooleanFilter(
+        method='filter_has_pathways',
+        label='Has connected pathways',
+    )
 
     class Meta:
         model = Structure
         fields = ['id', 'installation_date']
+
+    def filter_occupied(self, queryset, name, value):
+        occupied_pws = CableSegment.objects.values_list('pathway_id', flat=True)
+        occupied_struct_pks = set()
+        for start_pk, end_pk in (
+            Pathway.objects.filter(pk__in=occupied_pws)
+            .values_list('start_structure_id', 'end_structure_id')
+        ):
+            if start_pk:
+                occupied_struct_pks.add(start_pk)
+            if end_pk:
+                occupied_struct_pks.add(end_pk)
+        if value:
+            return queryset.filter(pk__in=occupied_struct_pks)
+        return queryset.exclude(pk__in=occupied_struct_pks)
+
+    def filter_has_pathways(self, queryset, name, value):
+        connected = Pathway.objects.values_list(
+            'start_structure_id', 'end_structure_id',
+        )
+        pks = set()
+        for start_pk, end_pk in connected:
+            if start_pk:
+                pks.add(start_pk)
+            if end_pk:
+                pks.add(end_pk)
+        if value:
+            return queryset.filter(pk__in=pks)
+        return queryset.exclude(pk__in=pks)
 
     def search(self, queryset, name, value):
         if not value.strip():
@@ -131,10 +168,20 @@ class PathwayFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
         label='End Location (slug)',
     )
     length = MultiValueNumberFilter()
+    occupied = django_filters.BooleanFilter(
+        method='filter_occupied',
+        label='Occupied (has routed cables)',
+    )
 
     class Meta:
         model = Pathway
         fields = ['id', 'installation_date']
+
+    def filter_occupied(self, queryset, name, value):
+        occupied_pws = CableSegment.objects.values_list('pathway_id', flat=True)
+        if value:
+            return queryset.filter(pk__in=occupied_pws)
+        return queryset.exclude(pk__in=occupied_pws)
 
     def filter_structure(self, queryset, name, value):
         """Filter to pathways connected to a structure at either end.

@@ -363,6 +363,7 @@ export interface MapInitConfig {
     bounds?: L.LatLngBoundsExpression;
     kiosk?: boolean;
     select?: string;  // feature ID to auto-select, e.g. "structure-123"
+    routeData?: unknown;  // Pre-loaded route geometry for static route display
 }
 
 export interface MapInstance {

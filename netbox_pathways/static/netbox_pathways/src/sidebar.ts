@@ -1196,6 +1196,18 @@ function _renderDetail(entry: FeatureEntry): void {
         body.appendChild(link);
     }
 
+    // Plan Route button (structures only)
+    if (entry.featureType === 'structure') {
+        const planLink = document.createElement('a');
+        planLink.href = '/plugins/pathways/route-planner/?start=' + p.id;
+        planLink.className = 'btn btn-sm btn-outline-primary w-100 mb-3';
+        const planIcon = document.createElement('i');
+        planIcon.className = 'mdi mdi-map-search-outline';
+        planLink.appendChild(planIcon);
+        planLink.appendChild(document.createTextNode(' Plan Route From Here'));
+        body.appendChild(planLink);
+    }
+
     // Fetch enriched detail from REST API
     const detailContainer = document.createElement('div');
     body.appendChild(detailContainer);

@@ -8,17 +8,17 @@
     <div class="card">
       <h2 class="card-header">Split Route</h2>
       <div class="card-body">
-        <p>Split <strong>{{ route.name }}</strong> at a mid-route structure into two separate planned routes. The original route will be archived.</p>
+        <p>Split <strong>{{ route.name }}</strong> at a mid-route structure into two separate planned routes. The original route will be marked as split and can be reverted later.</p>
 
-        {% if mid_structures %}
+        {% if split_options %}
         <form method="post">
           {% csrf_token %}
           <div class="mb-3">
             <label class="form-label">Split At Structure</label>
             <select name="split_structure" class="form-select" required>
               <option value="">-- Select mid-route structure --</option>
-              {% for s in mid_structures %}
-              <option value="{{ s.pk }}">{{ s }}</option>
+              {% for opt in split_options %}
+              <option value="{{ opt.pk }}">{{ opt.label }} ({{ opt.first_hops }} + {{ opt.second_hops }} hops)</option>
               {% endfor %}
             </select>
           </div>
@@ -37,7 +37,7 @@
             <a href="{{ route.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
           </div>
         </form>
-        {% else %}
+        {% elif not split_options %}
         <div class="alert alert-warning mb-0">
           <i class="mdi mdi-alert"></i>
           No mid-route structures found. A route with only 1 hop cannot be split.
