@@ -15,6 +15,7 @@ class TestValidateCableRoute:
         from django.db.models.signals import pre_save
 
         from netbox_pathways.signals import enforce_cable_routability
+
         pre_save.disconnect(enforce_cable_routability, sender=CableSegment)
         yield
         pre_save.connect(enforce_cable_routability, sender=CableSegment)
@@ -39,21 +40,23 @@ class TestValidateCableRoute:
 
     def _make_conduit(self, label, s_from, s_to, srid):
         return Conduit.objects.create(
-            label=label, start_structure=s_from, end_structure=s_to,
+            label=label,
+            start_structure=s_from,
+            end_structure=s_to,
             path=LineString((0, 0), (1, 1), srid=srid),
         )
 
     def test_no_segments(self, cable):
         result = validate_cable_route(cable.pk)
-        assert result['segment_count'] == 0
-        assert result['valid'] is False
+        assert result["segment_count"] == 0
+        assert result["valid"] is False
 
     def test_single_segment_valid(self, cable, structures, srid):
         pw = self._make_conduit("C-R-1", structures[0], structures[1], srid)
         CableSegment.objects.create(cable=cable, pathway=pw)
         result = validate_cable_route(cable.pk)
-        assert result['valid'] is True
-        assert result['gaps'] == []
+        assert result["valid"] is True
+        assert result["gaps"] == []
 
     def test_connected_route_valid(self, cable, structures, srid):
         pw1 = self._make_conduit("C-R-1", structures[0], structures[1], srid)
@@ -61,8 +64,8 @@ class TestValidateCableRoute:
         CableSegment.objects.create(cable=cable, pathway=pw1)
         CableSegment.objects.create(cable=cable, pathway=pw2)
         result = validate_cable_route(cable.pk)
-        assert result['valid'] is True
-        assert result['gaps'] == []
+        assert result["valid"] is True
+        assert result["gaps"] == []
 
     def test_gap_detected(self, cable, structures, srid):
         pw1 = self._make_conduit("C-R-1", structures[0], structures[1], srid)
@@ -70,13 +73,13 @@ class TestValidateCableRoute:
         CableSegment.objects.create(cable=cable, pathway=pw1)
         CableSegment.objects.create(cable=cable, pathway=pw2)
         result = validate_cable_route(cable.pk)
-        assert result['valid'] is False
-        assert len(result['gaps']) == 1
+        assert result["valid"] is False
+        assert len(result["gaps"]) == 1
 
     def test_segment_with_null_pathway(self, cable, structures, srid):
         pw1 = self._make_conduit("C-R-1", structures[0], structures[1], srid)
         CableSegment.objects.create(cable=cable, pathway=pw1)
         CableSegment.objects.create(cable=cable, pathway=None)
         result = validate_cable_route(cable.pk)
-        assert result['valid'] is False
-        assert len(result['gaps']) == 1
+        assert result["valid"] is False
+        assert len(result["gaps"]) == 1

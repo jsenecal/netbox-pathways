@@ -26,12 +26,13 @@ license-files = ["LICENSE"]
 requires-python = ">=3.12"
 
 classifiers = [
-    'Development Status :: 3 - Alpha',
-    'Intended Audience :: Developers',
-    'Natural Language :: English',
-    'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.12',
-    'Programming Language :: Python :: 3.13',
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 
 dependencies = [
@@ -49,14 +50,14 @@ dev = [
     "ruff",
 ]
 docs = [
-    "mkdocs>=1.5",
-    "mkdocs-material>=9.0",
+    "zensical",
 ]
 
 [project.urls]
 Homepage = "https://github.com/jsenecal/netbox-pathways"
 Source = "https://github.com/jsenecal/netbox-pathways"
 Tracker = "https://github.com/jsenecal/netbox-pathways/issues"
+Documentation = "https://jsenecal.github.io/netbox-pathways/"
 
 [tool.bumpver]
 current_version = "0.1.0"
@@ -75,20 +76,29 @@ push = true
 "netbox_pathways/__init__.py" = [
     '__version__ = "{version}"',
 ]
+"CHANGELOG.md" = [
+    '## \[Unreleased\]',
+    '## \[{version}\] - {now:%Y-%m-%d}',
+]
 
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+extend-exclude = ["**/migrations/*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "S", "B", "A", "C4", "DJ", "PIE"]
-ignore = ["E501", "S101", "DJ01"]
+ignore = ["E501", "N806", "S101", "DJ01"]
 
 [tool.ruff.lint.per-file-ignores]
 "migrations/*" = ["N806", "N999"]
-"tests/*" = ["S101", "S105"]
+"tests/*" = ["S101", "S105", "S106", "E402", "F841"]
 "netbox_pathways/management/commands/generate_sample_data.py" = ["S311", "B007"]
 "netbox_pathways/management/commands/import_geodata.py" = ["S603", "S607"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "netbox.settings"

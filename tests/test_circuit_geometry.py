@@ -23,7 +23,9 @@ class TestCircuitGeometry:
     @pytest.fixture
     def circuit(self, provider, circuit_type):
         return Circuit.objects.create(
-            cid="TEST-001", provider=provider, type=circuit_type,
+            cid="TEST-001",
+            provider=provider,
+            type=circuit_type,
         )
 
     @pytest.fixture
@@ -48,7 +50,9 @@ class TestCircuitGeometry:
 
     def test_provider_reference_optional(self, circuit, line):
         cg = CircuitGeometry.objects.create(
-            circuit=circuit, path=line, provider_reference="PROV-ROUTE-42",
+            circuit=circuit,
+            path=line,
+            provider_reference="PROV-ROUTE-42",
         )
         assert cg.provider_reference == "PROV-ROUTE-42"
 
@@ -72,7 +76,9 @@ class TestCircuitGeoJSON:
     @pytest.fixture
     def circuit(self, provider, circuit_type):
         return Circuit.objects.create(
-            cid="GEO-001", provider=provider, type=circuit_type,
+            cid="GEO-001",
+            provider=provider,
+            type=circuit_type,
         )
 
     @pytest.fixture
@@ -84,7 +90,7 @@ class TestCircuitGeoJSON:
     @pytest.fixture
     def admin_user(self):
         user_model = get_user_model()
-        return user_model.objects.create_superuser('geotester', 'g@t.com', 'pass')
+        return user_model.objects.create_superuser("geotester", "g@t.com", "pass")
 
     @pytest.fixture
     def api_client(self, admin_user):
@@ -93,16 +99,16 @@ class TestCircuitGeoJSON:
         return client
 
     def test_geojson_returns_feature_collection(self, api_client, circuit_geom):
-        resp = api_client.get('/api/plugins/pathways/geo/circuits/')
+        resp = api_client.get("/api/plugins/pathways/geo/circuits/")
         assert resp.status_code == 200
         data = resp.json()
-        assert data['type'] == 'FeatureCollection'
-        assert len(data['features']) == 1
+        assert data["type"] == "FeatureCollection"
+        assert len(data["features"]) == 1
 
     def test_geojson_feature_properties(self, api_client, circuit_geom):
-        resp = api_client.get('/api/plugins/pathways/geo/circuits/')
-        feat = resp.json()['features'][0]
-        assert feat['geometry']['type'] == 'LineString'
-        props = feat['properties']
-        assert props['cid'] == 'GEO-001'
-        assert 'provider' in props
+        resp = api_client.get("/api/plugins/pathways/geo/circuits/")
+        feat = resp.json()["features"][0]
+        assert feat["geometry"]["type"] == "LineString"
+        props = feat["properties"]
+        assert props["cid"] == "GEO-001"
+        assert "provider" in props

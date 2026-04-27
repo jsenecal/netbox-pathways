@@ -19,7 +19,7 @@ def get_srid():
     """
     from django.core.exceptions import ImproperlyConfigured
 
-    srid = settings.PLUGINS_CONFIG.get('netbox_pathways', {}).get('srid')
+    srid = settings.PLUGINS_CONFIG.get("netbox_pathways", {}).get("srid")
     if srid is None:
         raise ImproperlyConfigured(
             "netbox_pathways: 'srid' is required in PLUGINS_CONFIG['netbox_pathways']. "
@@ -52,7 +52,7 @@ def point_to_lonlat(geom):
     if geom is None:
         return None
     pt = to_leaflet(geom)
-    if pt.geom_type != 'Point':
+    if pt.geom_type != "Point":
         pt = pt.centroid
     return (pt.x, pt.y)
 

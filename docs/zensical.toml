@@ -1,113 +1,59 @@
 [project]
-name = "NetBox Pathways"
-description = "Physical cable plant infrastructure documentation for NetBox"
+site_name = "NetBox Pathways"
+site_url = "https://jsenecal.github.io/netbox-pathways/"
+site_description = "Physical cable plant infrastructure documentation for NetBox: structures, pathways, conduits, and routing with PostGIS"
+site_author = "Jonathan Senecal"
 repo_url = "https://github.com/jsenecal/netbox-pathways"
 repo_name = "jsenecal/netbox-pathways"
-
-[theme]
-name = "material"
-palette_primary = "teal"
-palette_accent = "amber"
-icon_repo = "fontawesome/brands/github"
-features = [
-    "navigation.tabs",
-    "navigation.sections",
-    "navigation.expand",
-    "navigation.top",
-    "search.suggest",
-    "search.highlight",
-    "content.code.copy",
-    "content.tabs.link",
+edit_uri = "edit/main/docs/"
+docs_dir = "."
+nav = [
+  { "Home" = "index.md" },
+  { "Getting Started" = [
+    { "Installation" = "getting-started/installation.md" },
+    { "Configuration" = "getting-started/configuration.md" },
+    { "Quick Start" = "getting-started/quickstart.md" },
+  ] },
+  { "User Guide" = [
+    { "Concepts" = "user-guide/concepts.md" },
+    { "Structures" = "user-guide/structures.md" },
+    { "Pathways" = "user-guide/pathways.md" },
+    { "Cable Routing" = "user-guide/cable-routing.md" },
+    { "Interactive Map" = "user-guide/interactive-map.md" },
+    { "Pull Sheets" = "user-guide/pull-sheets.md" },
+    { "QGIS Integration" = "user-guide/qgis-integration.md" },
+  ] },
+  { "Developer" = [
+    { "Architecture" = "developer/architecture.md" },
+    { "API Examples" = "developer/api-examples.md" },
+    { "Map Layer Registry" = "developer/map-layer-registry.md" },
+    { "Contributing" = "developer/contributing.md" },
+  ] },
+  { "Reference" = [
+    { "Choice Fields" = "reference/choices.md" },
+    { "GeoJSON API" = "reference/geojson-api.md" },
+  ] },
 ]
 
-[theme.icon]
-logo = "material/map-marker-path"
+[project.theme]
+features = [
+  "content.action.edit",
+  "content.action.view",
+]
 
-[[nav]]
-title = "Home"
-path = "index.md"
+[[project.theme.palette]]
+scheme = "default"
+primary = "teal"
+accent = "amber"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
 
-[[nav]]
-title = "Getting Started"
+[[project.theme.palette]]
+scheme = "slate"
+primary = "teal"
+accent = "amber"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
 
-[[nav.children]]
-title = "Installation"
-path = "getting-started/installation.md"
-
-[[nav.children]]
-title = "Configuration"
-path = "getting-started/configuration.md"
-
-[[nav.children]]
-title = "Quick Start"
-path = "getting-started/quickstart.md"
-
-[[nav]]
-title = "User Guide"
-
-[[nav.children]]
-title = "Concepts"
-path = "user-guide/concepts.md"
-
-[[nav.children]]
-title = "Structures"
-path = "user-guide/structures.md"
-
-[[nav.children]]
-title = "Pathways"
-path = "user-guide/pathways.md"
-
-[[nav.children]]
-title = "Cable Routing"
-path = "user-guide/cable-routing.md"
-
-[[nav.children]]
-title = "Interactive Map"
-path = "user-guide/interactive-map.md"
-
-[[nav.children]]
-title = "Pull Sheets"
-path = "user-guide/pull-sheets.md"
-
-[[nav.children]]
-title = "QGIS Integration"
-path = "user-guide/qgis-integration.md"
-
-[[nav]]
-title = "Developer Guide"
-
-[[nav.children]]
-title = "Architecture"
-path = "developer/architecture.md"
-
-[[nav.children]]
-title = "API Examples"
-path = "developer/api-examples.md"
-
-[[nav.children]]
-title = "Map Layer Registry"
-path = "developer/map-layer-registry.md"
-
-[[nav.children]]
-title = "Contributing"
-path = "developer/contributing.md"
-
-[[nav]]
-title = "Reference"
-
-[[nav.children]]
-title = "Choice Fields"
-path = "reference/choices.md"
-
-[[nav.children]]
-title = "GeoJSON API"
-path = "reference/geojson-api.md"
-
-[plugins.search]
-enabled = true
-
-[markdown_extensions]
-admonition = true
-codehilite = true
-toc = { permalink = true }
-tables = true
+[project.theme.icon]
+repo = "fontawesome/brands/github"

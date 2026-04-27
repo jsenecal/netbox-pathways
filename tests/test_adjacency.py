@@ -17,7 +17,8 @@ class TestAdjacencyView:
     def structures(self, srid):
         return [
             Structure.objects.create(
-                name=f"ADJ-{i}", location=Point(i * 0.01, i * 0.01, srid=srid),
+                name=f"ADJ-{i}",
+                location=Point(i * 0.01, i * 0.01, srid=srid),
             )
             for i in range(3)
         ]
@@ -52,7 +53,8 @@ class TestAdjacencyView:
     def test_returns_empty_for_isolated_node(self, client, srid, admin_user):
         client.force_login(admin_user)
         s = Structure.objects.create(
-            name="ISOLATED", location=Point(5, 5, srid=srid),
+            name="ISOLATED",
+            location=Point(5, 5, srid=srid),
         )
         url = f"/plugins/pathways/adjacency/?node_type=structure&node_id={s.pk}"
         response = client.get(url)

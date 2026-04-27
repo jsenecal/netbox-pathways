@@ -1,0 +1,170 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv sync --extra dev
+      - run: uv run ruff check netbox_pathways tests
+      - run: uv run ruff format --check netbox_pathways tests
+
+  test:
+    name: Test (Python ${{ matrix.python }}, NetBox ${{ matrix.netbox }})
+    runs-on: ubuntu-latest
+    needs: lint
+    permissions:
+      contents: read
+      id-token: write  # for Codecov OIDC upload
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13", "3.14"]
+        netbox: ["4.5.4", "4.5.8"]
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: netbox
+          POSTGRES_USER: netbox
+          POSTGRES_PASSWORD: ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U netbox"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpq-dev gdal-bin libgdal-dev libgeos-dev libproj-dev
+
+      - name: Clone NetBox v${{ matrix.netbox }}
+        run: |
+          git clone --depth 1 --branch v${{ matrix.netbox }} \
+            https://github.com/netbox-community/netbox.git /opt/netbox
+
+      - name: Configure NetBox
+        run: |
+          cat > /opt/netbox/netbox/netbox/configuration.py << 'EOF_CFG'
+          ALLOWED_HOSTS = ["*"]
+
+          DATABASES = {
+              "default": {
+                  "ENGINE": "django.contrib.gis.db.backends.postgis",
+                  "NAME": "netbox",
+                  "USER": "netbox",
+                  "PASSWORD": "ci-password",
+                  "HOST": "localhost",
+                  "PORT": "5432",
+                  "CONN_MAX_AGE": 300,
+              }
+          }
+
+          REDIS = {
+              "tasks":   {"HOST": "localhost", "PORT": 6379, "PASSWORD": "", "DATABASE": 0, "SSL": False},
+              "caching": {"HOST": "localhost", "PORT": 6379, "PASSWORD": "", "DATABASE": 1, "SSL": False},
+          }
+
+          SECRET_KEY = "ci-only-secret-key-do-not-use-in-production-aaaaaaaaaaaaaaaaaaaa"
+
+          PLUGINS = ["netbox_pathways"]
+          PLUGINS_CONFIG = {"netbox_pathways": {}}
+          EOF_CFG
+
+      - name: Install plugin and NetBox dependencies
+        run: |
+          uv venv
+          uv pip install -r /opt/netbox/requirements.txt
+          uv pip install -e ".[dev]"
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
+
+      - name: Run migrations
+        env:
+          PYTHONPATH: /opt/netbox/netbox
+          DJANGO_SETTINGS_MODULE: netbox.settings
+          NETBOX_CONFIGURATION: netbox.configuration
+        run: |
+          cd /opt/netbox/netbox
+          python manage.py migrate --noinput
+
+      - name: Run pytest with coverage
+        env:
+          PYTHONPATH: /opt/netbox/netbox
+          DJANGO_SETTINGS_MODULE: netbox.settings
+          NETBOX_CONFIGURATION: netbox.configuration
+        run: |
+          pytest tests/ -v --tb=short --cov=netbox_pathways --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        if: matrix.python == '3.13' && matrix.netbox == '4.5.8'
+        continue-on-error: true
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+      - name: Check migrations
+        env:
+          PYTHONPATH: /opt/netbox/netbox
+          DJANGO_SETTINGS_MODULE: netbox.settings
+          NETBOX_CONFIGURATION: netbox.configuration
+        run: |
+          cd /opt/netbox/netbox
+          python manage.py makemigrations --check --dry-run
+
+      - name: Django system check
+        env:
+          PYTHONPATH: /opt/netbox/netbox
+          DJANGO_SETTINGS_MODULE: netbox.settings
+          NETBOX_CONFIGURATION: netbox.configuration
+        run: |
+          cd /opt/netbox/netbox
+          python manage.py check
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v4
+      - run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

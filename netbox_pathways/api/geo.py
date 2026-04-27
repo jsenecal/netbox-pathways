@@ -30,7 +30,7 @@ MAX_GEO_RESULTS = 2000
 
 def _grid_size_for_zoom(zoom):
     """Grid cell size in WGS84 degrees, calibrated to ~50px cluster radius."""
-    return 70.0 / (2 ** zoom)
+    return 70.0 / (2**zoom)
 
 
 # --- GeoJSON Serializers ---
@@ -50,7 +50,7 @@ class StructureGeoSerializer(GeoFeatureModelSerializer):
 
     class Meta:
         model = models.Structure
-        geo_field = 'geo_4326'
+        geo_field = "geo_4326"
         fields = ["id", "name", "structure_type", "site_name"]
 
     def get_site_name(self, obj):
@@ -62,7 +62,7 @@ class PathwayGeoSerializer(GeoFeatureModelSerializer):
 
     class Meta:
         model = models.Pathway
-        geo_field = 'geo_4326'
+        geo_field = "geo_4326"
         fields = ["id", "label", "pathway_type"]
 
 
@@ -81,7 +81,7 @@ class ConduitGeoSerializer(GeoFeatureModelSerializer):
 
     class Meta:
         model = models.Conduit
-        geo_field = 'geo_4326'
+        geo_field = "geo_4326"
         fields = ["id", "label", "pathway_type"]
 
 
@@ -90,7 +90,7 @@ class AerialSpanGeoSerializer(GeoFeatureModelSerializer):
 
     class Meta:
         model = models.AerialSpan
-        geo_field = 'geo_4326'
+        geo_field = "geo_4326"
         fields = ["id", "label", "pathway_type"]
 
 
@@ -99,24 +99,25 @@ class DirectBuriedGeoSerializer(GeoFeatureModelSerializer):
 
     class Meta:
         model = models.DirectBuried
-        geo_field = 'geo_4326'
+        geo_field = "geo_4326"
         fields = ["id", "label", "pathway_type"]
 
 
 class CircuitGeoSerializer(GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
-    cid = drf_serializers.CharField(source='circuit.cid', read_only=True)
-    provider = drf_serializers.CharField(source='circuit.provider.name', read_only=True)
-    circuit_type = drf_serializers.CharField(source='circuit.type.name', read_only=True)
-    status = drf_serializers.CharField(source='circuit.status', read_only=True)
+    cid = drf_serializers.CharField(source="circuit.cid", read_only=True)
+    provider = drf_serializers.CharField(source="circuit.provider.name", read_only=True)
+    circuit_type = drf_serializers.CharField(source="circuit.type.name", read_only=True)
+    status = drf_serializers.CharField(source="circuit.status", read_only=True)
 
     class Meta:
         model = models.CircuitGeometry
-        geo_field = 'geo_4326'
+        geo_field = "geo_4326"
         fields = ["id", "cid", "provider", "circuit_type", "status", "provider_reference"]
 
 
 # --- Bbox filtering mixin ---
+
 
 class BboxFilterMixin:
     """
@@ -127,21 +128,22 @@ class BboxFilterMixin:
     ``get_queryset()`` so that DRF's filter backends (e.g. ``?q=``) can
     still filter the queryset before slicing.
     """
-    bbox_geo_field = 'location'  # native geometry column name
+
+    bbox_geo_field = "location"  # native geometry column name
 
     def _apply_bbox(self, qs):
         """Annotate geo_4326 and apply bbox filter (no result cap)."""
         qs = qs.annotate(geo_4326=Transform(self.bbox_geo_field, LEAFLET_SRID))
 
-        bbox = self.request.query_params.get('bbox')
+        bbox = self.request.query_params.get("bbox")
         if bbox:
             try:
-                west, south, east, north = (float(v) for v in bbox.split(','))
+                west, south, east, north = (float(v) for v in bbox.split(","))
                 bbox_poly = Polygon.from_bbox((west, south, east, north))
                 bbox_poly.srid = LEAFLET_SRID
                 if get_srid() != LEAFLET_SRID:
                     bbox_poly.transform(get_srid())
-                qs = qs.filter(**{f'{self.bbox_geo_field}__intersects': bbox_poly})
+                qs = qs.filter(**{f"{self.bbox_geo_field}__intersects": bbox_poly})
             except (ValueError, TypeError):
                 pass
 
@@ -176,12 +178,20 @@ class BboxFilterMixin:
 
 
 class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
-    queryset = models.Structure.objects.select_related('site').only(
-        'id', 'name', 'structure_type', 'location', 'site__name',
-    ).order_by('pk')
+    queryset = (
+        models.Structure.objects.select_related("site")
+        .only(
+            "id",
+            "name",
+            "structure_type",
+            "location",
+            "site__name",
+        )
+        .order_by("pk")
+    )
     serializer_class = StructureGeoSerializer
     filterset_class = filters.StructureFilterSet
-    bbox_geo_field = 'location'
+    bbox_geo_field = "location"
     pagination_class = None
 
     def list(self, request, *args, **kwargs):
@@ -202,26 +212,24 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
     def _parse_zoom(self):
         try:
-            return int(self.request.query_params['zoom'])
+            return int(self.request.query_params["zoom"])
         except (KeyError, ValueError, TypeError):
             return None
 
     def _clustered_response(self, zoom, etag=None):
         # Get bbox-filtered queryset WITHOUT the result cap (aggregation reduces rows)
-        qs = self._apply_bbox(
-            models.Structure.objects.only('id', 'location').order_by()
-        )
+        qs = self._apply_bbox(models.Structure.objects.only("id", "location").order_by())
 
         grid_size = _grid_size_for_zoom(zoom)
-        geo_expr = Transform('location', LEAFLET_SRID)
+        geo_expr = Transform("location", LEAFLET_SRID)
         clusters = (
             qs
             # Grid used only for grouping — the actual display point is the
             # centroid of collected geometries, giving organic placement.
             .annotate(grid_cell=SnapToGrid(geo_expr, grid_size))
-            .values('grid_cell')
+            .values("grid_cell")
             .annotate(
-                count=Count('id'),
+                count=Count("id"),
                 centroid=Centroid(Collect(geo_expr)),
             )
             .order_by()
@@ -230,22 +238,24 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
         features = []
         total = 0
         for c in clusters:
-            pt = c['centroid']
+            pt = c["centroid"]
             if pt is None:
                 continue
-            count = c['count']
+            count = c["count"]
             total += count
-            features.append({
-                'type': 'Feature',
-                'geometry': {
-                    'type': 'Point',
-                    'coordinates': [pt.x, pt.y],
-                },
-                'properties': {
-                    'cluster': True,
-                    'point_count': count,
-                },
-            })
+            features.append(
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [pt.x, pt.y],
+                    },
+                    "properties": {
+                        "cluster": True,
+                        "point_count": count,
+                    },
+                }
+            )
 
         response = Response(
             {
@@ -268,7 +278,7 @@ class PathwayGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     ).order_by("pk")
     serializer_class = PathwayGeoSerializer
     filterset_class = filters.PathwayFilterSet
-    bbox_geo_field = 'path'
+    bbox_geo_field = "path"
     pagination_class = None
 
 
@@ -308,7 +318,7 @@ class ConduitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     )
     serializer_class = ConduitGeoSerializer
     filterset_class = filters.ConduitFilterSet
-    bbox_geo_field = 'path'
+    bbox_geo_field = "path"
     pagination_class = None
 
 
@@ -321,7 +331,7 @@ class AerialSpanGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     ).order_by("pk")
     serializer_class = AerialSpanGeoSerializer
     filterset_class = filters.AerialSpanFilterSet
-    bbox_geo_field = 'path'
+    bbox_geo_field = "path"
     pagination_class = None
 
 
@@ -334,15 +344,17 @@ class DirectBuriedGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     ).order_by("pk")
     serializer_class = DirectBuriedGeoSerializer
     filterset_class = filters.DirectBuriedFilterSet
-    bbox_geo_field = 'path'
+    bbox_geo_field = "path"
     pagination_class = None
 
 
 class CircuitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = models.CircuitGeometry.objects.select_related(
-        'circuit', 'circuit__provider', 'circuit__type',
-    ).order_by('pk')
+        "circuit",
+        "circuit__provider",
+        "circuit__type",
+    ).order_by("pk")
     serializer_class = CircuitGeoSerializer
     filterset_class = filters.CircuitGeometryFilterSet
-    bbox_geo_field = 'path'
+    bbox_geo_field = "path"
     pagination_class = None
