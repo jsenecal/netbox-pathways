@@ -102,7 +102,11 @@ jobs:
           SECRET_KEY = "ci-only-secret-key-do-not-use-in-production-aaaaaaaaaaaaaaaaaaaa"
 
           PLUGINS = ["netbox_pathways"]
-          PLUGINS_CONFIG = {"netbox_pathways": {}}
+          PLUGINS_CONFIG = {
+              "netbox_pathways": {
+                  "srid": 4326,  # WGS84 (CI-only; SRID is immutable post-deploy)
+              }
+          }
           EOF_CFG
 
       - name: Install plugin and NetBox dependencies
