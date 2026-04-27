@@ -32,7 +32,6 @@ from .models import (
     PathwayLocation,
     PlannedRoute,
     SiteGeometry,
-    SlackLoop,
     Structure,
 )
 
@@ -211,24 +210,6 @@ class CableSegmentFilterForm(NetBoxModelFilterSetForm):
     )
     cable_id = DynamicModelMultipleChoiceField(
         queryset=Cable.objects.all(), required=False, label='Cable',
-    )
-    pathway_id = DynamicModelMultipleChoiceField(
-        queryset=Pathway.objects.all(), required=False, label='Pathway',
-    )
-    tag = TagFilterField(model)
-
-
-class SlackLoopFilterForm(NetBoxModelFilterSetForm):
-    model = SlackLoop
-    fieldsets = (
-        FieldSet('q', 'filter_id', 'tag'),
-        FieldSet('cable_id', 'structure_id', 'pathway_id', name='Attributes'),
-    )
-    cable_id = DynamicModelMultipleChoiceField(
-        queryset=Cable.objects.all(), required=False, label='Cable',
-    )
-    structure_id = DynamicModelMultipleChoiceField(
-        queryset=Structure.objects.all(), required=False, label='Structure',
     )
     pathway_id = DynamicModelMultipleChoiceField(
         queryset=Pathway.objects.all(), required=False, label='Pathway',

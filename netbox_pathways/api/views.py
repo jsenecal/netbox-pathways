@@ -89,12 +89,6 @@ class CableSegmentViewSet(NetBoxModelViewSet):
     filterset_class = filters.CableSegmentFilterSet
 
 
-class SlackLoopViewSet(NetBoxModelViewSet):
-    queryset = models.SlackLoop.objects.select_related('cable', 'structure', 'pathway')
-    serializer_class = serializers.SlackLoopSerializer
-    filterset_class = filters.SlackLoopFilterSet
-
-
 class SiteGeometryViewSet(NetBoxModelViewSet):
     queryset = models.SiteGeometry.objects.select_related('site', 'structure')
     serializer_class = serializers.SiteGeometrySerializer

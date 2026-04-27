@@ -679,30 +679,6 @@ class CableSegment(NetBoxModel):
                 })
 
 
-class SlackLoop(NetBoxModel):
-    prerequisite_models = (
-        'netbox_pathways.Structure',
-    )
-
-    cable = models.ForeignKey(Cable, on_delete=models.CASCADE, related_name='slack_loops')
-    structure = models.ForeignKey(Structure, on_delete=models.CASCADE, related_name='slack_loops')
-    pathway = models.ForeignKey(
-        Pathway, on_delete=models.SET_NULL, null=True, blank=True, related_name='slack_loops',
-        help_text="For aerial slack stored on a span near the structure",
-    )
-    length = models.FloatField(help_text="Length of slack in meters")
-    comments = models.TextField(blank=True)
-
-    class Meta:
-        ordering = ['cable', 'structure']
-
-    def __str__(self):
-        return f"{self.cable.label} — {self.length}m @ {self.structure.name}"
-
-    def get_absolute_url(self):
-        return reverse('plugins:netbox_pathways:slackloop', args=[self.pk])
-
-
 class PlannedRoute(NetBoxModel):
     name = models.CharField(max_length=200)
     status = models.CharField(

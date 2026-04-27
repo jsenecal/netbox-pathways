@@ -35,7 +35,6 @@ from .models import (
     PathwayLocation,
     PlannedRoute,
     SiteGeometry,
-    SlackLoop,
     Structure,
 )
 
@@ -610,38 +609,6 @@ class CableSegmentBulkEditForm(NetBoxModelBulkEditForm):
     model = CableSegment
     fieldsets = (
         FieldSet('pathway'),
-    )
-    nullable_fields = ('pathway',)
-
-
-# --- Slack Loop ---
-
-class SlackLoopForm(NetBoxModelForm):
-    cable = DynamicModelChoiceField(queryset=Cable.objects.all(), selector=True)
-    structure = DynamicModelChoiceField(queryset=Structure.objects.all(), selector=True)
-    pathway = DynamicModelChoiceField(
-        queryset=Pathway.objects.all(), required=False, selector=True,
-    )
-
-    fieldsets = (
-        FieldSet('cable', 'structure', 'pathway', 'length', name='Slack Loop'),
-        FieldSet('tags', name='Details'),
-    )
-
-    class Meta:
-        model = SlackLoop
-        fields = ['cable', 'structure', 'pathway', 'length', 'comments', 'tags']
-
-
-class SlackLoopBulkEditForm(NetBoxModelBulkEditForm):
-    structure = DynamicModelChoiceField(queryset=Structure.objects.all(), required=False, selector=True)
-    pathway = DynamicModelChoiceField(
-        queryset=Pathway.objects.all(), required=False, selector=True,
-    )
-
-    model = SlackLoop
-    fieldsets = (
-        FieldSet('structure', 'pathway'),
     )
     nullable_fields = ('pathway',)
 

@@ -300,80 +300,8 @@ class CoreModelMapExtension(PluginTemplateExtension):
         return data
 
 
-class CableSlackLoopExtension(PluginTemplateExtension):
-    """Slack loops table on Cable detail pages."""
-
-    models = ['dcim.cable']
-
-    def left_page(self):
-        from django.utils.html import format_html, mark_safe
-
-        obj = self.context['object']
-        slack_loops = models.SlackLoop.objects.filter(cable=obj).select_related('structure', 'pathway')
-        if not slack_loops.exists():
-            return ''
-
-        rows = []
-        for sl in slack_loops:
-            pw_name = str(sl.pathway) if sl.pathway else '\u2014'
-            rows.append(format_html(
-                '<tr><td><a href="{}">{}</a></td><td>{}</td><td>{} m</td></tr>',
-                sl.structure.get_absolute_url(), sl.structure.name, pw_name, sl.length,
-            ))
-
-        total = sum(sl.length for sl in slack_loops)
-
-        return format_html(
-            '<div class="card mb-3">'
-            '<div class="card-header"><h5 class="card-title mb-0">Slack Loops</h5></div>'
-            '<div class="card-body p-0">'
-            '<table class="table table-sm table-hover mb-0">'
-            '<thead><tr><th>Structure</th><th>Pathway</th><th>Length</th></tr></thead>'
-            '<tbody>{}</tbody>'
-            '<tfoot><tr><td colspan="2"><strong>Total</strong></td><td><strong>{} m</strong></td></tr></tfoot>'
-            '</table></div></div>',
-            mark_safe(''.join(rows)),  # noqa: S308 — rows built via format_html (pre-escaped)
-            total,
-        )
-
-
-class StructureSlackLoopExtension(PluginTemplateExtension):
-    """Slack loops table on Structure detail pages."""
-
-    models = ['netbox_pathways.structure']
-
-    def right_page(self):
-        from django.utils.html import format_html, mark_safe
-
-        obj = self.context['object']
-        slack_loops = models.SlackLoop.objects.filter(structure=obj).select_related('cable', 'pathway')
-        if not slack_loops.exists():
-            return ''
-
-        rows = []
-        for sl in slack_loops:
-            pw_name = str(sl.pathway) if sl.pathway else '\u2014'
-            rows.append(format_html(
-                '<tr><td><a href="#">{}</a></td><td>{}</td><td>{} m</td></tr>',
-                sl.cable.label, pw_name, sl.length,
-            ))
-
-        return format_html(
-            '<div class="card mb-3">'
-            '<div class="card-header"><h5 class="card-title mb-0">Slack Loops</h5></div>'
-            '<div class="card-body p-0">'
-            '<table class="table table-sm table-hover mb-0">'
-            '<thead><tr><th>Cable</th><th>Pathway</th><th>Length</th></tr></thead>'
-            '<tbody>{}</tbody>'
-            '</table></div></div>',
-            mark_safe(''.join(rows)),  # noqa: S308 — rows built via format_html (pre-escaped)
-        )
-
-
 template_extensions = [
     LeafletHeadExtension,
     PluginModelMapExtension,
     CoreModelMapExtension,
-    CableSlackLoopExtension,
-    StructureSlackLoopExtension,
 ]

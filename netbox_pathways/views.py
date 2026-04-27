@@ -797,50 +797,6 @@ class CircuitGeometryDeleteView(generic.ObjectDeleteView):
     queryset = models.CircuitGeometry.objects.all()
 
 
-# --- Slack Loops ---
-
-class SlackLoopListView(generic.ObjectListView):
-    queryset = models.SlackLoop.objects.select_related('cable', 'structure', 'pathway')
-    table = tables.SlackLoopTable
-    filterset = filters.SlackLoopFilterSet
-    filterset_form = filterforms.SlackLoopFilterForm
-    actions = (AddObject, BulkExport, BulkEdit, BulkDelete)
-
-
-class SlackLoopView(generic.ObjectView):
-    queryset = models.SlackLoop.objects.all()
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.SlackLoopPanel(),
-            TagsPanel(),
-            CustomFieldsPanel(),
-            CommentsPanel(),
-        ],
-        right_panels=[],
-    )
-
-
-class SlackLoopEditView(generic.ObjectEditView):
-    queryset = models.SlackLoop.objects.all()
-    form = forms.SlackLoopForm
-
-
-class SlackLoopDeleteView(generic.ObjectDeleteView):
-    queryset = models.SlackLoop.objects.all()
-
-
-class SlackLoopBulkEditView(generic.BulkEditView):
-    queryset = models.SlackLoop.objects.all()
-    filterset = filters.SlackLoopFilterSet
-    table = tables.SlackLoopTable
-    form = forms.SlackLoopBulkEditForm
-
-
-class SlackLoopBulkDeleteView(generic.BulkDeleteView):
-    queryset = models.SlackLoop.objects.all()
-    table = tables.SlackLoopTable
-
-
 # --- Planned Route ---
 
 class PlannedRouteListView(generic.ObjectListView):
@@ -1844,20 +1800,12 @@ class PullSheetDetailView(LoginRequiredMixin, View):
             total_pathway_length=Sum('pathway__length'),
         )
 
-        # Slack from SlackLoop model
-        slack_loops = models.SlackLoop.objects.filter(
-            cable=cable,
-        ).select_related('structure', 'pathway')
-        total_slack = slack_loops.aggregate(total=Sum('length'))['total'] or 0
-
         return render(request, 'netbox_pathways/pullsheet_detail.html', {
             'cable': cable,
             'segments': segments,
             'segment_count': segments.count(),
             'total_pathway_length': totals['total_pathway_length'] or 0,
             'route': route,
-            'slack_loops': slack_loops,
-            'total_slack': total_slack,
         })
 
 

@@ -104,15 +104,6 @@ class CableSegmentIndex(SearchIndex):
 
 
 @register_search
-class SlackLoopIndex(SearchIndex):
-    model = models.SlackLoop
-    fields = (
-        ('comments', 5000),
-    )
-    display_attrs = ('cable', 'structure', 'length')
-
-
-@register_search
 class SiteGeometryIndex(SearchIndex):
     model = models.SiteGeometry
     fields = (

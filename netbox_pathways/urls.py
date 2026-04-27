@@ -121,18 +121,6 @@ urlpatterns = [
         *get_model_urls('netbox_pathways', 'cablesegment'),
     ])),
 
-    # Slack Loops
-    path('slack-loops/', views.SlackLoopListView.as_view(), name='slackloop_list'),
-    path('slack-loops/add/', views.SlackLoopEditView.as_view(), name='slackloop_add'),
-    path('slack-loops/edit/', views.SlackLoopBulkEditView.as_view(), name='slackloop_bulk_edit'),
-    path('slack-loops/delete/', views.SlackLoopBulkDeleteView.as_view(), name='slackloop_bulk_delete'),
-    path('slack-loops/<int:pk>/', include([
-        path('', views.SlackLoopView.as_view(), name='slackloop'),
-        path('edit/', views.SlackLoopEditView.as_view(), name='slackloop_edit'),
-        path('delete/', views.SlackLoopDeleteView.as_view(), name='slackloop_delete'),
-        *get_model_urls('netbox_pathways', 'slackloop'),
-    ])),
-
     # Site Geometries
     path('site-geometries/', views.SiteGeometryListView.as_view(), name='sitegeometry_list'),
     path('site-geometries/add/', views.SiteGeometryEditView.as_view(), name='sitegeometry_add'),
