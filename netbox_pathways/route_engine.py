@@ -61,10 +61,15 @@ def find_route(
         include_inactive=include_inactive,
     )
 
-    has_constraints = any([
-        avoid_pathway_types, avoid_structure_types,
-        avoid_tenants, tenant_only, not include_inactive,
-    ])
+    has_constraints = any(
+        [
+            avoid_pathway_types,
+            avoid_structure_types,
+            avoid_tenants,
+            tenant_only,
+            not include_inactive,
+        ]
+    )
     if has_constraints:
         graph = PathwayGraph.build_topology(pathway_qs=qs)
     else:
@@ -95,10 +100,10 @@ def _build_filtered_queryset(
     include_inactive=False,
 ):
     """Build a Pathway queryset with hard constraints applied as SQL filters."""
-    qs = models.Pathway.objects.exclude(pathway_type='conduit_bank')
+    qs = models.Pathway.objects.exclude(pathway_type="conduit_bank")
 
     if not include_inactive:
-        inactive = ['retired', 'decommissioning']
+        inactive = ["retired", "decommissioning"]
         qs = qs.exclude(start_structure__status__in=inactive)
         qs = qs.exclude(end_structure__status__in=inactive)
 
@@ -128,7 +133,7 @@ def _apply_graph_constraints(
     """Remove nodes/edges from the graph based on post-build constraints."""
     if avoid_structures:
         for pk in avoid_structures:
-            node = ('structure', pk)
+            node = ("structure", pk)
             if node in graph.graph:
                 graph.graph.remove_node(node)
 
@@ -136,11 +141,10 @@ def _apply_graph_constraints(
         pathway_ids_to_remove = set(
             models.CableSegment.objects.filter(
                 cable_id__in=avoid_cables,
-            ).values_list('pathway_id', flat=True)
+            ).values_list("pathway_id", flat=True)
         )
         edges_to_remove = [
-            (u, v) for u, v, d in graph.graph.edges(data=True)
-            if d.get('pathway_id') in pathway_ids_to_remove
+            (u, v) for u, v, d in graph.graph.edges(data=True) if d.get("pathway_id") in pathway_ids_to_remove
         ]
         graph.graph.remove_edges_from(edges_to_remove)
 
@@ -153,7 +157,7 @@ def _apply_graph_constraints(
         ct_pks = set(
             CircuitTermination.objects.filter(
                 circuit_id__in=avoid_circuits,
-            ).values_list('pk', flat=True)
+            ).values_list("pk", flat=True)
         )
         if ct_pks:
             from dcim.models import CableTermination
@@ -162,18 +166,15 @@ def _apply_graph_constraints(
                 CableTermination.objects.filter(
                     termination_type=ct,
                     termination_id__in=ct_pks,
-                ).values_list('cable_id', flat=True)
+                ).values_list("cable_id", flat=True)
             )
             if cable_ids:
                 pids = set(
                     models.CableSegment.objects.filter(
                         cable_id__in=cable_ids,
-                    ).values_list('pathway_id', flat=True)
+                    ).values_list("pathway_id", flat=True)
                 )
-                edges_to_remove = [
-                    (u, v) for u, v, d in graph.graph.edges(data=True)
-                    if d.get('pathway_id') in pids
-                ]
+                edges_to_remove = [(u, v) for u, v, d in graph.graph.edges(data=True) if d.get("pathway_id") in pids]
                 graph.graph.remove_edges_from(edges_to_remove)
 
     if avoid_circuit_geometries:
@@ -183,14 +184,14 @@ def _apply_graph_constraints(
         circuit_ids = set(
             models.CircuitGeometry.objects.filter(
                 pk__in=avoid_circuit_geometries,
-            ).values_list('circuit_id', flat=True)
+            ).values_list("circuit_id", flat=True)
         )
         if circuit_ids:
             ct = ContentType.objects.get_for_model(CircuitTermination)
             ct_pks = set(
                 CircuitTermination.objects.filter(
                     circuit_id__in=circuit_ids,
-                ).values_list('pk', flat=True)
+                ).values_list("pk", flat=True)
             )
             if ct_pks:
                 from dcim.models import CableTermination
@@ -199,17 +200,16 @@ def _apply_graph_constraints(
                     CableTermination.objects.filter(
                         termination_type=ct,
                         termination_id__in=ct_pks,
-                    ).values_list('cable_id', flat=True)
+                    ).values_list("cable_id", flat=True)
                 )
                 if cable_ids:
                     pids = set(
                         models.CableSegment.objects.filter(
                             cable_id__in=cable_ids,
-                        ).values_list('pathway_id', flat=True)
+                        ).values_list("pathway_id", flat=True)
                     )
                     edges_to_remove = [
-                        (u, v) for u, v, d in graph.graph.edges(data=True)
-                        if d.get('pathway_id') in pids
+                        (u, v) for u, v, d in graph.graph.edges(data=True) if d.get("pathway_id") in pids
                     ]
                     graph.graph.remove_edges_from(edges_to_remove)
 
@@ -220,12 +220,10 @@ def _apply_in_use_preference(graph, factor):
     factor: 0-100 — higher values give more preference to shared pathways.
     At factor=100, in-use edges get 50% weight reduction.
     """
-    in_use_ids = set(
-        models.CableSegment.objects.values_list('pathway_id', flat=True).distinct()
-    )
+    in_use_ids = set(models.CableSegment.objects.values_list("pathway_id", flat=True).distinct())
     for _u, _v, data in graph.graph.edges(data=True):
-        if data.get('pathway_id') in in_use_ids:
-            data['weight'] *= (1 - factor / 200)
+        if data.get("pathway_id") in in_use_ids:
+            data["weight"] *= 1 - factor / 200
 
 
 def _chained_shortest_path(graph, start, end, waypoints):
@@ -235,7 +233,7 @@ def _chained_shortest_path(graph, start, end, waypoints):
     later segments cannot revisit them (a route must never cross the same
     structure twice).  Only the upcoming waypoints/endpoint are preserved.
     """
-    stops = [start] + [('structure', wp) for wp in waypoints] + [end]
+    stops = [start] + [("structure", wp) for wp in waypoints] + [end]
     all_pathway_ids = []
     total_cost = 0
 
@@ -249,7 +247,7 @@ def _chained_shortest_path(graph, start, end, waypoints):
 
         # Remove traversed nodes so subsequent segments can't revisit them.
         if i < len(stops) - 2:  # skip cleanup after the last segment
-            remaining = set(stops[i + 1:])
+            remaining = set(stops[i + 1 :])
             for node in path_nodes:
                 if node not in remaining and node in graph.graph:
                     graph.graph.remove_node(node)

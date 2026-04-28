@@ -16,13 +16,14 @@ class CableTraceView(APIView):
 
     GET /api/plugins/netbox-pathways/traversal/cable-trace/?cable_id=<id>
     """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        cable_id = request.query_params.get('cable_id')
+        cable_id = request.query_params.get("cable_id")
         if not cable_id:
             return Response(
-                {'error': 'cable_id is required'},
+                {"error": "cable_id is required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -30,16 +31,18 @@ class CableTraceView(APIView):
             cable_id = int(cable_id)
         except (TypeError, ValueError):
             return Response(
-                {'error': 'cable_id must be an integer'},
+                {"error": "cable_id must be an integer"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         segments = trace_cable(cable_id)
-        total_length = sum(s['length'] or 0 for s in segments)
+        total_length = sum(s["length"] or 0 for s in segments)
 
-        return Response({
-            'cable_id': cable_id,
-            'segment_count': len(segments),
-            'total_length': total_length,
-            'segments': segments,
-        })
+        return Response(
+            {
+                "cable_id": cable_id,
+                "segment_count": len(segments),
+                "total_length": total_length,
+                "segments": segments,
+            }
+        )

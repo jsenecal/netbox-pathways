@@ -93,9 +93,10 @@ class TestMapViewGet:
         request = factory.get(f"/plugins/pathways/map/?{query_string}")
         # LoginRequiredMixin needs request.user
         from django.contrib.auth.models import AnonymousUser
+
         request.user = AnonymousUser()
         view = MapView()
-        with patch.object(view, '_data_extent', return_value=None):
+        with patch.object(view, "_data_extent", return_value=None):
             # Bypass LoginRequiredMixin — call get() directly after dispatch
             response = view.get(request)
         return response
@@ -105,32 +106,32 @@ class TestMapViewGet:
         assert response.status_code == 200
         content = response.content.decode()
         # The wrapper div should have the pw-kiosk class
-        assert 'pathways-map-wrapper pw-kiosk' in content
+        assert "pathways-map-wrapper pw-kiosk" in content
 
     def test_kiosk_false(self, factory):
         response = self._get(factory, "kiosk=false")
         assert response.status_code == 200
         content = response.content.decode()
         # Wrapper div should NOT have pw-kiosk class (CSS rules still mention it)
-        assert 'pathways-map-wrapper pw-kiosk' not in content
+        assert "pathways-map-wrapper pw-kiosk" not in content
 
     def test_kiosk_missing(self, factory):
         response = self._get(factory, "")
         assert response.status_code == 200
         content = response.content.decode()
-        assert 'pathways-map-wrapper pw-kiosk' not in content
+        assert "pathways-map-wrapper pw-kiosk" not in content
 
     def test_kiosk_case_insensitive(self, factory):
         response = self._get(factory, "kiosk=TRUE")
         content = response.content.decode()
-        assert 'pathways-map-wrapper pw-kiosk' in content
+        assert "pathways-map-wrapper pw-kiosk" in content
 
     def test_lat_lon_zoom_params(self, factory):
         response = self._get(factory, "lat=48.8&lon=2.3&zoom=15")
         content = response.content.decode()
-        assert '48.8' in content
-        assert '2.3' in content
-        assert '15' in content
+        assert "48.8" in content
+        assert "2.3" in content
+        assert "15" in content
 
     def test_lat_lon_without_zoom_uses_default(self, factory):
         response = self._get(factory, "lat=48.8&lon=2.3")
@@ -140,13 +141,13 @@ class TestMapViewGet:
         """The JS init config should contain kiosk: true when param is set."""
         response = self._get(factory, "kiosk=true")
         content = response.content.decode()
-        assert 'kiosk: true' in content
+        assert "kiosk: true" in content
 
     def test_no_kiosk_js_config(self, factory):
         """The JS init config should contain kiosk: false when param is not set."""
         response = self._get(factory, "")
         content = response.content.decode()
-        assert 'kiosk: false' in content
+        assert "kiosk: false" in content
 
     def test_invalid_lat_uses_default(self, factory):
         response = self._get(factory, "lat=notanumber&lon=2.3")
@@ -156,10 +157,11 @@ class TestMapViewGet:
         """When no lat/lon params, _data_extent result is used."""
         request = factory.get("/plugins/pathways/map/")
         from django.contrib.auth.models import AnonymousUser
+
         request.user = AnonymousUser()
         view = MapView()
         extent = (-73.6, 45.4, -73.5, 45.6)
-        with patch.object(view, '_data_extent', return_value=extent):
+        with patch.object(view, "_data_extent", return_value=extent):
             response = view.get(request)
         content = response.content.decode()
         # Center should be midpoint of extent

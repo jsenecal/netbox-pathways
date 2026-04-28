@@ -36,7 +36,7 @@ from ..models import (
 
 class StructureSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_pathways-api:structure-detail',
+        view_name="plugins-api:netbox_pathways-api:structure-detail",
     )
     status = ChoiceField(choices=StructureStatusChoices, required=False)
     structure_type = ChoiceField(choices=StructureTypeChoices, required=False, allow_blank=True)
@@ -48,44 +48,69 @@ class StructureSerializer(NetBoxModelSerializer):
     class Meta:
         model = Structure
         fields = [
-            'id', 'url', 'display_url', 'display', 'name', 'status', 'structure_type', 'site',
-            'location', 'height', 'width', 'length', 'depth', 'elevation',
-            'installation_date', 'tenant',
-            'access_notes', 'comments', 'tags', 'created', 'last_updated',
-            'no_pathways', 'description',
+            "id",
+            "url",
+            "display_url",
+            "display",
+            "name",
+            "status",
+            "structure_type",
+            "site",
+            "location",
+            "height",
+            "width",
+            "length",
+            "depth",
+            "elevation",
+            "installation_date",
+            "tenant",
+            "access_notes",
+            "comments",
+            "tags",
+            "created",
+            "last_updated",
+            "no_pathways",
+            "description",
         ]
         brief_fields = (
-            'id', 'url', 'display_url', 'display', 'label', 'structure_type',
-            'no_pathways', 'description',
+            "id",
+            "url",
+            "display_url",
+            "display",
+            "label",
+            "structure_type",
+            "no_pathways",
+            "description",
         )
 
     def get_no_pathways(self, obj):
-        if hasattr(obj, '_has_pathways'):
+        if hasattr(obj, "_has_pathways"):
             return not obj._has_pathways
         return None
 
     def get_description(self, obj):
-        if hasattr(obj, '_has_pathways') and not obj._has_pathways:
-            return 'No connected pathways'
+        if hasattr(obj, "_has_pathways") and not obj._has_pathways:
+            return "No connected pathways"
         return None
 
 
 # --- Shared FK field declarations for pathway subtypes ---
 
+
 def _pathway_fk_fields():
     """Common FK field declarations for all pathway-based serializers."""
     return {
-        'start_structure': StructureSerializer(nested=True, required=False, allow_null=True),
-        'end_structure': StructureSerializer(nested=True, required=False, allow_null=True),
-        'start_location': LocationSerializer(nested=True, required=False, allow_null=True),
-        'end_location': LocationSerializer(nested=True, required=False, allow_null=True),
-        'tenant': TenantSerializer(nested=True, required=False, allow_null=True),
+        "start_structure": StructureSerializer(nested=True, required=False, allow_null=True),
+        "end_structure": StructureSerializer(nested=True, required=False, allow_null=True),
+        "start_location": LocationSerializer(nested=True, required=False, allow_null=True),
+        "end_location": LocationSerializer(nested=True, required=False, allow_null=True),
+        "tenant": TenantSerializer(nested=True, required=False, allow_null=True),
     }
 
 
 class ConduitBankSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_pathways-api:conduitbank-detail',
+        view_name="plugins-api:netbox_pathways-api:conduitbank-detail",
     )
     start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
     end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
@@ -98,18 +123,33 @@ class ConduitBankSerializer(NetBoxModelSerializer):
     class Meta:
         model = ConduitBank
         fields = [
-            'id', 'url', 'display_url', 'display', 'label',
-            'start_structure', 'end_structure', 'start_face', 'end_face',
-            'tenant', 'path', 'length',
-            'configuration', 'total_conduits', 'encasement_type',
-            'installation_date', 'comments', 'tags', 'created', 'last_updated',
+            "id",
+            "url",
+            "display_url",
+            "display",
+            "label",
+            "start_structure",
+            "end_structure",
+            "start_face",
+            "end_face",
+            "tenant",
+            "path",
+            "length",
+            "configuration",
+            "total_conduits",
+            "encasement_type",
+            "installation_date",
+            "comments",
+            "tags",
+            "created",
+            "last_updated",
         ]
-        brief_fields = ('id', 'url', 'display_url', 'display', 'label')
+        brief_fields = ("id", "url", "display_url", "display", "label")
 
 
 class PathwaySerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_pathways-api:pathway-detail',
+        view_name="plugins-api:netbox_pathways-api:pathway-detail",
     )
     pathway_type = ChoiceField(choices=PathwayTypeChoices, required=False, allow_blank=True)
     start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
@@ -122,18 +162,32 @@ class PathwaySerializer(NetBoxModelSerializer):
     class Meta:
         model = Pathway
         fields = [
-            'id', 'url', 'display_url', 'display', 'label', 'pathway_type', 'path',
-            'start_structure', 'end_structure',
-            'start_location', 'end_location', 'tenant', 'length',
-            'cables_routed', 'installation_date',
-            'comments', 'tags', 'created', 'last_updated',
+            "id",
+            "url",
+            "display_url",
+            "display",
+            "label",
+            "pathway_type",
+            "path",
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+            "tenant",
+            "length",
+            "cables_routed",
+            "installation_date",
+            "comments",
+            "tags",
+            "created",
+            "last_updated",
         ]
-        brief_fields = ('id', 'url', 'display_url', 'display', 'label', 'pathway_type')
+        brief_fields = ("id", "url", "display_url", "display", "label", "pathway_type")
 
 
 class ConduitSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_pathways-api:conduit-detail',
+        view_name="plugins-api:netbox_pathways-api:conduit-detail",
     )
     material = ChoiceField(choices=ConduitMaterialChoices, required=False, allow_blank=True)
     start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
@@ -147,21 +201,39 @@ class ConduitSerializer(NetBoxModelSerializer):
     class Meta:
         model = Conduit
         fields = [
-            'id', 'url', 'display_url', 'display', 'label', 'pathway_type', 'path',
-            'start_structure', 'end_structure',
-            'start_location', 'end_location',
-            'material', 'inner_diameter', 'outer_diameter', 'depth',
-            'conduit_bank', 'bank_position',
-            'start_junction', 'end_junction',
-            'length', 'cables_routed',
-            'installation_date', 'comments', 'tags', 'created', 'last_updated',
+            "id",
+            "url",
+            "display_url",
+            "display",
+            "label",
+            "pathway_type",
+            "path",
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+            "material",
+            "inner_diameter",
+            "outer_diameter",
+            "depth",
+            "conduit_bank",
+            "bank_position",
+            "start_junction",
+            "end_junction",
+            "length",
+            "cables_routed",
+            "installation_date",
+            "comments",
+            "tags",
+            "created",
+            "last_updated",
         ]
-        brief_fields = ('id', 'url', 'display_url', 'display', 'label', 'material')
+        brief_fields = ("id", "url", "display_url", "display", "label", "material")
 
 
 class AerialSpanSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_pathways-api:aerialspan-detail',
+        view_name="plugins-api:netbox_pathways-api:aerialspan-detail",
     )
     aerial_type = ChoiceField(choices=AerialTypeChoices, required=False, allow_blank=True)
     start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
@@ -174,20 +246,37 @@ class AerialSpanSerializer(NetBoxModelSerializer):
     class Meta:
         model = AerialSpan
         fields = [
-            'id', 'url', 'display_url', 'display', 'label', 'pathway_type', 'path',
-            'start_structure', 'end_structure',
-            'start_location', 'end_location',
-            'aerial_type', 'attachment_height', 'sag',
-            'messenger_size', 'wind_loading', 'ice_loading',
-            'length', 'cables_routed',
-            'installation_date', 'comments', 'tags', 'created', 'last_updated',
+            "id",
+            "url",
+            "display_url",
+            "display",
+            "label",
+            "pathway_type",
+            "path",
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+            "aerial_type",
+            "attachment_height",
+            "sag",
+            "messenger_size",
+            "wind_loading",
+            "ice_loading",
+            "length",
+            "cables_routed",
+            "installation_date",
+            "comments",
+            "tags",
+            "created",
+            "last_updated",
         ]
-        brief_fields = ('id', 'url', 'display_url', 'display', 'label', 'aerial_type')
+        brief_fields = ("id", "url", "display_url", "display", "label", "aerial_type")
 
 
 class DirectBuriedSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_pathways-api:directburied-detail',
+        view_name="plugins-api:netbox_pathways-api:directburied-detail",
     )
     start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
     end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
@@ -199,19 +288,35 @@ class DirectBuriedSerializer(NetBoxModelSerializer):
     class Meta:
         model = DirectBuried
         fields = [
-            'id', 'url', 'display_url', 'display', 'label', 'pathway_type', 'path',
-            'start_structure', 'end_structure',
-            'start_location', 'end_location',
-            'burial_depth', 'warning_tape', 'tracer_wire', 'armor_type',
-            'length', 'cables_routed',
-            'installation_date', 'comments', 'tags', 'created', 'last_updated',
+            "id",
+            "url",
+            "display_url",
+            "display",
+            "label",
+            "pathway_type",
+            "path",
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+            "burial_depth",
+            "warning_tape",
+            "tracer_wire",
+            "armor_type",
+            "length",
+            "cables_routed",
+            "installation_date",
+            "comments",
+            "tags",
+            "created",
+            "last_updated",
         ]
-        brief_fields = ('id', 'url', 'display_url', 'display', 'label')
+        brief_fields = ("id", "url", "display_url", "display", "label")
 
 
 class InnerductSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_pathways-api:innerduct-detail',
+        view_name="plugins-api:netbox_pathways-api:innerduct-detail",
     )
     start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
     end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
@@ -223,19 +328,35 @@ class InnerductSerializer(NetBoxModelSerializer):
     class Meta:
         model = Innerduct
         fields = [
-            'id', 'url', 'display_url', 'display', 'label', 'pathway_type', 'path',
-            'start_structure', 'end_structure',
-            'start_location', 'end_location',
-            'parent_conduit', 'size', 'color', 'position',
-            'length', 'cables_routed',
-            'installation_date', 'comments', 'tags', 'created', 'last_updated',
+            "id",
+            "url",
+            "display_url",
+            "display",
+            "label",
+            "pathway_type",
+            "path",
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+            "parent_conduit",
+            "size",
+            "color",
+            "position",
+            "length",
+            "cables_routed",
+            "installation_date",
+            "comments",
+            "tags",
+            "created",
+            "last_updated",
         ]
-        brief_fields = ('id', 'url', 'display_url', 'display', 'label', 'size')
+        brief_fields = ("id", "url", "display_url", "display", "label", "size")
 
 
 class ConduitJunctionSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_pathways-api:conduitjunction-detail',
+        view_name="plugins-api:netbox_pathways-api:conduitjunction-detail",
     )
     trunk_conduit = ConduitSerializer(nested=True, required=False, allow_null=True)
     branch_conduit = ConduitSerializer(nested=True, required=False, allow_null=True)
@@ -244,17 +365,26 @@ class ConduitJunctionSerializer(NetBoxModelSerializer):
     class Meta:
         model = ConduitJunction
         fields = [
-            'id', 'url', 'display_url', 'display', 'label',
-            'trunk_conduit', 'branch_conduit',
-            'towards_structure', 'position_on_trunk',
-            'comments', 'tags', 'created', 'last_updated',
+            "id",
+            "url",
+            "display_url",
+            "display",
+            "label",
+            "trunk_conduit",
+            "branch_conduit",
+            "towards_structure",
+            "position_on_trunk",
+            "comments",
+            "tags",
+            "created",
+            "last_updated",
         ]
-        brief_fields = ('id', 'url', 'display_url', 'display', 'label')
+        brief_fields = ("id", "url", "display_url", "display", "label")
 
 
 class PathwayLocationSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_pathways-api:pathwaylocation-detail',
+        view_name="plugins-api:netbox_pathways-api:pathwaylocation-detail",
     )
     pathway = PathwaySerializer(nested=True, required=False, allow_null=True)
     site = SiteSerializer(nested=True, required=False, allow_null=True)
@@ -263,15 +393,25 @@ class PathwayLocationSerializer(NetBoxModelSerializer):
     class Meta:
         model = PathwayLocation
         fields = [
-            'id', 'url', 'display_url', 'display', 'pathway', 'site', 'location',
-            'sequence', 'comments', 'tags', 'created', 'last_updated',
+            "id",
+            "url",
+            "display_url",
+            "display",
+            "pathway",
+            "site",
+            "location",
+            "sequence",
+            "comments",
+            "tags",
+            "created",
+            "last_updated",
         ]
-        brief_fields = ('id', 'url', 'display_url', 'display', 'pathway', 'sequence')
+        brief_fields = ("id", "url", "display_url", "display", "pathway", "sequence")
 
 
 class CableSegmentSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_pathways-api:cablesegment-detail',
+        view_name="plugins-api:netbox_pathways-api:cablesegment-detail",
     )
     cable = CableSerializer(nested=True, required=False, allow_null=True)
     pathway = PathwaySerializer(nested=True, required=False, allow_null=True)
@@ -279,16 +419,24 @@ class CableSegmentSerializer(NetBoxModelSerializer):
     class Meta:
         model = CableSegment
         fields = [
-            'id', 'url', 'display_url', 'display', 'cable', 'pathway',
-            'sequence',
-            'comments', 'tags', 'created', 'last_updated',
+            "id",
+            "url",
+            "display_url",
+            "display",
+            "cable",
+            "pathway",
+            "sequence",
+            "comments",
+            "tags",
+            "created",
+            "last_updated",
         ]
-        brief_fields = ('id', 'url', 'display_url', 'display', 'cable', 'pathway', 'sequence')
+        brief_fields = ("id", "url", "display_url", "display", "cable", "pathway", "sequence")
 
 
 class SiteGeometrySerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_pathways-api:sitegeometry-detail',
+        view_name="plugins-api:netbox_pathways-api:sitegeometry-detail",
     )
     site = SiteSerializer(nested=True, required=False, allow_null=True)
     structure = StructureSerializer(nested=True, required=False, allow_null=True)
@@ -296,30 +444,48 @@ class SiteGeometrySerializer(NetBoxModelSerializer):
     class Meta:
         model = SiteGeometry
         fields = [
-            'id', 'url', 'display_url', 'display', 'site', 'structure', 'geometry',
-            'comments', 'tags', 'created', 'last_updated',
+            "id",
+            "url",
+            "display_url",
+            "display",
+            "site",
+            "structure",
+            "geometry",
+            "comments",
+            "tags",
+            "created",
+            "last_updated",
         ]
-        brief_fields = ('id', 'url', 'display_url', 'display', 'site')
+        brief_fields = ("id", "url", "display_url", "display", "site")
 
 
 class CircuitGeometrySerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_pathways-api:circuitgeometry-detail',
+        view_name="plugins-api:netbox_pathways-api:circuitgeometry-detail",
     )
     circuit = CircuitSerializer(nested=True, required=False, allow_null=True)
 
     class Meta:
         model = CircuitGeometry
         fields = [
-            'id', 'url', 'display_url', 'display', 'circuit', 'path',
-            'provider_reference', 'comments', 'tags', 'created', 'last_updated',
+            "id",
+            "url",
+            "display_url",
+            "display",
+            "circuit",
+            "path",
+            "provider_reference",
+            "comments",
+            "tags",
+            "created",
+            "last_updated",
         ]
-        brief_fields = ('id', 'url', 'display_url', 'display', 'circuit')
+        brief_fields = ("id", "url", "display_url", "display", "circuit")
 
 
 class PlannedRouteSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
-        view_name='plugins-api:netbox_pathways-api:plannedroute-detail',
+        view_name="plugins-api:netbox_pathways-api:plannedroute-detail",
     )
     status = ChoiceField(choices=PlannedRouteStatusChoices, required=False)
     start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
@@ -332,9 +498,23 @@ class PlannedRouteSerializer(NetBoxModelSerializer):
     class Meta:
         model = PlannedRoute
         fields = [
-            'id', 'url', 'display_url', 'display', 'name', 'status',
-            'start_structure', 'end_structure', 'start_location', 'end_location',
-            'pathway_ids', 'constraints',
-            'tenant', 'cable', 'comments', 'tags', 'created', 'last_updated',
+            "id",
+            "url",
+            "display_url",
+            "display",
+            "name",
+            "status",
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+            "pathway_ids",
+            "constraints",
+            "tenant",
+            "cable",
+            "comments",
+            "tags",
+            "created",
+            "last_updated",
         ]
-        brief_fields = ('id', 'url', 'display_url', 'display', 'name', 'status')
+        brief_fields = ("id", "url", "display_url", "display", "name", "status")

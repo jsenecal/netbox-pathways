@@ -49,14 +49,14 @@ class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
     site_id = django_filters.ModelMultipleChoiceFilter(
         queryset=Site.objects.all(),
         distinct=False,
-        label='Site (ID)',
+        label="Site (ID)",
     )
     site = django_filters.ModelMultipleChoiceFilter(
-        field_name='site__slug',
+        field_name="site__slug",
         queryset=Site.objects.all(),
-        to_field_name='slug',
+        to_field_name="slug",
         distinct=False,
-        label='Site (slug)',
+        label="Site (slug)",
     )
     height = MultiValueNumberFilter()
     width = MultiValueNumberFilter()
@@ -64,24 +64,23 @@ class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
     depth = MultiValueNumberFilter()
     elevation = MultiValueNumberFilter()
     occupied = django_filters.BooleanFilter(
-        method='filter_occupied',
-        label='Occupied (has routed cables)',
+        method="filter_occupied",
+        label="Occupied (has routed cables)",
     )
     has_pathways = django_filters.BooleanFilter(
-        method='filter_has_pathways',
-        label='Has connected pathways',
+        method="filter_has_pathways",
+        label="Has connected pathways",
     )
 
     class Meta:
         model = Structure
-        fields = ['id', 'installation_date']
+        fields = ["id", "installation_date"]
 
     def filter_occupied(self, queryset, name, value):
-        occupied_pws = CableSegment.objects.values_list('pathway_id', flat=True)
+        occupied_pws = CableSegment.objects.values_list("pathway_id", flat=True)
         occupied_struct_pks = set()
-        for start_pk, end_pk in (
-            Pathway.objects.filter(pk__in=occupied_pws)
-            .values_list('start_structure_id', 'end_structure_id')
+        for start_pk, end_pk in Pathway.objects.filter(pk__in=occupied_pws).values_list(
+            "start_structure_id", "end_structure_id"
         ):
             if start_pk:
                 occupied_struct_pks.add(start_pk)
@@ -93,7 +92,8 @@ class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
 
     def filter_has_pathways(self, queryset, name, value):
         connected = Pathway.objects.values_list(
-            'start_structure_id', 'end_structure_id',
+            "start_structure_id",
+            "end_structure_id",
         )
         pks = set()
         for start_pk, end_pk in connected:
@@ -109,9 +109,7 @@ class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
         if not value.strip():
             return queryset
         return queryset.filter(
-            Q(name__icontains=value)
-            | Q(tenant__name__icontains=value)
-            | Q(access_notes__icontains=value)
+            Q(name__icontains=value) | Q(tenant__name__icontains=value) | Q(access_notes__icontains=value)
         )
 
 
@@ -125,59 +123,59 @@ class PathwayFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
     structure_id = django_filters.ModelMultipleChoiceFilter(
         queryset=Structure.objects.all(),
         distinct=False,
-        label='Structure (ID)',
-        method='filter_structure',
+        label="Structure (ID)",
+        method="filter_structure",
     )
     start_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='start_structure',
+        field_name="start_structure",
         queryset=Structure.objects.all(),
         distinct=False,
-        label='Start Structure (ID)',
+        label="Start Structure (ID)",
     )
     end_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='end_structure',
+        field_name="end_structure",
         queryset=Structure.objects.all(),
         distinct=False,
-        label='End Structure (ID)',
+        label="End Structure (ID)",
     )
     start_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='start_location',
+        field_name="start_location",
         queryset=Location.objects.all(),
         distinct=False,
-        label='Start Location (ID)',
+        label="Start Location (ID)",
     )
     end_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='end_location',
+        field_name="end_location",
         queryset=Location.objects.all(),
         distinct=False,
-        label='End Location (ID)',
+        label="End Location (ID)",
     )
     start_location = django_filters.ModelMultipleChoiceFilter(
-        field_name='start_location__slug',
+        field_name="start_location__slug",
         queryset=Location.objects.all(),
-        to_field_name='slug',
+        to_field_name="slug",
         distinct=False,
-        label='Start Location (slug)',
+        label="Start Location (slug)",
     )
     end_location = django_filters.ModelMultipleChoiceFilter(
-        field_name='end_location__slug',
+        field_name="end_location__slug",
         queryset=Location.objects.all(),
-        to_field_name='slug',
+        to_field_name="slug",
         distinct=False,
-        label='End Location (slug)',
+        label="End Location (slug)",
     )
     length = MultiValueNumberFilter()
     occupied = django_filters.BooleanFilter(
-        method='filter_occupied',
-        label='Occupied (has routed cables)',
+        method="filter_occupied",
+        label="Occupied (has routed cables)",
     )
 
     class Meta:
         model = Pathway
-        fields = ['id', 'installation_date']
+        fields = ["id", "installation_date"]
 
     def filter_occupied(self, queryset, name, value):
-        occupied_pws = CableSegment.objects.values_list('pathway_id', flat=True)
+        occupied_pws = CableSegment.objects.values_list("pathway_id", flat=True)
         if value:
             return queryset.filter(pk__in=occupied_pws)
         return queryset.exclude(pk__in=occupied_pws)
@@ -199,9 +197,7 @@ class PathwayFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
     def search(self, queryset, name, value):
         if not value.strip():
             return queryset
-        return queryset.filter(
-            Q(label__icontains=value) | Q(comments__icontains=value)
-        )
+        return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
 class ConduitFilterSet(NetBoxModelFilterSet):
@@ -212,34 +208,34 @@ class ConduitFilterSet(NetBoxModelFilterSet):
         null_value=None,
     )
     start_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='start_structure',
+        field_name="start_structure",
         queryset=Structure.objects.all(),
         distinct=False,
-        label='Start Structure (ID)',
+        label="Start Structure (ID)",
     )
     end_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='end_structure',
+        field_name="end_structure",
         queryset=Structure.objects.all(),
         distinct=False,
-        label='End Structure (ID)',
+        label="End Structure (ID)",
     )
     start_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='start_location',
+        field_name="start_location",
         queryset=Location.objects.all(),
         distinct=False,
-        label='Start Location (ID)',
+        label="Start Location (ID)",
     )
     end_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='end_location',
+        field_name="end_location",
         queryset=Location.objects.all(),
         distinct=False,
-        label='End Location (ID)',
+        label="End Location (ID)",
     )
     conduit_bank_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='conduit_bank',
+        field_name="conduit_bank",
         queryset=ConduitBank.objects.all(),
         distinct=False,
-        label='Conduit Bank (ID)',
+        label="Conduit Bank (ID)",
     )
     inner_diameter = MultiValueNumberFilter()
     outer_diameter = MultiValueNumberFilter()
@@ -248,14 +244,12 @@ class ConduitFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = Conduit
-        fields = ['id', 'installation_date']
+        fields = ["id", "installation_date"]
 
     def search(self, queryset, name, value):
         if not value.strip():
             return queryset
-        return queryset.filter(
-            Q(label__icontains=value) | Q(comments__icontains=value)
-        )
+        return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
 class AerialSpanFilterSet(NetBoxModelFilterSet):
@@ -266,28 +260,28 @@ class AerialSpanFilterSet(NetBoxModelFilterSet):
         null_value=None,
     )
     start_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='start_structure',
+        field_name="start_structure",
         queryset=Structure.objects.all(),
         distinct=False,
-        label='Start Structure (ID)',
+        label="Start Structure (ID)",
     )
     end_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='end_structure',
+        field_name="end_structure",
         queryset=Structure.objects.all(),
         distinct=False,
-        label='End Structure (ID)',
+        label="End Structure (ID)",
     )
     start_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='start_location',
+        field_name="start_location",
         queryset=Location.objects.all(),
         distinct=False,
-        label='Start Location (ID)',
+        label="Start Location (ID)",
     )
     end_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='end_location',
+        field_name="end_location",
         queryset=Location.objects.all(),
         distinct=False,
-        label='End Location (ID)',
+        label="End Location (ID)",
     )
     attachment_height = MultiValueNumberFilter()
     sag = MultiValueNumberFilter()
@@ -298,41 +292,39 @@ class AerialSpanFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = AerialSpan
-        fields = ['id', 'installation_date']
+        fields = ["id", "installation_date"]
 
     def search(self, queryset, name, value):
         if not value.strip():
             return queryset
-        return queryset.filter(
-            Q(label__icontains=value) | Q(comments__icontains=value)
-        )
+        return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
 class DirectBuriedFilterSet(NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     start_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='start_structure',
+        field_name="start_structure",
         queryset=Structure.objects.all(),
         distinct=False,
-        label='Start Structure (ID)',
+        label="Start Structure (ID)",
     )
     end_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='end_structure',
+        field_name="end_structure",
         queryset=Structure.objects.all(),
         distinct=False,
-        label='End Structure (ID)',
+        label="End Structure (ID)",
     )
     start_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='start_location',
+        field_name="start_location",
         queryset=Location.objects.all(),
         distinct=False,
-        label='Start Location (ID)',
+        label="Start Location (ID)",
     )
     end_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='end_location',
+        field_name="end_location",
         queryset=Location.objects.all(),
         distinct=False,
-        label='End Location (ID)',
+        label="End Location (ID)",
     )
     burial_depth = MultiValueNumberFilter()
     warning_tape = django_filters.BooleanFilter()
@@ -342,23 +334,21 @@ class DirectBuriedFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = DirectBuried
-        fields = ['id', 'installation_date']
+        fields = ["id", "installation_date"]
 
     def search(self, queryset, name, value):
         if not value.strip():
             return queryset
-        return queryset.filter(
-            Q(label__icontains=value) | Q(comments__icontains=value)
-        )
+        return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
 class InnerductFilterSet(NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     parent_conduit_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='parent_conduit',
+        field_name="parent_conduit",
         queryset=Conduit.objects.all(),
         distinct=False,
-        label='Parent Conduit (ID)',
+        label="Parent Conduit (ID)",
     )
     size = MultiValueCharFilter()
     color = MultiValueCharFilter()
@@ -366,29 +356,27 @@ class InnerductFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = Innerduct
-        fields = ['id', 'installation_date']
+        fields = ["id", "installation_date"]
 
     def search(self, queryset, name, value):
         if not value.strip():
             return queryset
-        return queryset.filter(
-            Q(label__icontains=value) | Q(comments__icontains=value)
-        )
+        return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
 class ConduitBankFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     start_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='start_structure',
+        field_name="start_structure",
         queryset=Structure.objects.all(),
         distinct=False,
-        label='Start Structure (ID)',
+        label="Start Structure (ID)",
     )
     end_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='end_structure',
+        field_name="end_structure",
         queryset=Structure.objects.all(),
         distinct=False,
-        label='End Structure (ID)',
+        label="End Structure (ID)",
     )
     start_face = django_filters.MultipleChoiceFilter(
         choices=BankFaceChoices,
@@ -415,68 +403,64 @@ class ConduitBankFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
 
     class Meta:
         model = ConduitBank
-        fields = ['id', 'installation_date']
+        fields = ["id", "installation_date"]
 
     def search(self, queryset, name, value):
         if not value.strip():
             return queryset
-        return queryset.filter(
-            Q(label__icontains=value) | Q(comments__icontains=value)
-        )
+        return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
 class ConduitJunctionFilterSet(NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     trunk_conduit_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='trunk_conduit',
+        field_name="trunk_conduit",
         queryset=Conduit.objects.all(),
         distinct=False,
-        label='Trunk Conduit (ID)',
+        label="Trunk Conduit (ID)",
     )
     branch_conduit_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='branch_conduit',
+        field_name="branch_conduit",
         queryset=Conduit.objects.all(),
         distinct=False,
-        label='Branch Conduit (ID)',
+        label="Branch Conduit (ID)",
     )
     towards_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='towards_structure',
+        field_name="towards_structure",
         queryset=Structure.objects.all(),
         distinct=False,
-        label='Towards Structure (ID)',
+        label="Towards Structure (ID)",
     )
     position_on_trunk = MultiValueNumberFilter()
 
     class Meta:
         model = ConduitJunction
-        fields = ['id']
+        fields = ["id"]
 
     def search(self, queryset, name, value):
         if not value.strip():
             return queryset
-        return queryset.filter(
-            Q(label__icontains=value) | Q(comments__icontains=value)
-        )
+        return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
 class CableSegmentFilterSet(NetBoxModelFilterSet):
     cable_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='cable',
+        field_name="cable",
         queryset=Cable.objects.all(),
         distinct=False,
-        label='Cable (ID)',
+        label="Cable (ID)",
     )
     pathway_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='pathway',
+        field_name="pathway",
         queryset=Pathway.objects.all(),
         distinct=False,
-        label='Pathway (ID)',
+        label="Pathway (ID)",
     )
     sequence = MultiValueNumberFilter()
 
     class Meta:
         model = CableSegment
-        fields = ['id']
+        fields = ["id"]
 
     def search(self, queryset, name, value):
         if not value.strip():
@@ -486,42 +470,42 @@ class CableSegmentFilterSet(NetBoxModelFilterSet):
 
 class PathwayLocationFilterSet(NetBoxModelFilterSet):
     pathway_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='pathway',
+        field_name="pathway",
         queryset=Pathway.objects.all(),
         distinct=False,
-        label='Pathway (ID)',
+        label="Pathway (ID)",
     )
     site_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='site',
+        field_name="site",
         queryset=Site.objects.all(),
         distinct=False,
-        label='Site (ID)',
+        label="Site (ID)",
     )
     site = django_filters.ModelMultipleChoiceFilter(
-        field_name='site__slug',
+        field_name="site__slug",
         queryset=Site.objects.all(),
-        to_field_name='slug',
+        to_field_name="slug",
         distinct=False,
-        label='Site (slug)',
+        label="Site (slug)",
     )
     location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='location',
+        field_name="location",
         queryset=Location.objects.all(),
         distinct=False,
-        label='Location (ID)',
+        label="Location (ID)",
     )
     location = django_filters.ModelMultipleChoiceFilter(
-        field_name='location__slug',
+        field_name="location__slug",
         queryset=Location.objects.all(),
-        to_field_name='slug',
+        to_field_name="slug",
         distinct=False,
-        label='Location (slug)',
+        label="Location (slug)",
     )
     sequence = MultiValueNumberFilter()
 
     class Meta:
         model = PathwayLocation
-        fields = ['id']
+        fields = ["id"]
 
     def search(self, queryset, name, value):
         if not value.strip():
@@ -531,28 +515,28 @@ class PathwayLocationFilterSet(NetBoxModelFilterSet):
 
 class SiteGeometryFilterSet(NetBoxModelFilterSet):
     site_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='site',
+        field_name="site",
         queryset=Site.objects.all(),
         distinct=False,
-        label='Site (ID)',
+        label="Site (ID)",
     )
     site = django_filters.ModelMultipleChoiceFilter(
-        field_name='site__slug',
+        field_name="site__slug",
         queryset=Site.objects.all(),
-        to_field_name='slug',
+        to_field_name="slug",
         distinct=False,
-        label='Site (slug)',
+        label="Site (slug)",
     )
     structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='structure',
+        field_name="structure",
         queryset=Structure.objects.all(),
         distinct=False,
-        label='Structure (ID)',
+        label="Structure (ID)",
     )
 
     class Meta:
         model = SiteGeometry
-        fields = ['id']
+        fields = ["id"]
 
     def search(self, queryset, name, value):
         if not value.strip():
@@ -562,37 +546,34 @@ class SiteGeometryFilterSet(NetBoxModelFilterSet):
 
 class CircuitGeometryFilterSet(NetBoxModelFilterSet):
     circuit_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='circuit',
+        field_name="circuit",
         queryset=Circuit.objects.all(),
         distinct=False,
-        label='Circuit (ID)',
+        label="Circuit (ID)",
     )
     provider_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='circuit__provider',
+        field_name="circuit__provider",
         queryset=Provider.objects.all(),
         distinct=False,
-        label='Provider (ID)',
+        label="Provider (ID)",
     )
     provider = django_filters.ModelMultipleChoiceFilter(
-        field_name='circuit__provider__slug',
+        field_name="circuit__provider__slug",
         queryset=Provider.objects.all(),
-        to_field_name='slug',
+        to_field_name="slug",
         distinct=False,
-        label='Provider (slug)',
+        label="Provider (slug)",
     )
     provider_reference = MultiValueCharFilter()
 
     class Meta:
         model = CircuitGeometry
-        fields = ['id']
+        fields = ["id"]
 
     def search(self, queryset, name, value):
         if not value.strip():
             return queryset
-        return queryset.filter(
-            Q(circuit__cid__icontains=value)
-            | Q(provider_reference__icontains=value)
-        )
+        return queryset.filter(Q(circuit__cid__icontains=value) | Q(provider_reference__icontains=value))
 
 
 class PlannedRouteFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
@@ -601,43 +582,41 @@ class PlannedRouteFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
         distinct=False,
     )
     start_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='start_structure',
+        field_name="start_structure",
         queryset=Structure.objects.all(),
         distinct=False,
-        label='Start Structure (ID)',
+        label="Start Structure (ID)",
     )
     end_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='end_structure',
+        field_name="end_structure",
         queryset=Structure.objects.all(),
         distinct=False,
-        label='End Structure (ID)',
+        label="End Structure (ID)",
     )
     start_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='start_location',
+        field_name="start_location",
         queryset=Location.objects.all(),
         distinct=False,
-        label='Start Location (ID)',
+        label="Start Location (ID)",
     )
     end_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='end_location',
+        field_name="end_location",
         queryset=Location.objects.all(),
         distinct=False,
-        label='End Location (ID)',
+        label="End Location (ID)",
     )
     cable_id = django_filters.ModelMultipleChoiceFilter(
-        field_name='cable',
+        field_name="cable",
         queryset=Cable.objects.all(),
         distinct=False,
-        label='Cable (ID)',
+        label="Cable (ID)",
     )
 
     class Meta:
         model = PlannedRoute
-        fields = ['id', 'name', 'status']
+        fields = ["id", "name", "status"]
 
     def search(self, queryset, name, value):
         if not value.strip():
             return queryset
-        return queryset.filter(
-            Q(name__icontains=value) | Q(comments__icontains=value)
-        )
+        return queryset.filter(Q(name__icontains=value) | Q(comments__icontains=value))

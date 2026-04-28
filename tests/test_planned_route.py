@@ -15,7 +15,8 @@ class TestPlannedRoute:
     def structures(self, srid):
         return [
             Structure.objects.create(
-                name=f"PR-{i}", location=Point(i * 0.01, i * 0.01, srid=srid),
+                name=f"PR-{i}",
+                location=Point(i * 0.01, i * 0.01, srid=srid),
             )
             for i in range(3)
         ]
@@ -28,7 +29,8 @@ class TestPlannedRoute:
                 start_structure=structures[i],
                 end_structure=structures[i + 1],
                 path=LineString(
-                    (i * 0.01, i * 0.01), ((i + 1) * 0.01, (i + 1) * 0.01),
+                    (i * 0.01, i * 0.01),
+                    ((i + 1) * 0.01, (i + 1) * 0.01),
                     srid=srid,
                 ),
                 length=100,
@@ -44,7 +46,7 @@ class TestPlannedRoute:
             pathway_ids=[c.pk for c in conduits],
         )
         assert route.hop_count == 2
-        assert route.status == 'draft'
+        assert route.status == "draft"
         assert str(route) == "Test Route"
 
     def test_total_length(self, structures, conduits):

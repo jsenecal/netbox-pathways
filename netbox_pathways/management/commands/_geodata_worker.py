@@ -15,10 +15,11 @@ def save_batch(model_map_key, batch_rows, geom_field):
     since GEOS objects can't be pickled across process boundaries.
     FK references are passed as ('__fk__', 'app_label.model_name', pk) tuples.
     """
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'netbox.settings')
-    if '/opt/netbox/netbox' not in sys.path:
-        sys.path.insert(0, '/opt/netbox/netbox')
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "netbox.settings")
+    if "/opt/netbox/netbox" not in sys.path:
+        sys.path.insert(0, "/opt/netbox/netbox")
     import django
+
     django.setup()
 
     from django.apps import apps
@@ -38,7 +39,7 @@ def save_batch(model_map_key, batch_rows, geom_field):
             for key, value in row.items():
                 if key == geom_field:
                     kwargs[key] = GEOSGeometry(value)
-                elif isinstance(value, tuple) and len(value) == 3 and value[0] == '__fk__':
+                elif isinstance(value, tuple) and len(value) == 3 and value[0] == "__fk__":
                     fk_model = apps.get_model(value[1])
                     kwargs[key] = fk_model(pk=value[2])
                 else:

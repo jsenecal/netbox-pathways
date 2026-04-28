@@ -20,22 +20,22 @@ def _endpoint_nodes(pathway):
     end = None
 
     if pathway.start_structure_id:
-        start = ('structure', pathway.start_structure_id)
+        start = ("structure", pathway.start_structure_id)
     elif pathway.start_location_id:
-        start = ('location', pathway.start_location_id)
+        start = ("location", pathway.start_location_id)
 
     if pathway.end_structure_id:
-        end = ('structure', pathway.end_structure_id)
+        end = ("structure", pathway.end_structure_id)
     elif pathway.end_location_id:
-        end = ('location', pathway.end_location_id)
+        end = ("location", pathway.end_location_id)
 
     # Conduit junction endpoints (accessed via LEFT JOIN annotation)
-    start_junc = getattr(pathway, '_start_junction_id', None)
-    end_junc = getattr(pathway, '_end_junction_id', None)
+    start_junc = getattr(pathway, "_start_junction_id", None)
+    end_junc = getattr(pathway, "_end_junction_id", None)
     if start_junc:
-        start = ('junction', start_junc)
+        start = ("junction", start_junc)
     if end_junc:
-        end = ('junction', end_junc)
+        end = ("junction", end_junc)
 
     return start, end
 
@@ -91,14 +91,17 @@ class PathwayGraph:
         # Fast path: raw tuples, no model instances, no joins for geo
         base_qs = pathway_qs if pathway_qs is not None else models.Pathway.objects.all()
         rows = (
-            base_qs
-            .exclude(pathway_type='conduit_bank')  # banks are containers, not routable
+            base_qs.exclude(pathway_type="conduit_bank")  # banks are containers, not routable
             .exclude(start_structure__isnull=True, start_location__isnull=True)
             .exclude(end_structure__isnull=True, end_location__isnull=True)
             .values_list(
-                'pk', 'length', 'pathway_type',
-                'start_structure_id', 'end_structure_id',
-                'start_location_id', 'end_location_id',
+                "pk",
+                "length",
+                "pathway_type",
+                "start_structure_id",
+                "end_structure_id",
+                "start_location_id",
+                "end_location_id",
             )
         )
 
@@ -106,42 +109,46 @@ class PathwayGraph:
             start = None
             end = None
             if ss_id:
-                start = ('structure', ss_id)
+                start = ("structure", ss_id)
             elif sl_id:
-                start = ('location', sl_id)
+                start = ("location", sl_id)
             if es_id:
-                end = ('structure', es_id)
+                end = ("structure", es_id)
             elif el_id:
-                end = ('location', el_id)
+                end = ("location", el_id)
 
             if not start or not end or start == end:
                 continue
 
             instance.graph.add_edge(
-                start, end,
+                start,
+                end,
                 pathway_id=pk,
                 weight=length or 0,
                 pathway_type=pw_type,
             )
 
         # Add junction-based edges (conduits with junctions)
-        junction_rows = (
-            models.Conduit.objects
-            .exclude(start_junction__isnull=True, end_junction__isnull=True)
-            .values_list(
-                'pathway_ptr_id', 'length', 'pathway_type',
-                'start_structure_id', 'end_structure_id',
-                'start_junction_id', 'end_junction_id',
-            )
+        junction_rows = models.Conduit.objects.exclude(
+            start_junction__isnull=True, end_junction__isnull=True
+        ).values_list(
+            "pathway_ptr_id",
+            "length",
+            "pathway_type",
+            "start_structure_id",
+            "end_structure_id",
+            "start_junction_id",
+            "end_junction_id",
         )
         for pk, length, pw_type, ss_id, es_id, sj_id, ej_id in junction_rows.iterator():
-            start = ('junction', sj_id) if sj_id else (('structure', ss_id) if ss_id else None)
-            end = ('junction', ej_id) if ej_id else (('structure', es_id) if es_id else None)
+            start = ("junction", sj_id) if sj_id else (("structure", ss_id) if ss_id else None)
+            end = ("junction", ej_id) if ej_id else (("structure", es_id) if es_id else None)
             if not start or not end or start == end:
                 continue
             # Override the edge from the first pass if junction is more specific
             instance.graph.add_edge(
-                start, end,
+                start,
+                end,
                 pathway_id=pk,
                 weight=length or 0,
                 pathway_type=pw_type,
@@ -160,28 +167,37 @@ class PathwayGraph:
     def _build_base(cls, site_id=None, include_metadata=True):
         instance = cls()
 
-        qs = models.Pathway.objects.exclude(
-            pathway_type='conduit_bank',  # banks are containers, not routable
-        ).select_related(
-            'start_structure', 'end_structure',
-            'start_location', 'end_location',
-        ).only(
-            'id', 'label', 'pathway_type', 'length',
-            'start_structure', 'end_structure',
-            'start_location', 'end_location',
-            *(['path'] if include_metadata else []),
+        qs = (
+            models.Pathway.objects.exclude(
+                pathway_type="conduit_bank",  # banks are containers, not routable
+            )
+            .select_related(
+                "start_structure",
+                "end_structure",
+                "start_location",
+                "end_location",
+            )
+            .only(
+                "id",
+                "label",
+                "pathway_type",
+                "length",
+                "start_structure",
+                "end_structure",
+                "start_location",
+                "end_location",
+                *(["path"] if include_metadata else []),
+            )
         )
 
         if site_id:
-            qs = qs.filter(
-                Q(start_structure__site_id=site_id) | Q(end_structure__site_id=site_id)
-            )
+            qs = qs.filter(Q(start_structure__site_id=site_id) | Q(end_structure__site_id=site_id))
 
         # LEFT JOIN to conduit for junction fields
-        conduit_qs = models.Conduit.objects.filter(pathway_ptr_id=OuterRef('pk'))
+        conduit_qs = models.Conduit.objects.filter(pathway_ptr_id=OuterRef("pk"))
         qs = qs.annotate(
-            _start_junction_id=Subquery(conduit_qs.values('start_junction_id')[:1]),
-            _end_junction_id=Subquery(conduit_qs.values('end_junction_id')[:1]),
+            _start_junction_id=Subquery(conduit_qs.values("start_junction_id")[:1]),
+            _end_junction_id=Subquery(conduit_qs.values("end_junction_id")[:1]),
         )
 
         for pw in qs.iterator():
@@ -194,17 +210,17 @@ class PathwayGraph:
             if include_metadata:
                 coords = linestring_to_coords(pw.path)
                 instance.pathways[pw.pk] = {
-                    'id': pw.pk,
-                    'name': str(pw),
-                    'pathway_type': pw.pathway_type,
-                    'length': weight,
-                    'coords': coords,
-                    'url': pw.get_absolute_url(),
+                    "id": pw.pk,
+                    "name": str(pw),
+                    "pathway_type": pw.pathway_type,
+                    "length": weight,
+                    "coords": coords,
+                    "url": pw.get_absolute_url(),
                 }
 
             # Store geo for A* heuristic on structure nodes
             for node in (start, end):
-                if node not in instance.graph and node[0] == 'structure':
+                if node not in instance.graph and node[0] == "structure":
                     geo = None
                     if node == start and pw.start_structure:
                         geo = point_to_latlon(pw.start_structure.centroid)
@@ -213,7 +229,8 @@ class PathwayGraph:
                     instance.graph.add_node(node, geo=geo)
 
             instance.graph.add_edge(
-                start, end,
+                start,
+                end,
                 pathway_id=pw.pk,
                 weight=weight,
                 pathway_type=pw.pathway_type,
@@ -236,7 +253,10 @@ class PathwayGraph:
         """
         try:
             path_nodes = nx.shortest_path(
-                self.graph, start_node, end_node, weight='weight',
+                self.graph,
+                start_node,
+                end_node,
+                weight="weight",
             )
         except (nx.NodeNotFound, nx.NetworkXNoPath):
             return None
@@ -250,9 +270,11 @@ class PathwayGraph:
         """A* shortest path with haversine heuristic. Returns (total_cost, [pathway_ids]) or None."""
         try:
             path_nodes = nx.astar_path(
-                self.graph, start_node, end_node,
+                self.graph,
+                start_node,
+                end_node,
                 heuristic=self._haversine_heuristic,
-                weight='weight',
+                weight="weight",
             )
         except (nx.NodeNotFound, nx.NetworkXNoPath):
             return None
@@ -265,7 +287,10 @@ class PathwayGraph:
 
         results = []
         for path_nodes in nx.all_simple_paths(
-            self.graph, start_node, end_node, cutoff=max_depth,
+            self.graph,
+            start_node,
+            end_node,
+            cutoff=max_depth,
         ):
             route = self._extract_route(path_nodes)
             if route:
@@ -284,12 +309,14 @@ class PathwayGraph:
         result = []
         for neighbor in self.graph.neighbors(node):
             edge_data = self.graph.edges[node, neighbor]
-            result.append({
-                'pathway_id': edge_data['pathway_id'],
-                'destination': neighbor,
-                'weight': edge_data.get('weight', 0),
-                'pathway_type': edge_data.get('pathway_type', ''),
-            })
+            result.append(
+                {
+                    "pathway_id": edge_data["pathway_id"],
+                    "destination": neighbor,
+                    "weight": edge_data.get("weight", 0),
+                    "pathway_type": edge_data.get("pathway_type", ""),
+                }
+            )
         return result
 
     def neighbors(self, start_node, max_hops=3):
@@ -318,12 +345,14 @@ class PathwayGraph:
                 if neighbor not in visited:
                     visited.add(neighbor)
                     edge = self.graph.edges[node, neighbor]
-                    queue.append((
-                        neighbor,
-                        hops + 1,
-                        dist + edge.get('weight', 0),
-                        path_ids + [edge['pathway_id']],
-                    ))
+                    queue.append(
+                        (
+                            neighbor,
+                            hops + 1,
+                            dist + edge.get("weight", 0),
+                            path_ids + [edge["pathway_id"]],
+                        )
+                    )
 
         return result
 
@@ -333,14 +362,14 @@ class PathwayGraph:
         total_cost = 0
         for i in range(len(path_nodes) - 1):
             edge = self.graph.edges[path_nodes[i], path_nodes[i + 1]]
-            path_ids.append(edge['pathway_id'])
-            total_cost += edge.get('weight', 0)
+            path_ids.append(edge["pathway_id"])
+            total_cost += edge.get("weight", 0)
         return total_cost, path_ids
 
     def _haversine_heuristic(self, u, v):
         """Haversine distance in meters between two nodes. Returns 0 if geo unknown."""
-        u_geo = self.graph.nodes[u].get('geo') if u in self.graph else None
-        v_geo = self.graph.nodes[v].get('geo') if v in self.graph else None
+        u_geo = self.graph.nodes[u].get("geo") if u in self.graph else None
+        v_geo = self.graph.nodes[v].get("geo") if v in self.graph else None
         if not u_geo or not v_geo:
             return 0
         lat1, lon1 = math.radians(u_geo[0]), math.radians(u_geo[1])
@@ -359,22 +388,25 @@ def connected_pathways_db(node):
     """
     node_type, node_pk = node
     q = Q()
-    if node_type == 'structure':
+    if node_type == "structure":
         q = Q(start_structure_id=node_pk) | Q(end_structure_id=node_pk)
-    elif node_type == 'location':
+    elif node_type == "location":
         q = Q(start_location_id=node_pk) | Q(end_location_id=node_pk)
-    elif node_type == 'junction':
-        q = (
-            Q(conduit__start_junction_id=node_pk)
-            | Q(conduit__end_junction_id=node_pk)
-        )
+    elif node_type == "junction":
+        q = Q(conduit__start_junction_id=node_pk) | Q(conduit__end_junction_id=node_pk)
     else:
         return models.Pathway.objects.none()
 
-    return models.Pathway.objects.filter(q).select_related(
-        'start_structure', 'end_structure',
-        'start_location', 'end_location',
-    ).distinct()
+    return (
+        models.Pathway.objects.filter(q)
+        .select_related(
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+        )
+        .distinct()
+    )
 
 
 def trace_cable(cable_id):
@@ -383,34 +415,33 @@ def trace_cable(cable_id):
     Returns list of segment dicts with pathway geo data.
     """
     segments = (
-        models.CableSegment.objects
-        .filter(cable_id=cable_id)
+        models.CableSegment.objects.filter(cable_id=cable_id)
         .select_related(
-            'pathway',
-            'pathway__start_structure',
-            'pathway__end_structure',
-            'pathway__start_location',
-            'pathway__end_location',
+            "pathway",
+            "pathway__start_structure",
+            "pathway__end_structure",
+            "pathway__start_location",
+            "pathway__end_location",
         )
-        .order_by('sequence')
+        .order_by("sequence")
     )
 
     result = []
     for seg in segments:
         pw = seg.pathway
         entry = {
-            'segment_id': seg.pk,
-            'pathway_id': pw.pk if pw else None,
-            'pathway_name': str(pw) if pw else None,
-            'pathway_type': pw.pathway_type if pw else None,
-            'pathway_url': pw.get_absolute_url() if pw else None,
-            'length': pw.length if pw else None,
-            'coords': [],
-            'start_name': str(pw.start_endpoint) if pw and pw.start_endpoint else None,
-            'end_name': str(pw.end_endpoint) if pw and pw.end_endpoint else None,
+            "segment_id": seg.pk,
+            "pathway_id": pw.pk if pw else None,
+            "pathway_name": str(pw) if pw else None,
+            "pathway_type": pw.pathway_type if pw else None,
+            "pathway_url": pw.get_absolute_url() if pw else None,
+            "length": pw.length if pw else None,
+            "coords": [],
+            "start_name": str(pw.start_endpoint) if pw and pw.start_endpoint else None,
+            "end_name": str(pw.end_endpoint) if pw and pw.end_endpoint else None,
         }
         if pw and pw.path:
-            entry['coords'] = linestring_to_coords(pw.path)
+            entry["coords"] = linestring_to_coords(pw.path)
         result.append(entry)
 
     return result
@@ -418,12 +449,16 @@ def trace_cable(cable_id):
 
 # --- Batch node resolution helpers ---
 
+
 def _batch_fetch_structures(pks):
     """Fetch structures by PK set, return dict pk -> Structure."""
     if not pks:
         return {}
     return models.Structure.objects.only(
-        'id', 'name', 'structure_type', 'location',
+        "id",
+        "name",
+        "structure_type",
+        "location",
     ).in_bulk(list(pks))
 
 
@@ -432,6 +467,7 @@ def _batch_fetch_locations(pks):
     if not pks:
         return {}
     from dcim.models import Location
+
     return Location.objects.in_bulk(list(pks))
 
 
@@ -439,12 +475,19 @@ def _batch_fetch_junctions(pks):
     """Fetch junctions by PK set, return dict pk -> ConduitJunction."""
     if not pks:
         return {}
-    return models.ConduitJunction.objects.select_related(
-        'trunk_conduit',
-    ).only(
-        'id', 'name', 'trunk_conduit__name', 'trunk_conduit__path',
-        'position_on_trunk',
-    ).in_bulk(list(pks))
+    return (
+        models.ConduitJunction.objects.select_related(
+            "trunk_conduit",
+        )
+        .only(
+            "id",
+            "name",
+            "trunk_conduit__name",
+            "trunk_conduit__path",
+            "position_on_trunk",
+        )
+        .in_bulk(list(pks))
+    )
 
 
 def batch_resolve_nodes(nodes):
@@ -453,9 +496,9 @@ def batch_resolve_nodes(nodes):
 
     Returns dict: node -> {'label': str, 'geo': (lat, lon) | None}
     """
-    structure_pks = {pk for kind, pk in nodes if kind == 'structure'}
-    location_pks = {pk for kind, pk in nodes if kind == 'location'}
-    junction_pks = {pk for kind, pk in nodes if kind == 'junction'}
+    structure_pks = {pk for kind, pk in nodes if kind == "structure"}
+    location_pks = {pk for kind, pk in nodes if kind == "location"}
+    junction_pks = {pk for kind, pk in nodes if kind == "junction"}
 
     structures = _batch_fetch_structures(structure_pks)
     locations = _batch_fetch_locations(location_pks)
@@ -467,36 +510,36 @@ def batch_resolve_nodes(nodes):
         label = str(node)
         geo = None
 
-        if kind == 'structure':
+        if kind == "structure":
             s = structures.get(pk)
             if s:
                 label = str(s)
                 geo = point_to_latlon(s.centroid)
             else:
-                label = f'Structure #{pk}'
-        elif kind == 'location':
+                label = f"Structure #{pk}"
+        elif kind == "location":
             loc = locations.get(pk)
             if loc:
                 label = str(loc)
             else:
-                label = f'Location #{pk}'
-        elif kind == 'junction':
+                label = f"Location #{pk}"
+        elif kind == "junction":
             j = junctions.get(pk)
             if j:
                 label = str(j)
                 geo = point_to_latlon(j.location)
             else:
-                label = f'Junction #{pk}'
+                label = f"Junction #{pk}"
 
-        result[node] = {'label': label, 'geo': geo}
+        result[node] = {"label": label, "geo": geo}
     return result
 
 
 def node_to_label(node):
     """Convert a node tuple to a human-readable label (single-node convenience)."""
-    return batch_resolve_nodes([node])[node]['label']
+    return batch_resolve_nodes([node])[node]["label"]
 
 
 def node_to_geo(node):
     """Return (lat, lon) for a node in WGS84, or None (single-node convenience)."""
-    return batch_resolve_nodes([node])[node]['geo']
+    return batch_resolve_nodes([node])[node]["geo"]

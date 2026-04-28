@@ -16,6 +16,7 @@ class TestCableSegmentSequence:
         from django.db.models.signals import pre_save
 
         from netbox_pathways.signals import enforce_cable_routability
+
         pre_save.disconnect(enforce_cable_routability, sender=CableSegment)
         yield
         pre_save.connect(enforce_cable_routability, sender=CableSegment)
@@ -27,7 +28,8 @@ class TestCableSegmentSequence:
             Structure.objects.create(
                 name=f"MH-{i}",
                 location=Point(i, i, srid=srid),
-            ) for i in range(3)
+            )
+            for i in range(3)
         ]
 
     @pytest.fixture
@@ -79,8 +81,8 @@ class TestCableSegmentSequence:
     def test_no_slack_fields(self):
         """slack_loop_location and slack_length should not exist on model."""
         field_names = [f.name for f in CableSegment._meta.get_fields()]
-        assert 'slack_loop_location' not in field_names
-        assert 'slack_length' not in field_names
+        assert "slack_loop_location" not in field_names
+        assert "slack_length" not in field_names
 
 
 @pytest.mark.django_db
@@ -90,8 +92,10 @@ class TestCableSegmentRoutability:
         srid = get_srid()
         return [
             Structure.objects.create(
-                name=f"MH-RT-{i}", location=Point(i, i, srid=srid),
-            ) for i in range(2)
+                name=f"MH-RT-{i}",
+                location=Point(i, i, srid=srid),
+            )
+            for i in range(2)
         ]
 
     @pytest.fixture

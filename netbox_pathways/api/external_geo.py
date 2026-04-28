@@ -37,8 +37,7 @@ def _resolve_geo_column(model, geometry_field: str) -> tuple[str, str]:
         if supported_label.lower() == target_label.lower():
             return f"{geometry_field}__{geo_col}", supported_label
     raise ValueError(
-        f"FK '{geometry_field}' on {model.__name__} points to "
-        f"{target_label}, which is not in SUPPORTED_GEO_MODELS."
+        f"FK '{geometry_field}' on {model.__name__} points to {target_label}, which is not in SUPPORTED_GEO_MODELS."
     )
 
 
