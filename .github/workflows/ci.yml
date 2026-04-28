@@ -104,7 +104,10 @@ jobs:
           PLUGINS = ["netbox_pathways"]
           PLUGINS_CONFIG = {
               "netbox_pathways": {
-                  "srid": 4326,  # WGS84 (CI-only; SRID is immutable post-deploy)
+                  # Tests hardcode 3348 (NAD83(CSRS) / Statistics Canada Lambert)
+                  # geometries; SRID column must match. Don't change to 4326
+                  # without updating the test fixtures.
+                  "srid": 3348,
               }
           }
           EOF_CFG
