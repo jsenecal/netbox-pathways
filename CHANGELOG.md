@@ -7,19 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-04-28
+
+Initial public release. Documents physical cable plant infrastructure with PostGIS integration: structures, pathways, conduits, banks, junctions, cable routing, pull sheets, and a GeoJSON API for QGIS / GIS clients.
+
 ### Added
 
-- Canonical normalize-toolkit CI/CD shape (5 GHA workflows: ci.yml, publish.yml, docs.yml, release-drafter.yml, pr-title.yml + .github/release-drafter.yml).
-- .pre-commit-config.yaml with ruff hooks + standard pre-commit-hooks + a commit-msg stage that rejects AI/Claude attribution lines.
-- .git-template/hooks/commit-msg (canonical hook tracked in-tree, referenced by pre-commit).
-- CHANGELOG.md (this file).
+- **Structures** -- poles, manholes, cabinets, equipment rooms, etc., with PostGIS point or polygon geometry.
+- **Pathways** -- conduits, aerial spans, direct buried, innerducts, cable trays, raceways, with PostGIS line geometry.
+- **Conduit banks and junctions** -- model conduit bank configurations and mid-span Y-tees.
+- **Cable routing** -- track which `dcim.Cable` instances traverse which pathways, in sequence.
+- **Pull sheets** -- printable cable routing documents for field crews.
+- **Indoor / Outdoor** -- pathways can terminate at structures (outdoor) or NetBox `dcim.Location` (indoor).
+- **GeoJSON API** under `/api/plugins/pathways/geo/` for QGIS / OGR consumption.
+- **QGIS integration** -- bundled `.qml` style files and a `manage.py generate_qgis_project` command that emits a pre-configured `.qgs` project.
+- **Geometry editing** -- draw and edit geometries directly in NetBox forms via Leaflet map widgets.
+- **Interactive map** built into the plugin for quick visualization.
+- **REST API** for all models + GeoJSON variants under `/api/plugins/pathways/geo/`.
 
-### Changed
+### Toolkit
 
-- docs/zensical.toml rewritten to the canonical zensical schema (project / project.theme / [[project.theme.palette]]).
-- pyproject.toml: dropped mkdocs from [docs] extra in favor of zensical (matches the toolkit canonical); added extend-exclude for migrations; ignored N806 globally (Django `User = get_user_model()` idiom); added explicit [tool.ruff.format]; added bumpver CHANGELOG.md file pattern; added Documentation URL; added Python 3.14 classifier.
+- Canonical 5 GHA workflows (ci, publish, docs, release-drafter, pr-title) with PyPI Trusted Publishing and OIDC Codecov.
+- `docs/zensical.toml` documentation site auto-deployed to GitHub Pages.
+- `.pre-commit-config.yaml` with ruff hooks + standard pre-commit-hooks + a `commit-msg` stage that rejects AI / Claude attribution lines.
+- `.git-template/hooks/commit-msg` (canonical hook tracked in-tree).
+- `uv.lock` committed for reproducible CI / dev environments.
+- LICENSE: Apache 2.0.
 
-### Removed
+### Notes
 
-- Root-level mkdocs.yml (replaced by docs/zensical.toml).
-- SlackLoop model and all of its views, urls, forms, filters, filterforms, tables, serializers, API endpoints, search index entry, navigation menu entry, template_content, ui panel, and pullsheet template block. Slack-loop tracking now lives in netbox-fms whose closure-cable-entry workflow is the right home for it. Migration 0007_cable_routing_redesign no longer creates the SlackLoop model; the slack_loop_location PointField on Structure is unaffected.
+- The `srid` setting in `PLUGINS_CONFIG` is **immutable after data has been loaded** (see README warning). Choose carefully before first deployment.
+- SlackLoop model was removed in favor of the slack-loop tracking that lives in `netbox-fms` (its closure-cable-entry workflow is the right home for it). The `slack_loop_location` PointField on `Structure` is unaffected.
