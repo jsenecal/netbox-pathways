@@ -8,6 +8,12 @@ All plugin settings are configured in `PLUGINS_CONFIG` within your NetBox `confi
 |---------|-------|-------------|
 | `srid`  | `int` | Spatial reference system ID for stored geometries (e.g. `3348` for NAD83(CSRS)) |
 
+!!! danger "SRID is immutable"
+    The `srid` value is baked into PostGIS columns at migration time and
+    cannot be changed after data has been loaded without manual
+    re-projection. See [SRID Selection](srid.md) for guidance on which EPSG
+    code to choose and how to recover from a mistake.
+
 ## Map Settings
 
 ```python
@@ -28,8 +34,8 @@ PLUGINS_CONFIG = {
 | `map_zoom`           | `int`   | `10`                            | Default zoom level (1-22)                |
 | `map_tiles`          | `str`   | OpenStreetMap URL               | Tile URL template (fallback, see below)  |
 | `map_max_native_zoom`| `int`   | `19`                            | Max native zoom for fallback tiles       |
-| `map_attribution`    | `str`   | `© OpenStreetMap contributors`  | Attribution for fallback tiles           |
-| `map_base_layers`    | `list`  | —                               | Custom base layer definitions (see below)|
+| `map_attribution`    | `str`   | `(c) OpenStreetMap contributors`| Attribution for fallback tiles           |
+| `map_base_layers`    | `list`  | --                               | Custom base layer definitions (see below)|
 | `map_overlays`       | `list`  | `[]`                            | WMS/WMTS/tile overlay layers             |
 
 ## Tile Providers
@@ -76,7 +82,7 @@ PLUGINS_CONFIG = {
 
 Available Mapbox styles include `light-v11`, `dark-v11`, `streets-v12`, `outdoors-v12`, `satellite-v9`, `satellite-streets-v12`, `navigation-day-v1`, and `navigation-night-v1`. See [Mapbox Styles documentation](https://docs.mapbox.com/api/maps/styles/) for the full list.
 
-The tile URLs use the Mapbox Styles API (`/styles/v1/`), which renders vector styles as raster tiles — required for Leaflet compatibility. Set `tileSize: 512` and `zoomOffset: -1` for Mapbox 512px tiles.
+The tile URLs use the Mapbox Styles API (`/styles/v1/`), which renders vector styles as raster tiles -- required for Leaflet compatibility. Set `tileSize: 512` and `zoomOffset: -1` for Mapbox 512px tiles.
 
 ### OpenStreetMap (default)
 
@@ -99,8 +105,8 @@ Note that OSM tiles are limited to zoom level 19, while Mapbox supports up to 22
 
 The plugin automatically registers these Django apps via `PluginConfig.django_apps`:
 
-- `django.contrib.gis` — Geographic model fields and spatial queries
-- `rest_framework_gis` — GeoJSON serializer support for the REST API
+- `django.contrib.gis` -- Geographic model fields and spatial queries
+- `rest_framework_gis` -- GeoJSON serializer support for the REST API
 
 You do not need to add these to `INSTALLED_APPS` manually.
 
