@@ -1,6 +1,10 @@
+import logging
+
 from netbox.plugins import PluginConfig
 
 __version__ = "0.1.0"
+
+logger = logging.getLogger(__name__)
 
 
 class NetBoxPathwaysConfig(PluginConfig):
@@ -86,6 +90,8 @@ class NetBoxPathwaysConfig(PluginConfig):
 
         # Register signals
         from . import signals  # noqa: F401
+
+        logger.info("%s plugin loaded", self.name)
 
 
 config = NetBoxPathwaysConfig
