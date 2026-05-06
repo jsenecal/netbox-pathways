@@ -7,8 +7,6 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('dcim', '0227_alter_interface_speed_bigint'),
-        ('extras', '0134_owner'),
         ('netbox_pathways', '0014_plannedroute_parent_split'),
         ('tenancy', '0023_add_mptt_tree_indexes'),
     ]
