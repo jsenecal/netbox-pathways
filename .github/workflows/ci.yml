@@ -55,7 +55,7 @@ jobs:
       fail-fast: false
       matrix:
         python: ["3.12", "3.13", "3.14"]
-        netbox: ["4.5.4", "4.5.8"]
+        netbox: ["4.5.8", "4.5.10"]
     services:
       postgres:
         image: postgis/postgis:16-3.4
@@ -158,7 +158,7 @@ jobs:
           pytest tests/ -v --tb=short --cov=netbox_pathways --cov-report=xml
 
       - name: Upload coverage to Codecov
-        if: matrix.python == '3.13' && matrix.netbox == '4.5.8'
+        if: matrix.python == '3.13' && matrix.netbox == '4.5.10'
         continue-on-error: true
         uses: codecov/codecov-action@v5
         with:
