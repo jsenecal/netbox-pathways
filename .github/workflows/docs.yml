@@ -27,7 +27,7 @@ jobs:
           python-version: "3.14"
       - run: pip install zensical
       - run: cd docs && zensical build
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: docs/site
 
