@@ -62,7 +62,7 @@ class Structure(NetBoxModel):
     )
     installed_by = models.ForeignKey(
         Tenant,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="installed_pathways_structures",
@@ -240,7 +240,7 @@ class Pathway(NetBoxModel):
     )
     installed_by = models.ForeignKey(
         Tenant,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="installed_pathways_pathways",
