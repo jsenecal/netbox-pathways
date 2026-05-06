@@ -91,16 +91,29 @@ On the interactive map, pathways render as colored lines:
 
 Clicking a pathway line opens the sidebar with details including endpoints, length, type-specific attributes, and routed cables.
 
+## Lifecycle
+
+Every pathway carries the following lifecycle fields, in addition to the type-specific fields above:
+
+| Field | Description |
+|-------|-------------|
+| Installation Date | When the pathway was physically installed |
+| Commissioned Date | When the pathway was commissioned / accepted (often after the install date for outside-plant work) |
+| Tenant | Tenant served by / customer assigned to this pathway |
+| Installed By | Tenant entry for the contractor or workforce that physically installed the pathway (distinct from `Tenant`) |
+
 ## Filtering
 
 Pathway lists support filtering by:
 
-- **Pathway Type** — Conduit, Aerial, Direct Buried, etc.
-- **Start/End Structure** — Filter by connected structures
-- **Site** — Filter by associated site
-- **Material** — Conduit material (conduits only)
-- **Tenant** — Owning tenant
-- **Has Path** — Filter pathways with/without geometry
+- **Pathway Type** -- Conduit, Aerial, Direct Buried, etc.
+- **Start/End Structure** -- Filter by connected structures
+- **Site** -- Filter by associated site
+- **Material** -- Conduit material (conduits only)
+- **Tenant** -- Filter by owning tenant (served customer)
+- **Installed By** -- Filter by installer/contractor tenant
+- **Installation Date** / **Commissioned Date** -- Filter by date
+- **Has Path** -- Filter pathways with/without geometry
 
 ## Intermediate Locations
 

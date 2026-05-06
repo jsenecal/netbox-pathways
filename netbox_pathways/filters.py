@@ -4,6 +4,7 @@ from dcim.models import Cable, Location, Site
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
 from tenancy.filtersets import TenancyFilterSet
+from tenancy.models import Tenant
 from utilities.filters import MultiValueCharFilter, MultiValueNumberFilter
 
 from .choices import (
@@ -58,6 +59,12 @@ class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
         distinct=False,
         label="Site (slug)",
     )
+    installed_by_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="installed_by",
+        queryset=Tenant.objects.all(),
+        distinct=False,
+        label="Installed by (ID)",
+    )
     height = MultiValueNumberFilter()
     width = MultiValueNumberFilter()
     length = MultiValueNumberFilter()
@@ -74,7 +81,7 @@ class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
 
     class Meta:
         model = Structure
-        fields = ["id", "installation_date"]
+        fields = ["id", "installation_date", "commissioned_date"]
 
     def filter_occupied(self, queryset, name, value):
         occupied_pws = CableSegment.objects.values_list("pathway_id", flat=True)
@@ -165,6 +172,12 @@ class PathwayFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
         label="End Location (slug)",
     )
     length = MultiValueNumberFilter()
+    installed_by_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="installed_by",
+        queryset=Tenant.objects.all(),
+        distinct=False,
+        label="Installed by (ID)",
+    )
     occupied = django_filters.BooleanFilter(
         method="filter_occupied",
         label="Occupied (has routed cables)",
@@ -172,7 +185,7 @@ class PathwayFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
 
     class Meta:
         model = Pathway
-        fields = ["id", "installation_date"]
+        fields = ["id", "installation_date", "commissioned_date"]
 
     def filter_occupied(self, queryset, name, value):
         occupied_pws = CableSegment.objects.values_list("pathway_id", flat=True)
@@ -244,7 +257,7 @@ class ConduitFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = Conduit
-        fields = ["id", "installation_date"]
+        fields = ["id", "installation_date", "commissioned_date"]
 
     def search(self, queryset, name, value):
         if not value.strip():
@@ -292,7 +305,7 @@ class AerialSpanFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = AerialSpan
-        fields = ["id", "installation_date"]
+        fields = ["id", "installation_date", "commissioned_date"]
 
     def search(self, queryset, name, value):
         if not value.strip():
@@ -334,7 +347,7 @@ class DirectBuriedFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = DirectBuried
-        fields = ["id", "installation_date"]
+        fields = ["id", "installation_date", "commissioned_date"]
 
     def search(self, queryset, name, value):
         if not value.strip():
@@ -356,7 +369,7 @@ class InnerductFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = Innerduct
-        fields = ["id", "installation_date"]
+        fields = ["id", "installation_date", "commissioned_date"]
 
     def search(self, queryset, name, value):
         if not value.strip():
@@ -403,7 +416,7 @@ class ConduitBankFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
 
     class Meta:
         model = ConduitBank
-        fields = ["id", "installation_date"]
+        fields = ["id", "installation_date", "commissioned_date"]
 
     def search(self, queryset, name, value):
         if not value.strip():

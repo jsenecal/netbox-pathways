@@ -29,13 +29,16 @@ Structures are the anchor points of your cable plant. Every pathway starts and e
 | Field | Required | Description |
 |-------|----------|-------------|
 | Name | Yes | Unique identifier (e.g., `MH-001`, `POLE-042`) |
+| Status | No | Lifecycle state: `Planned`, `Active`, `Under Construction`, `Decommissioning`, `Retired`, or `Abandoned in place` (still physically present, no longer in service) |
 | Structure Type | No | Type from the table above |
 | Site | No | NetBox site this structure belongs to |
-| Location | Yes | Geographic point or polygon — click the map or enter coordinates |
+| Location | Yes | Geographic point or polygon -- click the map or enter coordinates |
 | Elevation | No | Elevation in meters |
 | Dimensions | No | Height, width, length, depth in meters |
-| Installation Date | No | When the structure was installed |
-| Tenant | No | Owning tenant |
+| Installation Date | No | When the structure was physically installed |
+| Commissioned Date | No | When the structure was commissioned / handed over (often after the install date for outside-plant work) |
+| Tenant | No | Tenant served by / customer assigned to this structure |
+| Installed By | No | Tenant entry for the contractor or workforce that physically installed the structure (distinct from `Tenant`) |
 | Access Notes | No | Instructions for field crews (e.g., "Key #42, contact dispatch") |
 
 ## Location Geometry
@@ -62,10 +65,13 @@ On the interactive map, structures appear as markers with shapes and colors matc
 
 The structure list supports filtering by:
 
-- **Site** — Filter by NetBox site
-- **Structure Type** — Filter by type (pole, manhole, etc.)
-- **Tenant** — Filter by owning tenant
-- **Has Location** — Filter structures with/without coordinates
+- **Site** -- Filter by NetBox site
+- **Structure Type** -- Filter by type (pole, manhole, etc.)
+- **Status** -- Filter by lifecycle state (including `Abandoned in place`)
+- **Tenant** -- Filter by owning tenant (served customer)
+- **Installed By** -- Filter by installer/contractor tenant
+- **Installation Date** / **Commissioned Date** -- Filter by date
+- **Has Location** -- Filter structures with/without coordinates
 
 ## Conduit Banks
 

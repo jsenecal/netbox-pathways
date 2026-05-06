@@ -142,9 +142,18 @@ class PathwayEndpointFormMixin:
 class StructureForm(NetBoxModelForm):
     site = DynamicModelChoiceField(queryset=Site.objects.all(), required=False, selector=True, quick_add=True)
     tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
+    installed_by = DynamicModelChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        selector=True,
+        quick_add=True,
+        label="Installed by",
+        help_text="Contractor or workforce that physically installed this structure",
+    )
 
     fieldsets = (
-        FieldSet("name", "status", "structure_type", "site", "tenant", "installation_date", name="Structure"),
+        FieldSet("name", "status", "structure_type", "site", "tenant", name="Structure"),
+        FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("height", "width", "length", "depth", "elevation", name="Dimensions"),
         FieldSet("location", name="Geometry"),
         FieldSet("access_notes", "tags", name="Details"),
@@ -158,6 +167,7 @@ class StructureForm(NetBoxModelForm):
             "structure_type",
             "site",
             "tenant",
+            "installed_by",
             "location",
             "height",
             "width",
@@ -165,6 +175,7 @@ class StructureForm(NetBoxModelForm):
             "depth",
             "elevation",
             "installation_date",
+            "commissioned_date",
             "access_notes",
             "comments",
             "tags",
@@ -187,6 +198,12 @@ class StructureImportForm(NetBoxModelImportForm):
         required=False,
         help_text="Tenant name",
     )
+    installed_by = CSVModelChoiceField(
+        queryset=Tenant.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Installer tenant name",
+    )
 
     class Meta:
         model = Structure
@@ -196,12 +213,14 @@ class StructureImportForm(NetBoxModelImportForm):
             "structure_type",
             "site",
             "tenant",
+            "installed_by",
             "height",
             "width",
             "length",
             "depth",
             "elevation",
             "installation_date",
+            "commissioned_date",
             "access_notes",
             "comments",
         ]
@@ -210,12 +229,17 @@ class StructureImportForm(NetBoxModelImportForm):
 class StructureBulkEditForm(NetBoxModelBulkEditForm):
     site = DynamicModelChoiceField(queryset=Site.objects.all(), required=False, selector=True)
     tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
+    installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
     status = forms.ChoiceField(choices=StructureStatusChoices, required=False)
     structure_type = forms.ChoiceField(choices=StructureTypeChoices, required=False)
+    commissioned_date = forms.DateField(required=False)
 
     model = Structure
-    fieldsets = (FieldSet("status", "site", "structure_type", "tenant"),)
-    nullable_fields = ("site", "tenant", "access_notes")
+    fieldsets = (
+        FieldSet("status", "site", "structure_type", "tenant", name="Structure"),
+        FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
+    )
+    nullable_fields = ("site", "tenant", "installed_by", "commissioned_date", "access_notes")
 
 
 # --- Pathway (base) ---
@@ -247,9 +271,17 @@ class PathwayForm(PathwayEndpointFormMixin, NetBoxModelForm):
         quick_add=True,
     )
     tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
+    installed_by = DynamicModelChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        selector=True,
+        quick_add=True,
+        label="Installed by",
+    )
 
     fieldsets = (
-        FieldSet("label", "tenant", "length", "installation_date", name="Pathway"),
+        FieldSet("label", "tenant", "length", name="Pathway"),
+        FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
         FieldSet("path", name="Geometry"),
         FieldSet("tags", name="Details"),
@@ -265,8 +297,10 @@ class PathwayForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "start_location",
             "end_location",
             "tenant",
+            "installed_by",
             "length",
             "installation_date",
+            "commissioned_date",
             "comments",
             "tags",
         ]
@@ -322,8 +356,17 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
         quick_add=True,
     )
 
+    installed_by = DynamicModelChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        selector=True,
+        quick_add=True,
+        label="Installed by",
+    )
+
     fieldsets = (
-        FieldSet("label", "material", "length", "installation_date", name="Conduit"),
+        FieldSet("label", "material", "length", name="Conduit"),
+        FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
         FieldSet("start_junction", "end_junction", name="Junctions"),
         FieldSet("inner_diameter", "outer_diameter", "depth", name="Dimensions"),
@@ -350,7 +393,9 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "conduit_bank",
             "bank_position",
             "length",
+            "installed_by",
             "installation_date",
+            "commissioned_date",
             "comments",
             "tags",
         ]
@@ -372,6 +417,12 @@ class ConduitImportForm(NetBoxModelImportForm):
         required=False,
         help_text="Ending structure name",
     )
+    installed_by = CSVModelChoiceField(
+        queryset=Tenant.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Installer tenant name",
+    )
 
     class Meta:
         model = Conduit
@@ -384,17 +435,24 @@ class ConduitImportForm(NetBoxModelImportForm):
             "outer_diameter",
             "depth",
             "length",
+            "installed_by",
             "installation_date",
+            "commissioned_date",
             "comments",
         ]
 
 
 class ConduitBulkEditForm(NetBoxModelBulkEditForm):
     material = forms.ChoiceField(choices=ConduitMaterialChoices, required=False)
+    installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
+    commissioned_date = forms.DateField(required=False)
 
     model = Conduit
-    fieldsets = (FieldSet("material"),)
-    nullable_fields = ("material",)
+    fieldsets = (
+        FieldSet("material", name="Conduit"),
+        FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
+    )
+    nullable_fields = ("material", "installed_by", "commissioned_date")
 
 
 # --- Aerial Span ---
@@ -426,8 +484,17 @@ class AerialSpanForm(PathwayEndpointFormMixin, NetBoxModelForm):
         quick_add=True,
     )
 
+    installed_by = DynamicModelChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        selector=True,
+        quick_add=True,
+        label="Installed by",
+    )
+
     fieldsets = (
-        FieldSet("label", "aerial_type", "length", "installation_date", name="Aerial Span"),
+        FieldSet("label", "aerial_type", "length", name="Aerial Span"),
+        FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
         FieldSet("attachment_height", "sag", "messenger_size", name="Physical"),
         FieldSet("wind_loading", "ice_loading", name="Loading"),
@@ -451,7 +518,9 @@ class AerialSpanForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "wind_loading",
             "ice_loading",
             "length",
+            "installed_by",
             "installation_date",
+            "commissioned_date",
             "comments",
             "tags",
         ]
@@ -471,6 +540,12 @@ class AerialSpanImportForm(NetBoxModelImportForm):
         to_field_name="name",
         help_text="Ending structure name",
     )
+    installed_by = CSVModelChoiceField(
+        queryset=Tenant.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Installer tenant name",
+    )
 
     class Meta:
         model = AerialSpan
@@ -485,7 +560,9 @@ class AerialSpanImportForm(NetBoxModelImportForm):
             "wind_loading",
             "ice_loading",
             "length",
+            "installed_by",
             "installation_date",
+            "commissioned_date",
             "comments",
         ]
 
@@ -493,10 +570,15 @@ class AerialSpanImportForm(NetBoxModelImportForm):
 class AerialSpanBulkEditForm(NetBoxModelBulkEditForm):
     aerial_type = forms.ChoiceField(choices=AerialTypeChoices, required=False)
     messenger_size = forms.CharField(max_length=50, required=False)
+    installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
+    commissioned_date = forms.DateField(required=False)
 
     model = AerialSpan
-    fieldsets = (FieldSet("aerial_type", "messenger_size"),)
-    nullable_fields = ("messenger_size", "wind_loading", "ice_loading")
+    fieldsets = (
+        FieldSet("aerial_type", "messenger_size", name="Aerial Span"),
+        FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
+    )
+    nullable_fields = ("messenger_size", "wind_loading", "ice_loading", "installed_by", "commissioned_date")
 
 
 # --- Direct Buried ---
@@ -507,10 +589,15 @@ class DirectBuriedBulkEditForm(NetBoxModelBulkEditForm):
     warning_tape = forms.NullBooleanField(required=False)
     tracer_wire = forms.NullBooleanField(required=False)
     armor_type = forms.CharField(max_length=100, required=False)
+    installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
+    commissioned_date = forms.DateField(required=False)
 
     model = DirectBuried
-    fieldsets = (FieldSet("tenant", "warning_tape", "tracer_wire", "armor_type"),)
-    nullable_fields = ("tenant", "armor_type")
+    fieldsets = (
+        FieldSet("tenant", "warning_tape", "tracer_wire", "armor_type", name="Direct Buried"),
+        FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
+    )
+    nullable_fields = ("tenant", "armor_type", "installed_by", "commissioned_date")
 
 
 class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
@@ -539,8 +626,17 @@ class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
         quick_add=True,
     )
 
+    installed_by = DynamicModelChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        selector=True,
+        quick_add=True,
+        label="Installed by",
+    )
+
     fieldsets = (
-        FieldSet("label", "length", "installation_date", name="Direct Buried"),
+        FieldSet("label", "length", name="Direct Buried"),
+        FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
         FieldSet("burial_depth", "warning_tape", "tracer_wire", "armor_type", name="Physical"),
         FieldSet("path", name="Geometry"),
@@ -561,7 +657,9 @@ class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "tracer_wire",
             "armor_type",
             "length",
+            "installed_by",
             "installation_date",
+            "commissioned_date",
             "comments",
             "tags",
         ]
@@ -581,10 +679,15 @@ class InnerductBulkEditForm(NetBoxModelBulkEditForm):
     )
     color = forms.CharField(max_length=50, required=False)
     size = forms.CharField(max_length=50, required=False)
+    installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
+    commissioned_date = forms.DateField(required=False)
 
     model = Innerduct
-    fieldsets = (FieldSet("parent_conduit", "size", "color"),)
-    nullable_fields = ("color",)
+    fieldsets = (
+        FieldSet("parent_conduit", "size", "color", name="Innerduct"),
+        FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
+    )
+    nullable_fields = ("color", "installed_by", "commissioned_date")
 
 
 class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
@@ -622,10 +725,19 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
         help_text="Leave blank to inherit from parent conduit",
     )
 
+    installed_by = DynamicModelChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        selector=True,
+        quick_add=True,
+        label="Installed by",
+    )
+
     fieldsets = (
         FieldSet("label", "parent_conduit", "size", "color", "position", name="Innerduct"),
+        FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
-        FieldSet("length", "installation_date", name="Physical"),
+        FieldSet("length", name="Physical"),
         FieldSet("path", name="Geometry"),
         FieldSet("tags", name="Details"),
     )
@@ -644,7 +756,9 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "start_location",
             "end_location",
             "length",
+            "installed_by",
             "installation_date",
+            "commissioned_date",
             "comments",
             "tags",
         ]
@@ -670,12 +784,20 @@ class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
         quick_add=True,
     )
     tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
+    installed_by = DynamicModelChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        selector=True,
+        quick_add=True,
+        label="Installed by",
+    )
 
     fieldsets = (
         FieldSet("label", "tenant", name="Conduit Bank"),
+        FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("start_structure", "start_face", "end_structure", "end_face", name="Endpoints"),
         FieldSet("configuration", "total_conduits", "encasement_type", name="Configuration"),
-        FieldSet("path", "length", "installation_date", "tags", name="Details"),
+        FieldSet("path", "length", "tags", name="Details"),
     )
 
     class Meta:
@@ -683,6 +805,7 @@ class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
         fields = [
             "label",
             "tenant",
+            "installed_by",
             "start_structure",
             "start_face",
             "end_structure",
@@ -693,6 +816,7 @@ class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "path",
             "length",
             "installation_date",
+            "commissioned_date",
             "comments",
             "tags",
         ]
@@ -714,6 +838,12 @@ class ConduitBankImportForm(NetBoxModelImportForm):
         required=False,
         help_text="End structure name",
     )
+    installed_by = CSVModelChoiceField(
+        queryset=Tenant.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Installer tenant name",
+    )
 
     class Meta:
         model = ConduitBank
@@ -726,7 +856,9 @@ class ConduitBankImportForm(NetBoxModelImportForm):
             "configuration",
             "total_conduits",
             "encasement_type",
+            "installed_by",
             "installation_date",
+            "commissioned_date",
             "comments",
         ]
 
@@ -736,13 +868,16 @@ class ConduitBankBulkEditForm(NetBoxModelBulkEditForm):
     end_face = forms.ChoiceField(choices=BankFaceChoices, required=False)
     configuration = forms.ChoiceField(choices=ConduitBankConfigChoices, required=False)
     encasement_type = forms.ChoiceField(choices=EncasementTypeChoices, required=False)
+    installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
+    commissioned_date = forms.DateField(required=False)
 
     model = ConduitBank
     fieldsets = (
         FieldSet("start_face", "end_face"),
         FieldSet("configuration", "encasement_type"),
+        FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
     )
-    nullable_fields = ("start_face", "end_face", "encasement_type")
+    nullable_fields = ("start_face", "end_face", "encasement_type", "installed_by", "commissioned_date")
 
 
 # --- Conduit Junction ---

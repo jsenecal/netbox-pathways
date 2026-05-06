@@ -34,6 +34,7 @@ class StructureTable(NetBoxTable):
     site = tables.Column(linkify=True)
     structure_type = columns.ChoiceFieldColumn()
     tenant = tables.Column(linkify=True)
+    installed_by = tables.Column(linkify=True, verbose_name="Installed by")
     actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
 
     class Meta(NetBoxTable.Meta):
@@ -51,7 +52,9 @@ class StructureTable(NetBoxTable):
             "depth",
             "elevation",
             "installation_date",
+            "commissioned_date",
             "tenant",
+            "installed_by",
             "actions",
         )
         default_columns = ("name", "status", "structure_type", "site", "tenant")
@@ -69,6 +72,7 @@ class PathwayTable(NetBoxTable):
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
     tenant = tables.Column(linkify=True)
+    installed_by = tables.Column(linkify=True, verbose_name="Installed by")
     cables_routed = tables.Column(verbose_name="Cables", orderable=True)
     in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
     actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
@@ -86,10 +90,12 @@ class PathwayTable(NetBoxTable):
             "start_location",
             "end_location",
             "tenant",
+            "installed_by",
             "length",
             "cables_routed",
             "in_use",
             "installation_date",
+            "commissioned_date",
             "actions",
         )
         default_columns = (
@@ -114,6 +120,7 @@ class ConduitTable(NetBoxTable):
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
     conduit_bank = tables.Column(linkify=True)
+    installed_by = tables.Column(linkify=True, verbose_name="Installed by")
     cables_routed = tables.Column(verbose_name="Cables", orderable=True)
     in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
     actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
@@ -135,7 +142,9 @@ class ConduitTable(NetBoxTable):
             "length",
             "cables_routed",
             "in_use",
+            "installed_by",
             "installation_date",
+            "commissioned_date",
             "actions",
         )
         default_columns = (
@@ -160,6 +169,7 @@ class AerialSpanTable(NetBoxTable):
     end_structure = tables.Column(linkify=True)
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
+    installed_by = tables.Column(linkify=True, verbose_name="Installed by")
     cables_routed = tables.Column(verbose_name="Cables", orderable=True)
     in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
     actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
@@ -180,7 +190,9 @@ class AerialSpanTable(NetBoxTable):
             "length",
             "cables_routed",
             "in_use",
+            "installed_by",
             "installation_date",
+            "commissioned_date",
             "actions",
         )
         default_columns = (
@@ -203,6 +215,7 @@ class DirectBuriedTable(NetBoxTable):
     end_structure = tables.Column(linkify=True)
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
+    installed_by = tables.Column(linkify=True, verbose_name="Installed by")
     cables_routed = tables.Column(verbose_name="Cables", orderable=True)
     in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
     actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
@@ -224,7 +237,9 @@ class DirectBuriedTable(NetBoxTable):
             "length",
             "cables_routed",
             "in_use",
+            "installed_by",
             "installation_date",
+            "commissioned_date",
             "actions",
         )
         default_columns = (
@@ -244,6 +259,7 @@ class InnerductTable(NetBoxTable):
         order_by="pk",
     )
     parent_conduit = tables.Column(linkify=True)
+    installed_by = tables.Column(linkify=True, verbose_name="Installed by")
     cables_routed = tables.Column(verbose_name="Cables", orderable=True)
     in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
     actions = columns.ActionsColumn(actions=("edit", "delete"))
@@ -261,7 +277,9 @@ class InnerductTable(NetBoxTable):
             "position",
             "cables_routed",
             "in_use",
+            "installed_by",
             "installation_date",
+            "commissioned_date",
             "actions",
         )
         default_columns = ("innerduct", "parent_conduit", "size", "color", "in_use", "cables_routed")
@@ -278,6 +296,7 @@ class ConduitBankTable(NetBoxTable):
     start_face = columns.ChoiceFieldColumn()
     end_face = columns.ChoiceFieldColumn()
     tenant = tables.Column(linkify=True)
+    installed_by = tables.Column(linkify=True, verbose_name="Installed by")
     configuration = columns.ChoiceFieldColumn()
     encasement_type = columns.ChoiceFieldColumn()
     conduit_count = tables.Column(
@@ -298,12 +317,14 @@ class ConduitBankTable(NetBoxTable):
             "start_face",
             "end_face",
             "tenant",
+            "installed_by",
             "configuration",
             "total_conduits",
             "conduit_count",
             "encasement_type",
             "length",
             "installation_date",
+            "commissioned_date",
             "actions",
         )
         default_columns = (

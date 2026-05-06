@@ -41,7 +41,7 @@ class StructureFilterForm(NetBoxModelFilterSetForm):
     fieldsets = (
         FieldSet("q", "filter_id", "tag"),
         FieldSet("status", "structure_type", "site_id", name="Attributes"),
-        FieldSet("tenant_id", name="Tenant"),
+        FieldSet("tenant_id", "installed_by_id", name="Tenant"),
     )
     status = forms.MultipleChoiceField(choices=StructureStatusChoices, required=False)
     structure_type = forms.MultipleChoiceField(choices=StructureTypeChoices, required=False)
@@ -56,6 +56,12 @@ class StructureFilterForm(NetBoxModelFilterSetForm):
         null_option="None",
         label="Tenant",
     )
+    installed_by_id = DynamicModelMultipleChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        null_option="None",
+        label="Installed by",
+    )
     tag = TagFilterField(model)
 
 
@@ -65,7 +71,7 @@ class PathwayFilterForm(NetBoxModelFilterSetForm):
         FieldSet("q", "filter_id", "tag"),
         FieldSet("pathway_type", name="Attributes"),
         FieldSet("start_structure_id", "end_structure_id", "start_location_id", "end_location_id", name="Endpoints"),
-        FieldSet("tenant_id", name="Tenant"),
+        FieldSet("tenant_id", "installed_by_id", name="Tenant"),
     )
     pathway_type = forms.MultipleChoiceField(choices=PathwayTypeChoices, required=False)
     start_structure_id = DynamicModelMultipleChoiceField(
@@ -93,6 +99,12 @@ class PathwayFilterForm(NetBoxModelFilterSetForm):
         required=False,
         null_option="None",
         label="Tenant",
+    )
+    installed_by_id = DynamicModelMultipleChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        null_option="None",
+        label="Installed by",
     )
     tag = TagFilterField(model)
 
@@ -213,7 +225,7 @@ class ConduitBankFilterForm(NetBoxModelFilterSetForm):
         FieldSet("q", "filter_id", "tag"),
         FieldSet("configuration", "encasement_type", "start_face", "end_face", name="Attributes"),
         FieldSet("start_structure_id", "end_structure_id", name="Endpoints"),
-        FieldSet("tenant_id", name="Tenant"),
+        FieldSet("tenant_id", "installed_by_id", name="Tenant"),
     )
     configuration = forms.MultipleChoiceField(choices=ConduitBankConfigChoices, required=False)
     encasement_type = forms.MultipleChoiceField(choices=EncasementTypeChoices, required=False)
@@ -234,6 +246,12 @@ class ConduitBankFilterForm(NetBoxModelFilterSetForm):
         required=False,
         null_option="None",
         label="Tenant",
+    )
+    installed_by_id = DynamicModelMultipleChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        null_option="None",
+        label="Installed by",
     )
     tag = TagFilterField(model)
 

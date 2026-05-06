@@ -42,6 +42,7 @@ class StructureSerializer(NetBoxModelSerializer):
     structure_type = ChoiceField(choices=StructureTypeChoices, required=False, allow_blank=True)
     site = SiteSerializer(nested=True, required=False, allow_null=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
+    installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
     no_pathways = drf_serializers.SerializerMethodField(read_only=True)
     description = drf_serializers.SerializerMethodField(read_only=True)
 
@@ -63,7 +64,9 @@ class StructureSerializer(NetBoxModelSerializer):
             "depth",
             "elevation",
             "installation_date",
+            "commissioned_date",
             "tenant",
+            "installed_by",
             "access_notes",
             "comments",
             "tags",
@@ -119,6 +122,7 @@ class ConduitBankSerializer(NetBoxModelSerializer):
     configuration = ChoiceField(choices=ConduitBankConfigChoices, required=False, allow_blank=True)
     encasement_type = ChoiceField(choices=EncasementTypeChoices, required=False, allow_blank=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
+    installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
 
     class Meta:
         model = ConduitBank
@@ -133,12 +137,14 @@ class ConduitBankSerializer(NetBoxModelSerializer):
             "start_face",
             "end_face",
             "tenant",
+            "installed_by",
             "path",
             "length",
             "configuration",
             "total_conduits",
             "encasement_type",
             "installation_date",
+            "commissioned_date",
             "comments",
             "tags",
             "created",
@@ -157,6 +163,7 @@ class PathwaySerializer(NetBoxModelSerializer):
     start_location = LocationSerializer(nested=True, required=False, allow_null=True)
     end_location = LocationSerializer(nested=True, required=False, allow_null=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
+    installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
     cables_routed = drf_serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -174,9 +181,11 @@ class PathwaySerializer(NetBoxModelSerializer):
             "start_location",
             "end_location",
             "tenant",
+            "installed_by",
             "length",
             "cables_routed",
             "installation_date",
+            "commissioned_date",
             "comments",
             "tags",
             "created",
@@ -196,6 +205,7 @@ class ConduitSerializer(NetBoxModelSerializer):
     end_location = LocationSerializer(nested=True, required=False, allow_null=True)
     conduit_bank = ConduitBankSerializer(nested=True, required=False, allow_null=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
+    installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
     cables_routed = drf_serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -220,9 +230,12 @@ class ConduitSerializer(NetBoxModelSerializer):
             "bank_position",
             "start_junction",
             "end_junction",
+            "tenant",
+            "installed_by",
             "length",
             "cables_routed",
             "installation_date",
+            "commissioned_date",
             "comments",
             "tags",
             "created",
@@ -241,6 +254,7 @@ class AerialSpanSerializer(NetBoxModelSerializer):
     start_location = LocationSerializer(nested=True, required=False, allow_null=True)
     end_location = LocationSerializer(nested=True, required=False, allow_null=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
+    installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
     cables_routed = drf_serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -263,9 +277,12 @@ class AerialSpanSerializer(NetBoxModelSerializer):
             "messenger_size",
             "wind_loading",
             "ice_loading",
+            "tenant",
+            "installed_by",
             "length",
             "cables_routed",
             "installation_date",
+            "commissioned_date",
             "comments",
             "tags",
             "created",
@@ -283,6 +300,7 @@ class DirectBuriedSerializer(NetBoxModelSerializer):
     start_location = LocationSerializer(nested=True, required=False, allow_null=True)
     end_location = LocationSerializer(nested=True, required=False, allow_null=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
+    installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
     cables_routed = drf_serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -303,9 +321,12 @@ class DirectBuriedSerializer(NetBoxModelSerializer):
             "warning_tape",
             "tracer_wire",
             "armor_type",
+            "tenant",
+            "installed_by",
             "length",
             "cables_routed",
             "installation_date",
+            "commissioned_date",
             "comments",
             "tags",
             "created",
@@ -323,6 +344,7 @@ class InnerductSerializer(NetBoxModelSerializer):
     start_location = LocationSerializer(nested=True, required=False, allow_null=True)
     end_location = LocationSerializer(nested=True, required=False, allow_null=True)
     parent_conduit = ConduitSerializer(nested=True, required=False, allow_null=True)
+    installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
     cables_routed = drf_serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -343,9 +365,11 @@ class InnerductSerializer(NetBoxModelSerializer):
             "size",
             "color",
             "position",
+            "installed_by",
             "length",
             "cables_routed",
             "installation_date",
+            "commissioned_date",
             "comments",
             "tags",
             "created",
