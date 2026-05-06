@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-06
+
 ### Added
 
 - **GraphQL API** -- new `netbox_pathways/graphql/` module exposing every plugin model (`Structure`, `SiteGeometry`, `CircuitGeometry`, `Pathway`, `ConduitBank`, `Conduit`, `AerialSpan`, `DirectBuried`, `Innerduct`, `ConduitJunction`, `PathwayLocation`, `CableSegment`, `PlannedRoute`) on the NetBox `/graphql/` endpoint via Strawberry types, filter inputs, and a query class wired through `PluginConfig.graphql_schema`. Geometry fields are excluded from GraphQL types -- continue to use the GeoJSON REST endpoints under `/api/plugins/pathways/geo/` for spatial queries.
