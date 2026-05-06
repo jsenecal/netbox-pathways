@@ -15,6 +15,21 @@ A **Cable Segment** represents one section of a cable's physical route through a
 | Exit Point | Geographic coordinate where the cable exits |
 | Slack Loop Location | Where extra cable is coiled |
 | Slack Length | Extra cable length in meters |
+| Lashed With | Other cable segments mechanically lashed together with this one on the same aerial span. Multi-select; symmetric. See [Aerial Overlashing](#aerial-overlashing) below. |
+
+### Aerial Overlashing
+
+In aerial plant, a fiber cable is sometimes mechanically lashed onto another cable rather than carrying its own support strand. Over time, an aerial span can accumulate a stack of cables all wrapped together by the same lash wire -- one cable installed, then a second lashed onto it, then a third onto that, and so on. From a load-and-handling perspective, all cables in that wrap share the same lashing.
+
+The plugin captures this with **Lashed With**: a symmetric `ManyToManyField` between `CableSegment` instances. Adding a peer to one segment automatically adds this segment to the peer's `lashed_with` set -- there is no "host" or "guest" distinction. Each segment in the bundle is equally lashed with every other.
+
+Lashing is per-segment, not per-cable, because a cable can be partly overlashed (aerial segments) and partly not (underground segments along the same route).
+
+Note: `lashed_with` is **pairwise symmetric**, not transitive. If A is lashed with B and B is lashed with C, that does not automatically mean A is lashed with C -- the user must add each pair explicitly. The form's multi-select makes this fast: when adding a new cable segment to an existing bundle of N peers, select all N at once. A future enhancement could introduce a `LashingBundle` model to capture group identity directly; for now, the bundle is implicit in the graph.
+
+To find every cable a given segment is lashed with: `segment.lashed_cables` (a `@property` returning a `Cable` queryset of every peer segment's cable).
+
+If a peer cable is not modeled in NetBox (foreign plant, e.g. another carrier's cable), leave that peer out and record the relationship in the segment's `comments`.
 
 ### Example Route
 

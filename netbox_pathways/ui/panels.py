@@ -1,6 +1,30 @@
 from django.utils.translation import gettext_lazy as _
 from netbox.ui import attrs
-from netbox.ui.panels import ObjectAttributesPanel
+from netbox.ui.panels import ObjectAttributesPanel, ObjectsTablePanel
+
+
+class HideIfEmptyObjectsTablePanel(ObjectsTablePanel):
+    """ObjectsTablePanel that hides itself when no rows would render.
+
+    The base panel renders an HTMX-loaded table that is empty when the
+    filtered queryset has no rows. For relationships with a physical cap on
+    cardinality (where most instances will have zero peers), this avoids a
+    permanent empty table on every detail page.
+
+    The `empty_check` kwarg is a callable taking the template context and
+    returning True if the panel should be rendered.
+    """
+
+    def __init__(self, *args, empty_check=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._empty_check = empty_check
+
+    def should_render(self, context):
+        if not super().should_render(context):
+            return False
+        if self._empty_check is None:
+            return True
+        return self._empty_check(context)
 
 
 class StructurePanel(ObjectAttributesPanel):

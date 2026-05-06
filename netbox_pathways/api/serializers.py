@@ -439,6 +439,12 @@ class CableSegmentSerializer(NetBoxModelSerializer):
     )
     cable = CableSerializer(nested=True, required=False, allow_null=True)
     pathway = PathwaySerializer(nested=True, required=False, allow_null=True)
+    lashed_with = drf_serializers.PrimaryKeyRelatedField(
+        many=True,
+        required=False,
+        queryset=CableSegment.objects.all(),
+        help_text="Other cable segments lashed together with this one (symmetrical).",
+    )
 
     class Meta:
         model = CableSegment
@@ -450,6 +456,7 @@ class CableSegmentSerializer(NetBoxModelSerializer):
             "cable",
             "pathway",
             "sequence",
+            "lashed_with",
             "comments",
             "tags",
             "created",
