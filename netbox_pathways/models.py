@@ -744,6 +744,17 @@ class CableSegment(NetBoxModel):
         blank=True,
         help_text="Order of segment in cable route (auto-assigned)",
     )
+    lashed_with = models.ManyToManyField(
+        "self",
+        blank=True,
+        symmetrical=True,
+        help_text=(
+            "Other cable segments mechanically lashed together with this one in aerial plant. "
+            "Symmetrical: adding a peer here automatically adds this segment to the peer's "
+            "lashed_with set. Lashing is per-segment because a cable can be partly overlashed "
+            "(aerial segments) and partly not (underground segments along the same route)."
+        ),
+    )
     comments = models.TextField(blank=True)
 
     class Meta:
@@ -763,6 +774,11 @@ class CableSegment(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:netbox_pathways:cablesegment", args=[self.pk])
+
+    @property
+    def lashed_cables(self):
+        """The dcim.Cable instances of every segment lashed with this one (excludes self.cable)."""
+        return Cable.objects.filter(pathway_segments__in=self.lashed_with.all()).distinct()
 
     def save(self, *args, **kwargs):
         if self.sequence is None:

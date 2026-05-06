@@ -8,7 +8,7 @@ from django.contrib.gis.geos import LineString
 from django.utils.safestring import mark_safe
 from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelForm, NetBoxModelImportForm
 from tenancy.models import Tenant
-from utilities.forms.fields import CSVModelChoiceField, DynamicModelChoiceField
+from utilities.forms.fields import CSVModelChoiceField, DynamicModelChoiceField, DynamicModelMultipleChoiceField
 from utilities.forms.rendering import FieldSet
 
 from .choices import (
@@ -929,9 +929,15 @@ class CableSegmentForm(NetBoxModelForm):
         required=False,
         selector=True,
     )
+    lashed_with = DynamicModelMultipleChoiceField(
+        queryset=CableSegment.objects.all(),
+        required=False,
+        label="Lashed with",
+        help_text="Other cable segments mechanically lashed together with this one (symmetrical).",
+    )
 
     fieldsets = (
-        FieldSet("cable", "pathway", name="Cable Segment"),
+        FieldSet("cable", "pathway", "lashed_with", name="Cable Segment"),
         FieldSet("tags", name="Details"),
     )
 
@@ -940,6 +946,7 @@ class CableSegmentForm(NetBoxModelForm):
         fields = [
             "cable",
             "pathway",
+            "lashed_with",
             "comments",
             "tags",
         ]
@@ -948,6 +955,8 @@ class CableSegmentForm(NetBoxModelForm):
 class CableSegmentImportForm(NetBoxModelImportForm):
     class Meta:
         model = CableSegment
+        # M2M `lashed_with` is intentionally omitted from CSV import; populate it
+        # via the UI form or REST API after the segments themselves are imported.
         fields = [
             "cable",
             "pathway",

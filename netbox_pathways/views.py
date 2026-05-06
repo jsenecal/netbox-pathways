@@ -670,6 +670,14 @@ class CableSegmentView(generic.ObjectView):
             CustomFieldsPanel(),
             CommentsPanel(),
         ],
+        bottom_panels=[
+            panels.HideIfEmptyObjectsTablePanel(
+                model="netbox_pathways.CableSegment",
+                title="Lashed With",
+                filters={"lashed_with_id": lambda ctx: ctx["object"].pk},
+                empty_check=lambda ctx: ctx["object"].lashed_with.exists(),
+            ),
+        ],
     )
 
     def get_extra_context(self, request, instance):

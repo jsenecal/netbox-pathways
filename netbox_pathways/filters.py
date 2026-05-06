@@ -469,6 +469,12 @@ class CableSegmentFilterSet(NetBoxModelFilterSet):
         distinct=False,
         label="Pathway (ID)",
     )
+    lashed_with_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="lashed_with",
+        queryset=CableSegment.objects.all(),
+        distinct=False,
+        label="Lashed with segment (ID)",
+    )
     sequence = MultiValueNumberFilter()
 
     class Meta:

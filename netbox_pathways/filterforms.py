@@ -279,7 +279,7 @@ class CableSegmentFilterForm(NetBoxModelFilterSetForm):
     model = CableSegment
     fieldsets = (
         FieldSet("q", "filter_id", "tag"),
-        FieldSet("cable_id", "pathway_id", name="Attributes"),
+        FieldSet("cable_id", "pathway_id", "lashed_with_id", name="Attributes"),
     )
     cable_id = DynamicModelMultipleChoiceField(
         queryset=Cable.objects.all(),
@@ -290,6 +290,11 @@ class CableSegmentFilterForm(NetBoxModelFilterSetForm):
         queryset=Pathway.objects.all(),
         required=False,
         label="Pathway",
+    )
+    lashed_with_id = DynamicModelMultipleChoiceField(
+        queryset=CableSegment.objects.all(),
+        required=False,
+        label="Lashed with segment",
     )
     tag = TagFilterField(model)
 
