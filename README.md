@@ -1,5 +1,7 @@
 # netbox-pathways
 
+> **Under active development -- alpha.** netbox-pathways is pre-1.0 and changing fast. Models, migrations, REST/GeoJSON endpoints, and configuration keys may break between releases without deprecation cycles. Pin an exact version in production, expect to read the [CHANGELOG](CHANGELOG.md) before every upgrade, and back up your database before running migrations. Issue reports and PRs are very welcome.
+
 > A NetBox plugin for documenting physical cable plant infrastructure with PostGIS integration. Track conduits, aerial spans, structures, and cable routing with geographic data, comparable to SmallWorld or ArcGIS with ArcFM for outside/inside plant documentation.
 
 [![PyPI](https://img.shields.io/pypi/v/netbox-pathways.svg)](https://pypi.org/project/netbox-pathways/)
@@ -32,18 +34,50 @@
 
 ## Installation
 
+> NetBox runs on plain PostgreSQL by default. This plugin requires PostGIS, so installing it on an existing NetBox deployment means changing your database setup. The short version is below; see [PostGIS Setup](https://jsenecal.github.io/netbox-pathways/getting-started/postgis-setup/) in the docs for the full walkthrough (system libraries, container images, migrating an existing database).
+
+### 1. PostGIS prerequisites
+
+Install the GIS system libraries on every NetBox host (web workers and `rq`), and PostGIS on the database server:
+
+```bash
+# Debian / Ubuntu (NetBox host)
+sudo apt-get install -y gdal-bin libgdal-dev libgeos-dev libproj-dev binutils
+
+# Database server: PostgreSQL 16+ with the PostGIS 3.4 package, then:
+psql -d netbox -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+```
+
+### 2. Switch NetBox to the PostGIS database backend
+
+In `configuration.py`, the default `DATABASES` engine is plain PostgreSQL. Change `ENGINE` to the PostGIS backend (the standard `django.db.backends.postgresql` engine appears to work but fails the first time a geometry column is created):
+
+```python
+DATABASES = {
+    "default": {
+        "ENGINE": "django.contrib.gis.db.backends.postgis",  # was django.db.backends.postgresql
+        "NAME": "netbox",
+        "USER": "netbox",
+        "PASSWORD": "...",
+        "HOST": "localhost",
+        "PORT": "",
+        "CONN_MAX_AGE": 300,
+    },
+}
+```
+
+### 3. Install the plugin and configure it
+
 ```bash
 pip install netbox-pathways
 ```
-
-In your NetBox `configuration.py`:
 
 ```python
 PLUGINS = ["netbox_pathways"]
 
 PLUGINS_CONFIG = {
     "netbox_pathways": {
-        "srid": 3348,           # REQUIRED -- your EPSG code (see warning below)
+        "srid": 3348,           # REQUIRED -- your EPSG code (see SRID warning below)
         "map_center_lat": 45.5, # default map center latitude (optional)
         "map_center_lon": -73.5,# default map center longitude (optional)
         "map_zoom": 10,         # default map zoom level (optional)
@@ -51,7 +85,7 @@ PLUGINS_CONFIG = {
 }
 ```
 
-Run migrations and restart:
+### 4. Migrate, collect static, restart
 
 ```bash
 cd /opt/netbox/netbox
@@ -59,6 +93,8 @@ python manage.py migrate
 python manage.py collectstatic --no-input
 sudo systemctl restart netbox netbox-rq
 ```
+
+If `migrate` fails with errors mentioning `postgis`, `gdal`, or `geos`, the database backend is still on plain PostgreSQL or the GIS system libraries are missing on the NetBox host. The [PostGIS Setup](https://jsenecal.github.io/netbox-pathways/getting-started/postgis-setup/) page covers diagnosis and recovery.
 
 ## Configuration
 
@@ -101,6 +137,8 @@ All resources are exposed under `/api/plugins/pathways/`. GeoJSON variants live 
 Full documentation: **[jsenecal.github.io/netbox-pathways](https://jsenecal.github.io/netbox-pathways/)**
 
 - [Installation](https://jsenecal.github.io/netbox-pathways/getting-started/installation/)
+- [PostGIS Setup](https://jsenecal.github.io/netbox-pathways/getting-started/postgis-setup/)
+- [SRID Selection](https://jsenecal.github.io/netbox-pathways/getting-started/srid/)
 - [Configuration](https://jsenecal.github.io/netbox-pathways/getting-started/configuration/)
 - [Concepts](https://jsenecal.github.io/netbox-pathways/user-guide/concepts/)
 - [QGIS Integration](https://jsenecal.github.io/netbox-pathways/user-guide/qgis-integration/)
