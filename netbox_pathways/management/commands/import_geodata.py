@@ -57,6 +57,27 @@ TRANSFORMS = {
 }
 
 
+def _matches_null_value(value, null_values):
+    """Return True if value should be treated as null per the null_values list.
+
+    Compares numerically when both sides are coercible to float (so 0 == 0.0 == "0"),
+    and falls back to stripped string equality for non-numeric sentinels like "N/A".
+    """
+    if value is None:
+        return True
+    for nv in null_values:
+        if nv is None:
+            continue
+        try:
+            if float(value) == float(nv):
+                return True
+        except (TypeError, ValueError):
+            pass
+        if str(value).strip() == str(nv):
+            return True
+    return False
+
+
 def _deserialize_kwargs(row, geom_field):
     """Reconstruct kwargs from serialized row (EWKT geometry, FK tuples)."""
     from django.apps import apps
@@ -380,6 +401,8 @@ class Command(BaseCommand):
                         value = raw.get(src_field)
                         if value is None or not str(value).strip():
                             continue
+                        if "null_values" in spec and _matches_null_value(value, spec["null_values"]):
+                            continue
                         transform_name = spec.get("transform")
                         if transform_name:
                             transform_fn = TRANSFORMS.get(transform_name)
@@ -663,11 +686,16 @@ class Command(BaseCommand):
     def _apply_field_spec(self, value, spec):
         """Apply a field specification to transform a source value.
 
-        Processing order: regex → map → transform → format.
-        Each step feeds into the next if both are present.
+        Processing order: null_values -> regex -> map -> transform -> format.
+        Each step feeds into the next if both are present. A null_values match
+        short-circuits and returns None (the field is left unset on the model).
         """
         if not isinstance(spec, dict):
             return value
+
+        # Null sentinel detection (short-circuits the rest of the pipeline)
+        if "null_values" in spec and _matches_null_value(value, spec["null_values"]):
+            return None
 
         # Regex extraction
         if "regex" in spec:
