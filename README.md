@@ -132,6 +132,10 @@ Open the generated `.qgs` file in QGIS. Style files (`.qml`) ship under `static/
 
 All resources are exposed under `/api/plugins/pathways/`. GeoJSON variants live under `/api/plugins/pathways/geo/` for direct QGIS / OGR consumption. See [API Examples](https://jsenecal.github.io/netbox-pathways/developer/api-examples/) for full endpoint coverage.
 
+## GraphQL
+
+Every Pathways model is exposed on NetBox's `/graphql/` endpoint (single and `_list` queries: `structure`, `structure_list`, `pathway`, `pathway_list`, `conduit`, `conduit_list`, etc.). Geometry fields are intentionally omitted -- query the GeoJSON REST endpoints for spatial data.
+
 ## Documentation
 
 Full documentation: **[jsenecal.github.io/netbox-pathways](https://jsenecal.github.io/netbox-pathways/)**
