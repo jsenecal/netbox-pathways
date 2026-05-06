@@ -9,6 +9,7 @@ class StructureStatusChoices(ChoiceSet):
     STATUS_CONSTRUCTION = "construction"
     STATUS_DECOMMISSIONING = "decommissioning"
     STATUS_RETIRED = "retired"
+    STATUS_ABANDONED = "abandoned"
 
     CHOICES = [
         (STATUS_PLANNED, "Planned", "cyan"),
@@ -16,6 +17,7 @@ class StructureStatusChoices(ChoiceSet):
         (STATUS_CONSTRUCTION, "Under Construction", "blue"),
         (STATUS_DECOMMISSIONING, "Decommissioning", "yellow"),
         (STATUS_RETIRED, "Retired", "red"),
+        (STATUS_ABANDONED, "Abandoned in place", "gray"),
     ]
 
 

@@ -9,12 +9,14 @@ class StructurePanel(ObjectAttributesPanel):
     structure_type = attrs.ChoiceAttr("structure_type", label=_("Type"))
     site = attrs.RelatedObjectAttr("site", linkify=True, label=_("Site"))
     tenant = attrs.RelatedObjectAttr("tenant", linkify=True, label=_("Tenant"))
+    installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
     height = attrs.NumericAttr("height", label=_("Height (m)"))
     width = attrs.NumericAttr("width", label=_("Width (m)"))
     length = attrs.NumericAttr("length", label=_("Length (m)"))
     depth = attrs.NumericAttr("depth", label=_("Depth (m)"))
     elevation = attrs.NumericAttr("elevation", label=_("Elevation (m)"))
     installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
+    commissioned_date = attrs.TextAttr("commissioned_date", label=_("Commissioned date"))
     access_notes = attrs.TextAttr("access_notes", label=_("Access notes"))
 
 
@@ -26,9 +28,11 @@ class PathwayPanel(ObjectAttributesPanel):
     start_location = attrs.RelatedObjectAttr("start_location", linkify=True, label=_("Start location"))
     end_location = attrs.RelatedObjectAttr("end_location", linkify=True, label=_("End location"))
     tenant = attrs.RelatedObjectAttr("tenant", linkify=True, label=_("Tenant"))
+    installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
     length = attrs.NumericAttr("length", label=_("Length (m)"))
 
     installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
+    commissioned_date = attrs.TextAttr("commissioned_date", label=_("Commissioned date"))
 
 
 class ConduitPanel(ObjectAttributesPanel):
@@ -44,8 +48,10 @@ class ConduitPanel(ObjectAttributesPanel):
     outer_diameter = attrs.NumericAttr("outer_diameter", label=_("Outer diameter (mm)"))
     depth = attrs.NumericAttr("depth", label=_("Depth (m)"))
     length = attrs.NumericAttr("length", label=_("Length (m)"))
+    installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
 
     installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
+    commissioned_date = attrs.TextAttr("commissioned_date", label=_("Commissioned date"))
 
 
 class AerialSpanPanel(ObjectAttributesPanel):
@@ -61,8 +67,10 @@ class AerialSpanPanel(ObjectAttributesPanel):
     wind_loading = attrs.TextAttr("wind_loading", label=_("Wind loading"))
     ice_loading = attrs.TextAttr("ice_loading", label=_("Ice loading"))
     length = attrs.NumericAttr("length", label=_("Length (m)"))
+    installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
 
     installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
+    commissioned_date = attrs.TextAttr("commissioned_date", label=_("Commissioned date"))
 
 
 class DirectBuriedPanel(ObjectAttributesPanel):
@@ -76,8 +84,10 @@ class DirectBuriedPanel(ObjectAttributesPanel):
     tracer_wire = attrs.BooleanAttr("tracer_wire", label=_("Tracer wire"))
     armor_type = attrs.TextAttr("armor_type", label=_("Armor type"))
     length = attrs.NumericAttr("length", label=_("Length (m)"))
+    installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
 
     installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
+    commissioned_date = attrs.TextAttr("commissioned_date", label=_("Commissioned date"))
 
 
 class InnerductPanel(ObjectAttributesPanel):
@@ -87,8 +97,10 @@ class InnerductPanel(ObjectAttributesPanel):
     color = attrs.TextAttr("color", label=_("Color"))
     position = attrs.TextAttr("position", label=_("Position"))
     length = attrs.NumericAttr("length", label=_("Length (m)"))
+    installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
 
     installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
+    commissioned_date = attrs.TextAttr("commissioned_date", label=_("Commissioned date"))
 
 
 class ConduitBankPanel(ObjectAttributesPanel):
@@ -98,11 +110,13 @@ class ConduitBankPanel(ObjectAttributesPanel):
     end_structure = attrs.RelatedObjectAttr("end_structure", linkify=True, label=_("End structure"))
     end_face = attrs.ChoiceAttr("end_face", label=_("End face"))
     tenant = attrs.RelatedObjectAttr("tenant", linkify=True, label=_("Tenant"))
+    installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
     configuration = attrs.ChoiceAttr("configuration", label=_("Configuration"))
     total_conduits = attrs.NumericAttr("total_conduits", label=_("Designed capacity"))
     encasement_type = attrs.ChoiceAttr("encasement_type", label=_("Encasement type"))
     length = attrs.NumericAttr("length", label=_("Length (m)"))
     installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
+    commissioned_date = attrs.TextAttr("commissioned_date", label=_("Commissioned date"))
 
 
 class ConduitJunctionPanel(ObjectAttributesPanel):

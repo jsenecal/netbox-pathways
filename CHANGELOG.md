@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Installer tracking** -- new `installed_by` FK to `tenancy.Tenant` on `Structure` and `Pathway` (and all subclasses), capturing the contractor or workforce that physically installed the asset, distinct from `tenant` (served customer / asset owner).
+- **Commissioned date** -- new `commissioned_date` `DateField` on `Structure` and `Pathway`, alongside the existing `installation_date`. Captures handover / acceptance date which routinely differs from install date for outside-plant work.
+- **Abandoned-in-place status** -- new `StructureStatusChoices.STATUS_ABANDONED` value with display label `Abandoned in place` and color `gray`. Distinct from `decommissioning` / `retired`: an abandoned-in-place asset is still physically present but no longer in service.
+
+### Changed
+
+- Forms, tables, filters, REST API serializers, search indexes, and detail panels updated for the three new fields/values across `Structure`, `Pathway`, `Conduit`, `AerialSpan`, `DirectBuried`, `Innerduct`, and `ConduitBank`.
+
 ## [0.1.0] - 2026-04-28
 
 Initial public release. Documents physical cable plant infrastructure with PostGIS integration: structures, pathways, conduits, banks, junctions, cable routing, pull sheets, and a GeoJSON API for QGIS / GIS clients.

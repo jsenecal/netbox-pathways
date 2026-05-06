@@ -12,7 +12,7 @@ class StructureIndex(SearchIndex):
         ("access_notes", 500),
         ("comments", 5000),
     )
-    display_attrs = ("status", "structure_type", "site", "tenant")
+    display_attrs = ("status", "structure_type", "site", "tenant", "installed_by")
 
 
 @register_search

@@ -48,12 +48,25 @@ class Structure(NetBoxModel):
     length = models.FloatField(null=True, blank=True, help_text="Length in meters")
     depth = models.FloatField(null=True, blank=True, help_text="Depth in meters")
     installation_date = models.DateField(null=True, blank=True)
+    commissioned_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date the structure was commissioned / handed over (often after installation_date)",
+    )
     tenant = models.ForeignKey(
         Tenant,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="pathways_structures",
+    )
+    installed_by = models.ForeignKey(
+        Tenant,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="installed_pathways_structures",
+        help_text="Contractor or workforce that physically installed this structure",
     )
     access_notes = models.TextField(blank=True, help_text="Access restrictions or requirements")
     comments = models.TextField(blank=True)
@@ -64,6 +77,7 @@ class Structure(NetBoxModel):
             models.Index(fields=["structure_type"]),
             models.Index(fields=["site"]),
             models.Index(fields=["status"]),
+            models.Index(fields=["installed_by"]),
         ]
 
     def get_status_color(self):
@@ -224,8 +238,21 @@ class Pathway(NetBoxModel):
         blank=True,
         related_name="pathways_pathways",
     )
+    installed_by = models.ForeignKey(
+        Tenant,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="installed_pathways_pathways",
+        help_text="Contractor or workforce that physically installed this pathway",
+    )
     length = models.FloatField(null=True, blank=True, help_text="Total length in meters")
     installation_date = models.DateField(null=True, blank=True)
+    commissioned_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date the pathway was commissioned / accepted (often after installation_date)",
+    )
     comments = models.TextField(blank=True)
 
     class Meta:
