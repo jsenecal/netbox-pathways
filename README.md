@@ -149,6 +149,13 @@ Full documentation: **[jsenecal.github.io/netbox-pathways](https://jsenecal.gith
 - [Architecture](https://jsenecal.github.io/netbox-pathways/developer/architecture/)
 - [GeoJSON API reference](https://jsenecal.github.io/netbox-pathways/reference/geojson-api/)
 
+## Related plugins
+
+netbox-pathways is part of a three-plugin set that models the full optical transport stack:
+
+- **[netbox-fms](https://github.com/jsenecal/netbox-fms)** -- Fiber Management System. Defines fiber cable construction (buffer tubes, ribbons, strands), plans splices in closures, and provisions end-to-end fiber circuits. Pathways tracks *where cables run*; FMS tracks *what is inside them and how strands are spliced*.
+- **[netbox-wdm](https://github.com/jsenecal/netbox-wdm)** -- WDM (Wavelength Division Multiplexing) device management. Models ITU channel plans, ROADM mappings, and wavelength services that ride on top of the fiber circuits FMS provisions, over the cables routed through Pathways.
+
 ## Contributing
 
 PRs welcome. Use conventional-commits PR titles (`feat:`, `fix:`, `chore:`, `docs:`, ...) -- release-drafter assembles release notes from them. Run `make setup` after cloning to install dev dependencies and the pre-commit hooks (including the AI-attribution-rejecting `commit-msg` hook).
