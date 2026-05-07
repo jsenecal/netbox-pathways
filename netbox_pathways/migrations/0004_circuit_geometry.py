@@ -7,6 +7,10 @@ import taggit.managers
 import utilities.json
 from django.db import migrations, models
 
+from netbox_pathways.geo import get_srid
+
+_SRID = get_srid()
+
 
 class Migration(migrations.Migration):
 
@@ -24,7 +28,7 @@ class Migration(migrations.Migration):
                 ('created', models.DateTimeField(auto_now_add=True, null=True)),
                 ('last_updated', models.DateTimeField(auto_now=True, null=True)),
                 ('custom_field_data', models.JSONField(blank=True, default=dict, encoder=utilities.json.CustomFieldJSONEncoder)),
-                ('path', django.contrib.gis.db.models.fields.LineStringField(srid=3348)),
+                ('path', django.contrib.gis.db.models.fields.LineStringField(srid=_SRID)),
                 ('provider_reference', models.CharField(blank=True, max_length=200)),
                 ('comments', models.TextField(blank=True)),
                 ('circuit', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='pathways_route', to='circuits.circuit')),

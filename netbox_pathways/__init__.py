@@ -89,8 +89,12 @@ class NetBoxPathwaysConfig(PluginConfig):
 
         super().ready()
 
-        # Register signals
+        from django.core.checks import register
+
         from . import signals  # noqa: F401
+        from .checks import check_geometry_column_srids
+
+        register(check_geometry_column_srids)
 
         logger.info("%s plugin loaded", self.name)
 
