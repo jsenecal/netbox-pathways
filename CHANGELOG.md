@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`CircuitGeometry.path` SRID drift** -- `0004_circuit_geometry` no longer hardcodes `srid=3348`; it now uses `_SRID = get_srid()` like the other migrations, so the column SRID follows `PLUGINS_CONFIG['netbox_pathways']['srid']`. Installs whose configured SRID differs from `3348` were silently storing the path column at `3348` and rejecting every form submission with `Geometry SRID does not match column SRID` (issue #5, #29).
+
+### Added
+
+- **System check `netbox_pathways.E001`** -- compares introspected `geometry_columns` SRIDs against `get_srid()` and emits a `checks.Error` (with remediation hint) whenever a stored column SRID disagrees with the configured value. Runs on `manage.py check` and `manage.py migrate`. Catches the same drift surfaced in #5/#29 before users hit it through the UI.
+
 ## [0.2.0] - 2026-05-06
 
 ### Added
