@@ -61,8 +61,7 @@ export function wireWidgetShell(handles: WidgetShellHandles): void {
     const pasteConfirmBtn = wrapper.querySelector<HTMLButtonElement>('[data-action="paste-confirm"]');
     const pasteCancelBtn = wrapper.querySelector<HTMLButtonElement>('[data-action="paste-cancel"]');
     const geolocateBtn = wrapper.querySelector<HTMLButtonElement>('[data-action="geolocate"]');
-    const pasteLat = wrapper.querySelector<HTMLInputElement>('[data-paste-input="lat"]');
-    const pasteLon = wrapper.querySelector<HTMLInputElement>('[data-paste-input="lon"]');
+    const pasteInput = wrapper.querySelector<HTMLInputElement>('[data-paste-input]');
 
     if (textarea) textarea.value = prettyGeoJson(handles.hiddenInput.value);
 
@@ -133,66 +132,57 @@ export function wireWidgetShell(handles: WidgetShellHandles): void {
         if (helperInfo) helperInfo.textContent = '';
     }
 
-    // ----- Paste lat/lon form -----
+    // ----- Paste lat/lon form (swaps button <-> form in place) -----
     function openPasteForm(): void {
-        if (!pasteForm) return;
+        if (!pasteForm || !pasteToggleBtn) return;
+        pasteToggleBtn.classList.add('d-none');
         pasteForm.classList.remove('d-none');
         pasteForm.classList.add('d-flex');
-        if (pasteToggleBtn) pasteToggleBtn.setAttribute('aria-expanded', 'true');
-        if (pasteLat) pasteLat.focus();
+        pasteToggleBtn.setAttribute('aria-expanded', 'true');
+        if (pasteInput) {
+            pasteInput.value = '';
+            pasteInput.focus();
+        }
     }
     function closePasteForm(): void {
-        if (!pasteForm) return;
+        if (!pasteForm || !pasteToggleBtn) return;
         pasteForm.classList.add('d-none');
         pasteForm.classList.remove('d-flex');
-        if (pasteToggleBtn) pasteToggleBtn.setAttribute('aria-expanded', 'false');
-        if (pasteLat) pasteLat.value = '';
-        if (pasteLon) pasteLon.value = '';
+        pasteToggleBtn.classList.remove('d-none');
+        pasteToggleBtn.setAttribute('aria-expanded', 'false');
+        if (pasteInput) pasteInput.value = '';
         clearHelperError();
+        pasteToggleBtn.focus();
     }
     function confirmPaste(): void {
-        const latRaw = pasteLat?.value.trim() ?? '';
-        const lonRaw = pasteLon?.value.trim() ?? '';
-        if (!latRaw || !lonRaw) {
-            showHelperError('Enter both latitude and longitude.');
+        const raw = pasteInput?.value.trim() ?? '';
+        if (!raw) {
+            showHelperError('Enter a coordinate.');
             return;
         }
-        const lat = Number(latRaw);
-        const lon = Number(lonRaw);
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-            showHelperError('Latitude and longitude must be numbers.');
+        const result = parseGeometryInput(raw, 'Point');
+        if (result.error || !result.geometry || result.geometry.type !== 'Point') {
+            showHelperError(result.error || 'Could not parse coordinate.');
             return;
         }
-        if (lat < -90 || lat > 90) {
-            showHelperError('Latitude must be between -90 and 90.');
-            return;
-        }
-        if (lon < -180 || lon > 180) {
-            showHelperError('Longitude must be between -180 and 180.');
-            return;
-        }
+        const [lon, lat] = (result.geometry as GeoJSON.Point).coordinates;
         applyPoint(lon, lat);
         closePasteForm();
     }
     if (pasteToggleBtn) {
-        pasteToggleBtn.addEventListener('click', () => {
-            if (pasteForm?.classList.contains('d-none')) openPasteForm();
-            else closePasteForm();
-        });
+        pasteToggleBtn.addEventListener('click', openPasteForm);
     }
     if (pasteConfirmBtn) pasteConfirmBtn.addEventListener('click', confirmPaste);
     if (pasteCancelBtn) pasteCancelBtn.addEventListener('click', closePasteForm);
-    if (pasteLat && pasteLon) {
-        [pasteLat, pasteLon].forEach((el) => {
-            el.addEventListener('keydown', (e: KeyboardEvent) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    confirmPaste();
-                } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    closePasteForm();
-                }
-            });
+    if (pasteInput) {
+        pasteInput.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                confirmPaste();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                closePasteForm();
+            }
         });
     }
 

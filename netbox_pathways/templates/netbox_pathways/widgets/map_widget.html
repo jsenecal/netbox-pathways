@@ -38,36 +38,32 @@
                         title="Use my current location (requires HTTPS and browser permission)">
                     <i class="mdi mdi-crosshairs-gps"></i> Use my location
                 </button>
-                <button type="button"
-                        class="btn btn-sm btn-outline-primary"
-                        data-action="paste-toggle"
-                        aria-expanded="false">
-                    <i class="mdi mdi-content-paste"></i> Paste lat/lon...
-                </button>
-                <div class="pathways-paste-form d-none align-items-center gap-1"
-                     data-paste-form>
-                    <input type="text"
-                           inputmode="decimal"
-                           class="form-control form-control-sm pathways-paste-input"
-                           placeholder="Lat (e.g. 45.5017)"
-                           data-paste-input="lat"
-                           autocomplete="off">
-                    <input type="text"
-                           inputmode="decimal"
-                           class="form-control form-control-sm pathways-paste-input"
-                           placeholder="Lon (e.g. -73.5673)"
-                           data-paste-input="lon"
-                           autocomplete="off">
+                <div class="d-inline-flex align-items-center gap-1" data-paste-slot>
                     <button type="button"
-                            class="btn btn-sm btn-primary"
-                            data-action="paste-confirm">
-                        Add
+                            class="btn btn-sm btn-outline-primary"
+                            data-action="paste-toggle"
+                            aria-expanded="false">
+                        <i class="mdi mdi-content-paste"></i> Paste lat/lon...
                     </button>
-                    <button type="button"
-                            class="btn btn-sm btn-outline-secondary"
-                            data-action="paste-cancel">
-                        Cancel
-                    </button>
+                    <div class="pathways-paste-form d-none align-items-center gap-1"
+                         data-paste-form>
+                        <input type="text"
+                               class="form-control form-control-sm pathways-paste-input"
+                               placeholder="45.5017, -73.5673"
+                               data-paste-input
+                               autocomplete="off"
+                               aria-label="Lat, lon">
+                        <button type="button"
+                                class="btn btn-sm btn-primary"
+                                data-action="paste-confirm">
+                            Add
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                data-action="paste-cancel">
+                            Cancel
+                        </button>
+                    </div>
                 </div>
                 <span class="text-danger small pathways-helper-error"
                       data-helper-error
