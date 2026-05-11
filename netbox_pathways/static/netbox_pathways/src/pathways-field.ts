@@ -8,6 +8,13 @@
  */
 
 import { getControlOptions } from './draw-controls';
+import { computeAppendVertex, type AppendResult } from './geom-ops';
+import { addPointHelperControl } from './widget-controls';
+import { wireWidgetShell } from './widget-shell';
+
+function isLineMode(geomType: string): boolean {
+  return geomType.replace(/\s+/g, '').toLowerCase() === 'linestring';
+}
 
 interface FieldReadyDetail {
   map: L.Map;
@@ -66,21 +73,97 @@ function initWidget(container: HTMLElement): void {
   const pm = (map as any).pm;
   pm.setGlobalOptions({ layerGroup: drawnItems });
 
-  // Add geoman controls
+  // Helper controls (geolocate, paste) -- inserted between zoom and geoman.
+  const helperOpts: { onPoint: (lon: number, lat: number) => void; showInfo?: (msg: string) => void } = {
+    onPoint: (lon: number, lat: number) => applyHelperPoint(lon, lat),
+  };
+  addPointHelperControl(map, helperOpts);
+
+  // Add geoman controls (rendered below the helper bar)
   const controlOpts = getControlOptions(geomType);
   pm.addControls(controlOpts);
 
   // Load existing geometry
   let currentLayer: L.Layer | null = null;
+  let pendingLinePoint: [number, number] | null = null;
+  let pendingMarker: L.Marker | null = null;
+
+  function clearPending(): void {
+    pendingLinePoint = null;
+    if (pendingMarker) {
+      map.removeLayer(pendingMarker);
+      pendingMarker = null;
+    }
+  }
+
+  function loadGeometry(geom: GeoJSON.Geometry | null): void {
+    clearPending();
+    if (currentLayer) {
+      drawnItems.removeLayer(currentLayer);
+      currentLayer = null;
+    }
+    if (!geom) {
+      enableDrawButtons(pm, geomType);
+      return;
+    }
+    try {
+      const layer = L.GeoJSON.geometryToLayer(geom as unknown as GeoJSON.Feature);
+      drawnItems.addLayer(layer);
+      currentLayer = layer;
+      const bounds = drawnItems.getBounds();
+      if (bounds.isValid()) map.fitBounds(bounds, { maxZoom: 18 });
+      (currentLayer as any).on('pm:edit', () => serialize());
+      disableDrawButtons(pm, geomType);
+    } catch (e) {
+      console.error('Failed to load geometry:', e);
+    }
+  }
+
+  function currentGeometry(): GeoJSON.Geometry | null {
+    if (!currentLayer) return null;
+    const gj = (currentLayer as any).toGeoJSON();
+    return gj?.geometry ?? null;
+  }
+
+  function appendLinePoint(lon: number, lat: number): AppendResult {
+    const result = computeAppendVertex(currentGeometry(), pendingLinePoint, [lon, lat]);
+    if (result.kind === 'pending') {
+      pendingLinePoint = result.pending;
+      if (pendingMarker) map.removeLayer(pendingMarker);
+      pendingMarker = L.marker([lat, lon], { opacity: 0.6 })
+        .bindTooltip('Pending vertex (1 of 2)', { permanent: false })
+        .addTo(map);
+      map.setView([lat, lon], Math.max(map.getZoom(), 14));
+      return result;
+    }
+    loadGeometry(result.geometry);
+    return result;
+  }
+
+  function setHiddenInput(geom: GeoJSON.Geometry | null): void {
+    input!.value = geom ? JSON.stringify(geom) : '';
+    input!.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function applyHelperPoint(lon: number, lat: number): void {
+    if (isLineMode(geomType)) {
+      const result = appendLinePoint(lon, lat);
+      if (result.kind === 'pending') {
+        helperOpts.showInfo?.('Vertex 1 of 2 saved -- add one more to form a line.');
+        return;
+      }
+      setHiddenInput(result.geometry);
+      return;
+    }
+    const point: GeoJSON.Point = { type: 'Point', coordinates: [lon, lat] };
+    setHiddenInput(point);
+    loadGeometry(point);
+  }
+
   const existingValue = input.value.trim();
   if (existingValue) {
     try {
-      const geojson = JSON.parse(existingValue);
-      const layer = L.GeoJSON.geometryToLayer(geojson);
-      drawnItems.addLayer(layer);
-      currentLayer = layer;
-      map.fitBounds(drawnItems.getBounds(), { maxZoom: 18 });
-      disableDrawButtons(pm, geomType);
+      loadGeometry(JSON.parse(existingValue) as GeoJSON.Geometry);
     } catch (e) {
       console.error('Failed to parse existing geometry:', e);
     }
@@ -100,6 +183,7 @@ function initWidget(container: HTMLElement): void {
 
   // Single-feature mode: on create, remove previous, disable draw buttons
   map.on('pm:create', (e: any) => {
+    clearPending();
     if (currentLayer) {
       drawnItems.removeLayer(currentLayer);
     }
@@ -116,6 +200,7 @@ function initWidget(container: HTMLElement): void {
     if (e.layer === currentLayer) {
       currentLayer = null;
     }
+    clearPending();
     serialize();
     enableDrawButtons(pm, geomType);
   });
@@ -146,6 +231,17 @@ function initWidget(container: HTMLElement): void {
     bubbles: true,
     detail: { map, drawnItems, geomType },
   }));
+
+  // Wire surrounding widget shell (tabs, Coordinates free-text editor).
+  // The in-map helper buttons (geolocate, paste) are L.Controls registered
+  // above, not part of the shell.
+  wireWidgetShell({
+    fieldId,
+    geomType,
+    hiddenInput: input,
+    loadGeometry,
+    invalidateMap: () => map.invalidateSize(),
+  });
 }
 
 function getDrawButtonNames(geomType: string): string[] {

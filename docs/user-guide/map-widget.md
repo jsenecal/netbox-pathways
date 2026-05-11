@@ -1,9 +1,14 @@
 # Map Widget On Forms
 
-Every model with a geographic field is edited through a Leaflet map widget
-embedded in the NetBox add/edit form. The widget is the same on every
-form; this page covers what you can do with it and how it interacts with
-the rest of the form.
+Every model with a geographic field is edited through a map widget
+embedded in the NetBox add/edit form. The widget has two tabs:
+
+- **Map** -- a Leaflet/geoman editor with draw tools and helper buttons.
+- **Coordinates** -- a free-text editor accepting GeoJSON, WKT, or DMS.
+
+Both tabs share a single hidden field, so edits in one show up in the
+other on tab switch. This page covers what you can do with each tab and
+how the widget interacts with the rest of the form.
 
 ## Where It Appears
 
@@ -86,9 +91,72 @@ scenes:
 
 You should never have to enter raw coordinates in your storage SRID
 manually. If you do need to (for instance, copying a coordinate from
-another system), the form accepts a WKT/GeoJSON paste in the underlying
-text input that the widget wraps; check for it under the "Show advanced"
-toggle on the widget when present.
+another system or recording field-survey GPS data), use the
+**Coordinates** tab or one of the point helpers described below.
+
+## Manual Coordinate Entry
+
+Switch to the **Coordinates** tab to paste or hand-edit geometry as
+free text. The parser is forgiving and accepts:
+
+- **GeoJSON** -- a `Geometry`, a `Feature` (the `geometry` is unwrapped),
+  or a `FeatureCollection` (the first feature wins). Pretty-printed JSON
+  is fine.
+- **WKT** -- `POINT(lon lat)`, `LINESTRING(lon lat, lon lat, ...)`, or
+  `POLYGON((lon lat, ...))`. Case-insensitive, whitespace-tolerant.
+- **DMS** -- e.g. `45 30 15 N 73 34 00 W` or `45°30'15"N 73°34'00"W`.
+  N/S/E/W letters are optional; if omitted, the parser assumes the
+  Google-Maps convention of latitude-first.
+- **Decimal lat,lon** -- e.g. `41.40338, 2.17403`. Latitude first
+  (Google Maps style). Whitespace or comma separator.
+
+All coordinates are interpreted as WGS84 (EPSG:4326). Parse errors are
+shown inline below the textarea; the previous geometry is preserved
+until you submit a valid value or switch tabs.
+
+## Map Tab Helpers
+
+The Map tab has a small toolbar above the map:
+
+- **Use my location** -- calls `navigator.geolocation` to drop a marker
+  at your current position. Requires HTTPS (browsers refuse on plain
+  HTTP) and the user must grant permission. Best used on a phone or
+  tablet during a field survey.
+- **Paste lat/lon...** -- opens an inline two-field form. Type a
+  latitude and a longitude (decimal degrees), press Enter or click
+  **Add**. Coordinates are validated against `[-90, 90]` / `[-180, 180]`.
+
+### Point widgets
+
+The helpers set or replace the marker at the chosen location.
+
+### LineString widgets
+
+The helpers append a vertex to the existing line. When no line has been
+started yet, the first invocation stashes the point as a pending vertex
+(shown as a faded marker with a "Pending vertex (1 of 2)" tooltip) and
+the info slot shows `Vertex 1 of 2 saved -- add one more to form a line.`
+The second invocation materializes a two-vertex LineString. Drawing a
+shape with the geoman tool or trashing the geometry clears any pending
+vertex.
+
+## CSV Bulk Import
+
+The same forgiving parser is wired into the bulk-import forms for
+`Structure` (column name `location`) and the LineString pathway models
+`Conduit`, `AerialSpan`, and `ConduitBank` (column name `path`).
+Spreadsheets can supply any of the textarea formats:
+
+- GeoJSON Geometry, Feature, or FeatureCollection
+- WKT (`POINT(lon lat)` or `LINESTRING(lon lat, lon lat, ...)`)
+- DMS with N/S/E/W hemispheres
+- DMS without hemispheres (lat-first)
+- Decimal `lat, lon` pairs in Google Maps order
+
+Coordinates are interpreted as WGS84 and reprojected to the configured
+storage SRID at save time. Leave the column empty to skip geometry for
+a given row -- the geometry can be drawn or pasted later through the
+form widget.
 
 ## Multiple Base Layers
 

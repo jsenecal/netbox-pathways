@@ -1,10 +1,67 @@
-<div id="{{ id }}-map"
-     class="pathways-map-widget"
-     data-field-id="{{ id }}"
-     data-geom-type="{{ geom_type }}"
-     style="height: 400px; width: 100%;">
+<div class="pathways-widget" data-field-id="{{ id }}">
+    <ul class="nav nav-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button type="button"
+                    class="nav-link active"
+                    id="{{ id }}-tab-map-btn"
+                    data-bs-toggle="tab"
+                    data-bs-target="#{{ id }}-tab-map"
+                    role="tab"
+                    aria-controls="{{ id }}-tab-map"
+                    aria-selected="true">
+                <i class="mdi mdi-map"></i> Map
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button type="button"
+                    class="nav-link"
+                    id="{{ id }}-tab-coords-btn"
+                    data-bs-toggle="tab"
+                    data-bs-target="#{{ id }}-tab-coords"
+                    role="tab"
+                    aria-controls="{{ id }}-tab-coords"
+                    aria-selected="false">
+                <i class="mdi mdi-code-braces"></i> Coordinates
+            </button>
+        </li>
+    </ul>
+    <div class="tab-content border-start border-end border-bottom rounded-bottom p-2">
+        <div class="tab-pane show active"
+             id="{{ id }}-tab-map"
+             role="tabpanel"
+             aria-labelledby="{{ id }}-tab-map-btn">
+            <div id="{{ id }}-map"
+                 class="pathways-map-widget"
+                 data-field-id="{{ id }}"
+                 data-geom-type="{{ geom_type }}"
+                 style="height: 400px; width: 100%;">
+            </div>
+        </div>
+        <div class="tab-pane"
+             id="{{ id }}-tab-coords"
+             role="tabpanel"
+             aria-labelledby="{{ id }}-tab-coords-btn">
+            <textarea class="form-control font-monospace pathways-coord-textarea"
+                      rows="8"
+                      spellcheck="false"
+                      autocomplete="off"
+                      data-coord-textarea
+                      aria-describedby="{{ id }}-coord-help {{ id }}-coord-error">{{ serialized }}</textarea>
+            <div id="{{ id }}-coord-help" class="form-text">
+                Accepts GeoJSON (Geometry or Feature), WKT (POINT, LINESTRING,
+                POLYGON), DMS (hemisphere letters optional; lat-first when
+                omitted), or decimal "lat, lon" pairs in Google Maps order.
+                Coordinates are interpreted as WGS84.
+            </div>
+            <div id="{{ id }}-coord-error"
+                 class="text-danger small pathways-coord-error"
+                 data-coord-error
+                 role="alert"
+                 aria-live="polite"></div>
+        </div>
+    </div>
+    <input type="hidden" id="{{ id }}" name="{{ name }}" value="{{ serialized }}">
+    {% if endpoint_json %}
+    <script type="application/json" id="{{ id }}-endpoints">{{ endpoint_json }}</script>
+    {% endif %}
 </div>
-<input type="hidden" id="{{ id }}" name="{{ name }}" value="{{ serialized }}">
-{% if endpoint_json %}
-<script type="application/json" id="{{ id }}-endpoints">{{ endpoint_json }}</script>
-{% endif %}

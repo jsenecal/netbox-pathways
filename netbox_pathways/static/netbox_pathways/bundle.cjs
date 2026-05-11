@@ -6,7 +6,7 @@ const srcDir = path.join(__dirname, 'src');
 const outDir = path.join(__dirname, 'dist');
 
 // Modules imported by other entrypoints — not standalone bundles
-const MODULES = new Set(['sidebar.ts', 'popover.ts', 'external-layers.ts', 'draw-controls.ts', 'map-utils.ts', 'map-core.ts', 'data-layers.ts']);
+const MODULES = new Set(['sidebar.ts', 'popover.ts', 'external-layers.ts', 'draw-controls.ts', 'map-utils.ts', 'map-core.ts', 'data-layers.ts', 'coord-parser.ts', 'widget-shell.ts', 'geom-ops.ts', 'widget-controls.ts']);
 
 // Find top-level .ts entrypoints (not in types/, not internal modules)
 const entryPoints = fs.readdirSync(srcDir)
