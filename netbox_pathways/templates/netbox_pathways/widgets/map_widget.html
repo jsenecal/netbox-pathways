@@ -30,7 +30,6 @@
              id="{{ id }}-tab-map"
              role="tabpanel"
              aria-labelledby="{{ id }}-tab-map-btn">
-            {% if geom_type|upper != "LINESTRING" %}
             <div class="pathways-map-toolbar d-flex flex-wrap align-items-center gap-2 mb-2 d-print-none"
                  data-toolbar>
                 <button type="button"
@@ -74,8 +73,10 @@
                       data-helper-error
                       role="alert"
                       aria-live="polite"></span>
+                <span class="text-muted small pathways-helper-info"
+                      data-helper-info
+                      aria-live="polite"></span>
             </div>
-            {% endif %}
             <div id="{{ id }}-map"
                  class="pathways-map-widget"
                  data-field-id="{{ id }}"

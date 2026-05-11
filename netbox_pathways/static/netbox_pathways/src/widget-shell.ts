@@ -10,6 +10,7 @@
  */
 
 import { parseGeometryInput } from './coord-parser';
+import type { AppendResult } from './geom-ops';
 
 export interface WidgetShellHandles {
     fieldId: string;
@@ -17,8 +18,14 @@ export interface WidgetShellHandles {
     hiddenInput: HTMLInputElement;
     /** Replace the map's current geometry with the given GeoJSON. */
     loadGeometry: (geom: GeoJSON.Geometry | null) => void;
+    /** Apply one [lon, lat] point in LineString append mode (helper buttons). */
+    appendLinePoint: (lon: number, lat: number) => AppendResult;
     /** Tell Leaflet to recompute size after the tab pane becomes visible. */
     invalidateMap: () => void;
+}
+
+function isLineMode(geomType: string): boolean {
+    return geomType.replace(/\s+/g, '').toLowerCase() === 'linestring';
 }
 
 function prettyGeoJson(text: string): string {
@@ -48,6 +55,7 @@ export function wireWidgetShell(handles: WidgetShellHandles): void {
     const textarea = wrapper.querySelector<HTMLTextAreaElement>('[data-coord-textarea]');
     const coordError = wrapper.querySelector<HTMLElement>('[data-coord-error]');
     const helperError = wrapper.querySelector<HTMLElement>('[data-helper-error]');
+    const helperInfo = wrapper.querySelector<HTMLElement>('[data-helper-info]');
     const pasteForm = wrapper.querySelector<HTMLElement>('[data-paste-form]');
     const pasteToggleBtn = wrapper.querySelector<HTMLButtonElement>('[data-action="paste-toggle"]');
     const pasteConfirmBtn = wrapper.querySelector<HTMLButtonElement>('[data-action="paste-confirm"]');
@@ -111,6 +119,12 @@ export function wireWidgetShell(handles: WidgetShellHandles): void {
     }
     function clearHelperError(): void {
         if (helperError) helperError.textContent = '';
+    }
+    function showHelperInfo(msg: string): void {
+        if (helperInfo) helperInfo.textContent = msg;
+    }
+    function clearHelperInfo(): void {
+        if (helperInfo) helperInfo.textContent = '';
     }
 
     // ----- Paste lat/lon form -----
@@ -212,6 +226,16 @@ export function wireWidgetShell(handles: WidgetShellHandles): void {
 
     // ----- Apply a single point (called by paste-confirm and geolocate) -----
     function applyPoint(lon: number, lat: number): void {
+        clearHelperInfo();
+        if (isLineMode(handles.geomType)) {
+            const result = handles.appendLinePoint(lon, lat);
+            if (result.kind === 'pending') {
+                showHelperInfo('Vertex 1 of 2 saved -- add one more to form a line.');
+                return;
+            }
+            setHidden(handles.hiddenInput, result.geometry);
+            return;
+        }
         const point: GeoJSON.Point = { type: 'Point', coordinates: [lon, lat] };
         setHidden(handles.hiddenInput, point);
         handles.loadGeometry(point);

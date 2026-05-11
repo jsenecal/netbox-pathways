@@ -1,12 +1,12 @@
 /**
  * Forgiving free-text geometry parser for the Coordinates tab of the map widget.
  *
- * Accepts GeoJSON (Geometry/Feature/FeatureCollection), WKT, and DMS pairs,
- * and normalizes them to a GeoJSON geometry validated against the widget's
- * geom_type. Bare "lat,lon" pairs are intentionally rejected -- the Map tab
- * has a dedicated "Paste lat/lon..." helper for that input mode (see #32).
+ * Accepts GeoJSON (Geometry/Feature/FeatureCollection), WKT, DMS (with or
+ * without N/S/E/W hemispheres), and bare decimal lat,lon pairs in Google
+ * Maps order (latitude first). All coordinates are emitted as EPSG:4326
+ * [longitude, latitude] per RFC 7946.
  *
- * All coordinates are emitted as EPSG:4326 [longitude, latitude] per RFC 7946.
+ * See issue #32.
  */
 
 export type GeomType = 'Point' | 'LineString' | 'Polygon' | 'Geometry';
@@ -115,16 +115,15 @@ function looksLikeWkt(text: string): boolean {
     return /^\s*(point|linestring|polygon|multipoint|multilinestring|multipolygon)\s*\(/i.test(text);
 }
 
-function looksLikeDms(text: string): boolean {
-    // Require a digit (with optional D/M/S separators) immediately before a
-    // hemisphere letter, so prose like "not sure" or "Main St West" doesn't
-    // route here.
+function looksLikeDmsWithHemisphere(text: string): boolean {
+    // Require a digit immediately before a hemisphere letter so prose like
+    // "not sure" or "Main St West" doesn't route here.
     return /\d[°dD'"ms\s:]*[NSEWnsew]/.test(text);
 }
 
-function looksLikeBareLatLon(text: string): boolean {
-    // Two finite-number tokens separated by comma/whitespace, optionally signed.
-    return /^\s*-?\d+(\.\d+)?\s*[, ]\s*-?\d+(\.\d+)?\s*$/.test(text);
+function tokenizeNumbers(text: string): string[] {
+    // Split on any DMS separator or whitespace/comma; keep numeric tokens.
+    return text.split(/[°'"dDmMsS:,\s]+/).filter((t) => t.length > 0 && /^-?\d/.test(t));
 }
 
 // ---------------------------------------------------------------------------
@@ -246,25 +245,56 @@ function parseDms(text: string): ParseResult {
 // Entry point
 // ---------------------------------------------------------------------------
 
+function parseDecimalPair(latRaw: string, lonRaw: string): ParseResult {
+    const lat = Number(latRaw);
+    const lon = Number(lonRaw);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        return fail('Latitude and longitude must be numbers.');
+    }
+    return ok({ type: 'Point', coordinates: [lon, lat] });
+}
+
+function parseDmsTriple(deg: string, min: string, sec: string): number | null {
+    const d = Number(deg);
+    const m = Number(min);
+    const s = Number(sec);
+    if (!Number.isFinite(d) || !Number.isFinite(m) || !Number.isFinite(s)) return null;
+    const sign = d < 0 || Object.is(d, -0) ? -1 : 1;
+    return sign * (Math.abs(d) + m / 60 + s / 3600);
+}
+
+function parseNumericTokens(tokens: string[]): ParseResult {
+    if (tokens.length === 2) {
+        return parseDecimalPair(tokens[0], tokens[1]);
+    }
+    if (tokens.length === 6) {
+        const lat = parseDmsTriple(tokens[0], tokens[1], tokens[2]);
+        const lon = parseDmsTriple(tokens[3], tokens[4], tokens[5]);
+        if (lat === null || lon === null) return fail('Invalid DMS components.');
+        return ok({ type: 'Point', coordinates: [lon, lat] });
+    }
+    return fail('Unrecognized input. Paste GeoJSON, WKT, DMS, or lat,lon decimals.');
+}
+
 export function parseGeometryInput(text: string, geomType: string): ParseResult {
     const trimmed = text.trim();
     if (!trimmed) return empty();
 
     const expected = normalizeGeomType(geomType);
 
-    if (looksLikeBareLatLon(trimmed)) {
-        return fail('Bare "lat, lon" is not accepted here. Use the "Paste lat/lon..." button on the Map tab.');
-    }
-
     let result: ParseResult;
     if (looksLikeJson(trimmed)) {
         result = parseJson(trimmed);
     } else if (looksLikeWkt(trimmed)) {
         result = parseWkt(trimmed);
-    } else if (looksLikeDms(trimmed)) {
+    } else if (looksLikeDmsWithHemisphere(trimmed)) {
         result = parseDms(trimmed);
     } else {
-        return fail('Unrecognized input. Paste GeoJSON, WKT, or DMS (with N/S/E/W).');
+        const tokens = tokenizeNumbers(trimmed);
+        if (tokens.length === 0) {
+            return fail('Unrecognized input. Paste GeoJSON, WKT, DMS, or lat,lon decimals.');
+        }
+        result = parseNumericTokens(tokens);
     }
 
     if (result.error || !result.geometry) return result;

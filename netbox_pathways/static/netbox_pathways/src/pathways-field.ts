@@ -8,6 +8,7 @@
  */
 
 import { getControlOptions } from './draw-controls';
+import { computeAppendVertex, type AppendResult } from './geom-ops';
 import { wireWidgetShell } from './widget-shell';
 
 interface FieldReadyDetail {
@@ -73,7 +74,19 @@ function initWidget(container: HTMLElement): void {
 
   // Load existing geometry
   let currentLayer: L.Layer | null = null;
+  let pendingLinePoint: [number, number] | null = null;
+  let pendingMarker: L.Marker | null = null;
+
+  function clearPending(): void {
+    pendingLinePoint = null;
+    if (pendingMarker) {
+      map.removeLayer(pendingMarker);
+      pendingMarker = null;
+    }
+  }
+
   function loadGeometry(geom: GeoJSON.Geometry | null): void {
+    clearPending();
     if (currentLayer) {
       drawnItems.removeLayer(currentLayer);
       currentLayer = null;
@@ -93,6 +106,27 @@ function initWidget(container: HTMLElement): void {
     } catch (e) {
       console.error('Failed to load geometry:', e);
     }
+  }
+
+  function currentGeometry(): GeoJSON.Geometry | null {
+    if (!currentLayer) return null;
+    const gj = (currentLayer as any).toGeoJSON();
+    return gj?.geometry ?? null;
+  }
+
+  function appendLinePoint(lon: number, lat: number): AppendResult {
+    const result = computeAppendVertex(currentGeometry(), pendingLinePoint, [lon, lat]);
+    if (result.kind === 'pending') {
+      pendingLinePoint = result.pending;
+      if (pendingMarker) map.removeLayer(pendingMarker);
+      pendingMarker = L.marker([lat, lon], { opacity: 0.6 })
+        .bindTooltip('Pending vertex (1 of 2)', { permanent: false })
+        .addTo(map);
+      map.setView([lat, lon], Math.max(map.getZoom(), 14));
+      return result;
+    }
+    loadGeometry(result.geometry);
+    return result;
   }
 
   const existingValue = input.value.trim();
@@ -118,6 +152,7 @@ function initWidget(container: HTMLElement): void {
 
   // Single-feature mode: on create, remove previous, disable draw buttons
   map.on('pm:create', (e: any) => {
+    clearPending();
     if (currentLayer) {
       drawnItems.removeLayer(currentLayer);
     }
@@ -134,6 +169,7 @@ function initWidget(container: HTMLElement): void {
     if (e.layer === currentLayer) {
       currentLayer = null;
     }
+    clearPending();
     serialize();
     enableDrawButtons(pm, geomType);
   });
@@ -171,6 +207,7 @@ function initWidget(container: HTMLElement): void {
     geomType,
     hiddenInput: input,
     loadGeometry,
+    appendLinePoint,
     invalidateMap: () => map.invalidateSize(),
   });
 }

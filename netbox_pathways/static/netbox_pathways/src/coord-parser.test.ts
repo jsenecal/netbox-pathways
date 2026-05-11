@@ -126,19 +126,17 @@ describe('parseGeometryInput - WKT', () => {
     });
 });
 
-describe('parseGeometryInput - DMS (point only)', () => {
+describe('parseGeometryInput - DMS', () => {
     it('parses a DMS pair with hemisphere letters', () => {
         const r = parseGeometryInput('45 30 15 N 73 34 00 W', 'Point');
         expect(r.error).toBeNull();
         expect(r.geometry?.type).toBe('Point');
         const coords = (r.geometry as GeoJSON.Point).coordinates;
-        // 45 30 15 N -> +45.504166...
         expect(coords[1]).toBeCloseTo(45.5041667, 4);
-        // 73 34 00 W -> -73.566666...
         expect(coords[0]).toBeCloseTo(-73.5666667, 4);
     });
 
-    it('parses DMS with symbols', () => {
+    it('parses DMS with symbols and hemispheres', () => {
         const r = parseGeometryInput(`45°30'15"N 73°34'00"W`, 'Point');
         expect(r.error).toBeNull();
         const coords = (r.geometry as GeoJSON.Point).coordinates;
@@ -152,26 +150,49 @@ describe('parseGeometryInput - DMS (point only)', () => {
         expect(r.geometry?.type).toBe('Point');
     });
 
-    it('rejects DMS-looking text without hemisphere letters as ambiguous', () => {
-        // Without N/S/E/W we cannot infer lat-then-lon vs lon-then-lat.
-        // The "paste lat/lon" helper exists for that case.
-        const r = parseGeometryInput('45 30 15 73 34 00', 'Point');
-        expect(r.geometry).toBeNull();
-        expect(r.error).not.toBeNull();
+    it('parses DMS without hemispheres, assuming lat,lon order', () => {
+        // No N/S/E/W -- assume Google Maps convention (lat first).
+        const r = parseGeometryInput('45 30 15 -73 34 00', 'Point');
+        expect(r.error).toBeNull();
+        expect(r.geometry?.type).toBe('Point');
+        const coords = (r.geometry as GeoJSON.Point).coordinates;
+        expect(coords[1]).toBeCloseTo(45.5041667, 4);
+        expect(coords[0]).toBeCloseTo(-73.5666667, 4);
+    });
+
+    it('parses DMS-without-hemispheres with symbols', () => {
+        const r = parseGeometryInput(`45°30'15" -73°34'00"`, 'Point');
+        expect(r.error).toBeNull();
+        const coords = (r.geometry as GeoJSON.Point).coordinates;
+        expect(coords[1]).toBeCloseTo(45.5041667, 4);
+        expect(coords[0]).toBeCloseTo(-73.5666667, 4);
     });
 });
 
-describe('parseGeometryInput - bare lat/lon explicitly rejected', () => {
-    it('rejects "45.5, -73.5" with a helpful message', () => {
-        const r = parseGeometryInput('45.5, -73.5', 'Point');
-        expect(r.geometry).toBeNull();
-        expect(r.error).toMatch(/paste lat\/lon/i);
+describe('parseGeometryInput - bare decimal lat,lon (Google Maps style)', () => {
+    it('parses "41.40338, 2.17403" as a Point [lon, lat]', () => {
+        const r = parseGeometryInput('41.40338, 2.17403', 'Point');
+        expect(r.error).toBeNull();
+        expect(r.geometry).toEqual({ type: 'Point', coordinates: [2.17403, 41.40338] });
     });
 
-    it('rejects "45.5 -73.5" with the same helpful message', () => {
+    it('parses space-separated pair', () => {
         const r = parseGeometryInput('45.5 -73.5', 'Point');
+        expect(r.error).toBeNull();
+        expect(r.geometry).toEqual({ type: 'Point', coordinates: [-73.5, 45.5] });
+    });
+
+    it('parses comma-separated negative pair', () => {
+        const r = parseGeometryInput('-45.5,-73.5', 'Point');
+        expect(r.error).toBeNull();
+        expect(r.geometry).toEqual({ type: 'Point', coordinates: [-73.5, -45.5] });
+    });
+
+    it('rejects when first value is out of latitude range', () => {
+        // 91 cannot be a latitude; user likely swapped the order.
+        const r = parseGeometryInput('91, 45', 'Point');
         expect(r.geometry).toBeNull();
-        expect(r.error).toMatch(/paste lat\/lon/i);
+        expect(r.error).toMatch(/latitude/i);
     });
 });
 
@@ -180,14 +201,12 @@ describe('parseGeometryInput - prose does not route to DMS', () => {
         const r = parseGeometryInput('not sure', 'Point');
         expect(r.geometry).toBeNull();
         expect(r.error).toMatch(/unrecognized/i);
-        expect(r.error).not.toMatch(/could not parse dms/i);
     });
 
-    it('rejects "Main Street West" without trying to parse DMS', () => {
+    it('rejects "Main Street West"', () => {
         const r = parseGeometryInput('Main Street West', 'Point');
         expect(r.geometry).toBeNull();
         expect(r.error).toMatch(/unrecognized/i);
-        expect(r.error).not.toMatch(/could not parse dms/i);
     });
 });
 

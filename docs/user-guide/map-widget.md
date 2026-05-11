@@ -104,35 +104,41 @@ free text. The parser is forgiving and accepts:
   is fine.
 - **WKT** -- `POINT(lon lat)`, `LINESTRING(lon lat, lon lat, ...)`, or
   `POLYGON((lon lat, ...))`. Case-insensitive, whitespace-tolerant.
-- **DMS** -- `45 30 15 N 73 34 00 W` or `45deg 30' 15" N 73deg 34' 00" W`,
-  point geometries only. The N/S/E/W hemisphere letters are required
-  -- without them the parser cannot tell latitude from longitude.
+- **DMS** -- e.g. `45 30 15 N 73 34 00 W` or `45°30'15"N 73°34'00"W`.
+  N/S/E/W letters are optional; if omitted, the parser assumes the
+  Google-Maps convention of latitude-first.
+- **Decimal lat,lon** -- e.g. `41.40338, 2.17403`. Latitude first
+  (Google Maps style). Whitespace or comma separator.
 
-Bare `lat, lon` decimal pairs are deliberately not accepted in the
-textarea, because the order is ambiguous. Use the **Paste lat/lon...**
-button on the Map tab instead.
-
-Coordinates are always interpreted as WGS84 (EPSG:4326). Parse errors
-are shown inline below the textarea; the previous geometry is preserved
+All coordinates are interpreted as WGS84 (EPSG:4326). Parse errors are
+shown inline below the textarea; the previous geometry is preserved
 until you submit a valid value or switch tabs.
 
-## Map Tab Helpers (Points Only)
+## Map Tab Helpers
 
-On Point and "any geometry" widgets (Structure, SiteGeometry), the Map
-tab has a small toolbar above the map:
+The Map tab has a small toolbar above the map:
 
-- **Use my location** -- calls `navigator.geolocation` to drop or move
-  the marker at your current position. Requires HTTPS (the browser
-  will refuse on plain HTTP), and the user must grant permission. Best
-  used on a phone or tablet during a field survey.
+- **Use my location** -- calls `navigator.geolocation` to drop a marker
+  at your current position. Requires HTTPS (browsers refuse on plain
+  HTTP) and the user must grant permission. Best used on a phone or
+  tablet during a field survey.
 - **Paste lat/lon...** -- opens an inline two-field form. Type a
   latitude and a longitude (decimal degrees), press Enter or click
-  **Add**, and the marker moves to that point. Coordinates are
-  validated against `[-90, 90]` / `[-180, 180]`.
+  **Add**. Coordinates are validated against `[-90, 90]` / `[-180, 180]`.
 
-LineString widgets (pathways, conduits, circuits) do not show these
-buttons -- use the draw tool on the map or paste a `LINESTRING` /
-GeoJSON in the Coordinates tab.
+### Point widgets
+
+The helpers set or replace the marker at the chosen location.
+
+### LineString widgets
+
+The helpers append a vertex to the existing line. When no line has been
+started yet, the first invocation stashes the point as a pending vertex
+(shown as a faded marker with a "Pending vertex (1 of 2)" tooltip) and
+the info slot shows `Vertex 1 of 2 saved -- add one more to form a line.`
+The second invocation materializes a two-vertex LineString. Drawing a
+shape with the geoman tool or trashing the geometry clears any pending
+vertex.
 
 ## Multiple Base Layers
 
