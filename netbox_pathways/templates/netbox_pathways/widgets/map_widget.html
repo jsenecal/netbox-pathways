@@ -38,15 +38,14 @@
                         title="Use my current location (requires HTTPS and browser permission)">
                     <i class="mdi mdi-crosshairs-gps"></i> Use my location
                 </button>
-                <div class="position-relative d-inline-flex" data-paste-slot>
+                <div class="d-inline-flex align-items-center gap-1" data-paste-slot>
                     <button type="button"
                             class="btn btn-sm btn-outline-primary"
                             data-action="paste-toggle"
                             aria-expanded="false">
                         <i class="mdi mdi-content-paste"></i> Paste lat/lon...
                     </button>
-                    <div class="pathways-paste-form position-absolute top-0 start-0 d-none align-items-center gap-1 bg-body border rounded shadow-sm p-1"
-                         style="z-index: 1000;"
+                    <div class="pathways-paste-form d-none align-items-center gap-1"
                          data-paste-form>
                         <input type="text"
                                class="form-control form-control-sm pathways-paste-input"
@@ -57,13 +56,17 @@
                                style="width: 18ch;">
                         <button type="button"
                                 class="btn btn-sm btn-primary"
-                                data-action="paste-confirm">
-                            Add
+                                data-action="paste-confirm"
+                                aria-label="Add coordinate"
+                                title="Add">
+                            <i class="mdi mdi-check"></i>
                         </button>
                         <button type="button"
                                 class="btn btn-sm btn-outline-secondary"
-                                data-action="paste-cancel">
-                            Cancel
+                                data-action="paste-cancel"
+                                aria-label="Cancel"
+                                title="Cancel">
+                            <i class="mdi mdi-close"></i>
                         </button>
                     </div>
                 </div>

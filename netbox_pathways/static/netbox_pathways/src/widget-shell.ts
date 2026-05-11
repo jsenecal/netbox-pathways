@@ -132,9 +132,10 @@ export function wireWidgetShell(handles: WidgetShellHandles): void {
         if (helperInfo) helperInfo.textContent = '';
     }
 
-    // ----- Paste lat/lon form (overlays the toggle button in place) -----
+    // ----- Paste lat/lon form (in-place swap with the toggle button) -----
     function openPasteForm(): void {
         if (!pasteForm || !pasteToggleBtn) return;
+        pasteToggleBtn.classList.add('d-none');
         pasteForm.classList.remove('d-none');
         pasteForm.classList.add('d-flex');
         pasteToggleBtn.setAttribute('aria-expanded', 'true');
@@ -147,6 +148,7 @@ export function wireWidgetShell(handles: WidgetShellHandles): void {
         if (!pasteForm || !pasteToggleBtn) return;
         pasteForm.classList.add('d-none');
         pasteForm.classList.remove('d-flex');
+        pasteToggleBtn.classList.remove('d-none');
         pasteToggleBtn.setAttribute('aria-expanded', 'false');
         if (pasteInput) pasteInput.value = '';
         clearHelperError();
