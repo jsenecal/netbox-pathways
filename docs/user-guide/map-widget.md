@@ -140,6 +140,24 @@ The second invocation materializes a two-vertex LineString. Drawing a
 shape with the geoman tool or trashing the geometry clears any pending
 vertex.
 
+## CSV Bulk Import
+
+The same forgiving parser is wired into the bulk-import forms for
+`Structure` (column name `location`) and the LineString pathway models
+`Conduit`, `AerialSpan`, and `ConduitBank` (column name `path`).
+Spreadsheets can supply any of the textarea formats:
+
+- GeoJSON Geometry, Feature, or FeatureCollection
+- WKT (`POINT(lon lat)` or `LINESTRING(lon lat, lon lat, ...)`)
+- DMS with N/S/E/W hemispheres
+- DMS without hemispheres (lat-first)
+- Decimal `lat, lon` pairs in Google Maps order
+
+Coordinates are interpreted as WGS84 and reprojected to the configured
+storage SRID at save time. Leave the column empty to skip geometry for
+a given row -- the geometry can be drawn or pasted later through the
+form widget.
+
 ## Multiple Base Layers
 
 If `map_base_layers` is configured (typically Mapbox), the widget shows

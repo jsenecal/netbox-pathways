@@ -21,6 +21,7 @@ from .choices import (
     StructureStatusChoices,
     StructureTypeChoices,
 )
+from .coord_parser import ForgivingGeometryField
 from .geo import get_srid, to_leaflet
 from .models import (
     AerialSpan,
@@ -36,6 +37,11 @@ from .models import (
     PlannedRoute,
     SiteGeometry,
     Structure,
+)
+
+_IMPORT_GEOMETRY_HELP = (
+    "GeoJSON, WKT (POINT/LINESTRING), DMS (hemisphere letters optional; lat-first "
+    'when omitted), or decimal "lat, lon" pairs (Google Maps order). Interpreted as WGS84.'
 )
 
 
@@ -204,6 +210,11 @@ class StructureImportForm(NetBoxModelImportForm):
         required=False,
         help_text="Installer tenant name",
     )
+    location = ForgivingGeometryField(
+        required=False,
+        srid=get_srid(),
+        help_text=_IMPORT_GEOMETRY_HELP,
+    )
 
     class Meta:
         model = Structure
@@ -221,6 +232,7 @@ class StructureImportForm(NetBoxModelImportForm):
             "elevation",
             "installation_date",
             "commissioned_date",
+            "location",
             "access_notes",
             "comments",
         ]
@@ -423,6 +435,12 @@ class ConduitImportForm(NetBoxModelImportForm):
         required=False,
         help_text="Installer tenant name",
     )
+    path = ForgivingGeometryField(
+        required=False,
+        srid=get_srid(),
+        geom_type="LINESTRING",
+        help_text=_IMPORT_GEOMETRY_HELP,
+    )
 
     class Meta:
         model = Conduit
@@ -438,6 +456,7 @@ class ConduitImportForm(NetBoxModelImportForm):
             "installed_by",
             "installation_date",
             "commissioned_date",
+            "path",
             "comments",
         ]
 
@@ -547,6 +566,13 @@ class AerialSpanImportForm(NetBoxModelImportForm):
         help_text="Installer tenant name",
     )
 
+    path = ForgivingGeometryField(
+        required=False,
+        srid=get_srid(),
+        geom_type="LINESTRING",
+        help_text=_IMPORT_GEOMETRY_HELP,
+    )
+
     class Meta:
         model = AerialSpan
         fields = [
@@ -563,6 +589,7 @@ class AerialSpanImportForm(NetBoxModelImportForm):
             "installed_by",
             "installation_date",
             "commissioned_date",
+            "path",
             "comments",
         ]
 
@@ -845,6 +872,13 @@ class ConduitBankImportForm(NetBoxModelImportForm):
         help_text="Installer tenant name",
     )
 
+    path = ForgivingGeometryField(
+        required=False,
+        srid=get_srid(),
+        geom_type="LINESTRING",
+        help_text=_IMPORT_GEOMETRY_HELP,
+    )
+
     class Meta:
         model = ConduitBank
         fields = [
@@ -859,6 +893,7 @@ class ConduitBankImportForm(NetBoxModelImportForm):
             "installed_by",
             "installation_date",
             "commissioned_date",
+            "path",
             "comments",
         ]
 
