@@ -30,54 +30,6 @@
              id="{{ id }}-tab-map"
              role="tabpanel"
              aria-labelledby="{{ id }}-tab-map-btn">
-            <div class="pathways-map-toolbar d-flex flex-wrap align-items-center gap-2 mb-2 d-print-none"
-                 data-toolbar>
-                <button type="button"
-                        class="btn btn-sm btn-outline-primary"
-                        data-action="geolocate"
-                        title="Use my current location (requires HTTPS and browser permission)">
-                    <i class="mdi mdi-crosshairs-gps"></i> Use my location
-                </button>
-                <div class="d-inline-flex align-items-center gap-1" data-paste-slot>
-                    <button type="button"
-                            class="btn btn-sm btn-outline-primary"
-                            data-action="paste-toggle"
-                            aria-expanded="false">
-                        <i class="mdi mdi-content-paste"></i> Paste lat/lon...
-                    </button>
-                    <div class="pathways-paste-form d-none align-items-center gap-1"
-                         data-paste-form>
-                        <input type="text"
-                               class="form-control form-control-sm pathways-paste-input"
-                               placeholder="45.5017, -73.5673"
-                               data-paste-input
-                               autocomplete="off"
-                               aria-label="Lat, lon"
-                               style="width: 18ch;">
-                        <button type="button"
-                                class="btn btn-sm btn-primary"
-                                data-action="paste-confirm"
-                                aria-label="Add coordinate"
-                                title="Add">
-                            <i class="mdi mdi-check"></i>
-                        </button>
-                        <button type="button"
-                                class="btn btn-sm btn-outline-secondary"
-                                data-action="paste-cancel"
-                                aria-label="Cancel"
-                                title="Cancel">
-                            <i class="mdi mdi-close"></i>
-                        </button>
-                    </div>
-                </div>
-                <span class="text-danger small pathways-helper-error"
-                      data-helper-error
-                      role="alert"
-                      aria-live="polite"></span>
-                <span class="text-muted small pathways-helper-info"
-                      data-helper-info
-                      aria-live="polite"></span>
-            </div>
             <div id="{{ id }}-map"
                  class="pathways-map-widget"
                  data-field-id="{{ id }}"

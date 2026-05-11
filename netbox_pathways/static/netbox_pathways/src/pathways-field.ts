@@ -9,7 +9,12 @@
 
 import { getControlOptions } from './draw-controls';
 import { computeAppendVertex, type AppendResult } from './geom-ops';
+import { addPointHelperControl } from './widget-controls';
 import { wireWidgetShell } from './widget-shell';
+
+function isLineMode(geomType: string): boolean {
+  return geomType.replace(/\s+/g, '').toLowerCase() === 'linestring';
+}
 
 interface FieldReadyDetail {
   map: L.Map;
@@ -68,7 +73,13 @@ function initWidget(container: HTMLElement): void {
   const pm = (map as any).pm;
   pm.setGlobalOptions({ layerGroup: drawnItems });
 
-  // Add geoman controls
+  // Helper controls (geolocate, paste) -- inserted between zoom and geoman.
+  const helperOpts: { onPoint: (lon: number, lat: number) => void; showInfo?: (msg: string) => void } = {
+    onPoint: (lon: number, lat: number) => applyHelperPoint(lon, lat),
+  };
+  addPointHelperControl(map, helperOpts);
+
+  // Add geoman controls (rendered below the helper bar)
   const controlOpts = getControlOptions(geomType);
   pm.addControls(controlOpts);
 
@@ -127,6 +138,26 @@ function initWidget(container: HTMLElement): void {
     }
     loadGeometry(result.geometry);
     return result;
+  }
+
+  function setHiddenInput(geom: GeoJSON.Geometry | null): void {
+    input!.value = geom ? JSON.stringify(geom) : '';
+    input!.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function applyHelperPoint(lon: number, lat: number): void {
+    if (isLineMode(geomType)) {
+      const result = appendLinePoint(lon, lat);
+      if (result.kind === 'pending') {
+        helperOpts.showInfo?.('Vertex 1 of 2 saved -- add one more to form a line.');
+        return;
+      }
+      setHiddenInput(result.geometry);
+      return;
+    }
+    const point: GeoJSON.Point = { type: 'Point', coordinates: [lon, lat] };
+    setHiddenInput(point);
+    loadGeometry(point);
   }
 
   const existingValue = input.value.trim();
@@ -201,13 +232,14 @@ function initWidget(container: HTMLElement): void {
     detail: { map, drawnItems, geomType },
   }));
 
-  // Wire surrounding widget shell (tabs, helper buttons, free-text tab)
+  // Wire surrounding widget shell (tabs, Coordinates free-text editor).
+  // The in-map helper buttons (geolocate, paste) are L.Controls registered
+  // above, not part of the shell.
   wireWidgetShell({
     fieldId,
     geomType,
     hiddenInput: input,
     loadGeometry,
-    appendLinePoint,
     invalidateMap: () => map.invalidateSize(),
   });
 }

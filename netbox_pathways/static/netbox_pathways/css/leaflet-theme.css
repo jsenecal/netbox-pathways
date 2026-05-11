@@ -374,13 +374,108 @@
     stroke: #ff8c5a;
 }
 
-/* --- Coordinate-tab toolbar (edit widget) --- */
-/* Bootstrap's .form-control:focus draws a 0.25rem box-shadow ring around
-   the input. Padding all toolbar buttons by the same 0.25rem each side
-   makes the buttons tall enough to absorb the input's glow without the
-   toolbar growing 4px when the paste form is expanded. */
+/* --- In-map helper controls (edit widget) --- */
+/* Two-button leaflet-bar inserted between the zoom control and the geoman
+   draw toolbar. Paste button expands a small panel to the right of the bar.
+   See widget-controls.ts. */
 
-.pathways-map-toolbar .btn.btn-sm {
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
+.pathways-helpers-wrapper {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+}
+.pathways-helpers .pathways-helper-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+.pathways-helpers .pathways-helper-btn.is-active {
+    background-color: #f4f4f4;
+    color: #000;
+}
+.pathways-helpers .pathways-helper-btn.is-busy {
+    opacity: 0.6;
+    pointer-events: none;
+}
+.pathways-paste-panel {
+    align-items: center;
+    gap: 2px;
+    background: #fff;
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    padding: 2px;
+    margin-top: 26px; /* aligns with the second (paste) button in the bar */
+}
+.leaflet-touch .pathways-paste-panel {
+    margin-top: 30px;
+}
+.pathways-paste-panel .pathways-paste-input {
+    width: 18ch;
+    height: 24px;
+    border: 1px solid #ccc;
+    border-radius: 2px;
+    padding: 0 6px;
+    background: #fff;
+    color: #333;
+    font: inherit;
+    font-size: 13px;
+    outline: none;
+}
+.pathways-paste-panel .pathways-paste-input:focus {
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 1px #4a90e2;
+}
+.pathways-paste-panel .pathways-helper-btn {
+    width: 24px;
+    height: 24px;
+    line-height: 1;
+    font-size: 16px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 2px;
+    color: #333;
+    text-decoration: none;
+}
+.pathways-paste-panel .pathways-helper-btn:hover {
+    background: #f4f4f4;
+}
+.pathways-helper-status {
+    align-self: flex-start;
+    margin-top: 26px;
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: nowrap;
+    pointer-events: none;
+    max-width: 30ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.leaflet-touch .pathways-helper-status {
+    margin-top: 30px;
+}
+.pathways-helper-status.is-error {
+    background: rgba(180, 30, 30, 0.85);
+}
+
+[data-bs-theme="dark"] .pathways-paste-panel {
+    background: #2a2a2a;
+    border-color: rgba(255, 255, 255, 0.15);
+}
+[data-bs-theme="dark"] .pathways-paste-panel .pathways-paste-input {
+    background: #1a1a1a;
+    border-color: #444;
+    color: #ddd;
+}
+[data-bs-theme="dark"] .pathways-paste-panel .pathways-helper-btn {
+    background: #2a2a2a;
+    border-color: #444;
+    color: #ddd;
+}
+[data-bs-theme="dark"] .pathways-paste-panel .pathways-helper-btn:hover {
+    background: #3a3a3a;
 }
