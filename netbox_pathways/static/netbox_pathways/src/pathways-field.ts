@@ -8,6 +8,7 @@
  */
 
 import { getControlOptions } from './draw-controls';
+import { wireWidgetShell } from './widget-shell';
 
 interface FieldReadyDetail {
   map: L.Map;
@@ -72,15 +73,32 @@ function initWidget(container: HTMLElement): void {
 
   // Load existing geometry
   let currentLayer: L.Layer | null = null;
+  function loadGeometry(geom: GeoJSON.Geometry | null): void {
+    if (currentLayer) {
+      drawnItems.removeLayer(currentLayer);
+      currentLayer = null;
+    }
+    if (!geom) {
+      enableDrawButtons(pm, geomType);
+      return;
+    }
+    try {
+      const layer = L.GeoJSON.geometryToLayer(geom as unknown as GeoJSON.Feature);
+      drawnItems.addLayer(layer);
+      currentLayer = layer;
+      const bounds = drawnItems.getBounds();
+      if (bounds.isValid()) map.fitBounds(bounds, { maxZoom: 18 });
+      (currentLayer as any).on('pm:edit', () => serialize());
+      disableDrawButtons(pm, geomType);
+    } catch (e) {
+      console.error('Failed to load geometry:', e);
+    }
+  }
+
   const existingValue = input.value.trim();
   if (existingValue) {
     try {
-      const geojson = JSON.parse(existingValue);
-      const layer = L.GeoJSON.geometryToLayer(geojson);
-      drawnItems.addLayer(layer);
-      currentLayer = layer;
-      map.fitBounds(drawnItems.getBounds(), { maxZoom: 18 });
-      disableDrawButtons(pm, geomType);
+      loadGeometry(JSON.parse(existingValue) as GeoJSON.Geometry);
     } catch (e) {
       console.error('Failed to parse existing geometry:', e);
     }
@@ -146,6 +164,15 @@ function initWidget(container: HTMLElement): void {
     bubbles: true,
     detail: { map, drawnItems, geomType },
   }));
+
+  // Wire surrounding widget shell (tabs, helper buttons, free-text tab)
+  wireWidgetShell({
+    fieldId,
+    geomType,
+    hiddenInput: input,
+    loadGeometry,
+    invalidateMap: () => map.invalidateSize(),
+  });
 }
 
 function getDrawButtonNames(geomType: string): string[] {

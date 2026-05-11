@@ -22,7 +22,7 @@
 - **Pull Sheets** -- printable cable routing documents for field crews.
 - **GeoJSON API** -- standard GeoJSON endpoints for QGIS and other GIS clients.
 - **QGIS Integration** -- style files, project generator, and documentation.
-- **Geometry Editing** -- draw and edit geometries directly in NetBox forms via Leaflet map widgets.
+- **Geometry Editing** -- draw and edit geometries directly in NetBox forms via Leaflet map widgets, or paste GeoJSON/WKT/DMS in the Coordinates tab. Point widgets also expose "Use my location" (mobile GPS) and "Paste lat/lon..." helpers.
 - **Interactive Map** -- built-in Leaflet map for quick visualization.
 - **Indoor / Outdoor** -- pathways can terminate at structures (outdoor) or NetBox locations (indoor).
 

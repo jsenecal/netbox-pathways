@@ -1,0 +1,219 @@
+/**
+ * Wires the non-map parts of the geometry widget: tabs, free-text Coordinates
+ * tab, "Use my location" button, and "Paste lat/lon..." inline form.
+ *
+ * Hidden input remains the single source of truth. The map writes to it via
+ * pathways-field.ts; this shell reads from it (on tab show) and writes back
+ * (on textarea commit, geolocation success, or paste-confirm).
+ *
+ * See netbox-pathways issue #32.
+ */
+
+import { parseGeometryInput } from './coord-parser';
+
+export interface WidgetShellHandles {
+    fieldId: string;
+    geomType: string;
+    hiddenInput: HTMLInputElement;
+    /** Replace the map's current geometry with the given GeoJSON. */
+    loadGeometry: (geom: GeoJSON.Geometry | null) => void;
+    /** Tell Leaflet to recompute size after the tab pane becomes visible. */
+    invalidateMap: () => void;
+}
+
+function prettyGeoJson(text: string): string {
+    if (!text.trim()) return '';
+    try {
+        return JSON.stringify(JSON.parse(text), null, 2);
+    } catch {
+        return text;
+    }
+}
+
+function setHidden(input: HTMLInputElement, geom: GeoJSON.Geometry | null): void {
+    input.value = geom ? JSON.stringify(geom) : '';
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function findWrapper(fieldId: string): HTMLElement | null {
+    return document.querySelector<HTMLElement>(`.pathways-widget[data-field-id="${fieldId}"]`);
+}
+
+export function wireWidgetShell(handles: WidgetShellHandles): void {
+    const wrapper = findWrapper(handles.fieldId);
+    if (!wrapper) return;
+
+    const mapTabBtn = wrapper.querySelector<HTMLElement>(`#${handles.fieldId}-tab-map-btn`);
+    const coordTabBtn = wrapper.querySelector<HTMLElement>(`#${handles.fieldId}-tab-coords-btn`);
+    const textarea = wrapper.querySelector<HTMLTextAreaElement>('[data-coord-textarea]');
+    const coordError = wrapper.querySelector<HTMLElement>('[data-coord-error]');
+    const helperError = wrapper.querySelector<HTMLElement>('[data-helper-error]');
+    const pasteForm = wrapper.querySelector<HTMLElement>('[data-paste-form]');
+    const pasteToggleBtn = wrapper.querySelector<HTMLButtonElement>('[data-action="paste-toggle"]');
+    const pasteConfirmBtn = wrapper.querySelector<HTMLButtonElement>('[data-action="paste-confirm"]');
+    const pasteCancelBtn = wrapper.querySelector<HTMLButtonElement>('[data-action="paste-cancel"]');
+    const geolocateBtn = wrapper.querySelector<HTMLButtonElement>('[data-action="geolocate"]');
+    const pasteLat = wrapper.querySelector<HTMLInputElement>('[data-paste-input="lat"]');
+    const pasteLon = wrapper.querySelector<HTMLInputElement>('[data-paste-input="lon"]');
+
+    if (textarea) textarea.value = prettyGeoJson(handles.hiddenInput.value);
+
+    // ----- Tab events -----
+    if (mapTabBtn) {
+        mapTabBtn.addEventListener('shown.bs.tab', () => {
+            commitTextarea({ silent: true });
+            handles.invalidateMap();
+        });
+    }
+    if (coordTabBtn) {
+        coordTabBtn.addEventListener('shown.bs.tab', () => {
+            if (textarea) {
+                textarea.value = prettyGeoJson(handles.hiddenInput.value);
+                clearCoordError();
+            }
+        });
+        coordTabBtn.addEventListener('hide.bs.tab', () => {
+            commitTextarea({ silent: false });
+        });
+    }
+
+    // ----- Textarea commit -----
+    function commitTextarea(opts: { silent: boolean }): boolean {
+        if (!textarea) return true;
+        const value = textarea.value;
+        const result = parseGeometryInput(value, handles.geomType);
+        if (result.error) {
+            if (!opts.silent) showCoordError(result.error);
+            return false;
+        }
+        clearCoordError();
+        setHidden(handles.hiddenInput, result.geometry);
+        handles.loadGeometry(result.geometry);
+        return true;
+    }
+    if (textarea) {
+        textarea.addEventListener('blur', () => commitTextarea({ silent: false }));
+    }
+
+    function showCoordError(msg: string): void {
+        if (coordError) coordError.textContent = msg;
+    }
+    function clearCoordError(): void {
+        if (coordError) coordError.textContent = '';
+    }
+    function showHelperError(msg: string): void {
+        if (helperError) helperError.textContent = msg;
+        if (msg) {
+            window.setTimeout(() => {
+                if (helperError && helperError.textContent === msg) helperError.textContent = '';
+            }, 6000);
+        }
+    }
+    function clearHelperError(): void {
+        if (helperError) helperError.textContent = '';
+    }
+
+    // ----- Paste lat/lon form -----
+    function openPasteForm(): void {
+        if (!pasteForm) return;
+        pasteForm.classList.remove('d-none');
+        pasteForm.classList.add('d-flex');
+        if (pasteToggleBtn) pasteToggleBtn.setAttribute('aria-expanded', 'true');
+        if (pasteLat) pasteLat.focus();
+    }
+    function closePasteForm(): void {
+        if (!pasteForm) return;
+        pasteForm.classList.add('d-none');
+        pasteForm.classList.remove('d-flex');
+        if (pasteToggleBtn) pasteToggleBtn.setAttribute('aria-expanded', 'false');
+        if (pasteLat) pasteLat.value = '';
+        if (pasteLon) pasteLon.value = '';
+        clearHelperError();
+    }
+    function confirmPaste(): void {
+        const latRaw = pasteLat?.value.trim() ?? '';
+        const lonRaw = pasteLon?.value.trim() ?? '';
+        if (!latRaw || !lonRaw) {
+            showHelperError('Enter both latitude and longitude.');
+            return;
+        }
+        const lat = Number(latRaw);
+        const lon = Number(lonRaw);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+            showHelperError('Latitude and longitude must be numbers.');
+            return;
+        }
+        if (lat < -90 || lat > 90) {
+            showHelperError('Latitude must be between -90 and 90.');
+            return;
+        }
+        if (lon < -180 || lon > 180) {
+            showHelperError('Longitude must be between -180 and 180.');
+            return;
+        }
+        applyPoint(lon, lat);
+        closePasteForm();
+    }
+    if (pasteToggleBtn) {
+        pasteToggleBtn.addEventListener('click', () => {
+            if (pasteForm?.classList.contains('d-none')) openPasteForm();
+            else closePasteForm();
+        });
+    }
+    if (pasteConfirmBtn) pasteConfirmBtn.addEventListener('click', confirmPaste);
+    if (pasteCancelBtn) pasteCancelBtn.addEventListener('click', closePasteForm);
+    if (pasteLat && pasteLon) {
+        [pasteLat, pasteLon].forEach((el) => {
+            el.addEventListener('keydown', (e: KeyboardEvent) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    confirmPaste();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closePasteForm();
+                }
+            });
+        });
+    }
+
+    // ----- Geolocation -----
+    if (geolocateBtn) {
+        geolocateBtn.addEventListener('click', () => {
+            if (!navigator.geolocation) {
+                showHelperError('Geolocation is not supported by this browser.');
+                return;
+            }
+            if (!window.isSecureContext) {
+                showHelperError('Geolocation requires HTTPS.');
+                return;
+            }
+            geolocateBtn.disabled = true;
+            clearHelperError();
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    geolocateBtn.disabled = false;
+                    applyPoint(pos.coords.longitude, pos.coords.latitude);
+                },
+                (err) => {
+                    geolocateBtn.disabled = false;
+                    const message = err.code === err.PERMISSION_DENIED
+                        ? 'Location permission denied.'
+                        : err.code === err.POSITION_UNAVAILABLE
+                            ? 'Location unavailable.'
+                            : err.code === err.TIMEOUT
+                                ? 'Location request timed out.'
+                                : 'Could not get location.';
+                    showHelperError(message);
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+            );
+        });
+    }
+
+    // ----- Apply a single point (called by paste-confirm and geolocate) -----
+    function applyPoint(lon: number, lat: number): void {
+        const point: GeoJSON.Point = { type: 'Point', coordinates: [lon, lat] };
+        setHidden(handles.hiddenInput, point);
+        handles.loadGeometry(point);
+    }
+}

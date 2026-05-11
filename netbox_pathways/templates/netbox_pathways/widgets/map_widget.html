@@ -1,10 +1,112 @@
-<div id="{{ id }}-map"
-     class="pathways-map-widget"
-     data-field-id="{{ id }}"
-     data-geom-type="{{ geom_type }}"
-     style="height: 400px; width: 100%;">
+<div class="pathways-widget" data-field-id="{{ id }}">
+    <ul class="nav nav-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button type="button"
+                    class="nav-link active"
+                    id="{{ id }}-tab-map-btn"
+                    data-bs-toggle="tab"
+                    data-bs-target="#{{ id }}-tab-map"
+                    role="tab"
+                    aria-controls="{{ id }}-tab-map"
+                    aria-selected="true">
+                <i class="mdi mdi-map"></i> Map
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button type="button"
+                    class="nav-link"
+                    id="{{ id }}-tab-coords-btn"
+                    data-bs-toggle="tab"
+                    data-bs-target="#{{ id }}-tab-coords"
+                    role="tab"
+                    aria-controls="{{ id }}-tab-coords"
+                    aria-selected="false">
+                <i class="mdi mdi-code-braces"></i> Coordinates
+            </button>
+        </li>
+    </ul>
+    <div class="tab-content border-start border-end border-bottom rounded-bottom p-2">
+        <div class="tab-pane show active"
+             id="{{ id }}-tab-map"
+             role="tabpanel"
+             aria-labelledby="{{ id }}-tab-map-btn">
+            {% if geom_type|upper != "LINESTRING" %}
+            <div class="pathways-map-toolbar d-flex flex-wrap align-items-center gap-2 mb-2 d-print-none"
+                 data-toolbar>
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary"
+                        data-action="geolocate"
+                        title="Use my current location (requires HTTPS and browser permission)">
+                    <i class="mdi mdi-crosshairs-gps"></i> Use my location
+                </button>
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary"
+                        data-action="paste-toggle"
+                        aria-expanded="false">
+                    <i class="mdi mdi-content-paste"></i> Paste lat/lon...
+                </button>
+                <div class="pathways-paste-form d-none align-items-center gap-1"
+                     data-paste-form>
+                    <input type="text"
+                           inputmode="decimal"
+                           class="form-control form-control-sm pathways-paste-input"
+                           placeholder="Lat (e.g. 45.5017)"
+                           data-paste-input="lat"
+                           autocomplete="off">
+                    <input type="text"
+                           inputmode="decimal"
+                           class="form-control form-control-sm pathways-paste-input"
+                           placeholder="Lon (e.g. -73.5673)"
+                           data-paste-input="lon"
+                           autocomplete="off">
+                    <button type="button"
+                            class="btn btn-sm btn-primary"
+                            data-action="paste-confirm">
+                        Add
+                    </button>
+                    <button type="button"
+                            class="btn btn-sm btn-outline-secondary"
+                            data-action="paste-cancel">
+                        Cancel
+                    </button>
+                </div>
+                <span class="text-danger small pathways-helper-error"
+                      data-helper-error
+                      role="alert"
+                      aria-live="polite"></span>
+            </div>
+            {% endif %}
+            <div id="{{ id }}-map"
+                 class="pathways-map-widget"
+                 data-field-id="{{ id }}"
+                 data-geom-type="{{ geom_type }}"
+                 style="height: 400px; width: 100%;">
+            </div>
+        </div>
+        <div class="tab-pane"
+             id="{{ id }}-tab-coords"
+             role="tabpanel"
+             aria-labelledby="{{ id }}-tab-coords-btn">
+            <textarea class="form-control font-monospace pathways-coord-textarea"
+                      rows="8"
+                      spellcheck="false"
+                      autocomplete="off"
+                      data-coord-textarea
+                      aria-describedby="{{ id }}-coord-help {{ id }}-coord-error">{{ serialized }}</textarea>
+            <div id="{{ id }}-coord-help" class="form-text">
+                Accepts GeoJSON (Geometry or Feature), WKT (POINT/LINESTRING/POLYGON),
+                or DMS with N/S/E/W hemispheres. For a single lat/lon, switch to the
+                Map tab and use "Paste lat/lon...".
+            </div>
+            <div id="{{ id }}-coord-error"
+                 class="text-danger small pathways-coord-error"
+                 data-coord-error
+                 role="alert"
+                 aria-live="polite"></div>
+        </div>
+    </div>
+    <input type="hidden" id="{{ id }}" name="{{ name }}" value="{{ serialized }}">
+    {% if endpoint_json %}
+    <script type="application/json" id="{{ id }}-endpoints">{{ endpoint_json }}</script>
+    {% endif %}
 </div>
-<input type="hidden" id="{{ id }}" name="{{ name }}" value="{{ serialized }}">
-{% if endpoint_json %}
-<script type="application/json" id="{{ id }}-endpoints">{{ endpoint_json }}</script>
-{% endif %}

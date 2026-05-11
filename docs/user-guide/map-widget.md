@@ -1,9 +1,14 @@
 # Map Widget On Forms
 
-Every model with a geographic field is edited through a Leaflet map widget
-embedded in the NetBox add/edit form. The widget is the same on every
-form; this page covers what you can do with it and how it interacts with
-the rest of the form.
+Every model with a geographic field is edited through a map widget
+embedded in the NetBox add/edit form. The widget has two tabs:
+
+- **Map** -- a Leaflet/geoman editor with draw tools and helper buttons.
+- **Coordinates** -- a free-text editor accepting GeoJSON, WKT, or DMS.
+
+Both tabs share a single hidden field, so edits in one show up in the
+other on tab switch. This page covers what you can do with each tab and
+how the widget interacts with the rest of the form.
 
 ## Where It Appears
 
@@ -86,9 +91,48 @@ scenes:
 
 You should never have to enter raw coordinates in your storage SRID
 manually. If you do need to (for instance, copying a coordinate from
-another system), the form accepts a WKT/GeoJSON paste in the underlying
-text input that the widget wraps; check for it under the "Show advanced"
-toggle on the widget when present.
+another system or recording field-survey GPS data), use the
+**Coordinates** tab or one of the point helpers described below.
+
+## Manual Coordinate Entry
+
+Switch to the **Coordinates** tab to paste or hand-edit geometry as
+free text. The parser is forgiving and accepts:
+
+- **GeoJSON** -- a `Geometry`, a `Feature` (the `geometry` is unwrapped),
+  or a `FeatureCollection` (the first feature wins). Pretty-printed JSON
+  is fine.
+- **WKT** -- `POINT(lon lat)`, `LINESTRING(lon lat, lon lat, ...)`, or
+  `POLYGON((lon lat, ...))`. Case-insensitive, whitespace-tolerant.
+- **DMS** -- `45 30 15 N 73 34 00 W` or `45deg 30' 15" N 73deg 34' 00" W`,
+  point geometries only. The N/S/E/W hemisphere letters are required
+  -- without them the parser cannot tell latitude from longitude.
+
+Bare `lat, lon` decimal pairs are deliberately not accepted in the
+textarea, because the order is ambiguous. Use the **Paste lat/lon...**
+button on the Map tab instead.
+
+Coordinates are always interpreted as WGS84 (EPSG:4326). Parse errors
+are shown inline below the textarea; the previous geometry is preserved
+until you submit a valid value or switch tabs.
+
+## Map Tab Helpers (Points Only)
+
+On Point and "any geometry" widgets (Structure, SiteGeometry), the Map
+tab has a small toolbar above the map:
+
+- **Use my location** -- calls `navigator.geolocation` to drop or move
+  the marker at your current position. Requires HTTPS (the browser
+  will refuse on plain HTTP), and the user must grant permission. Best
+  used on a phone or tablet during a field survey.
+- **Paste lat/lon...** -- opens an inline two-field form. Type a
+  latitude and a longitude (decimal degrees), press Enter or click
+  **Add**, and the marker moves to that point. Coordinates are
+  validated against `[-90, 90]` / `[-180, 180]`.
+
+LineString widgets (pathways, conduits, circuits) do not show these
+buttons -- use the draw tool on the map or paste a `LINESTRING` /
+GeoJSON in the Coordinates tab.
 
 ## Multiple Base Layers
 

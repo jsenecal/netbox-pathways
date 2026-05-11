@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Manual coordinate entry on the map widget** -- the geometry widget now has a tabbed UI with a **Map** tab (existing Leaflet/geoman editor) and a **Coordinates** tab containing a free-text editor. The textarea accepts GeoJSON (Geometry, Feature, or FeatureCollection -- first feature wins), WKT (`POINT`/`LINESTRING`/`POLYGON`), and DMS pairs with N/S/E/W hemispheres; invalid input is reported inline without clobbering the previous geometry. Point and any-geometry widgets also expose two helper buttons on the Map tab: **Use my location** (`navigator.geolocation`, requires HTTPS) and **Paste lat/lon...** (an inline mini-form). LineString widgets keep the existing draw tool and free-text editor; helper buttons are point-oriented and hidden there. Refs #32.
+
 ## [0.2.1] - 2026-05-07
 
 ### Fixed
