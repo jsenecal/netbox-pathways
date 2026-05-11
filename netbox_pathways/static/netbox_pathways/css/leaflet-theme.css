@@ -373,3 +373,14 @@
 [data-bs-theme="dark"] .leaflet-interactive.pw-locked-endpoint {
     stroke: #ff8c5a;
 }
+
+/* --- Coordinate-tab toolbar (edit widget) --- */
+/* Bootstrap's .form-control:focus draws a 0.25rem box-shadow ring around
+   the input. Padding all toolbar buttons by the same 0.25rem each side
+   makes the buttons tall enough to absorb the input's glow without the
+   toolbar growing 4px when the paste form is expanded. */
+
+.pathways-map-toolbar .btn.btn-sm {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+}
