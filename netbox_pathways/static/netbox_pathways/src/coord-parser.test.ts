@@ -3,13 +3,15 @@
  *
  * parseGeometryInput accepts forgiving free-text input and normalizes it to
  * a GeoJSON geometry. Supported formats:
- *   - GeoJSON Geometry  ({type, coordinates})
- *   - GeoJSON Feature   (unwraps .geometry)
- *   - WKT               (POINT, LINESTRING, POLYGON)
- *   - DMS               (45 30 15 N 73 34 00 W) for points only
+ *   - GeoJSON Geometry          ({type, coordinates})
+ *   - GeoJSON Feature           (unwraps .geometry)
+ *   - GeoJSON FeatureCollection (uses the first feature)
+ *   - WKT                       (POINT, LINESTRING, POLYGON)
+ *   - DMS with hemispheres      (45 30 15 N 73 34 00 W) -- point only
+ *   - DMS without hemispheres   (45 30 15 -73 34 00)    -- point, lat-first
+ *   - Decimal "lat, lon"        (41.40338, 2.17403)     -- point, Google Maps order
  *
- * Bare "lat,lon" strings are intentionally NOT supported: the Map tab has a
- * dedicated "Paste lat/lon..." helper for that. See issue #32.
+ * Coordinates are emitted as EPSG:4326 [longitude, latitude]. See issue #32.
  */
 
 import { describe, it, expect } from 'vitest';

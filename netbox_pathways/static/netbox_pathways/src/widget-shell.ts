@@ -66,6 +66,10 @@ export function wireWidgetShell(handles: WidgetShellHandles): void {
 
     if (textarea) textarea.value = prettyGeoJson(handles.hiddenInput.value);
 
+    // True when the last commit attempt failed: the textarea contains
+    // unsaved invalid input that the user should see again on tab return.
+    let coordCommitFailed = false;
+
     // ----- Tab events -----
     if (mapTabBtn) {
         mapTabBtn.addEventListener('shown.bs.tab', () => {
@@ -75,13 +79,13 @@ export function wireWidgetShell(handles: WidgetShellHandles): void {
     }
     if (coordTabBtn) {
         coordTabBtn.addEventListener('shown.bs.tab', () => {
-            if (textarea) {
-                textarea.value = prettyGeoJson(handles.hiddenInput.value);
-                clearCoordError();
-            }
+            if (!textarea) return;
+            if (coordCommitFailed) return;
+            textarea.value = prettyGeoJson(handles.hiddenInput.value);
+            clearCoordError();
         });
         coordTabBtn.addEventListener('hide.bs.tab', () => {
-            commitTextarea({ silent: false });
+            coordCommitFailed = !commitTextarea({ silent: false });
         });
     }
 
@@ -100,7 +104,9 @@ export function wireWidgetShell(handles: WidgetShellHandles): void {
         return true;
     }
     if (textarea) {
-        textarea.addEventListener('blur', () => commitTextarea({ silent: false }));
+        textarea.addEventListener('blur', () => {
+            coordCommitFailed = !commitTextarea({ silent: false });
+        });
     }
 
     function showCoordError(msg: string): void {
@@ -227,6 +233,8 @@ export function wireWidgetShell(handles: WidgetShellHandles): void {
     // ----- Apply a single point (called by paste-confirm and geolocate) -----
     function applyPoint(lon: number, lat: number): void {
         clearHelperInfo();
+        // An explicit helper action supersedes any unsaved textarea input.
+        coordCommitFailed = false;
         if (isLineMode(handles.geomType)) {
             const result = handles.appendLinePoint(lon, lat);
             if (result.kind === 'pending') {

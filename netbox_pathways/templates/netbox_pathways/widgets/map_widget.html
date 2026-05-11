@@ -95,9 +95,10 @@
                       data-coord-textarea
                       aria-describedby="{{ id }}-coord-help {{ id }}-coord-error">{{ serialized }}</textarea>
             <div id="{{ id }}-coord-help" class="form-text">
-                Accepts GeoJSON (Geometry or Feature), WKT (POINT/LINESTRING/POLYGON),
-                or DMS with N/S/E/W hemispheres. For a single lat/lon, switch to the
-                Map tab and use "Paste lat/lon...".
+                Accepts GeoJSON (Geometry or Feature), WKT (POINT, LINESTRING,
+                POLYGON), DMS (hemisphere letters optional; lat-first when
+                omitted), or decimal "lat, lon" pairs in Google Maps order.
+                Coordinates are interpreted as WGS84.
             </div>
             <div id="{{ id }}-coord-error"
                  class="text-danger small pathways-coord-error"
