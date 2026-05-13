@@ -398,6 +398,16 @@ class ConduitBank(Pathway):
         blank=True,
         help_text="Designed conduit capacity of the bank (leave blank if unknown)",
     )
+    height = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of duct rows (vertical count); leave blank if unknown",
+    )
+    width = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of duct columns (horizontal count); leave blank if unknown",
+    )
     encasement_type = models.CharField(max_length=50, choices=EncasementTypeChoices, blank=True)
 
     class Meta:
