@@ -251,6 +251,7 @@ class AerialSpanSerializer(NetBoxModelSerializer):
         view_name="plugins-api:netbox_pathways-api:aerialspan-detail",
     )
     aerial_type = ChoiceField(choices=AerialTypeChoices, required=False, allow_blank=True)
+    attachment_height = drf_serializers.FloatField(read_only=True)
     start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
     end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
     start_location = LocationSerializer(nested=True, required=False, allow_null=True)
@@ -274,6 +275,8 @@ class AerialSpanSerializer(NetBoxModelSerializer):
             "start_location",
             "end_location",
             "aerial_type",
+            "start_attachment_height",
+            "end_attachment_height",
             "attachment_height",
             "sag",
             "messenger_size",
