@@ -78,7 +78,9 @@ classDiagram
     }
     class AerialSpan {
         +aerial_type: str
-        +attachment_height: float
+        +start_attachment_height: float
+        +end_attachment_height: float
+        +attachment_height: float (derived)
         +sag: float
         +messenger_size: str
     }

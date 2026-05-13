@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- **CSV import column `attachment_height` is removed.** Update imports to use
+  `start_attachment_height` and `end_attachment_height`. The REST API field
+  `attachment_height` becomes read-only and derived; clients writing to it
+  must target the per-side fields.
+
+### Changed
+
+- **`AerialSpan.attachment_height` is now per-endpoint.** The single
+  `attachment_height` field is replaced by `start_attachment_height` and
+  `end_attachment_height` (both nullable floats, meters). A read-only
+  `attachment_height` property returns the mean of the two sides (or whichever
+  side is populated; `None` if both are unset). Existing data is preserved on
+  migration: the previous single value is copied into both per-side fields.
+
 ### Added
 
 - **`/info` map endpoint and count-based layer gating** -- new `GET /api/plugins/pathways/geo/info/?bbox=...` returns per-layer feature counts (`structures`, `conduit_banks`, `conduits`, `aerial_spans`, `direct_buried`, `circuits`, and an `external` map for reference-mode registered layers) plus the per-layer thresholds the frontend uses to decide whether to render, client-cluster, or hide each layer. Thresholds default to `{structures: {cluster: 200, hide: 5000}, ...others: {hide: 500}}` and are overridable per-layer via `PLUGINS_CONFIG['netbox_pathways']['map_thresholds']`. The map frontend now consults `/info` on every pan/zoom and applies a single "structures clustered -> no supports" rule: whenever structures cross either threshold (client or server cluster), every pathway and reference-mode external layer is suppressed for that viewport. The hardcoded `MIN_BANK_ZOOM = 18` heuristic is removed; banks become visible whenever their viewport count is below the configured threshold. Over-budget layer toggles in the sidebar dim and display a count chip. `MapLayerRegistration` gains an optional `max_features` (default 500) for reference-mode external layers.
