@@ -142,6 +142,8 @@ class ConduitBankSerializer(NetBoxModelSerializer):
             "length",
             "configuration",
             "total_conduits",
+            "height",
+            "width",
             "encasement_type",
             "installation_date",
             "commissioned_date",
