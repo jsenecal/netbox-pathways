@@ -542,7 +542,16 @@ class AerialSpan(Pathway):
         return reverse("plugins:netbox_pathways:aerialspan", args=[self.pk])
 
     aerial_type = models.CharField(max_length=50, choices=AerialTypeChoices, blank=True)
-    attachment_height = models.FloatField(null=True, blank=True, help_text="Attachment height in meters")
+    start_attachment_height = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Attachment height at the start endpoint, in meters",
+    )
+    end_attachment_height = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Attachment height at the end endpoint, in meters",
+    )
     sag = models.FloatField(null=True, blank=True, help_text="Cable sag in meters")
     messenger_size = models.CharField(max_length=50, blank=True, help_text="Messenger wire size/type")
     wind_loading = models.CharField(max_length=50, blank=True, help_text="Wind loading zone/rating")
@@ -558,6 +567,19 @@ class AerialSpan(Pathway):
     def save(self, *args, **kwargs):
         self.pathway_type = "aerial"
         super().save(*args, **kwargs)
+
+    @property
+    def attachment_height(self):
+        """Mean of the two per-endpoint heights with None-tolerant fallback."""
+        a = self.start_attachment_height
+        b = self.end_attachment_height
+        if a is None and b is None:
+            return None
+        if a is None:
+            return b
+        if b is None:
+            return a
+        return (a + b) / 2
 
 
 class DirectBuried(Pathway):
