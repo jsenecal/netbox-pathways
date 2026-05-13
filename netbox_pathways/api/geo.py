@@ -11,13 +11,16 @@ reducing payload size at low zoom levels.
 """
 
 import hashlib
+import logging
 
 from django.contrib.gis.db.models import Collect
 from django.contrib.gis.db.models.functions import Centroid, SnapToGrid, Transform
 from django.contrib.gis.geos import Polygon
 from django.db.models import Count, Max
 from rest_framework import serializers as drf_serializers
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from rest_framework_gis.fields import GeometryField
 from rest_framework_gis.serializers import GeoFeatureModelSerializer
@@ -25,7 +28,39 @@ from rest_framework_gis.serializers import GeoFeatureModelSerializer
 from .. import filters, models
 from ..geo import LEAFLET_SRID, get_srid
 
+logger = logging.getLogger(__name__)
+
 MAX_GEO_RESULTS = 2000
+
+
+def _parse_bbox(value):
+    """Parse a ``west,south,east,north`` string into a WGS84 Polygon.
+
+    Returns ``(polygon, [w, s, e, n])`` or ``(None, None)`` on invalid input.
+    The polygon is already reprojected to the configured storage SRID, ready
+    to use in an ``__intersects`` lookup.
+    """
+    if not value:
+        return None, None
+    try:
+        west, south, east, north = (float(v) for v in value.split(","))
+    except (ValueError, TypeError):
+        return None, None
+    poly = Polygon.from_bbox((west, south, east, north))
+    poly.srid = LEAFLET_SRID
+    if get_srid() != LEAFLET_SRID:
+        poly.transform(get_srid())
+    return poly, [west, south, east, north]
+
+
+def _etag_components(queryset):
+    """Return ``(max_last_updated, count)`` for a queryset.
+
+    Shared between the list ViewSets and ``MapInfoView`` so the ETag hash
+    inputs stay consistent across endpoints.
+    """
+    agg = queryset.aggregate(t=Max("last_updated"), c=Count("id"))
+    return agg["t"], agg["c"] or 0
 
 
 def _grid_size_for_zoom(zoom):
@@ -134,19 +169,9 @@ class BboxFilterMixin:
     def _apply_bbox(self, qs):
         """Annotate geo_4326 and apply bbox filter (no result cap)."""
         qs = qs.annotate(geo_4326=Transform(self.bbox_geo_field, LEAFLET_SRID))
-
-        bbox = self.request.query_params.get("bbox")
-        if bbox:
-            try:
-                west, south, east, north = (float(v) for v in bbox.split(","))
-                bbox_poly = Polygon.from_bbox((west, south, east, north))
-                bbox_poly.srid = LEAFLET_SRID
-                if get_srid() != LEAFLET_SRID:
-                    bbox_poly.transform(get_srid())
-                qs = qs.filter(**{f"{self.bbox_geo_field}__intersects": bbox_poly})
-            except (ValueError, TypeError):
-                pass
-
+        poly, _ = _parse_bbox(self.request.query_params.get("bbox"))
+        if poly is not None:
+            qs = qs.filter(**{f"{self.bbox_geo_field}__intersects": poly})
         return qs
 
     def get_queryset(self):
@@ -155,9 +180,8 @@ class BboxFilterMixin:
 
     def _etag_for_queryset(self, queryset):
         """Lightweight ETag from max(last_updated) + count."""
-        agg = queryset.aggregate(t=Max("last_updated"), c=Count("id"))
-        raw = f"{agg['t']}:{agg['c']}"
-        return hashlib.md5(raw.encode(), usedforsecurity=False).hexdigest()
+        t, c = _etag_components(queryset)
+        return hashlib.md5(f"{t}:{c}".encode(), usedforsecurity=False).hexdigest()
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -358,3 +382,123 @@ class CircuitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     filterset_class = filters.CircuitGeometryFilterSet
     bbox_geo_field = "path"
     pagination_class = None
+
+
+# --- /info endpoint ---
+
+
+# Layers reported by /info. Each entry: (response_key, model, geo_field, extra_filter).
+# ``extra_filter`` is an optional Q-style filter dict applied before counting,
+# mirroring the corresponding GeoJSON viewset's queryset constraints (so e.g.
+# banked conduits aren't double-counted between "conduits" and "conduit_banks").
+_INFO_LAYERS = (
+    ("structures", models.Structure, "location", None),
+    ("conduit_banks", models.ConduitBank, "path", None),
+    ("conduits", models.Conduit, "path", {"conduit_bank__isnull": True}),
+    ("aerial_spans", models.AerialSpan, "path", None),
+    ("direct_buried", models.DirectBuried, "path", None),
+    ("circuits", models.CircuitGeometry, "path", None),
+)
+
+
+# Per-layer thresholds the frontend uses to gate rendering. ``cluster`` (when
+# present) is the count above which client-side clustering switches on;
+# ``hide`` is the count above which the layer is skipped entirely and its
+# toggle dimmed. Admins override with PLUGINS_CONFIG['netbox_pathways']
+# ['map_thresholds'][<layer_key>] = {...} -- shallow per-layer merge.
+DEFAULT_MAP_THRESHOLDS = {
+    "structures": {"cluster": 200, "hide": 5000},
+    "conduit_banks": {"hide": 500},
+    "conduits": {"hide": 500},
+    "aerial_spans": {"hide": 500},
+    "direct_buried": {"hide": 500},
+    "circuits": {"hide": 500},
+}
+
+
+def _resolved_thresholds():
+    """Merge plugin defaults with PLUGINS_CONFIG overrides (per-layer shallow merge)."""
+    from django.conf import settings
+
+    overrides = (
+        settings.PLUGINS_CONFIG.get("netbox_pathways", {}).get("map_thresholds", {})
+        if hasattr(settings, "PLUGINS_CONFIG")
+        else {}
+    )
+    return {key: overrides.get(key, default) for key, default in DEFAULT_MAP_THRESHOLDS.items()}
+
+
+def _external_reference_layers():
+    """Return reference-mode external layer registrations (URL-mode skipped)."""
+    from ..registry import registry
+
+    return [lr for lr in registry.all() if lr.source == "reference"]
+
+
+class MapInfoView(APIView):
+    """Return per-layer feature counts and thresholds for an optional bbox.
+
+    Drives the map frontend's per-layer gating: render plain, client-cluster,
+    or hide. Counts are computed once with a shared bbox intersection;
+    thresholds come from plugin defaults overridable via PLUGINS_CONFIG.
+    Reference-mode external layers participate; URL-mode external layers
+    cannot be counted server-side and are intentionally omitted.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        bbox_poly, bbox_list = _parse_bbox(request.query_params.get("bbox"))
+
+        counts = {}
+        thresholds = _resolved_thresholds()
+        external_counts = {}
+        external_thresholds = {}
+
+        max_updated = None
+        total = 0
+
+        def _count(qs, geo_field):
+            nonlocal max_updated, total
+            if bbox_poly is not None:
+                qs = qs.filter(**{f"{geo_field}__intersects": bbox_poly})
+            t, c = _etag_components(qs)
+            total += c
+            if t and (max_updated is None or t > max_updated):
+                max_updated = t
+            return c
+
+        for key, model, geo_field, extra_filter in _INFO_LAYERS:
+            qs = model.objects.all()
+            if extra_filter:
+                qs = qs.filter(**extra_filter)
+            counts[key] = _count(qs, geo_field)
+
+        from .external_geo import _resolve_geo_column
+
+        for layer_reg in _external_reference_layers():
+            try:
+                qs = layer_reg.queryset(request)
+                geo_path, _ = _resolve_geo_column(qs.model, layer_reg.geometry_field)
+            except Exception:
+                logger.warning(
+                    "Skipping external layer '%s' in /info: invalid registration", layer_reg.name, exc_info=True
+                )
+                continue
+            external_counts[layer_reg.name] = _count(qs, geo_path)
+            external_thresholds[layer_reg.name] = {"hide": layer_reg.max_features}
+
+        if external_counts:
+            counts["external"] = external_counts
+            thresholds["external"] = external_thresholds
+
+        etag = hashlib.md5(
+            f"{max_updated}:{total}:{bbox_list}".encode(),
+            usedforsecurity=False,
+        ).hexdigest()
+        if request.META.get("HTTP_IF_NONE_MATCH") == etag:
+            return Response(status=304, headers={"ETag": etag})
+
+        response = Response({"bbox": bbox_list, "counts": counts, "thresholds": thresholds})
+        response["ETag"] = etag
+        return response

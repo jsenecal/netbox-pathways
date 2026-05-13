@@ -272,8 +272,21 @@
         color: var(--tblr-body-color, #212529);
     }
     .pw-layer-unavailable {
-        opacity: 0.3;
-        pointer-events: none;
+        opacity: 0.4;
+    }
+    .pw-layer-unavailable .pw-layer-count-chip {
+        opacity: 1;
+    }
+    .pw-layer-count-chip {
+        display: inline-block;
+        margin-left: 4px;
+        padding: 1px 6px;
+        border-radius: 8px;
+        background: var(--tblr-warning-lt, #fff7e0);
+        color: var(--tblr-warning, #f59f00);
+        font-size: 0.9em;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.3;
     }
     .pw-inline-edit {
         display: none;

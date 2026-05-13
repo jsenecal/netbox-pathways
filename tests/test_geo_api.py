@@ -305,6 +305,162 @@ class TestPathwayGeoAPI:
 
 
 # ---------------------------------------------------------------------------
+# GeoJSON API — /info endpoint
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestMapInfoAPI:
+    URL = "/api/plugins/pathways/geo/info/"
+
+    def test_returns_counts_keys(self, api_client, structures, conduits, conduit_bank, aerial_span, direct_buried):
+        resp = api_client.get(self.URL, format="json")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "counts" in data
+        counts = data["counts"]
+        for key in ("structures", "conduit_banks", "conduits", "aerial_spans", "direct_buried", "circuits"):
+            assert key in counts
+            assert isinstance(counts[key], int)
+
+    def test_counts_match_objects(self, api_client, structures, conduits, conduit_bank, aerial_span, direct_buried):
+        resp = api_client.get(self.URL, format="json")
+        counts = resp.json()["counts"]
+        # Conduit endpoint excludes those in a bank; both fixture conduits stand alone
+        assert counts["structures"] == len(structures)
+        assert counts["conduit_banks"] == 1
+        assert counts["conduits"] == len(conduits)
+        assert counts["aerial_spans"] == 1
+        assert counts["direct_buried"] == 1
+
+    def test_empty_bbox(self, api_client, structures, conduits):
+        # Bbox far from any feature
+        resp = api_client.get(f"{self.URL}?bbox=170,80,171,81", format="json")
+        assert resp.status_code == 200
+        counts = resp.json()["counts"]
+        assert counts["structures"] == 0
+        assert counts["conduits"] == 0
+
+    def test_bbox_filters_results(self, api_client, structures, conduits):
+        # Without bbox we should see every feature
+        full = api_client.get(self.URL, format="json").json()
+        # A bbox far from any feature should match nothing
+        far = api_client.get(f"{self.URL}?bbox=170,80,171,81", format="json").json()
+        assert full["counts"]["structures"] >= far["counts"]["structures"]
+        assert full["counts"]["structures"] > 0
+        assert far["counts"]["structures"] == 0
+
+    def test_etag_header_present(self, api_client, structures):
+        resp = api_client.get(self.URL, format="json")
+        assert resp.get("ETag")
+
+    def test_etag_304_on_match(self, api_client, structures):
+        resp1 = api_client.get(self.URL, format="json")
+        etag = resp1["ETag"]
+        resp2 = api_client.get(self.URL, format="json", HTTP_IF_NONE_MATCH=etag)
+        assert resp2.status_code == 304
+
+    def test_invalid_bbox_ignored(self, api_client, structures):
+        resp = api_client.get(f"{self.URL}?bbox=garbage", format="json")
+        assert resp.status_code == 200
+        assert resp.json()["counts"]["structures"] >= len(structures)
+
+    def test_excludes_banked_conduits(self, api_client, conduit_bank, srid):
+        # A conduit that lives inside a bank should not be counted in "conduits"
+        Conduit.objects.create(
+            label="In-bank",
+            conduit_bank=conduit_bank,
+            bank_position="A1",
+            path=LineString((100, 100), (300, 300), srid=srid),
+            length=200,
+        )
+        resp = api_client.get(self.URL, format="json")
+        counts = resp.json()["counts"]
+        assert counts["conduit_banks"] == 1
+        # The banked conduit is not counted in the conduits layer
+        assert counts["conduits"] == 0
+
+    def test_returns_bbox_when_supplied(self, api_client, structures):
+        bbox = "-10,-10,10,10"
+        resp = api_client.get(f"{self.URL}?bbox={bbox}", format="json")
+        data = resp.json()
+        assert data.get("bbox") == [-10.0, -10.0, 10.0, 10.0]
+
+    def test_thresholds_in_response(self, api_client, structures):
+        resp = api_client.get(self.URL, format="json")
+        data = resp.json()
+        assert "thresholds" in data
+        t = data["thresholds"]
+        assert t["structures"] == {"cluster": 200, "hide": 5000}
+        for key in ("conduit_banks", "conduits", "aerial_spans", "direct_buried", "circuits"):
+            assert t[key] == {"hide": 500}
+
+    def test_plugin_config_threshold_override(self, api_client, structures, settings):
+        # Shallow-merged per-layer key
+        settings.PLUGINS_CONFIG = {
+            **settings.PLUGINS_CONFIG,
+            "netbox_pathways": {
+                **settings.PLUGINS_CONFIG.get("netbox_pathways", {}),
+                "map_thresholds": {"conduit_banks": {"hide": 1500}},
+            },
+        }
+        resp = api_client.get(self.URL, format="json")
+        t = resp.json()["thresholds"]
+        assert t["conduit_banks"] == {"hide": 1500}
+        # Other layers keep their defaults
+        assert t["structures"] == {"cluster": 200, "hide": 5000}
+        assert t["conduits"] == {"hide": 500}
+
+    def test_external_reference_layer_counted(self, api_client, conduits):
+        from netbox_pathways.models import Conduit
+        from netbox_pathways.registry import LayerStyle, MapLayerRegistration, registry
+
+        # Reference-mode layer: queryset of Conduits, geometry via start_structure FK
+        registry.register(
+            MapLayerRegistration(
+                name="ext_ref",
+                label="External Ref",
+                geometry_type="Point",
+                source="reference",
+                queryset=lambda r: Conduit.objects.all(),
+                geometry_field="start_structure",
+                style=LayerStyle(color="#000"),
+                max_features=42,
+            )
+        )
+        try:
+            resp = api_client.get(self.URL, format="json")
+        finally:
+            registry.unregister("ext_ref")
+        data = resp.json()
+        assert "external" in data["counts"]
+        assert data["counts"]["external"]["ext_ref"] == len(conduits)
+        assert data["thresholds"]["external"]["ext_ref"] == {"hide": 42}
+
+    def test_url_mode_external_layer_omitted(self, api_client, structures):
+        from netbox_pathways.registry import LayerStyle, MapLayerRegistration, registry
+
+        registry.register(
+            MapLayerRegistration(
+                name="ext_url",
+                label="External URL",
+                geometry_type="LineString",
+                source="url",
+                url="https://example.com/layer.geojson",
+                style=LayerStyle(color="#000"),
+            )
+        )
+        try:
+            resp = api_client.get(self.URL, format="json")
+        finally:
+            registry.unregister("ext_url")
+        data = resp.json()
+        # url-mode layers are not counted server-side
+        assert "ext_url" not in data["counts"].get("external", {})
+        assert "ext_url" not in data["thresholds"].get("external", {})
+
+
+# ---------------------------------------------------------------------------
 # MapView — _data_extent and _resolve_feature_extent
 # ---------------------------------------------------------------------------
 

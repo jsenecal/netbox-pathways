@@ -27,7 +27,143 @@ const API_BASE: string = CFG.apiBase || '/api/plugins/pathways/geo/';
 export { API_BASE };
 
 export const MIN_DATA_ZOOM = 11;
-export const MIN_BANK_ZOOM = 18;  // conduit banks only shown past clustering level
+
+// ---------------------------------------------------------------------------
+// /info endpoint: per-layer counts + thresholds for the current viewport
+// ---------------------------------------------------------------------------
+
+export interface LayerThresholds {
+    hide: number;
+    cluster?: number;
+}
+
+export interface MapInfo {
+    bbox: [number, number, number, number] | null;
+    counts: {
+        structures: number;
+        conduit_banks: number;
+        conduits: number;
+        aerial_spans: number;
+        direct_buried: number;
+        circuits: number;
+        external?: Record<string, number>;
+    };
+    thresholds: {
+        structures: LayerThresholds;
+        conduit_banks: LayerThresholds;
+        conduits: LayerThresholds;
+        aerial_spans: LayerThresholds;
+        direct_buried: LayerThresholds;
+        circuits: LayerThresholds;
+        external?: Record<string, LayerThresholds>;
+    };
+}
+
+export type ClusterMode = 'off' | 'client' | 'server';
+export type LayerDecision = 'render' | 'hide';
+
+export interface RenderingDecision {
+    clusterMode: ClusterMode;
+    layers: Record<string, LayerDecision>;
+}
+
+/**
+ * Pure mapping from /info counts + thresholds + currently-enabled layers to
+ * a per-layer render decision plus a global cluster mode.
+ *
+ * Rule of thumb: structures drive cluster mode. When structures are clustered
+ * (client or server), every non-structure layer is hidden because the
+ * supporting topology no longer makes sense at that density.
+ *
+ * Layer keys: native layers use their counts/thresholds keys directly
+ * (e.g. ``'conduit_banks'``); external layers use ``'external:<name>'``.
+ */
+export function decideLayerRendering(info: MapInfo, enabled: Set<string>): RenderingDecision {
+    const structuresCount = info.counts.structures;
+    const sThresh = info.thresholds.structures;
+    let clusterMode: ClusterMode = 'off';
+    if (structuresCount > sThresh.hide) {
+        clusterMode = 'server';
+    } else if (sThresh.cluster != null && structuresCount > sThresh.cluster) {
+        clusterMode = 'client';
+    }
+
+    const layers: Record<string, LayerDecision> = {};
+    const suppress = clusterMode !== 'off';
+
+    if (enabled.has('structures')) {
+        layers.structures = 'render';
+    }
+
+    const nativeKeys: (keyof MapInfo['counts'])[] = [
+        'conduit_banks', 'conduits', 'aerial_spans', 'direct_buried', 'circuits',
+    ];
+    for (const key of nativeKeys) {
+        if (!enabled.has(key)) continue;
+        if (suppress) {
+            layers[key] = 'hide';
+            continue;
+        }
+        const count = (info.counts[key] as number) ?? 0;
+        const threshold = info.thresholds[key as keyof MapInfo['thresholds']] as LayerThresholds | undefined;
+        layers[key] = threshold && count > threshold.hide ? 'hide' : 'render';
+    }
+
+    const extCounts = info.counts.external || {};
+    const extThresholds = info.thresholds.external || {};
+    for (const name of Object.keys(extCounts)) {
+        const key = `external:${name}`;
+        if (!enabled.has(key)) continue;
+        if (suppress) {
+            layers[key] = 'hide';
+            continue;
+        }
+        const t = extThresholds[name];
+        layers[key] = t && extCounts[name] > t.hide ? 'hide' : 'render';
+    }
+
+    return { clusterMode, layers };
+}
+
+// ---------------------------------------------------------------------------
+// /info fetch helper
+// ---------------------------------------------------------------------------
+
+let _infoController: AbortController | null = null;
+let _lastInfoEtag = '';
+let _lastInfo: MapInfo | null = null;
+
+export async function fetchMapInfo(
+    bbox: string,
+    callback: (info: MapInfo) => void,
+): Promise<void> {
+    if (_infoController) _infoController.abort();
+    const controller = new AbortController();
+    _infoController = controller;
+
+    const url = API_BASE + 'info/?bbox=' + bbox;
+    const headers: Record<string, string> = { 'Accept': 'application/json' };
+    const csrfToken = _getCookie('csrftoken');
+    if (csrfToken) headers['X-CSRFToken'] = csrfToken;
+    if (_lastInfoEtag) headers['If-None-Match'] = _lastInfoEtag;
+
+    try {
+        const response = await fetch(url, { headers, signal: controller.signal });
+        if (_infoController === controller) _infoController = null;
+        if (response.status === 304 && _lastInfo) {
+            callback(_lastInfo);
+            return;
+        }
+        if (response.ok) {
+            const data = await response.json() as MapInfo;
+            _lastInfoEtag = response.headers.get('ETag') || '';
+            _lastInfo = data;
+            callback(data);
+        }
+    } catch {
+        if (_infoController === controller) _infoController = null;
+    }
+}
 
 // ---------------------------------------------------------------------------
 // GeoJSON fetching with AbortController
@@ -228,12 +364,36 @@ export function createDataLayers(): DataLayerGroups {
 // Pathway config
 // ---------------------------------------------------------------------------
 
-export const PATHWAY_CONFIGS: [string, keyof DataLayerGroups, FeatureType, PathwayStyle, number?][] = [
-    ['conduit-banks/', 'conduitBanks', 'conduit_bank', { color: '#ad1457', weight: 5, opacity: 0.8, dashArray: '' }, MIN_BANK_ZOOM],
-    ['conduits/', 'conduits', 'conduit', { color: '#f57c00', weight: 3, opacity: 0.7, dashArray: '5 5' }],
-    ['aerial-spans/', 'aerialSpans', 'aerial', { color: '#1565c0', weight: 3, opacity: 0.7, dashArray: '10 5' }],
-    ['direct-buried/', 'directBuried', 'direct_buried', { color: '#616161', weight: 3, opacity: 0.7, dashArray: '2 4' }],
-    ['circuits/', 'circuits', 'circuit', { color: '#d32f2f', weight: 3, opacity: 0.8, dashArray: '8 6' }],
+/** Pathway layer descriptor.
+ *
+ * - ``endpoint``  -- GeoJSON endpoint path relative to API_BASE
+ * - ``layerKey``  -- key into DataLayerGroups
+ * - ``featureType`` -- canonical type label used by the sidebar/popover
+ * - ``style``     -- Leaflet polyline style
+ * - ``infoKey``   -- corresponding key in MapInfo.counts/thresholds; this is
+ *                    what the gating decision uses
+ */
+export type PathwayInfoKey = 'conduit_banks' | 'conduits' | 'aerial_spans' | 'direct_buried' | 'circuits';
+
+export interface PathwayConfig {
+    endpoint: string;
+    layerKey: keyof DataLayerGroups;
+    featureType: FeatureType;
+    style: PathwayStyle;
+    infoKey: PathwayInfoKey;
+}
+
+export const PATHWAY_CONFIGS: PathwayConfig[] = [
+    { endpoint: 'conduit-banks/', layerKey: 'conduitBanks', featureType: 'conduit_bank',
+      style: { color: '#ad1457', weight: 5, opacity: 0.8, dashArray: '' }, infoKey: 'conduit_banks' },
+    { endpoint: 'conduits/',      layerKey: 'conduits',     featureType: 'conduit',
+      style: { color: '#f57c00', weight: 3, opacity: 0.7, dashArray: '5 5' }, infoKey: 'conduits' },
+    { endpoint: 'aerial-spans/',  layerKey: 'aerialSpans',  featureType: 'aerial',
+      style: { color: '#1565c0', weight: 3, opacity: 0.7, dashArray: '10 5' }, infoKey: 'aerial_spans' },
+    { endpoint: 'direct-buried/', layerKey: 'directBuried', featureType: 'direct_buried',
+      style: { color: '#616161', weight: 3, opacity: 0.7, dashArray: '2 4' }, infoKey: 'direct_buried' },
+    { endpoint: 'circuits/',      layerKey: 'circuits',     featureType: 'circuit',
+      style: { color: '#d32f2f', weight: 3, opacity: 0.8, dashArray: '8 6' }, infoKey: 'circuits' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -394,41 +554,60 @@ export interface LoadCallbacks {
 /**
  * Load all data layers for the current viewport.
  *
- * This handles structure clustering, pathway rendering, line labels,
- * and stats tracking. Callers provide callbacks for feature interaction.
+ * Decision-driven: the caller supplies a ``RenderingDecision`` (from
+ * /info + ``decideLayerRendering``) that says which layers to render and
+ * whether to client-cluster structures. Layers marked ``'hide'`` are cleared
+ * without a network call; layers not present in the decision are also
+ * cleared (treated as disabled).
+ *
+ * The structures fetch always passes ``zoom`` so the server-side grid
+ * cluster fallback still kicks in for any installation that doesn't have a
+ * fresh /info result.
  */
 export function loadDataLayers(
     map: L.Map,
     dataLayers: DataLayerGroups,
+    decision: RenderingDecision | null,
     zoomHint: HTMLDivElement | null,
     callbacks: LoadCallbacks,
 ): void {
     const zoom = map.getZoom();
 
-    if (zoom < MIN_DATA_ZOOM) {
+    if (zoom < MIN_DATA_ZOOM || decision == null) {
         dataLayers.structures.clearLayers();
         dataLayers.conduitBanks.clearLayers();
         dataLayers.conduits.clearLayers();
         dataLayers.aerialSpans.clearLayers();
         dataLayers.directBuried.clearLayers();
         dataLayers.circuits.clearLayers();
-        if (zoomHint) zoomHint.style.display = '';
+        if (zoomHint) zoomHint.style.display = zoom < MIN_DATA_ZOOM ? '' : 'none';
         if (callbacks.onAllLoaded) callbacks.onAllLoaded([]);
         return;
     }
+    // From here on ``decision`` is non-null; the local alias lets nested
+    // closures benefit from the narrowing.
+    const live: RenderingDecision = decision;
 
     if (zoomHint) zoomHint.style.display = 'none';
+
+    // Clear any pathway layer whose decision is 'hide' (or absent because
+    // the toggle is off). Counts that don't make the cut never fetch.
+    PATHWAY_CONFIGS.forEach(function (cfg) {
+        if (live.layers[cfg.infoKey] !== 'render') {
+            dataLayers[cfg.layerKey].clearLayers();
+        }
+    });
 
     const allFeatures: FeatureEntry[] = [];
     let pendingLoads = 0;
     let totalExpectedLoads = 0;
 
-    if (map.hasLayer(dataLayers.structures)) totalExpectedLoads++;
+    const renderStructures = live.layers.structures === 'render' && map.hasLayer(dataLayers.structures);
+    if (renderStructures) totalExpectedLoads++;
 
     let pendingPathway = 0;
     PATHWAY_CONFIGS.forEach(function (cfg) {
-        const [, layerKey, , , minZoom] = cfg;
-        if (map.hasLayer(dataLayers[layerKey]) && (!minZoom || zoom >= minZoom)) {
+        if (live.layers[cfg.infoKey] === 'render' && map.hasLayer(dataLayers[cfg.layerKey])) {
             totalExpectedLoads++;
             pendingPathway++;
         }
@@ -440,13 +619,12 @@ export function loadDataLayers(
             if (callbacks.onAllLoaded) callbacks.onAllLoaded(allFeatures);
             // Prefetch cardinal neighbors for all active endpoints
             const specs: PreloadSpec[] = [];
-            if (map.hasLayer(dataLayers.structures)) {
+            if (renderStructures) {
                 specs.push({ endpoint: 'structures/', extraParams: { zoom: zoom } });
             }
             PATHWAY_CONFIGS.forEach(function (cfg) {
-                const [endpoint, layerKey, , , minZoom] = cfg;
-                if (map.hasLayer(dataLayers[layerKey]) && (!minZoom || zoom >= minZoom)) {
-                    specs.push({ endpoint });
+                if (live.layers[cfg.infoKey] === 'render' && map.hasLayer(dataLayers[cfg.layerKey])) {
+                    specs.push({ endpoint: cfg.endpoint });
                 }
             });
             preloadNeighbors(map, specs);
@@ -459,14 +637,17 @@ export function loadDataLayers(
     }
 
     // Structures
-    if (map.hasLayer(dataLayers.structures)) {
-        // MarkerCluster is optional — the route planner doesn't load it
+    if (renderStructures) {
+        // Client clustering is only used when the decision says 'client'; in
+        // 'off' mode markers render plain, in 'server' mode the response
+        // already contains pre-aggregated cluster centroids.
         const hasClusterPlugin = typeof L.markerClusterGroup === 'function';
-        if (!hasClusterPlugin) {
-            console.info('[pathways] MarkerCluster plugin not loaded — client-side clustering disabled');
+        if (!hasClusterPlugin && live.clusterMode === 'client') {
+            console.info('[pathways] MarkerCluster plugin not loaded -- client-side clustering disabled');
         }
-        const clusterGroup = hasClusterPlugin
-            ? L.markerClusterGroup({ maxClusterRadius: 35, spiderfyOnMaxZoom: true, disableClusteringAtZoom: 18 })
+        const useClientCluster = live.clusterMode === 'client' && hasClusterPlugin;
+        const clusterGroup = useClientCluster
+            ? L.markerClusterGroup({ maxClusterRadius: 35, spiderfyOnMaxZoom: true })
             : null;
 
         cachedFetch(map, 'structures/', function (data: GeoJSON.FeatureCollection) {
@@ -572,13 +753,12 @@ export function loadDataLayers(
     }
 
     PATHWAY_CONFIGS.forEach(function (cfg) {
-        const [endpoint, layerKey, ftype, style, minZoom] = cfg;
-        const layer = dataLayers[layerKey];
+        const layer = dataLayers[cfg.layerKey];
+        if (live.layers[cfg.infoKey] !== 'render') return;
         if (!map.hasLayer(layer)) return;
-        if (minZoom && zoom < minZoom) { layer.clearLayers(); return; }
-        cachedFetch(map, endpoint, function (data: GeoJSON.FeatureCollection) {
+        cachedFetch(map, cfg.endpoint, function (data: GeoJSON.FeatureCollection) {
             layer.clearLayers();
-            const geoLayer = L.geoJSON(data, _makePathwayOpts(ftype, style));
+            const geoLayer = L.geoJSON(data, _makePathwayOpts(cfg.featureType, cfg.style));
             geoLayer.addTo(layer);
             addLineLabels(geoLayer, layer, map);
             _pathwayLoaded(data);
