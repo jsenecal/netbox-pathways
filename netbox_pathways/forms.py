@@ -823,7 +823,7 @@ class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
         FieldSet("label", "tenant", name="Conduit Bank"),
         FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("start_structure", "start_face", "end_structure", "end_face", name="Endpoints"),
-        FieldSet("configuration", "total_conduits", "encasement_type", name="Configuration"),
+        FieldSet("configuration", "total_conduits", "height", "width", "encasement_type", name="Configuration"),
         FieldSet("path", "length", "tags", name="Details"),
     )
 
@@ -839,6 +839,8 @@ class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "end_face",
             "configuration",
             "total_conduits",
+            "height",
+            "width",
             "encasement_type",
             "path",
             "length",
@@ -889,6 +891,8 @@ class ConduitBankImportForm(NetBoxModelImportForm):
             "end_face",
             "configuration",
             "total_conduits",
+            "height",
+            "width",
             "encasement_type",
             "installed_by",
             "installation_date",
@@ -903,6 +907,8 @@ class ConduitBankBulkEditForm(NetBoxModelBulkEditForm):
     end_face = forms.ChoiceField(choices=BankFaceChoices, required=False)
     configuration = forms.ChoiceField(choices=ConduitBankConfigChoices, required=False)
     encasement_type = forms.ChoiceField(choices=EncasementTypeChoices, required=False)
+    height = forms.IntegerField(required=False, min_value=1)
+    width = forms.IntegerField(required=False, min_value=1)
     installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
     commissioned_date = forms.DateField(required=False)
 
@@ -910,9 +916,18 @@ class ConduitBankBulkEditForm(NetBoxModelBulkEditForm):
     fieldsets = (
         FieldSet("start_face", "end_face"),
         FieldSet("configuration", "encasement_type"),
+        FieldSet("height", "width", name="Dimensions"),
         FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
     )
-    nullable_fields = ("start_face", "end_face", "encasement_type", "installed_by", "commissioned_date")
+    nullable_fields = (
+        "start_face",
+        "end_face",
+        "encasement_type",
+        "height",
+        "width",
+        "installed_by",
+        "commissioned_date",
+    )
 
 
 # --- Conduit Junction ---

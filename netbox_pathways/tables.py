@@ -320,6 +320,8 @@ class ConduitBankTable(NetBoxTable):
             "installed_by",
             "configuration",
             "total_conduits",
+            "height",
+            "width",
             "conduit_count",
             "encasement_type",
             "length",
