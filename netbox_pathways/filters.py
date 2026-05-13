@@ -296,7 +296,8 @@ class AerialSpanFilterSet(NetBoxModelFilterSet):
         distinct=False,
         label="End Location (ID)",
     )
-    attachment_height = MultiValueNumberFilter()
+    start_attachment_height = MultiValueNumberFilter()
+    end_attachment_height = MultiValueNumberFilter()
     sag = MultiValueNumberFilter()
     length = MultiValueNumberFilter()
     messenger_size = MultiValueCharFilter()
