@@ -369,7 +369,8 @@ class Command(BaseCommand):
                     end_structure=s2,
                     tenant=random.choice(tenants) if random.random() < 0.4 else None,
                     aerial_type=random.choice(AERIAL_TYPES),
-                    attachment_height=round(random.uniform(5, 15), 1),
+                    start_attachment_height=round(random.uniform(5, 15), 1),
+                    end_attachment_height=round(random.uniform(5, 15), 1),
                     sag=round(random.uniform(0.3, 3.0), 2) if random.random() < 0.6 else None,
                     messenger_size=f"{random.choice(['6M', '10M', '1/4 EHS', '3/8 EHS'])}"
                     if random.random() < 0.5
