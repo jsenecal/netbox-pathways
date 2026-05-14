@@ -240,7 +240,7 @@ class TestStartEndNode:
             site=site,
             location=Point(0, 0, srid=SRID),
         )
-        Structure.objects.create(
+        s2 = Structure.objects.create(
             name="CR-multi-2",
             site=site,
             location=Point(10, 10, srid=SRID),
@@ -253,8 +253,11 @@ class TestStartEndNode:
             terminate_b=False,
         )
         result = mixin._start_node(cable)
-        # Either structure can win first(); both are valid graph nodes for the site
-        assert result == ("structure", s1.pk) or result[0] == "structure"
+        # Either structure can win first(); pin to one of the two known PKs.
+        assert result is not None
+        kind, pk = result
+        assert kind == "structure"
+        assert pk in {s1.pk, s2.pk}
 
 
 # ---------------------------------------------------------------------------
