@@ -115,7 +115,18 @@ Register a layer on the Pathways map.
 | `group` | `str` | No | Group label for layer control |
 | `min_zoom` | `int` | No | Minimum zoom to fetch data (default: `11`) |
 | `max_zoom` | `int` | No | Maximum zoom to fetch data (default: `None`) |
+| `max_features` | `int` | No | Reference-mode only: in-viewport count above which the layer is hidden and its toggle dimmed (default: `500`) |
 | `sort_order` | `int` | No | Layer ordering (default: `100`) |
+
+> **Reference-mode vs URL-mode density gating.** Reference-mode layers
+> participate in the `/info` count-based gating described in
+> [Layer density gating](#layer-density-gating); they report their count
+> alongside the native layers and respect both `max_features` and the global
+> "structures clustered -> hide supports" rule. URL-mode layers cannot be
+> counted server-side (the queryset lives in the external plugin), so they
+> keep the legacy `min_zoom` / `max_zoom` gate only. If you need count-based
+> gating for a URL-mode layer, expose a counterpart reference-mode
+> registration in your plugin.
 
 ### `unregister_map_layer(name)`
 
@@ -254,6 +265,10 @@ class FMSConfig(PluginConfig):
 ### Zoom Filtering
 
 Layers only fetch data when the map zoom is between `min_zoom` and `max_zoom`. This prevents overloading the map at low zoom levels.
+
+### Layer density gating
+
+In addition to zoom filtering, the map fetches a one-shot `/api/plugins/pathways/geo/info/` on every pan/zoom and uses the returned counts to decide whether each layer should render plain, with client clustering, or be hidden entirely. For reference-mode external layers, this is driven by the `max_features` registration field (default 500): when the in-viewport count for that layer exceeds `max_features`, the toggle dims and shows a count chip instead of fetching the GeoJSON. Native structures also drive a global "supports off" rule: when the structures layer is clustered (either client-cluster or server-cluster, decided from the structures thresholds), every other layer (native pathways and reference-mode externals alike) is suppressed for that viewport. The defaults and override mechanism are documented in the [user-facing map widget guide](../user-guide/map-widget.md). URL-mode external layers are not gated this way -- they keep their `min_zoom` / `max_zoom` window only.
 
 ### Layer Control
 

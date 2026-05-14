@@ -42,14 +42,14 @@ import type { MapInitConfig } from './map-core';
 import {
     API_BASE,
     MIN_DATA_ZOOM,
-    MIN_BANK_ZOOM,
-    PATHWAY_CONFIGS,
     createDataLayers,
     loadDataLayers,
     calcPathwayLength,
     serverSearch,
+    fetchMapInfo,
+    decideLayerRendering,
 } from './data-layers';
-import type { DataLayerGroups } from './data-layers';
+import type { MapInfo, RenderingDecision } from './data-layers';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -148,10 +148,21 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         }
     }
 
-    // Min zoom per layer display name -- layers below this zoom are dimmed
-    const LAYER_MIN_ZOOM: Record<string, number> = {
-        'Conduit Banks': MIN_BANK_ZOOM,
+    // Map between sidebar display name and MapInfo key. Used to translate
+    // the /info decision (which keys layers by their snake_case info key)
+    // back into the friendly labels used for the sidebar toggles.
+    const LAYER_INFO_KEY: Record<string, string> = {
+        'Structures': 'structures',
+        'Conduit Banks': 'conduit_banks',
+        'Conduits': 'conduits',
+        'Aerial Spans': 'aerial_spans',
+        'Direct Buried': 'direct_buried',
+        'Circuit Routes': 'circuits',
     };
+    for (const [extName] of externalGroups) {
+        const cfg = getLayerConfig(extName);
+        if (cfg) LAYER_INFO_KEY[cfg.label] = 'external:' + extName;
+    }
 
     // --- Sidebar layer toggle sync ---
 
@@ -262,22 +273,57 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         history.replaceState(null, '', newUrl);
     }
 
-    function _loadData(): void {
-        const zoom = map.getZoom();
+    function _setLayerChip(name: string, count: number | null): void {
+        if (!_layerCheckboxes[name]) return;
+        const btn = _layerCheckboxes[name].closest('.pw-layer-toggle') as HTMLElement | null;
+        if (!btn) return;
+        let chip = btn.querySelector<HTMLElement>('.pw-layer-count-chip');
+        if (count == null) {
+            if (chip) chip.remove();
+            return;
+        }
+        if (!chip) {
+            chip = document.createElement('span');
+            chip.className = 'pw-layer-count-chip';
+            btn.appendChild(chip);
+        }
+        chip.textContent = count.toLocaleString();
+    }
 
-        // Dim toggles for layers unavailable at this zoom
-        for (const lname in LAYER_MIN_ZOOM) {
-            if (_layerCheckboxes[lname]) {
-                const btn = _layerCheckboxes[lname].closest('.pw-layer-toggle');
-                if (btn) btn.classList.toggle('pw-layer-unavailable', zoom < LAYER_MIN_ZOOM[lname]);
+    function _applyDecisionToToggles(decision: RenderingDecision, info: MapInfo): void {
+        for (const lname in LAYER_INFO_KEY) {
+            if (!_layerCheckboxes[lname]) continue;
+            const btn = _layerCheckboxes[lname].closest('.pw-layer-toggle');
+            if (!btn) continue;
+            const infoKey = LAYER_INFO_KEY[lname];
+            // Hidden layers (decision said 'hide') get dimmed with a count chip.
+            // Only show the chip while the layer is enabled in the toggle.
+            const enabled = _layerCheckboxes[lname].checked;
+            const isHidden = enabled && decision.layers[infoKey] === 'hide';
+            btn.classList.toggle('pw-layer-unavailable', isHidden);
+            if (isHidden) {
+                let count: number | undefined;
+                if (infoKey.startsWith('external:')) {
+                    count = info.counts.external?.[infoKey.slice(9)];
+                } else {
+                    count = (info.counts as unknown as Record<string, number>)[infoKey];
+                }
+                _setLayerChip(lname, count ?? 0);
+            } else {
+                _setLayerChip(lname, null);
             }
         }
+    }
+
+    function _runLoad(decision: RenderingDecision | null, info: MapInfo | null): void {
+        const zoom = map.getZoom();
+        if (decision && info) _applyDecisionToToggles(decision, info);
 
         // Reset pathway stats
         pathwayCount = 0;
         totalLength = 0;
 
-        loadDataLayers(map, dataLayers, zoomHint, {
+        loadDataLayers(map, dataLayers, decision, zoomHint, {
             onFeatureClick: function (entry: FeatureEntry, e: L.LeafletMouseEvent) {
                 if (e.originalEvent) (e.originalEvent as any)._sidebarClick = true;
                 Sidebar.selectFeature(entry);
@@ -315,11 +361,13 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
                 }
 
                 // --- External plugin layers ---
+                // Suppress externals when the decision says hide (e.g. structures
+                // are clustered or the external layer is over its own threshold).
                 const visibleExternal = new Set<string>();
                 for (const [name, group] of externalGroups) {
-                    if (map.hasLayer(group)) {
-                        visibleExternal.add(name);
-                    }
+                    if (!map.hasLayer(group)) continue;
+                    if (decision && decision.layers['external:' + name] === 'hide') continue;
+                    visibleExternal.add(name);
                 }
                 if (visibleExternal.size > 0) {
                     const bbox = _bboxParam(map);
@@ -353,6 +401,32 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
                     }
                 }
             },
+        });
+    }
+
+    function _enabledInfoKeys(): Set<string> {
+        const set = new Set<string>();
+        for (const lname in LAYER_INFO_KEY) {
+            if (_layerCheckboxes[lname]?.checked) {
+                set.add(LAYER_INFO_KEY[lname]);
+            } else if (!_layerCheckboxes[lname] && map.hasLayer(layerNames[lname])) {
+                // Toggle not yet built (initial load): fall back to layer state
+                set.add(LAYER_INFO_KEY[lname]);
+            }
+        }
+        return set;
+    }
+
+    function _loadData(): void {
+        const zoom = map.getZoom();
+        if (zoom < MIN_DATA_ZOOM) {
+            _runLoad(null, null);
+            return;
+        }
+        const bbox = _bboxParam(map);
+        fetchMapInfo(bbox, function (info: MapInfo) {
+            const decision = decideLayerRendering(info, _enabledInfoKeys());
+            _runLoad(decision, info);
         });
     }
 

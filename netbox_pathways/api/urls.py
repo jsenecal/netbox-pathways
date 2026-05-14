@@ -9,6 +9,7 @@ from .geo import (
     ConduitBankGeoViewSet,
     ConduitGeoViewSet,
     DirectBuriedGeoViewSet,
+    MapInfoView,
     PathwayGeoViewSet,
     StructureGeoViewSet,
 )
@@ -39,6 +40,8 @@ router.register("geo/direct-buried", DirectBuriedGeoViewSet, basename="geo-direc
 router.register("geo/circuits", CircuitGeoViewSet, basename="geo-circuit")
 
 urlpatterns = router.urls + [
+    # Per-layer feature counts for the map (drives client-side gating)
+    path("geo/info/", MapInfoView.as_view(), name="geo-info"),
     # External plugin map layer endpoint
     path("geo/external/<str:layer_name>/", ExternalLayerGeoView.as_view(), name="external-geo"),
     # Graph traversal endpoints

@@ -72,6 +72,10 @@ class MapLayerRegistration:
     min_zoom: int = 11
     max_zoom: int | None = None
     sort_order: int = 0
+    # Reference-mode layers participate in /info count-based gating; max_features
+    # is the in-viewport count above which the frontend hides the layer and dims
+    # its toggle. URL-mode layers ignore this (they keep their min_zoom gate).
+    max_features: int = 500
 
     def to_json(self, api_base: str = "/api/plugins/pathways/geo/") -> dict[str, Any]:
         """Serialize to JSON-safe dict for PATHWAYS_CONFIG."""

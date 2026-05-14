@@ -33,12 +33,26 @@ Pathways render as colored lines connecting structures:
 
 Icon pill toggle buttons at the top of the map control which feature types are visible:
 
-- **Structures** — Toggle structure markers
-- **Conduits** — Toggle conduit lines
-- **Aerial Spans** — Toggle aerial span lines
-- **Direct Buried** — Toggle direct buried lines
+- **Structures** -- Toggle structure markers
+- **Conduits** -- Toggle conduit lines
+- **Aerial Spans** -- Toggle aerial span lines
+- **Direct Buried** -- Toggle direct buried lines
 
 External plugin layers (if registered) also appear as toggle buttons.
+
+### Layer Density Gating
+
+The map keeps the display readable by checking how many features each enabled layer would draw inside the current viewport. Every pan or zoom hits a lightweight `/api/plugins/pathways/geo/info/` endpoint that returns counts and thresholds; the frontend then decides per layer whether to draw it directly, draw it with client-side clustering, or hide it entirely. Hidden layer toggles dim to roughly half-opacity and show the in-view count beside the label so it is obvious why the layer is not on screen -- usually zooming in is enough to bring it back.
+
+Defaults (override in `PLUGINS_CONFIG['netbox_pathways']['map_thresholds']`):
+
+| Layer | Below `cluster` (structures only) | Above `cluster` | Above `hide` |
+| --- | --- | --- | --- |
+| Structures (`cluster: 200`, `hide: 5000`) | individual markers | client-side clusters | server-side clusters; all support layers hidden |
+| Conduit Banks (`hide: 500`) | rendered | -- | hidden, count shown on toggle |
+| Conduits / Aerial Spans / Direct Buried / Circuits (`hide: 500`) | rendered | -- | hidden, count shown on toggle |
+
+When the structures layer crosses either threshold (client cluster or server cluster), the supporting infrastructure layers are suppressed regardless of their own counts: at that density a single highlighted line cannot be matched back to a clustered structure marker, so the whole set is hidden until you zoom in. Reference-mode external layers participate in the same gating, using their `max_features` registration value (default 500).
 
 ### Sidebar
 
