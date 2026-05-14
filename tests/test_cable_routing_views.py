@@ -299,3 +299,161 @@ class TestRenderTable:
         assert response.status_code == 200
         # The template renders an empty-state message rather than the table
         assert b"No segments in this cable" in response.content
+
+
+# ---------------------------------------------------------------------------
+# CableRoutingAddSegmentView.post
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestAddSegmentPost:
+    @pytest.fixture(autouse=True)
+    def _no_routability_check(self, _disable_routability_signal):
+        yield
+
+    def test_creates_first_segment_with_sequence_one(self, factory, admin_user, linear_topology):
+        from dcim.models import Cable
+
+        from netbox_pathways.views import CableRoutingAddSegmentView
+
+        cable = Cable.objects.create(label="CR-add-first")
+        p1 = linear_topology["p1"]
+        request = factory.post(
+            f"/pathways/cable/{cable.pk}/routing/add/",
+            data={"pathway": str(p1.pk)},
+        )
+        request.user = admin_user
+
+        response = CableRoutingAddSegmentView().post(request, cable_pk=cable.pk)
+        assert response.status_code == 200
+
+        segments = list(CableSegment.objects.filter(cable=cable).order_by("sequence"))
+        assert len(segments) == 1
+        assert segments[0].sequence == 1
+        assert segments[0].pathway_id == p1.pk
+
+    def test_after_sequence_inserts_and_shifts_later_segments(self, factory, admin_user, linear_topology):
+        from dcim.models import Cable
+
+        from netbox_pathways.views import CableRoutingAddSegmentView
+
+        cable = Cable.objects.create(label="CR-add-shift")
+        p1 = linear_topology["p1"]
+        p2 = linear_topology["p2"]
+
+        # Seed two segments at sequences 1 and 2
+        seg1 = CableSegment.objects.create(cable=cable, pathway=p1, sequence=1)
+        seg2 = CableSegment.objects.create(cable=cable, pathway=p2, sequence=2)
+
+        request = factory.post(
+            f"/pathways/cable/{cable.pk}/routing/add/",
+            data={"pathway": str(p1.pk), "after_sequence": "1"},
+        )
+        request.user = admin_user
+
+        response = CableRoutingAddSegmentView().post(request, cable_pk=cable.pk)
+        assert response.status_code == 200
+
+        segments = list(CableSegment.objects.filter(cable=cable).order_by("sequence"))
+        assert len(segments) == 3
+        # seg1 still at sequence 1
+        seg1.refresh_from_db()
+        assert seg1.sequence == 1
+        # new segment inserted at sequence 2 with pathway p1
+        assert segments[1].sequence == 2
+        assert segments[1].pathway_id == p1.pk
+        assert segments[1].pk not in (seg1.pk, seg2.pk)
+        # previously-at-2 segment shifted to 3
+        seg2.refresh_from_db()
+        assert seg2.sequence == 3
+
+
+# ---------------------------------------------------------------------------
+# CableRoutingDeleteSegmentView.post
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestDeleteSegmentPost:
+    @pytest.fixture(autouse=True)
+    def _no_routability_check(self, _disable_routability_signal):
+        yield
+
+    def test_deletes_specified_segment_and_returns_table(self, factory, admin_user, linear_topology):
+        from dcim.models import Cable
+
+        from netbox_pathways.views import CableRoutingDeleteSegmentView
+
+        cable = Cable.objects.create(label="CR-del")
+        seg = CableSegment.objects.create(
+            cable=cable,
+            pathway=linear_topology["p1"],
+            sequence=1,
+        )
+
+        request = factory.post(f"/pathways/cable/{cable.pk}/routing/delete/{seg.pk}/")
+        request.user = admin_user
+
+        response = CableRoutingDeleteSegmentView().post(request, cable_pk=cable.pk, segment_pk=seg.pk)
+        assert response.status_code == 200
+        assert not CableSegment.objects.filter(pk=seg.pk).exists()
+
+
+# ---------------------------------------------------------------------------
+# CableRoutingApplyRouteView.post
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestApplyRoutePost:
+    @pytest.fixture(autouse=True)
+    def _no_routability_check(self, _disable_routability_signal):
+        yield
+
+    def test_replaces_existing_segments_with_pathway_ids(self, factory, admin_user, linear_topology):
+        from dcim.models import Cable
+
+        from netbox_pathways.views import CableRoutingApplyRouteView
+
+        cable = Cable.objects.create(label="CR-apply")
+        p1 = linear_topology["p1"]
+        p2 = linear_topology["p2"]
+
+        # Pre-existing segment at p2 only
+        CableSegment.objects.create(cable=cable, pathway=p2, sequence=1)
+
+        request = factory.post(
+            f"/pathways/cable/{cable.pk}/routing/apply/",
+            data={"pathway_ids": f"{p1.pk},{p2.pk}"},
+        )
+        request.user = admin_user
+
+        response = CableRoutingApplyRouteView().post(request, cable_pk=cable.pk)
+        assert response.status_code == 200
+
+        segments = list(CableSegment.objects.filter(cable=cable).order_by("sequence"))
+        assert [s.sequence for s in segments] == [1, 2]
+        assert [s.pathway_id for s in segments] == [p1.pk, p2.pk]
+
+    def test_empty_pathway_ids_clears_all_segments(self, factory, admin_user, linear_topology):
+        from dcim.models import Cable
+
+        from netbox_pathways.views import CableRoutingApplyRouteView
+
+        cable = Cable.objects.create(label="CR-apply-empty")
+        CableSegment.objects.create(
+            cable=cable,
+            pathway=linear_topology["p1"],
+            sequence=1,
+        )
+
+        request = factory.post(
+            f"/pathways/cable/{cable.pk}/routing/apply/",
+            data={"pathway_ids": ""},
+        )
+        request.user = admin_user
+
+        response = CableRoutingApplyRouteView().post(request, cable_pk=cable.pk)
+        assert response.status_code == 200
+        assert CableSegment.objects.filter(cable=cable).count() == 0
