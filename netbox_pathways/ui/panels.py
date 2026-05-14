@@ -137,6 +137,8 @@ class ConduitBankPanel(ObjectAttributesPanel):
     installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
     configuration = attrs.ChoiceAttr("configuration", label=_("Configuration"))
     total_conduits = attrs.NumericAttr("total_conduits", label=_("Designed capacity"))
+    height = attrs.NumericAttr("height", label=_("Height (rows)"))
+    width = attrs.NumericAttr("width", label=_("Width (columns)"))
     encasement_type = attrs.ChoiceAttr("encasement_type", label=_("Encasement type"))
     length = attrs.NumericAttr("length", label=_("Length (m)"))
     installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
