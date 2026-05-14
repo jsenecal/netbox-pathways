@@ -14,6 +14,7 @@ from netbox_pathways.views import (
     RoutePlannerSaveView,
     RoutePlannerView,
 )
+from tests.conftest import build_cable_with_terminations
 
 SRID = get_srid()
 
@@ -70,67 +71,6 @@ def view():
     return RoutePlannerView()
 
 
-def _build_cable_with_terminations(*, label, site, terminate_a=True, terminate_b=True):
-    """Build a Cable with optional A-/B-side terminations rooted in `site`.
-
-    Each side is wired to an Interface on a Device in `site`, which causes
-    `CableTermination.cache_related_objects()` to populate `_site` from
-    `termination.device.site` on save.
-    """
-    from dcim.models import (
-        Cable,
-        CableTermination,
-        Device,
-        DeviceRole,
-        DeviceType,
-        Interface,
-        Manufacturer,
-    )
-    from django.contrib.contenttypes.models import ContentType
-
-    mfr, _ = Manufacturer.objects.get_or_create(name="RP-mfr", slug="rp-mfr")
-    dt, _ = DeviceType.objects.get_or_create(
-        manufacturer=mfr,
-        model="RP-dt",
-        slug="rp-dt",
-    )
-    dr, _ = DeviceRole.objects.get_or_create(name="RP-dr", slug="rp-dr")
-
-    cable = Cable.objects.create(label=label)
-    iface_ct = ContentType.objects.get_for_model(Interface)
-
-    if terminate_a:
-        dev_a = Device.objects.create(
-            name=f"{label}-devA",
-            device_type=dt,
-            role=dr,
-            site=site,
-        )
-        iface_a = Interface.objects.create(name="eth0", device=dev_a, type="1000base-t")
-        CableTermination.objects.create(
-            cable=cable,
-            cable_end="A",
-            termination_type=iface_ct,
-            termination_id=iface_a.pk,
-        )
-    if terminate_b:
-        dev_b = Device.objects.create(
-            name=f"{label}-devB",
-            device_type=dt,
-            role=dr,
-            site=site,
-        )
-        iface_b = Interface.objects.create(name="eth0", device=dev_b, type="1000base-t")
-        CableTermination.objects.create(
-            cable=cable,
-            cable_end="B",
-            termination_type=iface_ct,
-            termination_id=iface_b.pk,
-        )
-
-    return cable
-
-
 @pytest.mark.django_db
 class TestResolveTermination:
     @pytest.fixture
@@ -160,11 +100,11 @@ class TestResolveTermination:
         assert view._resolve_termination(cable, "B") is None
 
     def test_a_side_resolves_to_structure(self, view, site, structure):
-        cable = _build_cable_with_terminations(label="RP-A", site=site, terminate_a=True, terminate_b=False)
+        cable = build_cable_with_terminations(label="RP-A", site=site, terminate_a=True, terminate_b=False)
         assert view._resolve_termination(cable, "A") == structure
 
     def test_b_side_resolves_to_structure(self, view, site, structure):
-        cable = _build_cable_with_terminations(label="RP-B", site=site, terminate_a=False, terminate_b=True)
+        cable = build_cable_with_terminations(label="RP-B", site=site, terminate_a=False, terminate_b=True)
         assert view._resolve_termination(cable, "B") == structure
 
 
