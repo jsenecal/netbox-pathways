@@ -31,6 +31,8 @@ foreign key promotes that conduit back to a map-visible feature.
 | `end_face`        | choice      | Which face of the end structure.                                 |
 | `configuration`   | choice      | Layout shape, see table below. Leave blank if irregular.         |
 | `total_conduits`  | int         | Designed capacity in slots. May be more than the actual count.   |
+| `height`          | int         | Number of duct rows (vertical count). Optional, nullable.        |
+| `width`           | int         | Number of duct columns (horizontal count). Optional, nullable.   |
 | `encasement_type` | choice      | Concrete, direct buried, bore, bridge attachment, tunnel.        |
 
 The bank inherits the rest of `Pathway` (tenant, length, installation date,
