@@ -1,11 +1,20 @@
 """Tests for route-planner view helpers."""
 
+from unittest.mock import patch
+
 import pytest
-from django.contrib.gis.geos import Point
+from django.contrib.gis.geos import LineString, Point
+from django.test import RequestFactory
 
 from netbox_pathways.geo import get_srid
-from netbox_pathways.models import Structure
-from netbox_pathways.views import RoutePlannerFindView, RoutePlannerView
+from netbox_pathways.models import Pathway, PlannedRoute, Structure
+from netbox_pathways.views import (
+    RoutePlannerFindView,
+    RoutePlannerSaveView,
+    RoutePlannerView,
+)
+
+SRID = get_srid()
 
 # ---------------------------------------------------------------------------
 # RoutePlannerFindView._parse_int_list
@@ -156,3 +165,116 @@ class TestResolveTermination:
     def test_b_side_resolves_to_structure(self, view, site, structure):
         cable = _build_cable_with_terminations(label="RP-B", site=site, terminate_a=False, terminate_b=True)
         assert view._resolve_termination(cable, "B") == structure
+
+
+# ---------------------------------------------------------------------------
+# RoutePlannerFindView.post
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def factory():
+    return RequestFactory()
+
+
+@pytest.fixture
+def two_structures(db):
+    s1 = Structure.objects.create(name="A", location=Point(0, 0, srid=SRID))
+    s2 = Structure.objects.create(name="B", location=Point(100, 100, srid=SRID))
+    return s1, s2
+
+
+@pytest.mark.django_db
+class TestRoutePlannerFindView:
+    def test_missing_endpoint_returns_empty_panel(self, factory, admin_user):
+        request = factory.post(
+            "/pathways/route-planner/find/",
+            {"start_structure": "1"},  # end_structure missing
+        )
+        request.user = admin_user
+        response = RoutePlannerFindView().post(request)
+        assert response.status_code == 200
+        assert b"Select both start and end structures" in response.content
+
+    def test_returns_results_panel_when_engine_returns_path(self, factory, two_structures, admin_user):
+        s1, s2 = two_structures
+        pw = Pathway.objects.create(
+            label="P1",
+            pathway_type="conduit",
+            path=LineString((0, 0), (100, 100), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+
+        request = factory.post(
+            "/pathways/route-planner/find/",
+            {
+                "start_structure": str(s1.pk),
+                "end_structure": str(s2.pk),
+                "prefer_in_use": "0",
+            },
+        )
+        request.user = admin_user
+
+        with patch(
+            "netbox_pathways.route_engine.find_route",
+            return_value=(1.0, [pw.pk]),
+        ):
+            response = RoutePlannerFindView().post(request)
+
+        assert response.status_code == 200
+        # Pathway label appears in the rendered planner_results.html fragment
+        assert b"P1" in response.content
+
+
+# ---------------------------------------------------------------------------
+# RoutePlannerSaveView.post
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestRoutePlannerSaveView:
+    def test_creates_planned_route_with_name_and_pathway_ids(self, factory, two_structures, admin_user):
+        s1, s2 = two_structures
+        pw = Pathway.objects.create(
+            label="P1",
+            pathway_type="conduit",
+            path=LineString((0, 0), (100, 100), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+
+        request = factory.post(
+            "/pathways/route-planner/save/",
+            {
+                "pathway_ids": f"{pw.pk}",
+                "start_structure": str(s1.pk),
+                "end_structure": str(s2.pk),
+                "name": "My Plan",
+            },
+        )
+        request.user = admin_user
+
+        response = RoutePlannerSaveView().post(request)
+        assert response.status_code == 302  # redirect to detail
+
+        plan = PlannedRoute.objects.get(name="My Plan")
+        assert plan.start_structure_id == s1.pk
+        assert plan.end_structure_id == s2.pk
+        assert plan.pathway_ids == [pw.pk]
+
+    def test_blank_name_defaults_to_unnamed_route(self, factory, two_structures, admin_user):
+        s1, s2 = two_structures
+        request = factory.post(
+            "/pathways/route-planner/save/",
+            {
+                "pathway_ids": "",
+                "start_structure": str(s1.pk),
+                "end_structure": str(s2.pk),
+                "name": "   ",  # whitespace only
+            },
+        )
+        request.user = admin_user
+
+        RoutePlannerSaveView().post(request)
+        assert PlannedRoute.objects.filter(name="Unnamed Route").exists()
