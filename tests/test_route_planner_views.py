@@ -9,6 +9,7 @@ from django.test import RequestFactory
 from netbox_pathways.geo import get_srid
 from netbox_pathways.models import Pathway, PlannedRoute, Structure
 from netbox_pathways.views import (
+    RoutePlannerConstraintView,
     RoutePlannerFindView,
     RoutePlannerSaveView,
     RoutePlannerView,
@@ -278,3 +279,41 @@ class TestRoutePlannerSaveView:
 
         RoutePlannerSaveView().post(request)
         assert PlannedRoute.objects.filter(name="Unnamed Route").exists()
+
+
+# ---------------------------------------------------------------------------
+# RoutePlannerConstraintView.get
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestRoutePlannerConstraintView:
+    def test_unknown_type_returns_400(self, factory, admin_user):
+        request = factory.get("/pathways/route-planner/constraint/?type=not_a_type")
+        request.user = admin_user
+        response = RoutePlannerConstraintView().get(request)
+        assert response.status_code == 400
+
+    def test_enum_constraint_excludes_conduit_bank(self, factory, admin_user):
+        request = factory.get(
+            "/pathways/route-planner/constraint/?type=avoid_pathway_types",
+        )
+        request.user = admin_user
+        response = RoutePlannerConstraintView().get(request)
+        assert response.status_code == 200
+        body = response.content.decode()
+        # PathwayTypeChoices includes "conduit_bank" but the constraint
+        # card filters it out -- the planner targets concrete pathways.
+        assert "conduit_bank" not in body
+
+    def test_model_constraint_renders_api_select_widget(self, factory, admin_user):
+        request = factory.get(
+            "/pathways/route-planner/constraint/?type=avoid_structures",
+        )
+        request.user = admin_user
+        response = RoutePlannerConstraintView().get(request)
+        assert response.status_code == 200
+        body = response.content.decode()
+        # Rendered widget must include the api-select hook so the frontend
+        # lazy-loads options instead of materializing all rows.
+        assert "api-select" in body
