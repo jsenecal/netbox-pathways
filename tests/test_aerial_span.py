@@ -50,8 +50,8 @@ def migrate_to():
 
 @pytest.mark.django_db(transaction=True)
 def test_forward_migration_copies_attachment_height_to_both_sides(migrate_to):
-    pre = "0016_cablesegment_lashed_with"
-    post = "0017_aerialspan_attachment_height_per_side"
+    pre = "0017_conduitbank_height_width"
+    post = "0018_aerialspan_attachment_height_per_side"
 
     executor = migrate_to(pre)
     OldAerialSpan = executor.loader.project_state([("netbox_pathways", pre)]).apps.get_model(
@@ -86,8 +86,8 @@ def test_forward_migration_copies_attachment_height_to_both_sides(migrate_to):
 
 @pytest.mark.django_db(transaction=True)
 def test_reverse_migration_copies_start_attachment_height_back(migrate_to):
-    pre = "0016_cablesegment_lashed_with"
-    post = "0017_aerialspan_attachment_height_per_side"
+    pre = "0017_conduitbank_height_width"
+    post = "0018_aerialspan_attachment_height_per_side"
 
     migrate_to(post)
     executor = MigrationExecutor(connection)

@@ -26,7 +26,7 @@ def copy_start_attachment_height_back(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("netbox_pathways", "0016_cablesegment_lashed_with"),
+        ("netbox_pathways", "0017_conduitbank_height_width"),
     ]
 
     operations = [
