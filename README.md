@@ -13,6 +13,12 @@
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
+> Local coverage note: `pytest --cov` run inside the devcontainer
+> against `/opt/netbox/venv` may report 0% due to an editable-install
+> / Django app-load timing quirk. For accurate local coverage use
+> `uv venv && source .venv/bin/activate && uv pip install -e ".[dev]" && pytest --cov=netbox_pathways`,
+> or rely on the Codecov upload from CI.
+
 ## Features
 
 - **Structures** -- poles, manholes, cabinets, equipment rooms, and more with PostGIS geometry (point or polygon).
