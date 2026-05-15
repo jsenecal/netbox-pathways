@@ -14,7 +14,7 @@ import hashlib
 import logging
 
 from django.contrib.gis.db.models import Collect
-from django.contrib.gis.db.models.functions import Centroid, SnapToGrid, Transform
+from django.contrib.gis.db.models.functions import Centroid, Length, SnapToGrid, Transform
 from django.contrib.gis.geos import Polygon
 from django.db.models import Count, Max
 from rest_framework import serializers as drf_serializers
@@ -94,48 +94,53 @@ class StructureGeoSerializer(GeoFeatureModelSerializer):
 
 class PathwayGeoSerializer(GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
+    geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = models.Pathway
         geo_field = "geo_4326"
-        fields = ["id", "label", "pathway_type"]
+        fields = ["id", "label", "pathway_type", "geo_length"]
 
 
 class ConduitBankGeoSerializer(GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
     conduit_count = drf_serializers.IntegerField(read_only=True)
+    geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = models.ConduitBank
         geo_field = "geo_4326"
-        fields = ["id", "label", "pathway_type", "configuration", "conduit_count"]
+        fields = ["id", "label", "pathway_type", "configuration", "conduit_count", "geo_length"]
 
 
 class ConduitGeoSerializer(GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
+    geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = models.Conduit
         geo_field = "geo_4326"
-        fields = ["id", "label", "pathway_type"]
+        fields = ["id", "label", "pathway_type", "geo_length"]
 
 
 class AerialSpanGeoSerializer(GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
+    geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = models.AerialSpan
         geo_field = "geo_4326"
-        fields = ["id", "label", "pathway_type"]
+        fields = ["id", "label", "pathway_type", "geo_length"]
 
 
 class DirectBuriedGeoSerializer(GeoFeatureModelSerializer):
     geo_4326 = GeometryField(read_only=True)
+    geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = models.DirectBuried
         geo_field = "geo_4326"
-        fields = ["id", "label", "pathway_type"]
+        fields = ["id", "label", "pathway_type", "geo_length"]
 
 
 class CircuitGeoSerializer(GeoFeatureModelSerializer):
@@ -294,12 +299,16 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
 
 class PathwayGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
-    queryset = models.Pathway.objects.only(
-        "id",
-        "label",
-        "pathway_type",
-        "path",
-    ).order_by("pk")
+    queryset = (
+        models.Pathway.objects.only(
+            "id",
+            "label",
+            "pathway_type",
+            "path",
+        )
+        .annotate(_geo_length=Length("path"))
+        .order_by("pk")
+    )
     serializer_class = PathwayGeoSerializer
     filterset_class = filters.PathwayFilterSet
     bbox_geo_field = "path"
@@ -310,6 +319,7 @@ class ConduitBankGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = (
         models.ConduitBank.objects.annotate(
             conduit_count=Count("conduits"),
+            _geo_length=Length("path"),
         )
         .only(
             "id",
@@ -327,11 +337,12 @@ class ConduitBankGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
 
 class ConduitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
-    # Exclude conduits that belong to a bank — those are represented by the bank line
+    # Exclude conduits that belong to a bank -- those are represented by the bank line
     queryset = (
         models.Conduit.objects.filter(
             conduit_bank__isnull=True,
         )
+        .annotate(_geo_length=Length("path"))
         .only(
             "id",
             "label",
@@ -347,12 +358,16 @@ class ConduitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
 
 class AerialSpanGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
-    queryset = models.AerialSpan.objects.only(
-        "id",
-        "label",
-        "pathway_type",
-        "path",
-    ).order_by("pk")
+    queryset = (
+        models.AerialSpan.objects.only(
+            "id",
+            "label",
+            "pathway_type",
+            "path",
+        )
+        .annotate(_geo_length=Length("path"))
+        .order_by("pk")
+    )
     serializer_class = AerialSpanGeoSerializer
     filterset_class = filters.AerialSpanFilterSet
     bbox_geo_field = "path"
@@ -360,12 +375,16 @@ class AerialSpanGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
 
 class DirectBuriedGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
-    queryset = models.DirectBuried.objects.only(
-        "id",
-        "label",
-        "pathway_type",
-        "path",
-    ).order_by("pk")
+    queryset = (
+        models.DirectBuried.objects.only(
+            "id",
+            "label",
+            "pathway_type",
+            "path",
+        )
+        .annotate(_geo_length=Length("path"))
+        .order_by("pk")
+    )
     serializer_class = DirectBuriedGeoSerializer
     filterset_class = filters.DirectBuriedFilterSet
     bbox_geo_field = "path"

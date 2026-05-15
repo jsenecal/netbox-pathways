@@ -93,6 +93,27 @@ On the interactive map, pathways render as colored lines:
 
 Clicking a pathway line opens the sidebar with details including endpoints, length, type-specific attributes, and routed cables.
 
+## Length: drawn vs as-built
+
+Every pathway carries two length values:
+
+| Field | Source | Use |
+|-------|--------|-----|
+| Length (m, as-built) | User-entered `length` field on the pathway record | Field-measured / as-built length: includes slack, riser drops, sag, and any vertical component the LineString does not capture. |
+| Geo length (m, drawn) | Read-only `geo_length`, computed by PostGIS `ST_Length` on the `path` LineString | The horizontal distance of the drawn geometry. Always reflects the current shape on the map. |
+
+The two values are intentionally separate -- they usually disagree, and that disagreement is information (slack, vertical drops, recently re-drawn geometry that has not been re-measured in the field, etc.).
+
+`geo_length` is exposed:
+
+- on the detail panel next to `Length (m, as-built)`,
+- as a sortable "Geo length (m)" column on each pathway list (off by default; toggle from the "Configure" menu),
+- on the REST API and GeoJSON endpoints (read-only),
+- as range filter parameters `?geo_length__gte=...` and `?geo_length__lte=...` on every Pathway list / API endpoint.
+
+!!! note
+    `geo_length` returns metres. The plugin's `PLUGINS_CONFIG['netbox_pathways']['srid']` must be a projected, metre-based CRS (e.g. an EPSG code for a local UTM zone or NAD83 Lambert Conformal Conic). The same requirement already underpins every other distance / area output in the plugin, so most installs need no extra configuration.
+
 ## Lifecycle
 
 Every pathway carries the following lifecycle fields, in addition to the type-specific fields above:
@@ -116,6 +137,7 @@ Pathway lists support filtering by:
 - **Installed By** -- Filter by installer/contractor tenant
 - **Installation Date** / **Commissioned Date** -- Filter by date
 - **Has Path** -- Filter pathways with/without geometry
+- **Geo length range** -- `?geo_length__gte=<m>` and `?geo_length__lte=<m>` filter pathways by their drawn length. Filtering runs as a PostGIS `ST_Length(path)` predicate, so it scales with database indexes rather than Python iteration.
 
 ## Intermediate Locations
 

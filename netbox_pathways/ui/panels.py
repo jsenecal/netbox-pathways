@@ -53,7 +53,8 @@ class PathwayPanel(ObjectAttributesPanel):
     end_location = attrs.RelatedObjectAttr("end_location", linkify=True, label=_("End location"))
     tenant = attrs.RelatedObjectAttr("tenant", linkify=True, label=_("Tenant"))
     installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
-    length = attrs.NumericAttr("length", label=_("Length (m)"))
+    length = attrs.NumericAttr("length", label=_("Length (m, as-built)"))
+    geo_length = attrs.NumericAttr("geo_length", label=_("Geo length (m, drawn)"))
 
     installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
     commissioned_date = attrs.TextAttr("commissioned_date", label=_("Commissioned date"))
@@ -71,7 +72,8 @@ class ConduitPanel(ObjectAttributesPanel):
     inner_diameter = attrs.NumericAttr("inner_diameter", label=_("Inner diameter (mm)"))
     outer_diameter = attrs.NumericAttr("outer_diameter", label=_("Outer diameter (mm)"))
     depth = attrs.NumericAttr("depth", label=_("Depth (m)"))
-    length = attrs.NumericAttr("length", label=_("Length (m)"))
+    length = attrs.NumericAttr("length", label=_("Length (m, as-built)"))
+    geo_length = attrs.NumericAttr("geo_length", label=_("Geo length (m, drawn)"))
     installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
 
     installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
@@ -92,7 +94,8 @@ class AerialSpanPanel(ObjectAttributesPanel):
     messenger_size = attrs.TextAttr("messenger_size", label=_("Messenger size"))
     wind_loading = attrs.TextAttr("wind_loading", label=_("Wind loading"))
     ice_loading = attrs.TextAttr("ice_loading", label=_("Ice loading"))
-    length = attrs.NumericAttr("length", label=_("Length (m)"))
+    length = attrs.NumericAttr("length", label=_("Length (m, as-built)"))
+    geo_length = attrs.NumericAttr("geo_length", label=_("Geo length (m, drawn)"))
     installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
 
     installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
@@ -109,7 +112,8 @@ class DirectBuriedPanel(ObjectAttributesPanel):
     warning_tape = attrs.BooleanAttr("warning_tape", label=_("Warning tape"))
     tracer_wire = attrs.BooleanAttr("tracer_wire", label=_("Tracer wire"))
     armor_type = attrs.TextAttr("armor_type", label=_("Armor type"))
-    length = attrs.NumericAttr("length", label=_("Length (m)"))
+    length = attrs.NumericAttr("length", label=_("Length (m, as-built)"))
+    geo_length = attrs.NumericAttr("geo_length", label=_("Geo length (m, drawn)"))
     installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
 
     installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
@@ -122,7 +126,8 @@ class InnerductPanel(ObjectAttributesPanel):
     size = attrs.TextAttr("size", label=_("Size"))
     color = attrs.TextAttr("color", label=_("Color"))
     position = attrs.TextAttr("position", label=_("Position"))
-    length = attrs.NumericAttr("length", label=_("Length (m)"))
+    length = attrs.NumericAttr("length", label=_("Length (m, as-built)"))
+    geo_length = attrs.NumericAttr("geo_length", label=_("Geo length (m, drawn)"))
     installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
 
     installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
@@ -142,7 +147,8 @@ class ConduitBankPanel(ObjectAttributesPanel):
     height = attrs.NumericAttr("height", label=_("Height (rows)"))
     width = attrs.NumericAttr("width", label=_("Width (columns)"))
     encasement_type = attrs.ChoiceAttr("encasement_type", label=_("Encasement type"))
-    length = attrs.NumericAttr("length", label=_("Length (m)"))
+    length = attrs.NumericAttr("length", label=_("Length (m, as-built)"))
+    geo_length = attrs.NumericAttr("geo_length", label=_("Geo length (m, drawn)"))
     installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
     commissioned_date = attrs.TextAttr("commissioned_date", label=_("Commissioned date"))
 

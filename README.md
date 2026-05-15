@@ -22,7 +22,7 @@
 ## Features
 
 - **Structures** -- poles, manholes, cabinets, equipment rooms, and more with PostGIS geometry (point or polygon).
-- **Pathways** -- conduits, aerial spans, direct buried, innerducts, cable trays with PostGIS line geometry.
+- **Pathways** -- conduits, aerial spans, direct buried, innerducts, cable trays with PostGIS line geometry; a computed `geo_length` (PostGIS `ST_Length`) sits alongside the manual as-built `length` so the drawn-versus-field distinction is always visible and sortable.
 - **Conduit Banks and Junctions** -- model conduit bank configurations and mid-span Y-tees.
 - **Cable Routing** -- track which NetBox cables traverse which pathways, in sequence.
 - **Pull Sheets** -- printable cable routing documents for field crews.

@@ -1,6 +1,7 @@
 from dcim.models import Cable, Site
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.contrib.gis.db.models.functions import Length
 from django.db import transaction
 from django.db.models import Count, Exists, F, OuterRef, Q, Sum
 from django.http import HttpResponse, JsonResponse
@@ -260,6 +261,7 @@ class PathwayListView(generic.ObjectListView):
     ).annotate(
         cables_routed=Count("cable_segments"),
         in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
+        _geo_length=Length("path"),
     )
     table = tables.PathwayTable
     filterset = filters.PathwayFilterSet
@@ -301,6 +303,7 @@ class ConduitListView(generic.ObjectListView):
     ).annotate(
         cables_routed=Count("cable_segments"),
         in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
+        _geo_length=Length("path"),
     )
     table = tables.ConduitTable
     filterset_form = filterforms.ConduitFilterForm
@@ -388,6 +391,7 @@ class AerialSpanListView(generic.ObjectListView):
         "tenant",
     ).annotate(
         cables_routed=Count("cable_segments"),
+        _geo_length=Length("path"),
         in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
     )
     table = tables.AerialSpanTable
@@ -454,6 +458,7 @@ class DirectBuriedListView(generic.ObjectListView):
     ).annotate(
         cables_routed=Count("cable_segments"),
         in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
+        _geo_length=Length("path"),
     )
     table = tables.DirectBuriedTable
     filterset = filters.DirectBuriedFilterSet
@@ -509,6 +514,7 @@ class InnerductListView(generic.ObjectListView):
     queryset = models.Innerduct.objects.select_related("parent_conduit").annotate(
         cables_routed=Count("cable_segments"),
         in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
+        _geo_length=Length("path"),
     )
     table = tables.InnerductTable
     filterset = filters.InnerductFilterSet
@@ -563,6 +569,7 @@ class InnerductBulkDeleteView(generic.BulkDeleteView):
 class ConduitBankListView(generic.ObjectListView):
     queryset = models.ConduitBank.objects.select_related("start_structure", "end_structure", "tenant").annotate(
         conduit_count=Count("conduits"),
+        _geo_length=Length("path"),
     )
     table = tables.ConduitBankTable
     filterset = filters.ConduitBankFilterSet

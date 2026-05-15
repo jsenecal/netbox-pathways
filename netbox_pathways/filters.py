@@ -35,6 +35,31 @@ from .models import (
 )
 
 
+class GeoLengthFilterMixin(django_filters.FilterSet):
+    """Adds `geo_length__gte` and `geo_length__lte` range filters that
+    apply `PathwayQuerySet.with_geo_length()` so filtering happens at the
+    PostGIS layer (`ST_Length`), not in Python.
+
+    Subclasses `django_filters.FilterSet` so django-filter's metaclass
+    collects the filter declarations into derived FilterSets' `base_filters`.
+    """
+
+    geo_length__gte = django_filters.NumberFilter(
+        method="filter_geo_length",
+        label="Geo length (m) >=",
+    )
+    geo_length__lte = django_filters.NumberFilter(
+        method="filter_geo_length",
+        label="Geo length (m) <=",
+    )
+
+    def filter_geo_length(self, queryset, name, value):
+        if value is None or not hasattr(queryset, "with_geo_length"):
+            return queryset
+        lookup = "_geo_length__gte" if name.endswith("__gte") else "_geo_length__lte"
+        return queryset.with_geo_length().filter(**{lookup: value})
+
+
 class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
     name = MultiValueCharFilter()
     status = django_filters.MultipleChoiceFilter(
@@ -120,7 +145,7 @@ class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
         )
 
 
-class PathwayFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
+class PathwayFilterSet(GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     pathway_type = django_filters.MultipleChoiceFilter(
         choices=PathwayTypeChoices,
@@ -213,7 +238,7 @@ class PathwayFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
         return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
-class ConduitFilterSet(NetBoxModelFilterSet):
+class ConduitFilterSet(GeoLengthFilterMixin, NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     material = django_filters.MultipleChoiceFilter(
         choices=ConduitMaterialChoices,
@@ -265,7 +290,7 @@ class ConduitFilterSet(NetBoxModelFilterSet):
         return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
-class AerialSpanFilterSet(NetBoxModelFilterSet):
+class AerialSpanFilterSet(GeoLengthFilterMixin, NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     aerial_type = django_filters.MultipleChoiceFilter(
         choices=AerialTypeChoices,
@@ -314,7 +339,7 @@ class AerialSpanFilterSet(NetBoxModelFilterSet):
         return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
-class DirectBuriedFilterSet(NetBoxModelFilterSet):
+class DirectBuriedFilterSet(GeoLengthFilterMixin, NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     start_structure_id = django_filters.ModelMultipleChoiceFilter(
         field_name="start_structure",
@@ -356,7 +381,7 @@ class DirectBuriedFilterSet(NetBoxModelFilterSet):
         return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
-class InnerductFilterSet(NetBoxModelFilterSet):
+class InnerductFilterSet(GeoLengthFilterMixin, NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     parent_conduit_id = django_filters.ModelMultipleChoiceFilter(
         field_name="parent_conduit",
@@ -378,7 +403,7 @@ class InnerductFilterSet(NetBoxModelFilterSet):
         return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
-class ConduitBankFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
+class ConduitBankFilterSet(GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     start_structure_id = django_filters.ModelMultipleChoiceFilter(
         field_name="start_structure",

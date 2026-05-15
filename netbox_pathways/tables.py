@@ -73,6 +73,7 @@ class PathwayTable(NetBoxTable):
     end_location = tables.Column(linkify=True)
     tenant = tables.Column(linkify=True)
     installed_by = tables.Column(linkify=True, verbose_name="Installed by")
+    geo_length = tables.Column(verbose_name="Geo length (m)", order_by="_geo_length")
     cables_routed = tables.Column(verbose_name="Cables", orderable=True)
     in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
     actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
@@ -92,6 +93,7 @@ class PathwayTable(NetBoxTable):
             "tenant",
             "installed_by",
             "length",
+            "geo_length",
             "cables_routed",
             "in_use",
             "installation_date",
@@ -121,6 +123,7 @@ class ConduitTable(NetBoxTable):
     end_location = tables.Column(linkify=True)
     conduit_bank = tables.Column(linkify=True)
     installed_by = tables.Column(linkify=True, verbose_name="Installed by")
+    geo_length = tables.Column(verbose_name="Geo length (m)", order_by="_geo_length")
     cables_routed = tables.Column(verbose_name="Cables", orderable=True)
     in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
     actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
@@ -140,6 +143,7 @@ class ConduitTable(NetBoxTable):
             "conduit_bank",
             "bank_position",
             "length",
+            "geo_length",
             "cables_routed",
             "in_use",
             "installed_by",
@@ -170,6 +174,7 @@ class AerialSpanTable(NetBoxTable):
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
     installed_by = tables.Column(linkify=True, verbose_name="Installed by")
+    geo_length = tables.Column(verbose_name="Geo length (m)", order_by="_geo_length")
     cables_routed = tables.Column(verbose_name="Cables", orderable=True)
     in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
     actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
@@ -189,6 +194,7 @@ class AerialSpanTable(NetBoxTable):
             "start_attachment_height",
             "end_attachment_height",
             "length",
+            "geo_length",
             "cables_routed",
             "in_use",
             "installed_by",
@@ -217,6 +223,7 @@ class DirectBuriedTable(NetBoxTable):
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
     installed_by = tables.Column(linkify=True, verbose_name="Installed by")
+    geo_length = tables.Column(verbose_name="Geo length (m)", order_by="_geo_length")
     cables_routed = tables.Column(verbose_name="Cables", orderable=True)
     in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
     actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
@@ -236,6 +243,7 @@ class DirectBuriedTable(NetBoxTable):
             "warning_tape",
             "tracer_wire",
             "length",
+            "geo_length",
             "cables_routed",
             "in_use",
             "installed_by",
@@ -304,6 +312,7 @@ class ConduitBankTable(NetBoxTable):
         verbose_name="Conduits",
         orderable=True,
     )
+    geo_length = tables.Column(verbose_name="Geo length (m)", order_by="_geo_length")
     actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
 
     class Meta(NetBoxTable.Meta):
@@ -326,6 +335,7 @@ class ConduitBankTable(NetBoxTable):
             "conduit_count",
             "encasement_type",
             "length",
+            "geo_length",
             "installation_date",
             "commissioned_date",
             "actions",
