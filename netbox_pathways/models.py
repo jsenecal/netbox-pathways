@@ -1,11 +1,13 @@
 from circuits.models import Circuit
 from dcim.models import Cable, Location, Site
 from django.contrib.gis.db import models
+from django.contrib.gis.db.models.functions import Length
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.urls import reverse
 from netbox.models import NetBoxModel
 from tenancy.models import Tenant
+from utilities.querysets import RestrictedQuerySet
 
 from .choices import (
     AerialTypeChoices,
@@ -197,8 +199,25 @@ class CircuitGeometry(NetBoxModel):
 # ConduitBank is defined after Pathway (it's a Pathway subclass).
 
 
+def _distance_to_m(value):
+    """Coerce a GeoDjango Distance (or numeric) to a float in metres."""
+    if value is None:
+        return None
+    if hasattr(value, "m"):
+        return value.m
+    return float(value)
+
+
+class PathwayQuerySet(RestrictedQuerySet):
+    def with_geo_length(self):
+        """Annotate each pathway with `_geo_length`: PostGIS `ST_Length(path)`."""
+        return self.annotate(_geo_length=Length("path"))
+
+
 class Pathway(NetBoxModel):
     prerequisite_models = ("netbox_pathways.Structure",)
+
+    objects = PathwayQuerySet.as_manager()
 
     label = models.CharField(max_length=100, blank=True)
     pathway_type = models.CharField(max_length=50, choices=PathwayTypeChoices, editable=False)
@@ -273,6 +292,23 @@ class Pathway(NetBoxModel):
     @property
     def end_endpoint(self):
         return self.end_structure or self.end_location
+
+    @property
+    def geo_length(self):
+        """Length of `path` in metres, computed by PostGIS `ST_Length`.
+
+        Reuses `_geo_length` when the instance was loaded via
+        `Pathway.objects.with_geo_length()`; otherwise issues an annotated
+        query so the length still comes from PostGIS, not Python.
+        Distinct from `length`, which is the manually entered as-built value.
+        """
+        annotated = self.__dict__.get("_geo_length")
+        if annotated is not None:
+            return _distance_to_m(annotated)
+        if self.pk is None:
+            return None
+        value = Pathway.objects.with_geo_length().values_list("_geo_length", flat=True).get(pk=self.pk)
+        return _distance_to_m(value)
 
     def clean(self):
         super().clean()

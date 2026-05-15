@@ -123,6 +123,7 @@ class ConduitBankSerializer(NetBoxModelSerializer):
     encasement_type = ChoiceField(choices=EncasementTypeChoices, required=False, allow_blank=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
     installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
+    geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = ConduitBank
@@ -140,6 +141,7 @@ class ConduitBankSerializer(NetBoxModelSerializer):
             "installed_by",
             "path",
             "length",
+            "geo_length",
             "configuration",
             "total_conduits",
             "height",
@@ -167,6 +169,7 @@ class PathwaySerializer(NetBoxModelSerializer):
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
     installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
     cables_routed = drf_serializers.IntegerField(read_only=True)
+    geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = Pathway
@@ -185,6 +188,7 @@ class PathwaySerializer(NetBoxModelSerializer):
             "tenant",
             "installed_by",
             "length",
+            "geo_length",
             "cables_routed",
             "installation_date",
             "commissioned_date",
@@ -209,6 +213,7 @@ class ConduitSerializer(NetBoxModelSerializer):
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
     installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
     cables_routed = drf_serializers.IntegerField(read_only=True)
+    geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = Conduit
@@ -235,6 +240,7 @@ class ConduitSerializer(NetBoxModelSerializer):
             "tenant",
             "installed_by",
             "length",
+            "geo_length",
             "cables_routed",
             "installation_date",
             "commissioned_date",
@@ -259,6 +265,7 @@ class AerialSpanSerializer(NetBoxModelSerializer):
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
     installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
     cables_routed = drf_serializers.IntegerField(read_only=True)
+    geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = AerialSpan
@@ -285,6 +292,7 @@ class AerialSpanSerializer(NetBoxModelSerializer):
             "tenant",
             "installed_by",
             "length",
+            "geo_length",
             "cables_routed",
             "installation_date",
             "commissioned_date",
@@ -307,6 +315,7 @@ class DirectBuriedSerializer(NetBoxModelSerializer):
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
     installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
     cables_routed = drf_serializers.IntegerField(read_only=True)
+    geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = DirectBuried
@@ -329,6 +338,7 @@ class DirectBuriedSerializer(NetBoxModelSerializer):
             "tenant",
             "installed_by",
             "length",
+            "geo_length",
             "cables_routed",
             "installation_date",
             "commissioned_date",
@@ -351,6 +361,7 @@ class InnerductSerializer(NetBoxModelSerializer):
     parent_conduit = ConduitSerializer(nested=True, required=False, allow_null=True)
     installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
     cables_routed = drf_serializers.IntegerField(read_only=True)
+    geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = Innerduct
@@ -372,6 +383,7 @@ class InnerductSerializer(NetBoxModelSerializer):
             "position",
             "installed_by",
             "length",
+            "geo_length",
             "cables_routed",
             "installation_date",
             "commissioned_date",
