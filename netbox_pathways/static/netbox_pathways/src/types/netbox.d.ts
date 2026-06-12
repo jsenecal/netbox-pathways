@@ -8,6 +8,12 @@ declare global {
     zoom?: number;
     minZoom?: number;
     maxZoom?: number;
+    /**
+     * Zoom at or above which the map skips `/info` and renders every
+     * enabled layer immediately. Defaults to 17 in the client; overridable
+     * via `PLUGINS_CONFIG['netbox_pathways']['map_skip_info_zoom']`.
+     */
+    skipInfoZoom?: number;
     overlays?: OverlayConfig[];
     baseLayers?: BaseLayerConfig[];
     externalLayers?: import('./external').ExternalLayerConfig[];

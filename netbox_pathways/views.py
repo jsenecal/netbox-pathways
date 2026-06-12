@@ -1760,6 +1760,7 @@ class MapView(LoginRequiredMixin, View):
 
         pathways_config = {
             "maxNativeZoom": plugin_cfg.get("map_max_native_zoom", 19),
+            "skipInfoZoom": plugin_cfg.get("map_skip_info_zoom", 17),
             "apiBase": geo_base,
             "overlays": plugin_cfg.get("map_overlays", []),
             "baseLayers": plugin_cfg.get("map_base_layers", []),

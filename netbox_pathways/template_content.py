@@ -107,6 +107,7 @@ class LeafletHeadExtension(PluginTemplateExtension):
         config = {
             **NetBoxPathwaysConfig._map_config,
             "maxNativeZoom": plugin_cfg.get("map_max_native_zoom", 19),
+            "skipInfoZoom": plugin_cfg.get("map_skip_info_zoom", 17),
             "apiBase": f"{api_base}geo/",
             "overlays": plugin_cfg.get("map_overlays", []),
         }
