@@ -34,9 +34,14 @@
 
 ## Compatibility
 
-| Plugin version | NetBox version | Python    | PostgreSQL          |
-|----------------|----------------|-----------|---------------------|
-| 0.1.x          | 4.5.3+         | 3.12-3.14 | 16+ with PostGIS 3.4|
+| Plugin version  | NetBox version       | Python    | PostgreSQL           |
+|-----------------|----------------------|-----------|----------------------|
+| 0.1.x -- 0.2.1  | 4.5.3 -- 4.5.x       | 3.12-3.14 | 16+ with PostGIS 3.4+|
+| 0.2.2+          | 4.5.3+ (incl. 4.6.x) | 3.12-3.14 | 16+ with PostGIS 3.4+|
+
+> NetBox 4.6 ships Django 6.0. Plugin versions 0.2.1 and earlier do not render
+> the geometry map widget on NetBox 4.6 (issue #52); upgrade to 0.2.2 or later
+> for NetBox 4.6 support.
 
 ## Installation
 

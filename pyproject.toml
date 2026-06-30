@@ -16,7 +16,7 @@ netbox_pathways = [
 
 [project]
 name = "netbox-pathways"
-version = "0.2.1"
+version = "0.2.2"
 description = "NetBox plugin for physical cable plant infrastructure documentation with GIS capabilities"
 readme = "README.md"
 authors = [
@@ -60,7 +60,7 @@ Tracker = "https://github.com/jsenecal/netbox-pathways/issues"
 Documentation = "https://jsenecal.github.io/netbox-pathways/"
 
 [tool.bumpversion]
-current_version = "0.2.1"
+current_version = "0.2.2"
 commit = true
 tag = true
 tag_name = "v{new_version}"
