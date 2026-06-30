@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-06-30
+
+### Fixed
+
+- **Geometry map widget renders blank on NetBox 4.6 / Django 6.0.** Django 6.0
+  stopped exposing the top-level `id`, `name`, and `geom_type` template-context
+  variables from `BaseGeometryWidget` (they moved under `widget`). The map
+  widget template read them at the top level, so on Django 6.0 the hidden
+  geometry input rendered with an empty `name` (the form submitted no geometry
+  and validation failed with "No geometry value submitted") and the map
+  container rendered with an empty `data-field-id` (the Leaflet/geoman
+  initializer bailed and no map appeared) -- making it impossible to add a
+  Structure or draw a Pathway. `PathwaysMapWidget.get_context` now re-exposes
+  these variables; the fix stays backwards compatible with NetBox 4.5 /
+  Django 5.2. Fixes #52.
+
 ## [0.2.1] - 2026-05-07
 
 ### Fixed
