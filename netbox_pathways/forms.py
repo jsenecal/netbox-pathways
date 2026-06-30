@@ -73,6 +73,14 @@ class PathwaysMapWidget(BaseGeometryWidget):
 
     def get_context(self, name, value, attrs):
         context = super().get_context(name, value, attrs)
+        # Django 6.0 stopped exposing id/name/geom_type at the top level of the
+        # widget context (they now live under ``widget``); our template reads
+        # them at the top level, so re-expose them here. setdefault keeps this
+        # backwards compatible with Django <= 5.2, which still sets them. (#52)
+        widget = context["widget"]
+        context.setdefault("id", widget["attrs"].get("id", ""))
+        context.setdefault("name", widget["name"])
+        context.setdefault("geom_type", widget["attrs"].get("geom_name", self.geom_type))
         if self.endpoint_geojson:
             context["endpoint_json"] = mark_safe(json.dumps(self.endpoint_geojson))  # noqa: S308
         return context
