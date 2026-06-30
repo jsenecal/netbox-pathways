@@ -55,7 +55,7 @@ jobs:
       fail-fast: false
       matrix:
         python: ["3.12", "3.13", "3.14"]
-        netbox: ["4.5.8", "4.5.10"]
+        netbox: ["4.5.8", "4.5.10", "4.6.3"]
     services:
       postgres:
         image: postgis/postgis:17-3.4
