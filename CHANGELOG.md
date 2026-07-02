@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`Pathway.path` is now optional for indoor pathways.** A pathway whose both
+  endpoints are locations (rooms, floors) can be saved without a geographic
+  path -- NetBox locations carry no coordinates, so previously such pathways
+  could not be created at all without drawing a meaningless map line. A path
+  is still required whenever either endpoint is geographic (a structure or,
+  for conduits, a junction); this rule now lives in `Pathway.clean()` instead
+  of the database NOT NULL constraint. Pathless indoor pathways are excluded
+  from the GeoJSON map layers. Innerducts now inherit locations (not just
+  structures) from their parent conduit, at validation time as well as save
+  time. Migration `0019_alter_pathway_path`.
 - **`AerialSpan.attachment_height` is now per-endpoint.** The single
   `attachment_height` field is replaced by `start_attachment_height` and
   `end_attachment_height` (both nullable floats, meters). A read-only

@@ -1,6 +1,6 @@
 # Pathways
 
-Pathways represent the physical routes that cables follow between structures and locations. Each pathway has a LineString geometry defining its geographic path.
+Pathways represent the physical routes that cables follow between structures and locations. Outdoor pathways have a LineString geometry defining their geographic path; indoor pathways (between two locations) have no geometry.
 
 ## Pathway Types
 
@@ -55,7 +55,7 @@ A smaller duct installed inside a parent conduit to subdivide capacity.
 | Color | Innerduct color for identification |
 | Position | Position within the parent conduit |
 
-Innerducts inherit start and end structures from their parent conduit if not explicitly set.
+Innerducts inherit start and end endpoints (structures or locations) from their parent conduit if not explicitly set.
 
 ## Endpoints
 
@@ -66,6 +66,10 @@ Every pathway has a start endpoint and an end endpoint. These can be:
 - **Junction** — A conduit junction (conduits only)
 
 You can mix endpoint types. For example, a conduit starting at a manhole (structure) and ending at an equipment room (location) models a building entrance path.
+
+### Indoor pathways
+
+When both endpoints are locations, the pathway is indoor and the geographic path is optional -- NetBox locations carry no coordinates, so there is nothing to draw. Simply pick the two locations and save; the pathway is created without geometry and does not appear on the interactive map or in the GeoJSON API layers. A path is still required whenever either endpoint is geographic (a structure or a junction).
 
 ## Creating a Pathway
 
