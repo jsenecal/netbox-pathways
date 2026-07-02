@@ -121,17 +121,26 @@ class PathwayEndpointFormMixin:
         if path:
             return cleaned
 
-        # Auto-generate path from structures
         start_struct = cleaned.get("start_structure")
         end_struct = cleaned.get("end_structure")
+        start_loc = cleaned.get("start_location")
+        end_loc = cleaned.get("end_location")
 
-        # Innerduct fallback: use parent conduit's structures
-        if not start_struct and not end_struct:
-            parent = cleaned.get("parent_conduit")
-            if parent:
-                start_struct = start_struct or parent.start_structure
-                end_struct = end_struct or parent.end_structure
+        # Innerduct fallback: use parent conduit's endpoints, per side
+        parent = cleaned.get("parent_conduit")
+        if parent:
+            if not start_struct and not start_loc:
+                start_struct = parent.start_structure
+                start_loc = parent.start_location
+            if not end_struct and not end_loc:
+                end_struct = parent.end_structure
+                end_loc = parent.end_location
 
+        # Indoor pathway (both endpoints are locations): no geographic path exists
+        if start_loc and end_loc and not start_struct and not end_struct:
+            return cleaned
+
+        # Auto-generate path from structures
         if start_struct and end_struct and start_struct.location and end_struct.location:
             start_geom = start_struct.location
             end_geom = end_struct.location
@@ -145,7 +154,12 @@ class PathwayEndpointFormMixin:
         else:
             from django.core.exceptions import ValidationError
 
-            raise ValidationError({"path": "Path is required when both endpoint structures are not set."})
+            raise ValidationError(
+                {
+                    "path": "Path is required unless both endpoints are structures "
+                    "(auto-generated) or both are locations (indoor)."
+                }
+            )
 
         return cleaned
 
