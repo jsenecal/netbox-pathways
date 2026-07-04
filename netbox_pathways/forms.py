@@ -45,6 +45,24 @@ _IMPORT_GEOMETRY_HELP = (
 )
 
 
+def _csv_structure_field(side):
+    return CSVModelChoiceField(
+        queryset=Structure.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text=f"{side} structure name",
+    )
+
+
+def _csv_location_field(side):
+    return CSVModelChoiceField(
+        queryset=Location.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text=f"{side} location name (indoor endpoint)",
+    )
+
+
 class PathwaysMapWidget(BaseGeometryWidget):
     """Map widget using Leaflet + geoman for geometry editing."""
 
@@ -439,18 +457,10 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
 
 
 class ConduitImportForm(NetBoxModelImportForm):
-    start_structure = CSVModelChoiceField(
-        queryset=Structure.objects.all(),
-        to_field_name="name",
-        required=False,
-        help_text="Starting structure name",
-    )
-    end_structure = CSVModelChoiceField(
-        queryset=Structure.objects.all(),
-        to_field_name="name",
-        required=False,
-        help_text="Ending structure name",
-    )
+    start_structure = _csv_structure_field("Starting")
+    end_structure = _csv_structure_field("Ending")
+    start_location = _csv_location_field("Starting")
+    end_location = _csv_location_field("Ending")
     installed_by = CSVModelChoiceField(
         queryset=Tenant.objects.all(),
         to_field_name="name",
@@ -471,6 +481,8 @@ class ConduitImportForm(NetBoxModelImportForm):
             "material",
             "start_structure",
             "end_structure",
+            "start_location",
+            "end_location",
             "inner_diameter",
             "outer_diameter",
             "depth",
@@ -572,16 +584,10 @@ class AerialSpanForm(PathwayEndpointFormMixin, NetBoxModelForm):
 
 
 class AerialSpanImportForm(NetBoxModelImportForm):
-    start_structure = CSVModelChoiceField(
-        queryset=Structure.objects.all(),
-        to_field_name="name",
-        help_text="Starting structure name",
-    )
-    end_structure = CSVModelChoiceField(
-        queryset=Structure.objects.all(),
-        to_field_name="name",
-        help_text="Ending structure name",
-    )
+    start_structure = _csv_structure_field("Starting")
+    end_structure = _csv_structure_field("Ending")
+    start_location = _csv_location_field("Starting")
+    end_location = _csv_location_field("Ending")
     installed_by = CSVModelChoiceField(
         queryset=Tenant.objects.all(),
         to_field_name="name",
@@ -603,6 +609,8 @@ class AerialSpanImportForm(NetBoxModelImportForm):
             "aerial_type",
             "start_structure",
             "end_structure",
+            "start_location",
+            "end_location",
             "start_attachment_height",
             "end_attachment_height",
             "sag",
@@ -719,6 +727,45 @@ class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
         }
 
 
+class DirectBuriedImportForm(NetBoxModelImportForm):
+    start_structure = _csv_structure_field("Starting")
+    end_structure = _csv_structure_field("Ending")
+    start_location = _csv_location_field("Starting")
+    end_location = _csv_location_field("Ending")
+    installed_by = CSVModelChoiceField(
+        queryset=Tenant.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Installer tenant name",
+    )
+    path = ForgivingGeometryField(
+        required=False,
+        srid=get_srid(),
+        geom_type="LINESTRING",
+        help_text=_IMPORT_GEOMETRY_HELP,
+    )
+
+    class Meta:
+        model = DirectBuried
+        fields = [
+            "label",
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+            "burial_depth",
+            "warning_tape",
+            "tracer_wire",
+            "armor_type",
+            "length",
+            "installed_by",
+            "installation_date",
+            "commissioned_date",
+            "path",
+            "comments",
+        ]
+
+
 # --- Innerduct ---
 
 
@@ -818,6 +865,49 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
         }
 
 
+class InnerductImportForm(NetBoxModelImportForm):
+    parent_conduit = CSVModelChoiceField(
+        queryset=Conduit.objects.all(),
+        help_text="Parent conduit ID (numeric)",
+    )
+    start_structure = _csv_structure_field("Starting")
+    end_structure = _csv_structure_field("Ending")
+    start_location = _csv_location_field("Starting")
+    end_location = _csv_location_field("Ending")
+    installed_by = CSVModelChoiceField(
+        queryset=Tenant.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Installer tenant name",
+    )
+    path = ForgivingGeometryField(
+        required=False,
+        srid=get_srid(),
+        geom_type="LINESTRING",
+        help_text=_IMPORT_GEOMETRY_HELP,
+    )
+
+    class Meta:
+        model = Innerduct
+        fields = [
+            "label",
+            "parent_conduit",
+            "size",
+            "color",
+            "position",
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+            "length",
+            "installed_by",
+            "installation_date",
+            "commissioned_date",
+            "path",
+            "comments",
+        ]
+
+
 # --- Conduit Bank ---
 
 
@@ -879,18 +969,10 @@ class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
 
 
 class ConduitBankImportForm(NetBoxModelImportForm):
-    start_structure = CSVModelChoiceField(
-        queryset=Structure.objects.all(),
-        to_field_name="name",
-        required=False,
-        help_text="Start structure name",
-    )
-    end_structure = CSVModelChoiceField(
-        queryset=Structure.objects.all(),
-        to_field_name="name",
-        required=False,
-        help_text="End structure name",
-    )
+    start_structure = _csv_structure_field("Start")
+    end_structure = _csv_structure_field("End")
+    start_location = _csv_location_field("Start")
+    end_location = _csv_location_field("End")
     installed_by = CSVModelChoiceField(
         queryset=Tenant.objects.all(),
         to_field_name="name",
@@ -913,11 +995,14 @@ class ConduitBankImportForm(NetBoxModelImportForm):
             "start_face",
             "end_structure",
             "end_face",
+            "start_location",
+            "end_location",
             "configuration",
             "total_conduits",
             "height",
             "width",
             "encasement_type",
+            "length",
             "installed_by",
             "installation_date",
             "commissioned_date",
@@ -990,6 +1075,33 @@ class ConduitJunctionForm(NetBoxModelForm):
             "position_on_trunk",
             "comments",
             "tags",
+        ]
+
+
+class ConduitJunctionImportForm(NetBoxModelImportForm):
+    trunk_conduit = CSVModelChoiceField(
+        queryset=Conduit.objects.all(),
+        help_text="Trunk conduit ID (numeric)",
+    )
+    branch_conduit = CSVModelChoiceField(
+        queryset=Conduit.objects.all(),
+        help_text="Branch conduit ID (numeric)",
+    )
+    towards_structure = CSVModelChoiceField(
+        queryset=Structure.objects.all(),
+        to_field_name="name",
+        help_text="Name of the trunk endpoint structure the junction faces",
+    )
+
+    class Meta:
+        model = ConduitJunction
+        fields = [
+            "label",
+            "trunk_conduit",
+            "branch_conduit",
+            "towards_structure",
+            "position_on_trunk",
+            "comments",
         ]
 
 
@@ -1118,6 +1230,29 @@ class SiteGeometryForm(NetBoxModelForm):
         }
 
 
+class SiteGeometryImportForm(NetBoxModelImportForm):
+    site = CSVModelChoiceField(
+        queryset=Site.objects.all(),
+        to_field_name="name",
+        help_text="Site name",
+    )
+    structure = CSVModelChoiceField(
+        queryset=Structure.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Structure that physically represents this site",
+    )
+    geometry = ForgivingGeometryField(
+        required=False,
+        srid=get_srid(),
+        help_text=_IMPORT_GEOMETRY_HELP,
+    )
+
+    class Meta:
+        model = SiteGeometry
+        fields = ["site", "structure", "geometry", "comments"]
+
+
 # --- Circuit Geometry ---
 
 
@@ -1139,6 +1274,22 @@ class CircuitGeometryForm(NetBoxModelForm):
         widgets = {
             "path": PathwaysMapWidget(),
         }
+
+
+class CircuitGeometryImportForm(NetBoxModelImportForm):
+    circuit = CSVModelChoiceField(
+        queryset=Circuit.objects.all(),
+        help_text="Circuit ID (numeric)",
+    )
+    path = ForgivingGeometryField(
+        srid=get_srid(),
+        geom_type="LINESTRING",
+        help_text=_IMPORT_GEOMETRY_HELP,
+    )
+
+    class Meta:
+        model = CircuitGeometry
+        fields = ["circuit", "path", "provider_reference", "comments"]
 
 
 # --- Planned Route ---
@@ -1196,6 +1347,38 @@ class PlannedRouteForm(NetBoxModelForm):
             "cable",
             "comments",
             "tags",
+        ]
+
+
+class PlannedRouteImportForm(NetBoxModelImportForm):
+    start_structure = _csv_structure_field("Starting")
+    end_structure = _csv_structure_field("Ending")
+    start_location = _csv_location_field("Starting")
+    end_location = _csv_location_field("Ending")
+    tenant = CSVModelChoiceField(
+        queryset=Tenant.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Tenant name",
+    )
+    cable = CSVModelChoiceField(
+        queryset=Cable.objects.all(),
+        required=False,
+        help_text="Cable ID (numeric)",
+    )
+
+    class Meta:
+        model = PlannedRoute
+        fields = [
+            "name",
+            "status",
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+            "tenant",
+            "cable",
+            "comments",
         ]
 
 

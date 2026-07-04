@@ -143,9 +143,11 @@ vertex.
 ## CSV Bulk Import
 
 The same forgiving parser is wired into the bulk-import forms for
-`Structure` (column name `location`) and the LineString pathway models
-`Conduit`, `AerialSpan`, and `ConduitBank` (column name `path`).
-Spreadsheets can supply any of the textarea formats:
+`Structure` (column name `location`), `SiteGeometry` (column name
+`geometry`), and the LineString models `Conduit`, `AerialSpan`,
+`DirectBuried`, `Innerduct`, `ConduitBank`, and `CircuitGeometry`
+(column name `path`). Spreadsheets can supply any of the textarea
+formats:
 
 - GeoJSON Geometry, Feature, or FeatureCollection
 - WKT (`POINT(lon lat)` or `LINESTRING(lon lat, lon lat, ...)`)
