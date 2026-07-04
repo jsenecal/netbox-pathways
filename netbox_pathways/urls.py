@@ -7,7 +7,7 @@ urlpatterns = [
     # Structures
     path("structures/", views.StructureListView.as_view(), name="structure_list"),
     path("structures/add/", views.StructureEditView.as_view(), name="structure_add"),
-    path("structures/import/", views.StructureBulkImportView.as_view(), name="structure_import"),
+    path("structures/import/", views.StructureBulkImportView.as_view(), name="structure_bulk_import"),
     path("structures/edit/", views.StructureBulkEditView.as_view(), name="structure_bulk_edit"),
     path("structures/delete/", views.StructureBulkDeleteView.as_view(), name="structure_bulk_delete"),
     path(
@@ -36,7 +36,7 @@ urlpatterns = [
     # Conduits
     path("conduits/", views.ConduitListView.as_view(), name="conduit_list"),
     path("conduits/add/", views.ConduitEditView.as_view(), name="conduit_add"),
-    path("conduits/import/", views.ConduitBulkImportView.as_view(), name="conduit_import"),
+    path("conduits/import/", views.ConduitBulkImportView.as_view(), name="conduit_bulk_import"),
     path("conduits/edit/", views.ConduitBulkEditView.as_view(), name="conduit_bulk_edit"),
     path("conduits/delete/", views.ConduitBulkDeleteView.as_view(), name="conduit_bulk_delete"),
     path(
@@ -53,7 +53,7 @@ urlpatterns = [
     # Aerial Spans
     path("aerial-spans/", views.AerialSpanListView.as_view(), name="aerialspan_list"),
     path("aerial-spans/add/", views.AerialSpanEditView.as_view(), name="aerialspan_add"),
-    path("aerial-spans/import/", views.AerialSpanBulkImportView.as_view(), name="aerialspan_import"),
+    path("aerial-spans/import/", views.AerialSpanBulkImportView.as_view(), name="aerialspan_bulk_import"),
     path("aerial-spans/edit/", views.AerialSpanBulkEditView.as_view(), name="aerialspan_bulk_edit"),
     path("aerial-spans/delete/", views.AerialSpanBulkDeleteView.as_view(), name="aerialspan_bulk_delete"),
     path(
@@ -70,6 +70,7 @@ urlpatterns = [
     # Direct Buried
     path("direct-buried/", views.DirectBuriedListView.as_view(), name="directburied_list"),
     path("direct-buried/add/", views.DirectBuriedEditView.as_view(), name="directburied_add"),
+    path("direct-buried/import/", views.DirectBuriedBulkImportView.as_view(), name="directburied_bulk_import"),
     path("direct-buried/edit/", views.DirectBuriedBulkEditView.as_view(), name="directburied_bulk_edit"),
     path("direct-buried/delete/", views.DirectBuriedBulkDeleteView.as_view(), name="directburied_bulk_delete"),
     path(
@@ -86,6 +87,7 @@ urlpatterns = [
     # Innerducts
     path("innerducts/", views.InnerductListView.as_view(), name="innerduct_list"),
     path("innerducts/add/", views.InnerductEditView.as_view(), name="innerduct_add"),
+    path("innerducts/import/", views.InnerductBulkImportView.as_view(), name="innerduct_bulk_import"),
     path("innerducts/edit/", views.InnerductBulkEditView.as_view(), name="innerduct_bulk_edit"),
     path("innerducts/delete/", views.InnerductBulkDeleteView.as_view(), name="innerduct_bulk_delete"),
     path(
@@ -102,7 +104,7 @@ urlpatterns = [
     # Conduit Banks
     path("conduit-banks/", views.ConduitBankListView.as_view(), name="conduitbank_list"),
     path("conduit-banks/add/", views.ConduitBankEditView.as_view(), name="conduitbank_add"),
-    path("conduit-banks/import/", views.ConduitBankBulkImportView.as_view(), name="conduitbank_import"),
+    path("conduit-banks/import/", views.ConduitBankBulkImportView.as_view(), name="conduitbank_bulk_import"),
     path("conduit-banks/edit/", views.ConduitBankBulkEditView.as_view(), name="conduitbank_bulk_edit"),
     path("conduit-banks/delete/", views.ConduitBankBulkDeleteView.as_view(), name="conduitbank_bulk_delete"),
     path(
@@ -119,6 +121,7 @@ urlpatterns = [
     # Conduit Junctions
     path("junctions/", views.ConduitJunctionListView.as_view(), name="conduitjunction_list"),
     path("junctions/add/", views.ConduitJunctionEditView.as_view(), name="conduitjunction_add"),
+    path("junctions/import/", views.ConduitJunctionBulkImportView.as_view(), name="conduitjunction_bulk_import"),
     path(
         "junctions/<int:pk>/",
         include(
@@ -147,7 +150,7 @@ urlpatterns = [
     # Cable Segments
     path("cable-segments/", views.CableSegmentListView.as_view(), name="cablesegment_list"),
     path("cable-segments/add/", views.CableSegmentEditView.as_view(), name="cablesegment_add"),
-    path("cable-segments/import/", views.CableSegmentBulkImportView.as_view(), name="cablesegment_import"),
+    path("cable-segments/import/", views.CableSegmentBulkImportView.as_view(), name="cablesegment_bulk_import"),
     path("cable-segments/edit/", views.CableSegmentBulkEditView.as_view(), name="cablesegment_bulk_edit"),
     path("cable-segments/delete/", views.CableSegmentBulkDeleteView.as_view(), name="cablesegment_bulk_delete"),
     path(
@@ -164,6 +167,7 @@ urlpatterns = [
     # Site Geometries
     path("site-geometries/", views.SiteGeometryListView.as_view(), name="sitegeometry_list"),
     path("site-geometries/add/", views.SiteGeometryEditView.as_view(), name="sitegeometry_add"),
+    path("site-geometries/import/", views.SiteGeometryBulkImportView.as_view(), name="sitegeometry_bulk_import"),
     path(
         "site-geometries/<int:pk>/",
         include(
@@ -179,6 +183,11 @@ urlpatterns = [
     path("circuit-geometries/", views.CircuitGeometryListView.as_view(), name="circuitgeometry_list"),
     path("circuit-geometries/add/", views.CircuitGeometryEditView.as_view(), name="circuitgeometry_add"),
     path(
+        "circuit-geometries/import/",
+        views.CircuitGeometryBulkImportView.as_view(),
+        name="circuitgeometry_bulk_import",
+    ),
+    path(
         "circuit-geometries/<int:pk>/",
         include(
             [
@@ -192,6 +201,7 @@ urlpatterns = [
     # Planned Routes
     path("planned-routes/", views.PlannedRouteListView.as_view(), name="plannedroute_list"),
     path("planned-routes/add/", views.PlannedRouteEditView.as_view(), name="plannedroute_add"),
+    path("planned-routes/import/", views.PlannedRouteBulkImportView.as_view(), name="plannedroute_bulk_import"),
     path("planned-routes/edit/", views.PlannedRouteBulkEditView.as_view(), name="plannedroute_bulk_edit"),
     path("planned-routes/delete/", views.PlannedRouteBulkDeleteView.as_view(), name="plannedroute_bulk_delete"),
     path(

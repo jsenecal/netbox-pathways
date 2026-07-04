@@ -16,6 +16,7 @@ from netbox.object_actions import (
     BulkDelete,
     BulkEdit,
     BulkExport,
+    BulkImport,
     CloneObject,
     DeleteObject,
     EditObject,
@@ -463,7 +464,7 @@ class DirectBuriedListView(generic.ObjectListView):
     table = tables.DirectBuriedTable
     filterset = filters.DirectBuriedFilterSet
     filterset_form = filterforms.DirectBuriedFilterForm
-    actions = (AddObject, BulkExport, BulkEdit, BulkDelete)
+    actions = (AddObject, BulkImport, BulkExport, BulkEdit, BulkDelete)
 
 
 class DirectBuriedView(generic.ObjectView):
@@ -495,6 +496,11 @@ class DirectBuriedDeleteView(generic.ObjectDeleteView):
     queryset = models.DirectBuried.objects.all()
 
 
+class DirectBuriedBulkImportView(generic.BulkImportView):
+    queryset = models.DirectBuried.objects.all()
+    model_form = forms.DirectBuriedImportForm
+
+
 class DirectBuriedBulkEditView(generic.BulkEditView):
     queryset = models.DirectBuried.objects.all()
     filterset = filters.DirectBuriedFilterSet
@@ -519,7 +525,7 @@ class InnerductListView(generic.ObjectListView):
     table = tables.InnerductTable
     filterset = filters.InnerductFilterSet
     filterset_form = filterforms.InnerductFilterForm
-    actions = (AddObject, BulkExport, BulkEdit, BulkDelete)
+    actions = (AddObject, BulkImport, BulkExport, BulkEdit, BulkDelete)
 
 
 class InnerductView(generic.ObjectView):
@@ -549,6 +555,11 @@ class InnerductEditView(generic.ObjectEditView):
 
 class InnerductDeleteView(generic.ObjectDeleteView):
     queryset = models.Innerduct.objects.all()
+
+
+class InnerductBulkImportView(generic.BulkImportView):
+    queryset = models.Innerduct.objects.all()
+    model_form = forms.InnerductImportForm
 
 
 class InnerductBulkEditView(generic.BulkEditView):
@@ -634,7 +645,7 @@ class ConduitJunctionListView(generic.ObjectListView):
     table = tables.ConduitJunctionTable
     filterset = filters.ConduitJunctionFilterSet
     filterset_form = filterforms.ConduitJunctionFilterForm
-    actions = (AddObject, BulkExport)
+    actions = (AddObject, BulkImport, BulkExport)
 
 
 class ConduitJunctionView(generic.ObjectView):
@@ -656,6 +667,11 @@ class ConduitJunctionEditView(generic.ObjectEditView):
 
 class ConduitJunctionDeleteView(generic.ObjectDeleteView):
     queryset = models.ConduitJunction.objects.all()
+
+
+class ConduitJunctionBulkImportView(generic.BulkImportView):
+    queryset = models.ConduitJunction.objects.all()
+    model_form = forms.ConduitJunctionImportForm
 
 
 # --- Cable Segment ---
@@ -766,7 +782,7 @@ class SiteGeometryListView(generic.ObjectListView):
     table = tables.SiteGeometryTable
     filterset = filters.SiteGeometryFilterSet
     filterset_form = filterforms.SiteGeometryFilterForm
-    actions = (AddObject, BulkExport)
+    actions = (AddObject, BulkImport, BulkExport)
 
 
 class SiteGeometryView(generic.ObjectView):
@@ -790,6 +806,11 @@ class SiteGeometryDeleteView(generic.ObjectDeleteView):
     queryset = models.SiteGeometry.objects.all()
 
 
+class SiteGeometryBulkImportView(generic.BulkImportView):
+    queryset = models.SiteGeometry.objects.all()
+    model_form = forms.SiteGeometryImportForm
+
+
 # --- Circuit Geometry ---
 
 
@@ -801,7 +822,7 @@ class CircuitGeometryListView(generic.ObjectListView):
     table = tables.CircuitGeometryTable
     filterset = filters.CircuitGeometryFilterSet
     filterset_form = filterforms.CircuitGeometryFilterForm
-    actions = (AddObject, BulkExport)
+    actions = (AddObject, BulkImport, BulkExport)
 
 
 class CircuitGeometryView(generic.ObjectView):
@@ -825,6 +846,11 @@ class CircuitGeometryDeleteView(generic.ObjectDeleteView):
     queryset = models.CircuitGeometry.objects.all()
 
 
+class CircuitGeometryBulkImportView(generic.BulkImportView):
+    queryset = models.CircuitGeometry.objects.all()
+    model_form = forms.CircuitGeometryImportForm
+
+
 # --- Planned Route ---
 
 
@@ -840,7 +866,7 @@ class PlannedRouteListView(generic.ObjectListView):
     table = tables.PlannedRouteTable
     filterset = filters.PlannedRouteFilterSet
     filterset_form = filterforms.PlannedRouteFilterForm
-    actions = (AddObject, BulkExport, BulkEdit, BulkDelete)
+    actions = (AddObject, BulkImport, BulkExport, BulkEdit, BulkDelete)
 
 
 class SplitRoute(ObjectAction):
@@ -977,6 +1003,11 @@ class PlannedRouteEditView(generic.ObjectEditView):
 
 class PlannedRouteDeleteView(generic.ObjectDeleteView):
     queryset = models.PlannedRoute.objects.all()
+
+
+class PlannedRouteBulkImportView(generic.BulkImportView):
+    queryset = models.PlannedRoute.objects.all()
+    model_form = forms.PlannedRouteImportForm
 
 
 class PlannedRouteBulkEditView(generic.BulkEditView):

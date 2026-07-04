@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CSV bulk import for every catalogued model** -- `DirectBuried`, `Innerduct`, `ConduitJunction`, `PlannedRoute`, `SiteGeometry`, and `CircuitGeometry` gain import forms, views, and `/import/` pages; previously only `Structure`, `Conduit`, `AerialSpan`, `ConduitBank`, and `CableSegment` were importable. Every importable model's left-menu entry and list view now shows an Import button. The pathway import forms (`Conduit`, `AerialSpan`, `DirectBuried`, `Innerduct`, `ConduitBank`, `PlannedRoute`) also accept `start_location` / `end_location` columns (by location name) so indoor endpoints can be imported, and `AerialSpanImportForm` no longer hard-requires structure endpoints. Refs #58.
 - **Computed `geo_length` on Pathway and subclasses** -- the drawn length of a pathway's LineString, in metres, is now exposed as a read-only `geo_length` property computed by PostGIS (`ST_Length`) rather than entered manually. The existing `length` field stays for as-built / field-measured lengths (slack, sag, riser drops) and is now labelled "Length (m, as-built)" in detail panels alongside the new "Geo length (m, drawn)". A custom `PathwayQuerySet.with_geo_length()` adds an `_geo_length` annotation that the list views (`Pathway`, `Conduit`, `AerialSpan`, `DirectBuried`, `Innerduct`, `ConduitBank`) already apply so the new sortable "Geo length (m)" table column hits PostGIS, not Python. REST and GeoJSON serializers emit `geo_length`; `PathwayFilterSet` (and the per-subclass filtersets) gain `geo_length__gte` / `geo_length__lte` URL range filters via a `GeoLengthFilterMixin`. Requires a projected, metre-based SRID (`PLUGINS_CONFIG['netbox_pathways']['srid']`) -- which is already required for the rest of the plugin's geometry support.
 - **`/info` map endpoint and count-based layer gating** -- new `GET /api/plugins/pathways/geo/info/?bbox=...` returns per-layer feature counts (`structures`, `conduit_banks`, `conduits`, `aerial_spans`, `direct_buried`, `circuits`, and an `external` map for reference-mode registered layers) plus the per-layer thresholds the frontend uses to decide whether to render, client-cluster, or hide each layer. Thresholds default to `{structures: {cluster: 200, hide: 5000}, ...others: {hide: 500}}` and are overridable per-layer via `PLUGINS_CONFIG['netbox_pathways']['map_thresholds']`. The map frontend now consults `/info` on every pan/zoom and applies a single "structures clustered -> no supports" rule: whenever structures cross either threshold (client or server cluster), every pathway and reference-mode external layer is suppressed for that viewport. The hardcoded `MIN_BANK_ZOOM = 18` heuristic is removed; banks become visible whenever their viewport count is below the configured threshold. Over-budget layer toggles in the sidebar dim and display a count chip. `MapLayerRegistration` gains an optional `max_features` (default 500) for reference-mode external layers.
 - **Geometry on CSV bulk import** -- `StructureImportForm` (Point) and the LineString import forms (`ConduitImportForm`, `AerialSpanImportForm`, `ConduitBankImportForm`) now expose a `location` / `path` column. Values pass through the same forgiving parser as the interactive map widget, so spreadsheets can carry GeoJSON, WKT, DMS (hemispheres optional), or Google-Maps-style decimal `lat,lon` pairs. The parser produces WGS84 and Django GIS reprojects to the configured storage SRID at save time. New helper `netbox_pathways.coord_parser.parse_geometry_input` plus `ForgivingGeometryField` are also importable by downstream code that wants the same lenient parsing.
@@ -41,6 +42,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `start_attachment_height` and `end_attachment_height`. The REST API field
   `attachment_height` becomes read-only and derived; clients writing to it
   must target the per-side fields.
+
+### Fixed
+
+- **List-view Import buttons were dead links.** The plugin registered its
+  import URLs as `<model>_import`, but NetBox's list-view `BulkImport` action
+  reverses `<model>_bulk_import`, so every Import button on object tables
+  rendered without an href. The URL names now follow the NetBox convention
+  (the `/import/` paths themselves are unchanged). Fixes #58.
+- `ConduitBankImportForm` was missing the `length` column that the GUI add
+  form exposes. Fixes #58.
 
 ## [0.2.2] - 2026-06-30
 
