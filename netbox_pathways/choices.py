@@ -70,6 +70,7 @@ class AerialTypeChoices(ChoiceSet):
         ("lashed", "Lashed", "green"),
         ("wrapped", "Wrapped", "orange"),
         ("adss", "ADSS", "purple"),
+        ("opgw", "OPGW", "red"),
     ]
 
 

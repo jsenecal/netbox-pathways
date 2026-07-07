@@ -16,6 +16,13 @@ def _make_span(**kwargs):
     )
 
 
+def test_aerial_type_choices_include_opgw():
+    """OPGW is selectable as an aerial type (issue #59)."""
+    from netbox_pathways.choices import AerialTypeChoices
+
+    assert "opgw" in AerialTypeChoices.values()
+
+
 @pytest.mark.parametrize(
     "start, end, expected",
     [
