@@ -157,6 +157,10 @@ def test_import_form_covers_all_editable_model_fields(form_cls):
         f.name
         for f in model._meta.get_fields()
         if getattr(f, "concrete", False)
+        # M2M columns (e.g. CableSegment.lashed_with) are deliberately not
+        # CSV-importable; ManyToManyField.concrete also differs across the
+        # Django versions NetBox 4.5/4.6 bundle, so exclude them explicitly.
+        and not f.many_to_many
         and f.editable
         and not f.auto_created
         and f.name not in excluded
