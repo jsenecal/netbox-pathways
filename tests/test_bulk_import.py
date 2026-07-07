@@ -115,3 +115,70 @@ def test_directburied_import_form_accepts_location_endpoints():
     assert form.is_valid(), form.errors
     assert form.instance.start_location == loc_a
     assert form.instance.end_location == loc_b
+
+
+# Model fields deliberately absent from CSV import, with the reason.
+IMPORT_FIELD_EXCLUSIONS = {
+    models.PlannedRoute: {
+        "pathway_ids",  # computed by the route-planning engine
+        "constraints",  # computed by the route-planning engine
+        "parent",  # set by route-split operations, never by hand
+    },
+}
+
+# Framework plumbing present on every NetBoxModel; never CSV columns.
+NON_IMPORT_FIELDS = {"id", "created", "last_updated", "custom_field_data", "tags"}
+
+
+def _import_forms():
+    return [
+        obj
+        for name, obj in vars(forms).items()
+        if isinstance(obj, type)
+        and name.endswith("ImportForm")
+        and obj.__module__ == forms.__name__
+        and hasattr(obj, "Meta")
+    ]
+
+
+@pytest.mark.parametrize("form_cls", _import_forms(), ids=lambda f: f.__name__)
+def test_import_form_covers_all_editable_model_fields(form_cls):
+    """Every editable concrete model field is importable unless excluded above.
+
+    Guards against model/import-form drift like issue #58's missing
+    conduit_bank and bank_position columns: a new model field must either
+    appear in the import form or be added to IMPORT_FIELD_EXCLUSIONS with a
+    reason.
+    """
+    model = form_cls.Meta.model
+    declared = set(form_cls.Meta.fields) | set(form_cls.base_fields)
+    excluded = NON_IMPORT_FIELDS | IMPORT_FIELD_EXCLUSIONS.get(model, set())
+    missing = [
+        f.name
+        for f in model._meta.get_fields()
+        if getattr(f, "concrete", False)
+        and f.editable
+        and not f.auto_created
+        and f.name not in excluded
+        and f.name not in declared
+    ]
+    assert not missing, f"{form_cls.__name__} is missing importable columns: {missing}"
+
+
+@pytest.mark.django_db
+def test_conduit_import_form_accepts_bank_and_position(structures):
+    """Conduit rows can carry bank membership by bank label (issue #58 follow-up)."""
+    s1, s2 = structures
+    bank = models.ConduitBank.objects.create(label="CB58", start_structure=s1, end_structure=s2)
+    form = forms.ConduitImportForm(
+        data={
+            "label": "C58",
+            "start_structure": s1.name,
+            "end_structure": s2.name,
+            "conduit_bank": bank.label,
+            "bank_position": "A1",
+        }
+    )
+    assert form.is_valid(), form.errors
+    assert form.instance.conduit_bank == bank
+    assert form.instance.bank_position == "A1"
