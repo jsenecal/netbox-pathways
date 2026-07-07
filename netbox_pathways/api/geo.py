@@ -299,8 +299,10 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
 
 class PathwayGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
+    # Indoor (location-to-location) pathways have no path and cannot be mapped
     queryset = (
-        models.Pathway.objects.only(
+        models.Pathway.objects.filter(path__isnull=False)
+        .only(
             "id",
             "label",
             "pathway_type",
@@ -317,7 +319,8 @@ class PathwayGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
 class ConduitBankGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = (
-        models.ConduitBank.objects.annotate(
+        models.ConduitBank.objects.filter(path__isnull=False)
+        .annotate(
             conduit_count=Count("conduits"),
             _geo_length=Length("path"),
         )
@@ -341,6 +344,7 @@ class ConduitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = (
         models.Conduit.objects.filter(
             conduit_bank__isnull=True,
+            path__isnull=False,
         )
         .annotate(_geo_length=Length("path"))
         .only(
@@ -359,7 +363,8 @@ class ConduitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
 class AerialSpanGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = (
-        models.AerialSpan.objects.only(
+        models.AerialSpan.objects.filter(path__isnull=False)
+        .only(
             "id",
             "label",
             "pathway_type",
@@ -376,7 +381,8 @@ class AerialSpanGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
 class DirectBuriedGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = (
-        models.DirectBuried.objects.only(
+        models.DirectBuried.objects.filter(path__isnull=False)
+        .only(
             "id",
             "label",
             "pathway_type",

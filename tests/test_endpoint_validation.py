@@ -52,10 +52,11 @@ class TestPathwayEndpointValidation:
         pw = _make_pathway(path)
         pw.clean()
 
-    def test_no_path_skips_validation(self):
+    def test_no_path_with_structure_endpoint_raises(self):
         struct = _make_structure("S4", Point(100, 200, srid=SRID))
         pw = _make_pathway(path=None, start_structure=struct)
-        pw.clean()
+        with pytest.raises(ValidationError, match="[Pp]ath"):
+            pw.clean()
 
     def test_polygon_structure_inside_snaps_to_boundary(self):
         poly = Polygon(((0, 0), (100, 0), (100, 100), (0, 100), (0, 0)), srid=SRID)

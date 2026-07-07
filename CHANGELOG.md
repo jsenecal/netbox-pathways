@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Skip-info band + optimistic `/info` revalidation on the map.** Panning and zooming no longer block on a fresh `/info` round-trip before the GeoJSON layers start loading. The frontend now uses a three-band strategy: below `MIN_DATA_ZOOM` (11) nothing renders; in the gated band, if a recent `/info` is cached the cached decision drives the immediate render and `/info` revalidates in the background with `If-None-Match` (a 304 leaves the screen untouched, a 200 reconciles only if the decision actually changed); at or above `SKIP_INFO_ZOOM` (default 17) `/info` is skipped entirely because the viewport is too small to plausibly cross any hide/cluster threshold. Configurable via `PLUGINS_CONFIG['netbox_pathways']['map_skip_info_zoom']` if a deployment hits the edge case. The pure decision logic lives in `netbox_pathways/static/netbox_pathways/src/load-strategy.ts` (`chooseLoadStrategy`, `decideSkipInfo`, `decisionsDiffer`) and is covered by vitest. `fetchMapInfo`'s callback now also signals whether the response was a 200 (fresh) or 304 (unchanged), so callers can skip the reconciliation render in the common case.
+- `opgw` (OPGW -- optical ground wire) added to `AerialTypeChoices`, selectable as the Aerial Type on Aerial Spans in forms, filters, and CSV import. Refs #59.
+- **CSV bulk import for every catalogued model** -- `DirectBuried`, `Innerduct`, `ConduitJunction`, `PlannedRoute`, `SiteGeometry`, and `CircuitGeometry` gain import forms, views, and `/import/` pages; previously only `Structure`, `Conduit`, `AerialSpan`, `ConduitBank`, and `CableSegment` were importable. Every importable model's left-menu entry and list view now shows an Import button. The pathway import forms (`Conduit`, `AerialSpan`, `DirectBuried`, `Innerduct`, `ConduitBank`, `PlannedRoute`) also accept `start_location` / `end_location` columns (by location name) so indoor endpoints can be imported, and `AerialSpanImportForm` no longer hard-requires structure endpoints. Import forms now cover every editable model field: `ConduitImportForm` gains `conduit_bank` and `start_junction` / `end_junction` (matched by label), `bank_position`, `start_face` / `end_face`, and owner `tenant` columns; the other pathway import forms gain `tenant`; `CableSegmentImportForm` gains an optional `sequence` (blank auto-assigns as before). Pathway rows whose endpoints are both structures no longer require a `path` value -- the straight-line path is auto-generated at import exactly as the interactive form does. A coverage test now pins every import form to its model's editable fields so new fields cannot silently go missing from CSV import. Refs #58.
 - **Computed `geo_length` on Pathway and subclasses** -- the drawn length of a pathway's LineString, in metres, is now exposed as a read-only `geo_length` property computed by PostGIS (`ST_Length`) rather than entered manually. The existing `length` field stays for as-built / field-measured lengths (slack, sag, riser drops) and is now labelled "Length (m, as-built)" in detail panels alongside the new "Geo length (m, drawn)". A custom `PathwayQuerySet.with_geo_length()` adds an `_geo_length` annotation that the list views (`Pathway`, `Conduit`, `AerialSpan`, `DirectBuried`, `Innerduct`, `ConduitBank`) already apply so the new sortable "Geo length (m)" table column hits PostGIS, not Python. REST and GeoJSON serializers emit `geo_length`; `PathwayFilterSet` (and the per-subclass filtersets) gain `geo_length__gte` / `geo_length__lte` URL range filters via a `GeoLengthFilterMixin`. Requires a projected, metre-based SRID (`PLUGINS_CONFIG['netbox_pathways']['srid']`) -- which is already required for the rest of the plugin's geometry support.
 - **`/info` map endpoint and count-based layer gating** -- new `GET /api/plugins/pathways/geo/info/?bbox=...` returns per-layer feature counts (`structures`, `conduit_banks`, `conduits`, `aerial_spans`, `direct_buried`, `circuits`, and an `external` map for reference-mode registered layers) plus the per-layer thresholds the frontend uses to decide whether to render, client-cluster, or hide each layer. Thresholds default to `{structures: {cluster: 200, hide: 5000}, ...others: {hide: 500}}` and are overridable per-layer via `PLUGINS_CONFIG['netbox_pathways']['map_thresholds']`. The map frontend now consults `/info` on every pan/zoom and applies a single "structures clustered -> no supports" rule: whenever structures cross either threshold (client or server cluster), every pathway and reference-mode external layer is suppressed for that viewport. The hardcoded `MIN_BANK_ZOOM = 18` heuristic is removed; banks become visible whenever their viewport count is below the configured threshold. Over-budget layer toggles in the sidebar dim and display a count chip. `MapLayerRegistration` gains an optional `max_features` (default 500) for reference-mode external layers.
 - **Geometry on CSV bulk import** -- `StructureImportForm` (Point) and the LineString import forms (`ConduitImportForm`, `AerialSpanImportForm`, `ConduitBankImportForm`) now expose a `location` / `path` column. Values pass through the same forgiving parser as the interactive map widget, so spreadsheets can carry GeoJSON, WKT, DMS (hemispheres optional), or Google-Maps-style decimal `lat,lon` pairs. The parser produces WGS84 and Django GIS reprojects to the configured storage SRID at save time. New helper `netbox_pathways.coord_parser.parse_geometry_input` plus `ForgivingGeometryField` are also importable by downstream code that wants the same lenient parsing.
@@ -18,6 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`Pathway.path` is now optional for indoor pathways.** A pathway whose both
+  endpoints are locations (rooms, floors) can be saved without a geographic
+  path -- NetBox locations carry no coordinates, so previously such pathways
+  could not be created at all without drawing a meaningless map line. A path
+  is still required whenever either endpoint is geographic (a structure or,
+  for conduits, a junction); this rule now lives in `Pathway.clean()` instead
+  of the database NOT NULL constraint. Pathless indoor pathways are excluded
+  from the GeoJSON map layers. Innerducts now inherit locations (not just
+  structures) from their parent conduit, at validation time as well as save
+  time. Migration `0019_alter_pathway_path`.
 - **`AerialSpan.attachment_height` is now per-endpoint.** The single
   `attachment_height` field is replaced by `start_attachment_height` and
   `end_attachment_height` (both nullable floats, meters). A read-only
@@ -32,6 +44,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `start_attachment_height` and `end_attachment_height`. The REST API field
   `attachment_height` becomes read-only and derived; clients writing to it
   must target the per-side fields.
+
+### Fixed
+
+- **List-view Import buttons were dead links.** The plugin registered its
+  import URLs as `<model>_import`, but NetBox's list-view `BulkImport` action
+  reverses `<model>_bulk_import`, so every Import button on object tables
+  rendered without an href. The URL names now follow the NetBox convention
+  (the `/import/` paths themselves are unchanged). Fixes #58.
+- `ConduitBankImportForm` was missing the `length` column that the GUI add
+  form exposes. Fixes #58.
+
+## [0.2.2] - 2026-06-30
+
+### Fixed
+
+- **Geometry map widget renders blank on NetBox 4.6 / Django 6.0.** Django 6.0
+  stopped exposing the top-level `id`, `name`, and `geom_type` template-context
+  variables from `BaseGeometryWidget` (they moved under `widget`). The map
+  widget template read them at the top level, so on Django 6.0 the hidden
+  geometry input rendered with an empty `name` (the form submitted no geometry
+  and validation failed with "No geometry value submitted") and the map
+  container rendered with an empty `data-field-id` (the Leaflet/geoman
+  initializer bailed and no map appeared) -- making it impossible to add a
+  Structure or draw a Pathway. `PathwaysMapWidget.get_context` now re-exposes
+  these variables; the fix stays backwards compatible with NetBox 4.5 /
+  Django 5.2. Fixes #52.
 
 ## [0.2.1] - 2026-05-07
 

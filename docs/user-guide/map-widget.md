@@ -143,9 +143,11 @@ vertex.
 ## CSV Bulk Import
 
 The same forgiving parser is wired into the bulk-import forms for
-`Structure` (column name `location`) and the LineString pathway models
-`Conduit`, `AerialSpan`, and `ConduitBank` (column name `path`).
-Spreadsheets can supply any of the textarea formats:
+`Structure` (column name `location`), `SiteGeometry` (column name
+`geometry`), and the LineString models `Conduit`, `AerialSpan`,
+`DirectBuried`, `Innerduct`, `ConduitBank`, and `CircuitGeometry`
+(column name `path`). Spreadsheets can supply any of the textarea
+formats:
 
 - GeoJSON Geometry, Feature, or FeatureCollection
 - WKT (`POINT(lon lat)` or `LINESTRING(lon lat, lon lat, ...)`)
@@ -154,9 +156,12 @@ Spreadsheets can supply any of the textarea formats:
 - Decimal `lat, lon` pairs in Google Maps order
 
 Coordinates are interpreted as WGS84 and reprojected to the configured
-storage SRID at save time. Leave the column empty to skip geometry for
-a given row -- the geometry can be drawn or pasted later through the
-form widget.
+storage SRID at save time. The `path` column may be left empty: rows
+whose endpoints are both structures get a straight-line path between
+the two structures auto-generated at import time (the same fallback the
+interactive form applies), and location-to-location (indoor) rows need
+no geographic path at all. The auto-generated or omitted geometry can
+be refined later through the form widget.
 
 ## Multiple Base Layers
 

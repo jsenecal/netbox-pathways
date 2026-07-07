@@ -221,7 +221,12 @@ class Pathway(NetBoxModel):
 
     label = models.CharField(max_length=100, blank=True)
     pathway_type = models.CharField(max_length=50, choices=PathwayTypeChoices, editable=False)
-    path = models.LineStringField(srid=get_srid(), help_text="Geographic path")
+    path = models.LineStringField(
+        srid=get_srid(),
+        null=True,
+        blank=True,
+        help_text="Geographic path (not applicable to indoor pathways between two locations)",
+    )
     start_structure = models.ForeignKey(
         Structure,
         on_delete=models.PROTECT,
@@ -294,6 +299,16 @@ class Pathway(NetBoxModel):
         return self.end_structure or self.end_location
 
     @property
+    def is_indoor(self):
+        """Both endpoints are dcim.Locations, which carry no geometry."""
+        return bool(
+            self.start_location_id
+            and self.end_location_id
+            and not self.start_structure_id
+            and not self.end_structure_id
+        )
+
+    @property
     def geo_length(self):
         """Length of `path` in metres, computed by PostGIS `ST_Length`.
 
@@ -313,6 +328,10 @@ class Pathway(NetBoxModel):
     def clean(self):
         super().clean()
         if not self.path:
+            if not self.is_indoor:
+                raise ValidationError(
+                    {"path": "Path is required unless both endpoints are locations (indoor pathway)."}
+                )
             return
         self._validate_and_snap_endpoint("start")
         self._validate_and_snap_endpoint("end")
@@ -509,6 +528,11 @@ class Conduit(Pathway):
     def map_visible(self):
         return self.conduit_bank_id is None
 
+    @property
+    def is_indoor(self):
+        """Junction endpoints are geographic, so they also preclude indoor status."""
+        return super().is_indoor and not self.start_junction_id and not self.end_junction_id
+
     class Meta:
         verbose_name = "Conduit"
         verbose_name_plural = "Conduits"
@@ -656,17 +680,26 @@ class Innerduct(Pathway):
         verbose_name = "Innerduct"
         verbose_name_plural = "Innerducts"
 
+    def _inherit_parent_endpoints(self):
+        """Inherit endpoints from the parent conduit, per side, if not explicitly set."""
+        if not self.parent_conduit_id:
+            return
+        if not any([self.start_structure_id, self.start_location_id]):
+            self.start_structure = self.parent_conduit.start_structure
+            self.start_location = self.parent_conduit.start_location
+        if not any([self.end_structure_id, self.end_location_id]):
+            self.end_structure = self.parent_conduit.end_structure
+            self.end_location = self.parent_conduit.end_location
+
+    def clean(self):
+        # Inherit before validation so the path-required check sees the
+        # effective endpoints, not just the explicitly set ones.
+        self._inherit_parent_endpoints()
+        super().clean()
+
     def save(self, *args, **kwargs):
         self.pathway_type = "innerduct"
-        if self.parent_conduit_id:
-            # Inherit start endpoint from parent if not explicitly set
-            if not any([self.start_structure_id, self.start_location_id]):
-                self.start_structure = self.parent_conduit.start_structure
-                self.start_location = self.parent_conduit.start_location
-            # Inherit end endpoint from parent if not explicitly set
-            if not any([self.end_structure_id, self.end_location_id]):
-                self.end_structure = self.parent_conduit.end_structure
-                self.end_location = self.parent_conduit.end_location
+        self._inherit_parent_endpoints()
         super().save(*args, **kwargs)
 
 

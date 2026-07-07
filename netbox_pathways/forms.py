@@ -45,6 +45,33 @@ _IMPORT_GEOMETRY_HELP = (
 )
 
 
+def _csv_structure_field(side):
+    return CSVModelChoiceField(
+        queryset=Structure.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text=f"{side} structure name",
+    )
+
+
+def _csv_location_field(side):
+    return CSVModelChoiceField(
+        queryset=Location.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text=f"{side} location name (indoor endpoint)",
+    )
+
+
+def _csv_tenant_field(help_text):
+    return CSVModelChoiceField(
+        queryset=Tenant.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text=help_text,
+    )
+
+
 class PathwaysMapWidget(BaseGeometryWidget):
     """Map widget using Leaflet + geoman for geometry editing."""
 
@@ -79,12 +106,79 @@ class PathwaysMapWidget(BaseGeometryWidget):
 
     def get_context(self, name, value, attrs):
         context = super().get_context(name, value, attrs)
+        # Django 6.0 stopped exposing id/name/geom_type at the top level of the
+        # widget context (they now live under ``widget``); our template reads
+        # them at the top level, so re-expose them here. setdefault keeps this
+        # backwards compatible with Django <= 5.2, which still sets them. (#52)
+        widget = context["widget"]
+        context.setdefault("id", widget["attrs"].get("id", ""))
+        context.setdefault("name", widget["name"])
+        context.setdefault("geom_type", widget["attrs"].get("geom_name", self.geom_type))
         if self.endpoint_geojson:
             context["endpoint_json"] = mark_safe(json.dumps(self.endpoint_geojson))  # noqa: S308
         return context
 
 
-class PathwayEndpointFormMixin:
+class PathwayPathFallbackMixin:
+    """Derive a missing path from endpoint structures, or accept pathless indoor rows.
+
+    Shared by the interactive pathway forms and the CSV import forms so both
+    have the same semantics: structure-to-structure entries get a straight
+    LineString between the structures, location-to-location (indoor) entries
+    need no geographic path at all.
+    """
+
+    def clean(self):
+        super().clean()
+        cleaned = self.cleaned_data
+        path = cleaned.get("path")
+        if path:
+            return cleaned
+
+        start_struct = cleaned.get("start_structure")
+        end_struct = cleaned.get("end_structure")
+        start_loc = cleaned.get("start_location")
+        end_loc = cleaned.get("end_location")
+
+        # Innerduct fallback: use parent conduit's endpoints, per side
+        parent = cleaned.get("parent_conduit")
+        if parent:
+            if not start_struct and not start_loc:
+                start_struct = parent.start_structure
+                start_loc = parent.start_location
+            if not end_struct and not end_loc:
+                end_struct = parent.end_structure
+                end_loc = parent.end_location
+
+        # Indoor pathway (both endpoints are locations): no geographic path exists
+        if start_loc and end_loc and not start_struct and not end_struct:
+            return cleaned
+
+        # Auto-generate path from structures
+        if start_struct and end_struct and start_struct.location and end_struct.location:
+            start_geom = start_struct.location
+            end_geom = end_struct.location
+            start_pt = start_geom.centroid if start_geom.geom_type != "Point" else start_geom
+            end_pt = end_geom.centroid if end_geom.geom_type != "Point" else end_geom
+            cleaned["path"] = LineString(
+                (start_pt.x, start_pt.y),
+                (end_pt.x, end_pt.y),
+                srid=get_srid(),
+            )
+        else:
+            from django.core.exceptions import ValidationError
+
+            raise ValidationError(
+                {
+                    "path": "Path is required unless both endpoints are structures "
+                    "(auto-generated) or both are locations (indoor)."
+                }
+            )
+
+        return cleaned
+
+
+class PathwayEndpointFormMixin(PathwayPathFallbackMixin):
     """Mixin for pathway forms: auto-generates path from structures, injects geometry for widget."""
 
     def __init__(self, *args, **kwargs):
@@ -105,41 +199,6 @@ class PathwayEndpointFormMixin:
                 endpoint_data[side] = json.loads(geom_4326.geojson)
         widget = self.fields["path"].widget
         widget.endpoint_geojson = endpoint_data if endpoint_data else None
-
-    def clean(self):
-        super().clean()
-        cleaned = self.cleaned_data
-        path = cleaned.get("path")
-        if path:
-            return cleaned
-
-        # Auto-generate path from structures
-        start_struct = cleaned.get("start_structure")
-        end_struct = cleaned.get("end_structure")
-
-        # Innerduct fallback: use parent conduit's structures
-        if not start_struct and not end_struct:
-            parent = cleaned.get("parent_conduit")
-            if parent:
-                start_struct = start_struct or parent.start_structure
-                end_struct = end_struct or parent.end_structure
-
-        if start_struct and end_struct and start_struct.location and end_struct.location:
-            start_geom = start_struct.location
-            end_geom = end_struct.location
-            start_pt = start_geom.centroid if start_geom.geom_type != "Point" else start_geom
-            end_pt = end_geom.centroid if end_geom.geom_type != "Point" else end_geom
-            cleaned["path"] = LineString(
-                (start_pt.x, start_pt.y),
-                (end_pt.x, end_pt.y),
-                srid=get_srid(),
-            )
-        else:
-            from django.core.exceptions import ValidationError
-
-            raise ValidationError({"path": "Path is required when both endpoint structures are not set."})
-
-        return cleaned
 
 
 # --- Structure ---
@@ -204,12 +263,7 @@ class StructureImportForm(NetBoxModelImportForm):
         required=False,
         help_text="Tenant name",
     )
-    installed_by = CSVModelChoiceField(
-        queryset=Tenant.objects.all(),
-        to_field_name="name",
-        required=False,
-        help_text="Installer tenant name",
-    )
+    installed_by = _csv_tenant_field("Installer tenant name")
     location = ForgivingGeometryField(
         required=False,
         srid=get_srid(),
@@ -416,25 +470,31 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
         }
 
 
-class ConduitImportForm(NetBoxModelImportForm):
-    start_structure = CSVModelChoiceField(
-        queryset=Structure.objects.all(),
-        to_field_name="name",
+class ConduitImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
+    start_structure = _csv_structure_field("Starting")
+    end_structure = _csv_structure_field("Ending")
+    start_location = _csv_location_field("Starting")
+    end_location = _csv_location_field("Ending")
+    conduit_bank = CSVModelChoiceField(
+        queryset=ConduitBank.objects.all(),
+        to_field_name="label",
         required=False,
-        help_text="Starting structure name",
+        help_text="Parent conduit bank label",
     )
-    end_structure = CSVModelChoiceField(
-        queryset=Structure.objects.all(),
-        to_field_name="name",
+    start_junction = CSVModelChoiceField(
+        queryset=ConduitJunction.objects.all(),
+        to_field_name="label",
         required=False,
-        help_text="Ending structure name",
+        help_text="Starting junction label",
     )
-    installed_by = CSVModelChoiceField(
-        queryset=Tenant.objects.all(),
-        to_field_name="name",
+    end_junction = CSVModelChoiceField(
+        queryset=ConduitJunction.objects.all(),
+        to_field_name="label",
         required=False,
-        help_text="Installer tenant name",
+        help_text="Ending junction label",
     )
+    tenant = _csv_tenant_field("Owner tenant name")
+    installed_by = _csv_tenant_field("Installer tenant name")
     path = ForgivingGeometryField(
         required=False,
         srid=get_srid(),
@@ -448,11 +508,20 @@ class ConduitImportForm(NetBoxModelImportForm):
             "label",
             "material",
             "start_structure",
+            "start_face",
             "end_structure",
+            "end_face",
+            "start_location",
+            "end_location",
+            "start_junction",
+            "end_junction",
+            "conduit_bank",
+            "bank_position",
             "inner_diameter",
             "outer_diameter",
             "depth",
             "length",
+            "tenant",
             "installed_by",
             "installation_date",
             "commissioned_date",
@@ -549,23 +618,13 @@ class AerialSpanForm(PathwayEndpointFormMixin, NetBoxModelForm):
         }
 
 
-class AerialSpanImportForm(NetBoxModelImportForm):
-    start_structure = CSVModelChoiceField(
-        queryset=Structure.objects.all(),
-        to_field_name="name",
-        help_text="Starting structure name",
-    )
-    end_structure = CSVModelChoiceField(
-        queryset=Structure.objects.all(),
-        to_field_name="name",
-        help_text="Ending structure name",
-    )
-    installed_by = CSVModelChoiceField(
-        queryset=Tenant.objects.all(),
-        to_field_name="name",
-        required=False,
-        help_text="Installer tenant name",
-    )
+class AerialSpanImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
+    start_structure = _csv_structure_field("Starting")
+    end_structure = _csv_structure_field("Ending")
+    start_location = _csv_location_field("Starting")
+    end_location = _csv_location_field("Ending")
+    tenant = _csv_tenant_field("Owner tenant name")
+    installed_by = _csv_tenant_field("Installer tenant name")
 
     path = ForgivingGeometryField(
         required=False,
@@ -581,6 +640,8 @@ class AerialSpanImportForm(NetBoxModelImportForm):
             "aerial_type",
             "start_structure",
             "end_structure",
+            "start_location",
+            "end_location",
             "start_attachment_height",
             "end_attachment_height",
             "sag",
@@ -588,6 +649,7 @@ class AerialSpanImportForm(NetBoxModelImportForm):
             "wind_loading",
             "ice_loading",
             "length",
+            "tenant",
             "installed_by",
             "installation_date",
             "commissioned_date",
@@ -697,6 +759,42 @@ class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
         }
 
 
+class DirectBuriedImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
+    start_structure = _csv_structure_field("Starting")
+    end_structure = _csv_structure_field("Ending")
+    start_location = _csv_location_field("Starting")
+    end_location = _csv_location_field("Ending")
+    tenant = _csv_tenant_field("Owner tenant name")
+    installed_by = _csv_tenant_field("Installer tenant name")
+    path = ForgivingGeometryField(
+        required=False,
+        srid=get_srid(),
+        geom_type="LINESTRING",
+        help_text=_IMPORT_GEOMETRY_HELP,
+    )
+
+    class Meta:
+        model = DirectBuried
+        fields = [
+            "label",
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+            "burial_depth",
+            "warning_tape",
+            "tracer_wire",
+            "armor_type",
+            "length",
+            "tenant",
+            "installed_by",
+            "installation_date",
+            "commissioned_date",
+            "path",
+            "comments",
+        ]
+
+
 # --- Innerduct ---
 
 
@@ -796,6 +894,46 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
         }
 
 
+class InnerductImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
+    parent_conduit = CSVModelChoiceField(
+        queryset=Conduit.objects.all(),
+        help_text="Parent conduit ID (numeric)",
+    )
+    start_structure = _csv_structure_field("Starting")
+    end_structure = _csv_structure_field("Ending")
+    start_location = _csv_location_field("Starting")
+    end_location = _csv_location_field("Ending")
+    tenant = _csv_tenant_field("Owner tenant name")
+    installed_by = _csv_tenant_field("Installer tenant name")
+    path = ForgivingGeometryField(
+        required=False,
+        srid=get_srid(),
+        geom_type="LINESTRING",
+        help_text=_IMPORT_GEOMETRY_HELP,
+    )
+
+    class Meta:
+        model = Innerduct
+        fields = [
+            "label",
+            "parent_conduit",
+            "size",
+            "color",
+            "position",
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+            "length",
+            "tenant",
+            "installed_by",
+            "installation_date",
+            "commissioned_date",
+            "path",
+            "comments",
+        ]
+
+
 # --- Conduit Bank ---
 
 
@@ -856,25 +994,13 @@ class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
         }
 
 
-class ConduitBankImportForm(NetBoxModelImportForm):
-    start_structure = CSVModelChoiceField(
-        queryset=Structure.objects.all(),
-        to_field_name="name",
-        required=False,
-        help_text="Start structure name",
-    )
-    end_structure = CSVModelChoiceField(
-        queryset=Structure.objects.all(),
-        to_field_name="name",
-        required=False,
-        help_text="End structure name",
-    )
-    installed_by = CSVModelChoiceField(
-        queryset=Tenant.objects.all(),
-        to_field_name="name",
-        required=False,
-        help_text="Installer tenant name",
-    )
+class ConduitBankImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
+    start_structure = _csv_structure_field("Start")
+    end_structure = _csv_structure_field("End")
+    start_location = _csv_location_field("Start")
+    end_location = _csv_location_field("End")
+    tenant = _csv_tenant_field("Owner tenant name")
+    installed_by = _csv_tenant_field("Installer tenant name")
 
     path = ForgivingGeometryField(
         required=False,
@@ -891,11 +1017,15 @@ class ConduitBankImportForm(NetBoxModelImportForm):
             "start_face",
             "end_structure",
             "end_face",
+            "start_location",
+            "end_location",
             "configuration",
             "total_conduits",
             "height",
             "width",
             "encasement_type",
+            "length",
+            "tenant",
             "installed_by",
             "installation_date",
             "commissioned_date",
@@ -971,6 +1101,33 @@ class ConduitJunctionForm(NetBoxModelForm):
         ]
 
 
+class ConduitJunctionImportForm(NetBoxModelImportForm):
+    trunk_conduit = CSVModelChoiceField(
+        queryset=Conduit.objects.all(),
+        help_text="Trunk conduit ID (numeric)",
+    )
+    branch_conduit = CSVModelChoiceField(
+        queryset=Conduit.objects.all(),
+        help_text="Branch conduit ID (numeric)",
+    )
+    towards_structure = CSVModelChoiceField(
+        queryset=Structure.objects.all(),
+        to_field_name="name",
+        help_text="Name of the trunk endpoint structure the junction faces",
+    )
+
+    class Meta:
+        model = ConduitJunction
+        fields = [
+            "label",
+            "trunk_conduit",
+            "branch_conduit",
+            "towards_structure",
+            "position_on_trunk",
+            "comments",
+        ]
+
+
 # --- Cable Segment ---
 
 
@@ -1012,6 +1169,7 @@ class CableSegmentImportForm(NetBoxModelImportForm):
         fields = [
             "cable",
             "pathway",
+            "sequence",
             "comments",
         ]
 
@@ -1096,6 +1254,29 @@ class SiteGeometryForm(NetBoxModelForm):
         }
 
 
+class SiteGeometryImportForm(NetBoxModelImportForm):
+    site = CSVModelChoiceField(
+        queryset=Site.objects.all(),
+        to_field_name="name",
+        help_text="Site name",
+    )
+    structure = CSVModelChoiceField(
+        queryset=Structure.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Structure that physically represents this site",
+    )
+    geometry = ForgivingGeometryField(
+        required=False,
+        srid=get_srid(),
+        help_text=_IMPORT_GEOMETRY_HELP,
+    )
+
+    class Meta:
+        model = SiteGeometry
+        fields = ["site", "structure", "geometry", "comments"]
+
+
 # --- Circuit Geometry ---
 
 
@@ -1117,6 +1298,22 @@ class CircuitGeometryForm(NetBoxModelForm):
         widgets = {
             "path": PathwaysMapWidget(),
         }
+
+
+class CircuitGeometryImportForm(NetBoxModelImportForm):
+    circuit = CSVModelChoiceField(
+        queryset=Circuit.objects.all(),
+        help_text="Circuit ID (numeric)",
+    )
+    path = ForgivingGeometryField(
+        srid=get_srid(),
+        geom_type="LINESTRING",
+        help_text=_IMPORT_GEOMETRY_HELP,
+    )
+
+    class Meta:
+        model = CircuitGeometry
+        fields = ["circuit", "path", "provider_reference", "comments"]
 
 
 # --- Planned Route ---
@@ -1174,6 +1371,38 @@ class PlannedRouteForm(NetBoxModelForm):
             "cable",
             "comments",
             "tags",
+        ]
+
+
+class PlannedRouteImportForm(NetBoxModelImportForm):
+    start_structure = _csv_structure_field("Starting")
+    end_structure = _csv_structure_field("Ending")
+    start_location = _csv_location_field("Starting")
+    end_location = _csv_location_field("Ending")
+    tenant = CSVModelChoiceField(
+        queryset=Tenant.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Tenant name",
+    )
+    cable = CSVModelChoiceField(
+        queryset=Cable.objects.all(),
+        required=False,
+        help_text="Cable ID (numeric)",
+    )
+
+    class Meta:
+        model = PlannedRoute
+        fields = [
+            "name",
+            "status",
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+            "tenant",
+            "cable",
+            "comments",
         ]
 
 
