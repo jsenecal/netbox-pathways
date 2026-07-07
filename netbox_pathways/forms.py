@@ -63,6 +63,15 @@ def _csv_location_field(side):
     )
 
 
+def _csv_tenant_field(help_text):
+    return CSVModelChoiceField(
+        queryset=Tenant.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text=help_text,
+    )
+
+
 class PathwaysMapWidget(BaseGeometryWidget):
     """Map widget using Leaflet + geoman for geometry editing."""
 
@@ -110,27 +119,14 @@ class PathwaysMapWidget(BaseGeometryWidget):
         return context
 
 
-class PathwayEndpointFormMixin:
-    """Mixin for pathway forms: auto-generates path from structures, injects geometry for widget."""
+class PathwayPathFallbackMixin:
+    """Derive a missing path from endpoint structures, or accept pathless indoor rows.
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if "path" in self.fields:
-            self.fields["path"].required = False
-        self._inject_endpoint_geometry()
-
-    def _inject_endpoint_geometry(self):
-        """Serialize structure geometry into the widget for client-side markers."""
-        if "path" not in self.fields:
-            return
-        endpoint_data = {}
-        for side in ("start", "end"):
-            structure = getattr(self.instance, f"{side}_structure", None)
-            if structure and structure.location:
-                geom_4326 = to_leaflet(structure.location)
-                endpoint_data[side] = json.loads(geom_4326.geojson)
-        widget = self.fields["path"].widget
-        widget.endpoint_geojson = endpoint_data if endpoint_data else None
+    Shared by the interactive pathway forms and the CSV import forms so both
+    have the same semantics: structure-to-structure entries get a straight
+    LineString between the structures, location-to-location (indoor) entries
+    need no geographic path at all.
+    """
 
     def clean(self):
         super().clean()
@@ -180,6 +176,29 @@ class PathwayEndpointFormMixin:
             )
 
         return cleaned
+
+
+class PathwayEndpointFormMixin(PathwayPathFallbackMixin):
+    """Mixin for pathway forms: auto-generates path from structures, injects geometry for widget."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "path" in self.fields:
+            self.fields["path"].required = False
+        self._inject_endpoint_geometry()
+
+    def _inject_endpoint_geometry(self):
+        """Serialize structure geometry into the widget for client-side markers."""
+        if "path" not in self.fields:
+            return
+        endpoint_data = {}
+        for side in ("start", "end"):
+            structure = getattr(self.instance, f"{side}_structure", None)
+            if structure and structure.location:
+                geom_4326 = to_leaflet(structure.location)
+                endpoint_data[side] = json.loads(geom_4326.geojson)
+        widget = self.fields["path"].widget
+        widget.endpoint_geojson = endpoint_data if endpoint_data else None
 
 
 # --- Structure ---
@@ -244,12 +263,7 @@ class StructureImportForm(NetBoxModelImportForm):
         required=False,
         help_text="Tenant name",
     )
-    installed_by = CSVModelChoiceField(
-        queryset=Tenant.objects.all(),
-        to_field_name="name",
-        required=False,
-        help_text="Installer tenant name",
-    )
+    installed_by = _csv_tenant_field("Installer tenant name")
     location = ForgivingGeometryField(
         required=False,
         srid=get_srid(),
@@ -456,17 +470,31 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
         }
 
 
-class ConduitImportForm(NetBoxModelImportForm):
+class ConduitImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
     start_structure = _csv_structure_field("Starting")
     end_structure = _csv_structure_field("Ending")
     start_location = _csv_location_field("Starting")
     end_location = _csv_location_field("Ending")
-    installed_by = CSVModelChoiceField(
-        queryset=Tenant.objects.all(),
-        to_field_name="name",
+    conduit_bank = CSVModelChoiceField(
+        queryset=ConduitBank.objects.all(),
+        to_field_name="label",
         required=False,
-        help_text="Installer tenant name",
+        help_text="Parent conduit bank label",
     )
+    start_junction = CSVModelChoiceField(
+        queryset=ConduitJunction.objects.all(),
+        to_field_name="label",
+        required=False,
+        help_text="Starting junction label",
+    )
+    end_junction = CSVModelChoiceField(
+        queryset=ConduitJunction.objects.all(),
+        to_field_name="label",
+        required=False,
+        help_text="Ending junction label",
+    )
+    tenant = _csv_tenant_field("Owner tenant name")
+    installed_by = _csv_tenant_field("Installer tenant name")
     path = ForgivingGeometryField(
         required=False,
         srid=get_srid(),
@@ -480,13 +508,20 @@ class ConduitImportForm(NetBoxModelImportForm):
             "label",
             "material",
             "start_structure",
+            "start_face",
             "end_structure",
+            "end_face",
             "start_location",
             "end_location",
+            "start_junction",
+            "end_junction",
+            "conduit_bank",
+            "bank_position",
             "inner_diameter",
             "outer_diameter",
             "depth",
             "length",
+            "tenant",
             "installed_by",
             "installation_date",
             "commissioned_date",
@@ -583,17 +618,13 @@ class AerialSpanForm(PathwayEndpointFormMixin, NetBoxModelForm):
         }
 
 
-class AerialSpanImportForm(NetBoxModelImportForm):
+class AerialSpanImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
     start_structure = _csv_structure_field("Starting")
     end_structure = _csv_structure_field("Ending")
     start_location = _csv_location_field("Starting")
     end_location = _csv_location_field("Ending")
-    installed_by = CSVModelChoiceField(
-        queryset=Tenant.objects.all(),
-        to_field_name="name",
-        required=False,
-        help_text="Installer tenant name",
-    )
+    tenant = _csv_tenant_field("Owner tenant name")
+    installed_by = _csv_tenant_field("Installer tenant name")
 
     path = ForgivingGeometryField(
         required=False,
@@ -618,6 +649,7 @@ class AerialSpanImportForm(NetBoxModelImportForm):
             "wind_loading",
             "ice_loading",
             "length",
+            "tenant",
             "installed_by",
             "installation_date",
             "commissioned_date",
@@ -727,17 +759,13 @@ class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
         }
 
 
-class DirectBuriedImportForm(NetBoxModelImportForm):
+class DirectBuriedImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
     start_structure = _csv_structure_field("Starting")
     end_structure = _csv_structure_field("Ending")
     start_location = _csv_location_field("Starting")
     end_location = _csv_location_field("Ending")
-    installed_by = CSVModelChoiceField(
-        queryset=Tenant.objects.all(),
-        to_field_name="name",
-        required=False,
-        help_text="Installer tenant name",
-    )
+    tenant = _csv_tenant_field("Owner tenant name")
+    installed_by = _csv_tenant_field("Installer tenant name")
     path = ForgivingGeometryField(
         required=False,
         srid=get_srid(),
@@ -758,6 +786,7 @@ class DirectBuriedImportForm(NetBoxModelImportForm):
             "tracer_wire",
             "armor_type",
             "length",
+            "tenant",
             "installed_by",
             "installation_date",
             "commissioned_date",
@@ -865,7 +894,7 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
         }
 
 
-class InnerductImportForm(NetBoxModelImportForm):
+class InnerductImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
     parent_conduit = CSVModelChoiceField(
         queryset=Conduit.objects.all(),
         help_text="Parent conduit ID (numeric)",
@@ -874,12 +903,8 @@ class InnerductImportForm(NetBoxModelImportForm):
     end_structure = _csv_structure_field("Ending")
     start_location = _csv_location_field("Starting")
     end_location = _csv_location_field("Ending")
-    installed_by = CSVModelChoiceField(
-        queryset=Tenant.objects.all(),
-        to_field_name="name",
-        required=False,
-        help_text="Installer tenant name",
-    )
+    tenant = _csv_tenant_field("Owner tenant name")
+    installed_by = _csv_tenant_field("Installer tenant name")
     path = ForgivingGeometryField(
         required=False,
         srid=get_srid(),
@@ -900,6 +925,7 @@ class InnerductImportForm(NetBoxModelImportForm):
             "start_location",
             "end_location",
             "length",
+            "tenant",
             "installed_by",
             "installation_date",
             "commissioned_date",
@@ -968,17 +994,13 @@ class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
         }
 
 
-class ConduitBankImportForm(NetBoxModelImportForm):
+class ConduitBankImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
     start_structure = _csv_structure_field("Start")
     end_structure = _csv_structure_field("End")
     start_location = _csv_location_field("Start")
     end_location = _csv_location_field("End")
-    installed_by = CSVModelChoiceField(
-        queryset=Tenant.objects.all(),
-        to_field_name="name",
-        required=False,
-        help_text="Installer tenant name",
-    )
+    tenant = _csv_tenant_field("Owner tenant name")
+    installed_by = _csv_tenant_field("Installer tenant name")
 
     path = ForgivingGeometryField(
         required=False,
@@ -1003,6 +1025,7 @@ class ConduitBankImportForm(NetBoxModelImportForm):
             "width",
             "encasement_type",
             "length",
+            "tenant",
             "installed_by",
             "installation_date",
             "commissioned_date",
@@ -1146,6 +1169,7 @@ class CableSegmentImportForm(NetBoxModelImportForm):
         fields = [
             "cable",
             "pathway",
+            "sequence",
             "comments",
         ]
 
