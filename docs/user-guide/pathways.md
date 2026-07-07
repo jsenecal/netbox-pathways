@@ -24,7 +24,7 @@ An overhead route, typically between poles.
 
 | Field | Description |
 |-------|-------------|
-| Aerial Type | Messenger, Self-support, Lashed, Wrapped, ADSS |
+| Aerial Type | Messenger, Self-support, Lashed, Wrapped, ADSS, OPGW |
 | Start Attachment Height | Height of cable attachment at the start side, in meters. Nullable. |
 | End Attachment Height | Height of cable attachment at the end side, in meters. Nullable. |
 | Attachment Height (derived) | Read-only mean of the two sides; falls back to whichever side is populated, or `None` if both are unset. Exposed on the detail panel, list table, and REST API but not editable. |

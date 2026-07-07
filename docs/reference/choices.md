@@ -52,6 +52,7 @@ All choice fields use NetBox's `ChoiceSet` base class and allow blank values (fi
 | `lashed` | Lashed | Green |
 | `wrapped` | Wrapped | Orange |
 | `adss` | ADSS | Purple |
+| `opgw` | OPGW | Red |
 
 ## ConduitBankConfigChoices
 
