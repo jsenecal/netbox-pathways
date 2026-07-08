@@ -46,6 +46,7 @@ class StructurePanel(ObjectAttributesPanel):
 
 class PathwayPanel(ObjectAttributesPanel):
     label = attrs.TextAttr("label", label=_("Label"))
+    status = attrs.ChoiceAttr("status", label=_("Status"))
     pathway_type = attrs.ChoiceAttr("pathway_type", label=_("Type"))
     start_structure = attrs.RelatedObjectAttr("start_structure", linkify=True, label=_("Start structure"))
     end_structure = attrs.RelatedObjectAttr("end_structure", linkify=True, label=_("End structure"))
@@ -62,6 +63,7 @@ class PathwayPanel(ObjectAttributesPanel):
 
 class ConduitPanel(ObjectAttributesPanel):
     label = attrs.TextAttr("label", label=_("Label"))
+    status = attrs.ChoiceAttr("status", label=_("Status"))
     material = attrs.ChoiceAttr("material", label=_("Material"))
     start_structure = attrs.RelatedObjectAttr("start_structure", linkify=True, label=_("Start structure"))
     end_structure = attrs.RelatedObjectAttr("end_structure", linkify=True, label=_("End structure"))
@@ -82,6 +84,7 @@ class ConduitPanel(ObjectAttributesPanel):
 
 class AerialSpanPanel(ObjectAttributesPanel):
     label = attrs.TextAttr("label", label=_("Label"))
+    status = attrs.ChoiceAttr("status", label=_("Status"))
     aerial_type = attrs.ChoiceAttr("aerial_type", label=_("Aerial type"))
     start_structure = attrs.RelatedObjectAttr("start_structure", linkify=True, label=_("Start structure"))
     end_structure = attrs.RelatedObjectAttr("end_structure", linkify=True, label=_("End structure"))
@@ -104,6 +107,7 @@ class AerialSpanPanel(ObjectAttributesPanel):
 
 class DirectBuriedPanel(ObjectAttributesPanel):
     label = attrs.TextAttr("label", label=_("Label"))
+    status = attrs.ChoiceAttr("status", label=_("Status"))
     start_structure = attrs.RelatedObjectAttr("start_structure", linkify=True, label=_("Start structure"))
     end_structure = attrs.RelatedObjectAttr("end_structure", linkify=True, label=_("End structure"))
     start_location = attrs.RelatedObjectAttr("start_location", linkify=True, label=_("Start location"))
@@ -122,6 +126,7 @@ class DirectBuriedPanel(ObjectAttributesPanel):
 
 class InnerductPanel(ObjectAttributesPanel):
     label = attrs.TextAttr("label", label=_("Label"))
+    status = attrs.ChoiceAttr("status", label=_("Status"))
     parent_conduit = attrs.RelatedObjectAttr("parent_conduit", linkify=True, label=_("Parent conduit"))
     size = attrs.TextAttr("size", label=_("Size"))
     color = attrs.TextAttr("color", label=_("Color"))
@@ -136,6 +141,7 @@ class InnerductPanel(ObjectAttributesPanel):
 
 class ConduitBankPanel(ObjectAttributesPanel):
     label = attrs.TextAttr("label", label=_("Label"))
+    status = attrs.ChoiceAttr("status", label=_("Status"))
     start_structure = attrs.RelatedObjectAttr("start_structure", linkify=True, label=_("Start structure"))
     start_face = attrs.ChoiceAttr("start_face", label=_("Start face"))
     end_structure = attrs.RelatedObjectAttr("end_structure", linkify=True, label=_("End structure"))

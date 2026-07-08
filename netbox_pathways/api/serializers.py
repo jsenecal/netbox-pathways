@@ -12,6 +12,7 @@ from ..choices import (
     ConduitBankConfigChoices,
     ConduitMaterialChoices,
     EncasementTypeChoices,
+    PathwayStatusChoices,
     PathwayTypeChoices,
     PlannedRouteStatusChoices,
     StructureStatusChoices,
@@ -115,6 +116,7 @@ class ConduitBankSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_pathways-api:conduitbank-detail",
     )
+    status = ChoiceField(choices=PathwayStatusChoices, required=False)
     start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
     end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
     start_face = ChoiceField(choices=BankFaceChoices, required=False, allow_blank=True)
@@ -133,6 +135,7 @@ class ConduitBankSerializer(NetBoxModelSerializer):
             "display_url",
             "display",
             "label",
+            "status",
             "start_structure",
             "end_structure",
             "start_face",
@@ -161,6 +164,7 @@ class PathwaySerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_pathways-api:pathway-detail",
     )
+    status = ChoiceField(choices=PathwayStatusChoices, required=False)
     pathway_type = ChoiceField(choices=PathwayTypeChoices, required=False, allow_blank=True)
     start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
     end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
@@ -179,6 +183,7 @@ class PathwaySerializer(NetBoxModelSerializer):
             "display_url",
             "display",
             "label",
+            "status",
             "pathway_type",
             "path",
             "start_structure",
@@ -204,6 +209,7 @@ class ConduitSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_pathways-api:conduit-detail",
     )
+    status = ChoiceField(choices=PathwayStatusChoices, required=False)
     material = ChoiceField(choices=ConduitMaterialChoices, required=False, allow_blank=True)
     start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
     end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
@@ -223,6 +229,7 @@ class ConduitSerializer(NetBoxModelSerializer):
             "display_url",
             "display",
             "label",
+            "status",
             "pathway_type",
             "path",
             "start_structure",
@@ -256,6 +263,7 @@ class AerialSpanSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_pathways-api:aerialspan-detail",
     )
+    status = ChoiceField(choices=PathwayStatusChoices, required=False)
     aerial_type = ChoiceField(choices=AerialTypeChoices, required=False, allow_blank=True)
     attachment_height = drf_serializers.FloatField(read_only=True)
     start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
@@ -275,6 +283,7 @@ class AerialSpanSerializer(NetBoxModelSerializer):
             "display_url",
             "display",
             "label",
+            "status",
             "pathway_type",
             "path",
             "start_structure",
@@ -308,6 +317,7 @@ class DirectBuriedSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_pathways-api:directburied-detail",
     )
+    status = ChoiceField(choices=PathwayStatusChoices, required=False)
     start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
     end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
     start_location = LocationSerializer(nested=True, required=False, allow_null=True)
@@ -325,6 +335,7 @@ class DirectBuriedSerializer(NetBoxModelSerializer):
             "display_url",
             "display",
             "label",
+            "status",
             "pathway_type",
             "path",
             "start_structure",
@@ -354,6 +365,7 @@ class InnerductSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_pathways-api:innerduct-detail",
     )
+    status = ChoiceField(choices=PathwayStatusChoices, required=False)
     start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
     end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
     start_location = LocationSerializer(nested=True, required=False, allow_null=True)
@@ -371,6 +383,7 @@ class InnerductSerializer(NetBoxModelSerializer):
             "display_url",
             "display",
             "label",
+            "status",
             "pathway_type",
             "path",
             "start_structure",

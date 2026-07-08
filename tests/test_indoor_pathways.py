@@ -88,6 +88,7 @@ class TestIndoorPathwayForms:
         loc_a, loc_b = locations
         form = ConduitForm(
             data={
+                "status": "active",
                 "start_location": loc_a.pk,
                 "end_location": loc_b.pk,
                 "tags": [],
@@ -117,6 +118,7 @@ class TestIndoorPathwayForms:
         parent.save()
         form = InnerductForm(
             data={
+                "status": "active",
                 "parent_conduit": parent.pk,
                 "size": "32mm",
                 "tags": [],

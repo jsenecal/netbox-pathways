@@ -38,7 +38,8 @@ def find_route(
         avoid_structure_types: list of structure_type values to exclude
         avoid_tenants: list of Tenant instances/PKs to exclude
         tenant_only: single Tenant — only include pathways owned by this tenant (or unassigned)
-        include_inactive: if False (default), exclude pathways touching retired/decommissioning structures
+        include_inactive: if False (default), exclude pathways whose own status is
+            retired/decommissioning, or that touch retired/decommissioning structures
 
     Graph-level constraints (applied after graph construction):
         avoid_structures: list of Structure PKs — remove these nodes entirely
@@ -104,6 +105,7 @@ def _build_filtered_queryset(
 
     if not include_inactive:
         inactive = ["retired", "decommissioning"]
+        qs = qs.exclude(status__in=inactive)
         qs = qs.exclude(start_structure__status__in=inactive)
         qs = qs.exclude(end_structure__status__in=inactive)
 

@@ -71,6 +71,7 @@ class PathwayFilter:
 
     id: int | None
     label: str | None
+    status: str | None
     pathway_type: str | None
     start_structure_id: int | None
     end_structure_id: int | None
@@ -85,6 +86,7 @@ class ConduitBankFilter:
 
     id: int | None
     label: str | None
+    status: str | None
     configuration: str | None
     encasement_type: str | None
 
@@ -94,6 +96,7 @@ class ConduitFilter:
     """GraphQL filter for Conduit."""
 
     id: int | None
+    status: str | None
     material: str | None
     conduit_bank_id: int | None
 
@@ -103,6 +106,7 @@ class AerialSpanFilter:
     """GraphQL filter for AerialSpan."""
 
     id: int | None
+    status: str | None
     aerial_type: str | None
 
 
@@ -111,6 +115,7 @@ class DirectBuriedFilter:
     """GraphQL filter for DirectBuried."""
 
     id: int | None
+    status: str | None
     warning_tape: bool | None
     tracer_wire: bool | None
 
@@ -120,6 +125,7 @@ class InnerductFilter:
     """GraphQL filter for Innerduct."""
 
     id: int | None
+    status: str | None
     parent_conduit_id: int | None
     size: str | None
     color: str | None

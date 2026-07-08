@@ -45,6 +45,11 @@ plan as a JSON snapshot.
 The current run's constraint set is shown in the sidebar; you can
 remove a constraint with the X button next to it.
 
+By default the planner also skips any pathway whose own status is
+`Retired` or `Decommissioning`, and any pathway touching a structure in
+one of those states. Check **Include inactive/retired** in the search
+preferences to route through them anyway.
+
 ## Running A Search
 
 1. Select start and end endpoints.

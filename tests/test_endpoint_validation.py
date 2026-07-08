@@ -161,6 +161,7 @@ class TestPathAutoGeneration:
         s2 = _make_structure("AG2", Point(500, 600, srid=SRID))
         form = PathwayForm(
             data={
+                "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
                 "tags": [],
@@ -178,6 +179,7 @@ class TestPathAutoGeneration:
         s2 = _make_structure("AG4", poly2)
         form = PathwayForm(
             data={
+                "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
                 "tags": [],
@@ -210,6 +212,7 @@ class TestPathAutoGeneration:
         path_4326 = to_leaflet(path)
         form = PathwayForm(
             data={
+                "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
                 "path": path_4326.geojson,
@@ -245,6 +248,7 @@ class TestEndToEndFormSave:
         s2 = _make_structure("E2E2", Point(500, 600, srid=SRID))
         form = ConduitBankForm(
             data={
+                "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
                 "tags": [],
@@ -264,6 +268,7 @@ class TestEndToEndFormSave:
         path_4326 = to_leaflet(path)
         form = PathwayForm(
             data={
+                "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
                 "path": path_4326.geojson,

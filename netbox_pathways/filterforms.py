@@ -14,6 +14,7 @@ from .choices import (
     ConduitBankConfigChoices,
     ConduitMaterialChoices,
     EncasementTypeChoices,
+    PathwayStatusChoices,
     PathwayTypeChoices,
     PlannedRouteStatusChoices,
     StructureStatusChoices,
@@ -69,10 +70,11 @@ class PathwayFilterForm(NetBoxModelFilterSetForm):
     model = Pathway
     fieldsets = (
         FieldSet("q", "filter_id", "tag"),
-        FieldSet("pathway_type", name="Attributes"),
+        FieldSet("status", "pathway_type", name="Attributes"),
         FieldSet("start_structure_id", "end_structure_id", "start_location_id", "end_location_id", name="Endpoints"),
         FieldSet("tenant_id", "installed_by_id", name="Tenant"),
     )
+    status = forms.MultipleChoiceField(choices=PathwayStatusChoices, required=False)
     pathway_type = forms.MultipleChoiceField(choices=PathwayTypeChoices, required=False)
     start_structure_id = DynamicModelMultipleChoiceField(
         queryset=Structure.objects.all(),
@@ -113,9 +115,10 @@ class ConduitFilterForm(NetBoxModelFilterSetForm):
     model = Conduit
     fieldsets = (
         FieldSet("q", "filter_id", "tag"),
-        FieldSet("material", "conduit_bank_id", name="Attributes"),
+        FieldSet("status", "material", "conduit_bank_id", name="Attributes"),
         FieldSet("start_structure_id", "end_structure_id", "start_location_id", "end_location_id", name="Endpoints"),
     )
+    status = forms.MultipleChoiceField(choices=PathwayStatusChoices, required=False)
     material = forms.MultipleChoiceField(choices=ConduitMaterialChoices, required=False)
     conduit_bank_id = DynamicModelMultipleChoiceField(
         queryset=ConduitBank.objects.all(),
@@ -149,9 +152,10 @@ class AerialSpanFilterForm(NetBoxModelFilterSetForm):
     model = AerialSpan
     fieldsets = (
         FieldSet("q", "filter_id", "tag"),
-        FieldSet("aerial_type", name="Attributes"),
+        FieldSet("status", "aerial_type", name="Attributes"),
         FieldSet("start_structure_id", "end_structure_id", "start_location_id", "end_location_id", name="Endpoints"),
     )
+    status = forms.MultipleChoiceField(choices=PathwayStatusChoices, required=False)
     aerial_type = forms.MultipleChoiceField(choices=AerialTypeChoices, required=False)
     start_structure_id = DynamicModelMultipleChoiceField(
         queryset=Structure.objects.all(),
@@ -180,8 +184,10 @@ class DirectBuriedFilterForm(NetBoxModelFilterSetForm):
     model = DirectBuried
     fieldsets = (
         FieldSet("q", "filter_id", "tag"),
+        FieldSet("status", name="Attributes"),
         FieldSet("start_structure_id", "end_structure_id", "start_location_id", "end_location_id", name="Endpoints"),
     )
+    status = forms.MultipleChoiceField(choices=PathwayStatusChoices, required=False)
     start_structure_id = DynamicModelMultipleChoiceField(
         queryset=Structure.objects.all(),
         required=False,
@@ -209,8 +215,9 @@ class InnerductFilterForm(NetBoxModelFilterSetForm):
     model = Innerduct
     fieldsets = (
         FieldSet("q", "filter_id", "tag"),
-        FieldSet("parent_conduit_id", name="Attributes"),
+        FieldSet("status", "parent_conduit_id", name="Attributes"),
     )
+    status = forms.MultipleChoiceField(choices=PathwayStatusChoices, required=False)
     parent_conduit_id = DynamicModelMultipleChoiceField(
         queryset=Conduit.objects.all(),
         required=False,
@@ -223,10 +230,11 @@ class ConduitBankFilterForm(NetBoxModelFilterSetForm):
     model = ConduitBank
     fieldsets = (
         FieldSet("q", "filter_id", "tag"),
-        FieldSet("configuration", "encasement_type", "start_face", "end_face", name="Attributes"),
+        FieldSet("status", "configuration", "encasement_type", "start_face", "end_face", name="Attributes"),
         FieldSet("start_structure_id", "end_structure_id", name="Endpoints"),
         FieldSet("tenant_id", "installed_by_id", name="Tenant"),
     )
+    status = forms.MultipleChoiceField(choices=PathwayStatusChoices, required=False)
     configuration = forms.MultipleChoiceField(choices=ConduitBankConfigChoices, required=False)
     encasement_type = forms.MultipleChoiceField(choices=EncasementTypeChoices, required=False)
     start_face = forms.MultipleChoiceField(choices=BankFaceChoices, required=False)
