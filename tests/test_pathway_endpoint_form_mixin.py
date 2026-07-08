@@ -23,6 +23,7 @@ class TestPathwayEndpointFormMixinClean:
         explicit_path = LineString((0, 0), (50, 50), (100, 100), srid=SRID)
         form = ConduitForm(
             data={
+                "status": "active",
                 "path": to_leaflet(explicit_path).geojson,
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
@@ -40,6 +41,7 @@ class TestPathwayEndpointFormMixinClean:
         s2 = _make_structure("S2", Point(100, 100, srid=SRID))
         form = ConduitForm(
             data={
+                "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
                 "tags": [],
@@ -56,6 +58,7 @@ class TestPathwayEndpointFormMixinClean:
         s2 = _make_structure("S2", Point(100, 100, srid=SRID))
         form = ConduitForm(
             data={
+                "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
                 "tags": [],
@@ -81,6 +84,7 @@ class TestPathwayEndpointFormMixinClean:
         parent.save()
         form = InnerductForm(
             data={
+                "status": "active",
                 "parent_conduit": parent.pk,
                 "size": "32mm",
                 "tags": [],

@@ -24,7 +24,7 @@ class ConduitIndex(SearchIndex):
         ("bank_position", 300),
         ("comments", 5000),
     )
-    display_attrs = ("material", "start_structure", "end_structure")
+    display_attrs = ("status", "material", "start_structure", "end_structure")
 
 
 @register_search
@@ -36,7 +36,7 @@ class AerialSpanIndex(SearchIndex):
         ("messenger_size", 300),
         ("comments", 5000),
     )
-    display_attrs = ("aerial_type", "start_structure", "end_structure")
+    display_attrs = ("status", "aerial_type", "start_structure", "end_structure")
 
 
 @register_search
@@ -47,7 +47,7 @@ class DirectBuriedIndex(SearchIndex):
         ("armor_type", 200),
         ("comments", 5000),
     )
-    display_attrs = ("start_structure", "end_structure")
+    display_attrs = ("status", "start_structure", "end_structure")
 
 
 @register_search
@@ -60,7 +60,7 @@ class InnerductIndex(SearchIndex):
         ("position", 300),
         ("comments", 5000),
     )
-    display_attrs = ("parent_conduit", "size", "color")
+    display_attrs = ("status", "parent_conduit", "size", "color")
 
 
 @register_search
@@ -72,7 +72,7 @@ class ConduitBankIndex(SearchIndex):
         ("encasement_type", 300),
         ("comments", 5000),
     )
-    display_attrs = ("start_structure", "end_structure", "configuration", "total_conduits")
+    display_attrs = ("status", "start_structure", "end_structure", "configuration", "total_conduits")
 
 
 @register_search
