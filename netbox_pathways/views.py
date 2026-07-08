@@ -1679,22 +1679,26 @@ class MapView(LoginRequiredMixin, View):
         bbox = None
 
         with connection.cursor() as cursor:
-            # Structures — trimmed extent to reject outliers
+            # Structures — trimmed extent to reject outliers. Locations may be
+            # any geometry (polygon footprints), and ST_X/ST_Y only accept
+            # points, so trim on each row's centroid; extents still use the
+            # full geometry so footprints are covered edge to edge.
             cursor.execute("""
                 WITH pts AS (
-                    SELECT ST_Transform(location, 4326) AS geom
+                    SELECT ST_Transform(location, 4326) AS geom,
+                           ST_Centroid(ST_Transform(location, 4326)) AS ctr
                     FROM netbox_pathways_structure
                     WHERE location IS NOT NULL
                 ),
                 med AS (
-                    SELECT ST_Y(ST_Centroid(ST_Collect(geom))) AS lat,
-                           ST_X(ST_Centroid(ST_Collect(geom))) AS lon
+                    SELECT ST_Y(ST_Centroid(ST_Collect(ctr))) AS lat,
+                           ST_X(ST_Centroid(ST_Collect(ctr))) AS lon
                     FROM pts
                 ),
                 trimmed AS (
                     SELECT pts.geom FROM pts, med
-                    WHERE abs(ST_Y(pts.geom) - med.lat) < 2
-                      AND abs(ST_X(pts.geom) - med.lon) < 2
+                    WHERE abs(ST_Y(pts.ctr) - med.lat) < 2
+                      AND abs(ST_X(pts.ctr) - med.lon) < 2
                 )
                 SELECT ST_Extent(geom) FROM trimmed
             """)
