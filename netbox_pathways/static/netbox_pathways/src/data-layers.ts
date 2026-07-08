@@ -28,6 +28,15 @@ export { API_BASE };
 
 export const MIN_DATA_ZOOM = 11;
 
+/**
+ * Zoom at or above which `/info` is skipped entirely. The viewport at this
+ * zoom is small enough that hide/cluster thresholds are effectively
+ * unreachable, so blocking the render on an `/info` round-trip just adds
+ * latency. Overridable by server config (`PATHWAYS_CONFIG.skipInfoZoom`)
+ * and by callers of `chooseLoadStrategy` for tests.
+ */
+export const SKIP_INFO_ZOOM: number = CFG.skipInfoZoom ?? 17;
+
 // ---------------------------------------------------------------------------
 // /info endpoint: per-layer counts + thresholds for the current viewport
 // ---------------------------------------------------------------------------
@@ -125,6 +134,22 @@ export function decideLayerRendering(info: MapInfo, enabled: Set<string>): Rende
     return { clusterMode, layers };
 }
 
+/**
+ * Synthetic "all enabled keys render" decision for the skip-info band.
+ *
+ * At these zooms we deliberately skip `/info`, so we have no counts.
+ * The premise is that any viewport at that zoom holds too few features to
+ * cross hide/cluster thresholds in practice; if a deployment hits that
+ * edge case it can raise `PATHWAYS_CONFIG.skipInfoZoom`.
+ */
+export function decideSkipInfo(enabled: Set<string>): RenderingDecision {
+    const layers: Record<string, LayerDecision> = {};
+    for (const key of enabled) {
+        layers[key] = 'render';
+    }
+    return { clusterMode: 'off', layers };
+}
+
 // ---------------------------------------------------------------------------
 // /info fetch helper
 // ---------------------------------------------------------------------------
@@ -133,9 +158,30 @@ let _infoController: AbortController | null = null;
 let _lastInfoEtag = '';
 let _lastInfo: MapInfo | null = null;
 
+/** Returns the most recent /info response, or null if none cached yet. */
+export function getLastInfo(): MapInfo | null {
+    return _lastInfo;
+}
+
+/** Test-only: clear cached /info state so each test starts deterministically. */
+export function _resetInfoCache(): void {
+    if (_infoController) _infoController.abort();
+    _infoController = null;
+    _lastInfoEtag = '';
+    _lastInfo = null;
+}
+
+/**
+ * Fetch `/info` with conditional revalidation.
+ *
+ * `callback(info, changed)` -- `changed` is `true` when the server returned
+ * fresh data (200) and `false` when it returned 304 Not Modified, in which
+ * case `info` is the cached value. Callers can short-circuit on `!changed`
+ * to avoid re-rendering when the previous decision is still valid.
+ */
 export async function fetchMapInfo(
     bbox: string,
-    callback: (info: MapInfo) => void,
+    callback: (info: MapInfo, changed: boolean) => void,
 ): Promise<void> {
     if (_infoController) _infoController.abort();
     const controller = new AbortController();
@@ -151,14 +197,14 @@ export async function fetchMapInfo(
         const response = await fetch(url, { headers, signal: controller.signal });
         if (_infoController === controller) _infoController = null;
         if (response.status === 304 && _lastInfo) {
-            callback(_lastInfo);
+            callback(_lastInfo, false);
             return;
         }
         if (response.ok) {
             const data = await response.json() as MapInfo;
             _lastInfoEtag = response.headers.get('ETag') || '';
             _lastInfo = data;
-            callback(data);
+            callback(data, true);
         }
     } catch {
         if (_infoController === controller) _infoController = null;

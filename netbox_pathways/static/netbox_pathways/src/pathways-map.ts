@@ -48,8 +48,10 @@ import {
     serverSearch,
     fetchMapInfo,
     decideLayerRendering,
+    getLastInfo,
 } from './data-layers';
 import type { MapInfo, RenderingDecision } from './data-layers';
+import { chooseLoadStrategy, decisionsDiffer } from './load-strategy';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -419,15 +421,48 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
     function _loadData(): void {
         const zoom = map.getZoom();
-        if (zoom < MIN_DATA_ZOOM) {
-            _runLoad(null, null);
-            return;
+        const enabled = _enabledInfoKeys();
+        const strategy = chooseLoadStrategy(zoom, getLastInfo(), enabled);
+
+        switch (strategy.kind) {
+            case 'below-min-zoom':
+                _runLoad(null, null);
+                return;
+
+            case 'skip-info':
+                // Skip /info entirely -- viewport is too small to plausibly
+                // cross any hide/cluster threshold. Render now, no round-trip.
+                _runLoad(strategy.decision, null);
+                return;
+
+            case 'optimistic': {
+                // Render the cached decision immediately, then revalidate /info
+                // in the background. A 304 leaves the screen untouched. A 200
+                // with a materially different decision triggers a reconcile.
+                _runLoad(strategy.decision, strategy.cachedInfo);
+                const bbox = _bboxParam(map);
+                fetchMapInfo(bbox, function (info: MapInfo, changed: boolean) {
+                    if (!changed) return;
+                    const fresh = decideLayerRendering(info, _enabledInfoKeys());
+                    if (decisionsDiffer(strategy.decision, fresh)) {
+                        _runLoad(fresh, info);
+                    } else {
+                        _applyDecisionToToggles(fresh, info);
+                    }
+                });
+                return;
+            }
+
+            case 'gated': {
+                // First load: no cache yet, so we still wait on /info.
+                const bbox = _bboxParam(map);
+                fetchMapInfo(bbox, function (info: MapInfo) {
+                    const decision = decideLayerRendering(info, _enabledInfoKeys());
+                    _runLoad(decision, info);
+                });
+                return;
+            }
         }
-        const bbox = _bboxParam(map);
-        fetchMapInfo(bbox, function (info: MapInfo) {
-            const decision = decideLayerRendering(info, _enabledInfoKeys());
-            _runLoad(decision, info);
-        });
     }
 
     // --- URL state management ---

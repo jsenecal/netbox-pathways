@@ -54,6 +54,18 @@ Defaults (override in `PLUGINS_CONFIG['netbox_pathways']['map_thresholds']`):
 
 When the structures layer crosses either threshold (client cluster or server cluster), the supporting infrastructure layers are suppressed regardless of their own counts: at that density a single highlighted line cannot be matched back to a clustered structure marker, so the whole set is hidden until you zoom in. Reference-mode external layers participate in the same gating, using their `max_features` registration value (default 500).
 
+### How the gating performs during panning
+
+To keep the gating logic from making the map feel laggy, the frontend uses three zoom bands:
+
+| Zoom band | Behaviour | `/info` round-trip |
+| --- | --- | --- |
+| Below `MIN_DATA_ZOOM` (11) | Nothing renders | None |
+| `MIN_DATA_ZOOM` to `map_skip_info_zoom` -- 1 (default 16) | Render from the most recent cached `/info` immediately; `/info` revalidates in the background with `If-None-Match`. A 304 leaves the screen untouched; a 200 only triggers a reconcile if the per-layer decision actually changes. First load with an empty cache still waits one round-trip. | Conditional, in the background |
+| At or above `map_skip_info_zoom` (default 17) | Render every enabled layer directly. The viewport is too small to plausibly cross any hide/cluster threshold, so the gate is skipped. | None |
+
+Set `PLUGINS_CONFIG['netbox_pathways']['map_skip_info_zoom']` to raise or lower the skip-info threshold for deployments with unusual feature density.
+
 ### Sidebar
 
 Clicking any feature opens a sidebar panel with two views:
