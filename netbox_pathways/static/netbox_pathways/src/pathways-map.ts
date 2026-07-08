@@ -67,6 +67,11 @@ const CFG: Partial<PathwaysConfig> = window.PATHWAYS_CONFIG || {};
 function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
     const container = document.getElementById(elementId);
 
+    // Seed available statuses from the page config so the hide-inactive
+    // panel and detail badges work before (or without) any /info fetch --
+    // /info is skipped entirely at high zoom.
+    StatusPrefs.setAvailableStatuses(CFG.statuses);
+
     // Inject dependencies into sub-modules
     Sidebar.setDeps({
         titleCase: _titleCase,

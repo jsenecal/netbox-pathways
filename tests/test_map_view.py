@@ -137,6 +137,14 @@ class TestMapViewGet:
         response = self._get(factory, "lat=48.8&lon=2.3")
         assert response.status_code == 200
 
+    def test_config_carries_status_choices(self, factory):
+        """The inactive-set panel must not depend on an /info round-trip
+        (skipped entirely at high zoom), so statuses ship with the page."""
+        response = self._get(factory, "")
+        content = response.content.decode()
+        assert '"statuses"' in content
+        assert '"retired"' in content
+
     def test_kiosk_js_config(self, factory):
         """The JS init config should contain kiosk: true when param is set."""
         response = self._get(factory, "kiosk=true")
