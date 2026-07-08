@@ -16,6 +16,7 @@ import logging
 from django.contrib.gis.db.models import Collect
 from django.contrib.gis.db.models.functions import Centroid, Length, SnapToGrid, Transform
 from django.contrib.gis.geos import Polygon
+from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Count, Max
 from rest_framework import serializers as drf_serializers
 from rest_framework.permissions import IsAuthenticated
@@ -26,6 +27,7 @@ from rest_framework_gis.fields import GeometryField
 from rest_framework_gis.serializers import GeoFeatureModelSerializer
 
 from .. import filters, models
+from ..choices import PathwayStatusChoices, StructureStatusChoices
 from ..geo import LEAFLET_SRID, get_srid
 
 logger = logging.getLogger(__name__)
@@ -66,6 +68,44 @@ def _etag_components(queryset):
 def _grid_size_for_zoom(zoom):
     """Grid cell size in WGS84 degrees, calibrated to ~50px cluster radius."""
     return 70.0 / (2**zoom)
+
+
+def _available_statuses():
+    """Union of pathway and structure status choices, as {value, label, color} dicts.
+
+    The two ChoiceSets ship identical but are independently overridable via
+    FIELD_CHOICES, so merge by value (pathway order first).
+    """
+    merged = {}
+    for choices in (PathwayStatusChoices, StructureStatusChoices):
+        for value, label in choices:  # ChoiceSetMeta iterates normalized (value, label) pairs
+            merged.setdefault(value, {"value": value, "label": str(label), "color": choices.colors.get(value)})
+    return list(merged.values())
+
+
+def _parse_exclude_status(request):
+    """Statuses to hide, from ``?exclude_status=`` (repeated or comma-separated).
+
+    Restricted to known status values so arbitrary input never reaches the
+    query; unknown values are ignored. Returns a sorted list (stable ETag
+    input).
+    """
+    requested = set()
+    for raw in request.query_params.getlist("exclude_status"):
+        requested.update(v.strip() for v in raw.split(","))
+    known = {s["value"] for s in _available_statuses()}
+    return sorted(requested & known)
+
+
+def _exclude_status(qs, statuses):
+    """Apply a status exclusion to ``qs`` if its model carries a status field."""
+    if not statuses:
+        return qs
+    try:
+        qs.model._meta.get_field("status")
+    except FieldDoesNotExist:
+        return qs
+    return qs.exclude(status__in=statuses)
 
 
 # --- GeoJSON Serializers ---
@@ -181,6 +221,7 @@ class BboxFilterMixin:
 
     def get_queryset(self):
         qs = super().get_queryset()
+        qs = _exclude_status(qs, _parse_exclude_status(self.request))
         return self._apply_bbox(qs)
 
     def _etag_for_queryset(self, queryset):
@@ -247,7 +288,9 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
     def _clustered_response(self, zoom, etag=None):
         # Get bbox-filtered queryset WITHOUT the result cap (aggregation reduces rows)
-        qs = self._apply_bbox(models.Structure.objects.only("id", "location").order_by())
+        qs = models.Structure.objects.only("id", "location").order_by()
+        qs = _exclude_status(qs, _parse_exclude_status(self.request))
+        qs = self._apply_bbox(qs)
 
         grid_size = _grid_size_for_zoom(zoom)
         geo_expr = Transform("location", LEAFLET_SRID)
@@ -474,6 +517,7 @@ class MapInfoView(APIView):
 
     def get(self, request):
         bbox_poly, bbox_list = _parse_bbox(request.query_params.get("bbox"))
+        excluded_statuses = _parse_exclude_status(request)
 
         counts = {}
         thresholds = _resolved_thresholds()
@@ -497,6 +541,7 @@ class MapInfoView(APIView):
             qs = model.objects.all()
             if extra_filter:
                 qs = qs.filter(**extra_filter)
+            qs = _exclude_status(qs, excluded_statuses)
             counts[key] = _count(qs, geo_field)
 
         from .external_geo import _resolve_geo_column
@@ -518,12 +563,19 @@ class MapInfoView(APIView):
             thresholds["external"] = external_thresholds
 
         etag = hashlib.md5(
-            f"{max_updated}:{total}:{bbox_list}".encode(),
+            f"{max_updated}:{total}:{bbox_list}:{excluded_statuses}".encode(),
             usedforsecurity=False,
         ).hexdigest()
         if request.META.get("HTTP_IF_NONE_MATCH") == etag:
             return Response(status=304, headers={"ETag": etag})
 
-        response = Response({"bbox": bbox_list, "counts": counts, "thresholds": thresholds})
+        response = Response(
+            {
+                "bbox": bbox_list,
+                "counts": counts,
+                "thresholds": thresholds,
+                "statuses": _available_statuses(),
+            }
+        )
         response["ETag"] = etag
         return response

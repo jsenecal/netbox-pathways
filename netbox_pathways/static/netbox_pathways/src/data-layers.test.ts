@@ -135,3 +135,63 @@ describe('decideLayerRendering', () => {
         expect(d.layers['external:splices']).toBe('hide');
     });
 });
+
+// ---------------------------------------------------------------------------
+// exclude_status injection on layer / info requests (issue #68)
+// ---------------------------------------------------------------------------
+
+import { vi, beforeEach } from 'vitest';
+import { fetchGeoJSON, fetchMapInfo, _resetInfoCache } from './data-layers';
+import { StatusPrefs } from './status-prefs';
+
+describe('exclude_status request param', () => {
+    let requestedUrls: string[];
+
+    beforeEach(() => {
+        localStorage.clear();
+        _resetInfoCache();
+        requestedUrls = [];
+        vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+            requestedUrls.push(url);
+            return {
+                ok: true,
+                status: 200,
+                headers: { get: () => '' },
+                json: async () => ({ type: 'FeatureCollection', features: [] }),
+            };
+        }));
+    });
+
+    it('fetchGeoJSON omits exclude_status while hiding is off', async () => {
+        await fetchGeoJSON('conduits/', '0,0,1,1', () => {});
+        expect(requestedUrls[0]).not.toContain('exclude_status');
+    });
+
+    it('fetchGeoJSON carries the inactive set when hiding is on', async () => {
+        StatusPrefs.setHideInactive(true);
+        await fetchGeoJSON('conduits/', '0,0,1,1', () => {});
+        expect(requestedUrls[0]).toContain('exclude_status=retired%2Cabandoned');
+    });
+
+    it('fetchMapInfo carries the inactive set and stores available statuses', async () => {
+        StatusPrefs.setHideInactive(true);
+        StatusPrefs.setInactiveSet(['decommissioning']);
+        vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+            requestedUrls.push(url);
+            return {
+                ok: true,
+                status: 200,
+                headers: { get: () => '' },
+                json: async () => ({
+                    bbox: null,
+                    counts: {},
+                    thresholds: {},
+                    statuses: [{ value: 'active', label: 'Active', color: 'green' }],
+                }),
+            };
+        }));
+        await fetchMapInfo('0,0,1,1', () => {});
+        expect(requestedUrls[0]).toContain('exclude_status=decommissioning');
+        expect(StatusPrefs.colorFor('active')).toBe('green');
+    });
+});

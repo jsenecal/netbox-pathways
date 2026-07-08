@@ -238,6 +238,42 @@
     .pw-layer-toggles:empty {
         display: none;
     }
+    /* Status visibility row + inactive-set config panel */
+    .pw-status-row {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 6px 14px;
+        border-bottom: 1px solid var(--tblr-border-color, #dee2e6);
+        flex-shrink: 0;
+    }
+    .pw-inactive-config {
+        position: absolute;
+        top: 100%;
+        left: 14px;
+        z-index: 1100;
+        min-width: 190px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--tblr-border-color, #dee2e6);
+        background: var(--tblr-card-bg, #fff);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        font-size: 0.78em;
+    }
+    .pw-inactive-config .pw-inactive-title {
+        font-weight: 600;
+        margin-bottom: 6px;
+        display: block;
+    }
+    .pw-inactive-config label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        padding: 2px 0;
+        margin: 0;
+    }
     .pw-stats-overlay {
         padding: 3px 10px;
         border-radius: 4px;
@@ -445,6 +481,19 @@
                     {% endif %}
                     <!-- Layer Toggles -->
                     <div id="pw-layer-toggles" class="pw-layer-toggles"></div>
+                    <!-- Status visibility -->
+                    <div class="pw-status-row">
+                        <button id="pw-hide-inactive" type="button" class="pw-layer-toggle"
+                                title="Hide features whose status is in the inactive set">
+                            <i class="mdi mdi-eye-off-outline"></i>
+                            <span>Hide inactive</span>
+                        </button>
+                        <button id="pw-inactive-gear" type="button" class="pw-layer-toggle"
+                                title="Choose which statuses count as inactive">
+                            <i class="mdi mdi-cog-outline"></i>
+                        </button>
+                        <div id="pw-inactive-config" class="pw-inactive-config" style="display:none;"></div>
+                    </div>
                     <!-- List Panel -->
                     <div id="pw-panel-list" class="pw-panel">
                         <div class="pw-sidebar-header" id="pw-sidebar-toggle" style="cursor:pointer;">
