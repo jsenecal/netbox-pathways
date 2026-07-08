@@ -49,6 +49,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Map page crashed when any structure had a polygon footprint.** The
+  initial-extent query trimmed GPS outliers with `ST_X()`/`ST_Y()` on raw
+  structure locations, but those functions only accept points, so a single
+  polygon-footprint structure raised `InternalError: Argument to ST_Y() must
+  have type POINT` and 500ed the map and route planner. Outlier trimming now
+  compares each geometry's centroid (identical behavior for points) while the
+  extent itself still uses the full geometry, so footprints are covered edge
+  to edge. Fixes #71.
 - **List-view Import buttons were dead links.** The plugin registered its
   import URLs as `<model>_import`, but NetBox's list-view `BulkImport` action
   reverses `<model>_bulk_import`, so every Import button on object tables
