@@ -172,6 +172,37 @@ class TestRouteEngine:
         cost, _ids = result
         assert cost == 35
 
+    def test_include_inactive_false_excludes_retired_pathways(self, network):
+        """A pathway whose own status is retired is not routable by default (issue #60)."""
+        c = network["conduits"][1]  # S1->S2, the cheap middle hop
+        c.status = "retired"
+        c.save()
+        s = network["structures"]
+        result = find_route(
+            start_node=("structure", s[0].pk),
+            end_node=("structure", s[3].pk),
+            include_inactive=False,
+        )
+        assert result is not None
+        cost, pathway_ids = result
+        # Forced onto the direct S1->S3 conduit: 10 + 50
+        assert cost == 60
+        assert c.pk not in pathway_ids
+
+    def test_include_inactive_true_allows_retired_pathways(self, network):
+        c = network["conduits"][1]
+        c.status = "retired"
+        c.save()
+        s = network["structures"]
+        result = find_route(
+            start_node=("structure", s[0].pk),
+            end_node=("structure", s[3].pk),
+            include_inactive=True,
+        )
+        assert result is not None
+        cost, _ids = result
+        assert cost == 35
+
     def test_cached_graph_bypassed_with_constraints(self, network):
         """When constraints produce a filtered queryset, cache is bypassed."""
         s = network["structures"]

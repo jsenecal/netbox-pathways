@@ -21,6 +21,26 @@ class StructureStatusChoices(ChoiceSet):
     ]
 
 
+class PathwayStatusChoices(ChoiceSet):
+    key = "Pathway.status"
+
+    STATUS_PLANNED = "planned"
+    STATUS_ACTIVE = "active"
+    STATUS_CONSTRUCTION = "construction"
+    STATUS_DECOMMISSIONING = "decommissioning"
+    STATUS_RETIRED = "retired"
+    STATUS_ABANDONED = "abandoned"
+
+    CHOICES = [
+        (STATUS_PLANNED, "Planned", "cyan"),
+        (STATUS_ACTIVE, "Active", "green"),
+        (STATUS_CONSTRUCTION, "Under Construction", "blue"),
+        (STATUS_DECOMMISSIONING, "Decommissioning", "yellow"),
+        (STATUS_RETIRED, "Retired", "red"),
+        (STATUS_ABANDONED, "Abandoned in place", "gray"),
+    ]
+
+
 class StructureTypeChoices(ChoiceSet):
     CHOICES = [
         ("pole", "Pole", "green"),

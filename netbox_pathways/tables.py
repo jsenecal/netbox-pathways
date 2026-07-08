@@ -66,6 +66,7 @@ class PathwayTable(NetBoxTable):
         verbose_name="Pathway",
         order_by="pk",
     )
+    status = columns.ChoiceFieldColumn()
     pathway_type = columns.ChoiceFieldColumn()
     start_structure = tables.Column(linkify=True)
     end_structure = tables.Column(linkify=True)
@@ -85,6 +86,7 @@ class PathwayTable(NetBoxTable):
             "id",
             "pathway",
             "label",
+            "status",
             "pathway_type",
             "start_structure",
             "end_structure",
@@ -102,6 +104,7 @@ class PathwayTable(NetBoxTable):
         )
         default_columns = (
             "pathway",
+            "status",
             "pathway_type",
             "start_structure",
             "end_structure",
@@ -116,6 +119,7 @@ class ConduitTable(NetBoxTable):
         verbose_name="Conduit",
         order_by="pk",
     )
+    status = columns.ChoiceFieldColumn()
     material = columns.ChoiceFieldColumn()
     start_structure = tables.Column(linkify=True)
     end_structure = tables.Column(linkify=True)
@@ -135,6 +139,7 @@ class ConduitTable(NetBoxTable):
             "id",
             "conduit",
             "label",
+            "status",
             "material",
             "start_structure",
             "end_structure",
@@ -153,6 +158,7 @@ class ConduitTable(NetBoxTable):
         )
         default_columns = (
             "conduit",
+            "status",
             "material",
             "start_structure",
             "end_structure",
@@ -168,6 +174,7 @@ class AerialSpanTable(NetBoxTable):
         verbose_name="Aerial Span",
         order_by="pk",
     )
+    status = columns.ChoiceFieldColumn()
     aerial_type = columns.ChoiceFieldColumn()
     start_structure = tables.Column(linkify=True)
     end_structure = tables.Column(linkify=True)
@@ -186,6 +193,7 @@ class AerialSpanTable(NetBoxTable):
             "id",
             "aerial_span",
             "label",
+            "status",
             "aerial_type",
             "start_structure",
             "end_structure",
@@ -204,6 +212,7 @@ class AerialSpanTable(NetBoxTable):
         )
         default_columns = (
             "aerial_span",
+            "status",
             "aerial_type",
             "start_structure",
             "end_structure",
@@ -218,6 +227,7 @@ class DirectBuriedTable(NetBoxTable):
         verbose_name="Direct Buried",
         order_by="pk",
     )
+    status = columns.ChoiceFieldColumn()
     start_structure = tables.Column(linkify=True)
     end_structure = tables.Column(linkify=True)
     start_location = tables.Column(linkify=True)
@@ -235,6 +245,7 @@ class DirectBuriedTable(NetBoxTable):
             "id",
             "direct_buried",
             "label",
+            "status",
             "start_structure",
             "end_structure",
             "start_location",
@@ -253,6 +264,7 @@ class DirectBuriedTable(NetBoxTable):
         )
         default_columns = (
             "direct_buried",
+            "status",
             "start_structure",
             "end_structure",
             "burial_depth",
@@ -267,6 +279,7 @@ class InnerductTable(NetBoxTable):
         verbose_name="Innerduct",
         order_by="pk",
     )
+    status = columns.ChoiceFieldColumn()
     parent_conduit = tables.Column(linkify=True)
     installed_by = tables.Column(linkify=True, verbose_name="Installed by")
     cables_routed = tables.Column(verbose_name="Cables", orderable=True)
@@ -280,6 +293,7 @@ class InnerductTable(NetBoxTable):
             "id",
             "innerduct",
             "label",
+            "status",
             "parent_conduit",
             "size",
             "color",
@@ -291,7 +305,7 @@ class InnerductTable(NetBoxTable):
             "commissioned_date",
             "actions",
         )
-        default_columns = ("innerduct", "parent_conduit", "size", "color", "in_use", "cables_routed")
+        default_columns = ("innerduct", "status", "parent_conduit", "size", "color", "in_use", "cables_routed")
 
 
 class ConduitBankTable(NetBoxTable):
@@ -300,6 +314,7 @@ class ConduitBankTable(NetBoxTable):
         verbose_name="Conduit Bank",
         order_by="pk",
     )
+    status = columns.ChoiceFieldColumn()
     start_structure = tables.Column(linkify=True)
     end_structure = tables.Column(linkify=True)
     start_face = columns.ChoiceFieldColumn()
@@ -322,6 +337,7 @@ class ConduitBankTable(NetBoxTable):
             "id",
             "conduit_bank",
             "label",
+            "status",
             "start_structure",
             "end_structure",
             "start_face",
@@ -342,6 +358,7 @@ class ConduitBankTable(NetBoxTable):
         )
         default_columns = (
             "conduit_bank",
+            "status",
             "start_structure",
             "end_structure",
             "configuration",

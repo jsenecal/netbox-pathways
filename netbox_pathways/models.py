@@ -15,6 +15,7 @@ from .choices import (
     ConduitBankConfigChoices,
     ConduitMaterialChoices,
     EncasementTypeChoices,
+    PathwayStatusChoices,
     PathwayTypeChoices,
     PlannedRouteStatusChoices,
     StructureStatusChoices,
@@ -220,6 +221,11 @@ class Pathway(NetBoxModel):
     objects = PathwayQuerySet.as_manager()
 
     label = models.CharField(max_length=100, blank=True)
+    status = models.CharField(
+        max_length=50,
+        choices=PathwayStatusChoices,
+        default=PathwayStatusChoices.STATUS_ACTIVE,
+    )
     pathway_type = models.CharField(max_length=50, choices=PathwayTypeChoices, editable=False)
     path = models.LineStringField(
         srid=get_srid(),
@@ -283,12 +289,16 @@ class Pathway(NetBoxModel):
         ordering = ["pk"]
         indexes = [
             models.Index(fields=["pathway_type"]),
+            models.Index(fields=["status"]),
             models.Index(fields=["start_structure", "end_structure"]),
         ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._pk = self.__dict__.get("id")
+
+    def get_status_color(self):
+        return PathwayStatusChoices.colors.get(self.status)
 
     @property
     def start_endpoint(self):

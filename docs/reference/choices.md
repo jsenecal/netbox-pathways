@@ -20,6 +20,19 @@ All choice fields use NetBox's `ChoiceSet` base class and allow blank values (fi
 | `telecom_closet` | Telecom Closet | Indigo |
 | `riser_room` | Riser Room | Pink |
 
+## PathwayStatusChoices
+
+Same states as structures (see the Structures user guide). Applies to every pathway type. Default is `active`.
+
+| Value | Label | Color |
+|-------|-------|-------|
+| `planned` | Planned | Cyan |
+| `active` | Active | Green |
+| `construction` | Under Construction | Blue |
+| `decommissioning` | Decommissioning | Yellow |
+| `retired` | Retired | Red |
+| `abandoned` | Abandoned in place | Gray |
+
 ## PathwayTypeChoices
 
 | Value | Label | Color |

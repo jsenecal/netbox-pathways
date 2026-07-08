@@ -124,6 +124,7 @@ Every pathway carries the following lifecycle fields, in addition to the type-sp
 
 | Field | Description |
 |-------|-------------|
+| Status | Lifecycle state: `Planned`, `Active` (default), `Under Construction`, `Decommissioning`, `Retired`, or `Abandoned in place` -- the same states as structures. The route planner skips `Retired` and `Decommissioning` pathways unless "Include inactive/retired" is checked. |
 | Installation Date | When the pathway was physically installed |
 | Commissioned Date | When the pathway was commissioned / accepted (often after the install date for outside-plant work) |
 | Tenant | Tenant served by / customer assigned to this pathway |
@@ -133,6 +134,7 @@ Every pathway carries the following lifecycle fields, in addition to the type-sp
 
 Pathway lists support filtering by:
 
+- **Status** -- Filter by lifecycle state
 - **Pathway Type** -- Conduit, Aerial, Direct Buried, etc.
 - **Start/End Structure** -- Filter by connected structures
 - **Site** -- Filter by associated site
