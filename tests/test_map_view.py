@@ -87,6 +87,26 @@ class TestSafeCasts:
 
 @pytest.mark.django_db
 class TestDataExtent:
+    @staticmethod
+    def _structure_at(name, lon, lat):
+        location = Point(lon, lat, srid=4326)
+        location.transform(get_srid())
+        return Structure.objects.create(name=name, location=location, structure_type="manhole")
+
+    def test_outlier_structures_trimmed(self):
+        """Structures more than 2 degrees from the cluster's mean position are
+        excluded from the initial extent, so one bad GPS fix cannot zoom the
+        whole map out."""
+        for i in range(5):
+            self._structure_at(f"Extent-Cluster-{i}", -73.6 + i * 0.01, 45.5)
+        self._structure_at("Extent-Outlier", -78.6, 45.5)
+
+        west, south, east, north = MapView()._data_extent()
+
+        assert west >= -74  # outlier at -78.6 trimmed away
+        assert east <= -73
+        assert 45 <= south <= north <= 46
+
     def test_polygon_footprint_structure(self):
         """Regression for #71: ST_Y() only accepts points, so a structure with
         a polygon footprint must not break the trimmed-extent query."""
