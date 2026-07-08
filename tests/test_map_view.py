@@ -1,10 +1,13 @@
-"""Tests for MapView — kiosk param, URL params, parse_box, safe casts."""
+"""Tests for MapView — kiosk param, URL params, parse_box, safe casts, data extent."""
 
 from unittest.mock import patch
 
 import pytest
+from django.contrib.gis.geos import Point, Polygon
 from django.test import RequestFactory
 
+from netbox_pathways.geo import get_srid
+from netbox_pathways.models import Structure
 from netbox_pathways.views import MapView
 
 
@@ -75,6 +78,42 @@ class TestSafeCasts:
     def test_safe_int_float_string(self, view):
         # float strings are not valid ints
         assert view._safe_int("3.5", 1) == 1
+
+
+# ---------------------------------------------------------------------------
+# _data_extent
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestDataExtent:
+    def test_polygon_footprint_structure(self):
+        """Regression for #71: ST_Y() only accepts points, so a structure with
+        a polygon footprint must not break the trimmed-extent query."""
+        srid = get_srid()
+        Structure.objects.create(
+            name="Extent-Point",
+            location=Point(100, 100, srid=srid),
+            structure_type="manhole",
+        )
+        Structure.objects.create(
+            name="Extent-Footprint",
+            location=Polygon(((0, 0), (50, 0), (50, 50), (0, 50), (0, 0)), srid=srid),
+            structure_type="vault",
+        )
+
+        extent = MapView()._data_extent()
+
+        assert extent is not None
+        west, south, east, north = extent
+        # The footprint's full extent (not just its centroid) must be covered:
+        # its (0, 0) corner is the bbox's southwest, the point its northeast.
+        origin = Point(0, 0, srid=srid)
+        origin.transform(4326)
+        assert west <= origin.x
+        assert south <= origin.y
+        assert east > west
+        assert north > south
 
 
 # ---------------------------------------------------------------------------
