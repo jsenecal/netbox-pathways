@@ -1784,6 +1784,8 @@ class MapView(LoginRequiredMixin, View):
 
         from django.conf import settings
 
+        from .api.geo import _available_statuses
+
         plugin_cfg = settings.PLUGINS_CONFIG.get("netbox_pathways", {})
 
         api_base = reverse("plugins-api:netbox_pathways-api:api-root")
@@ -1796,6 +1798,9 @@ class MapView(LoginRequiredMixin, View):
             "overlays": plugin_cfg.get("map_overlays", []),
             "baseLayers": plugin_cfg.get("map_base_layers", []),
             "externalLayers": [layer.to_json(api_base=geo_base) for layer in map_layer_registry.all()],
+            # The hide-inactive config panel needs these at page load; /info
+            # also carries them but is skipped entirely at high zoom.
+            "statuses": _available_statuses(),
         }
 
         # Compute extent from data; fall back to config or defaults

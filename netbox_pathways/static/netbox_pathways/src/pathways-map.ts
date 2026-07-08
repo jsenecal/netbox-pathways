@@ -52,6 +52,7 @@ import {
 } from './data-layers';
 import type { MapInfo, RenderingDecision } from './data-layers';
 import { chooseLoadStrategy, decisionsDiffer } from './load-strategy';
+import { StatusPrefs } from './status-prefs';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -65,6 +66,11 @@ const CFG: Partial<PathwaysConfig> = window.PATHWAYS_CONFIG || {};
 
 function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
     const container = document.getElementById(elementId);
+
+    // Seed available statuses from the page config so the hide-inactive
+    // panel and detail badges work before (or without) any /info fetch --
+    // /info is skipped entirely at high zoom.
+    StatusPrefs.setAvailableStatuses(CFG.statuses);
 
     // Inject dependencies into sub-modules
     Sidebar.setDeps({
@@ -255,6 +261,81 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         }
     }
     _buildSidebarLayerToggles();
+
+    // --- Status visibility (hide inactive) ---
+
+    function _buildStatusControls(): void {
+        const hideBtn = document.getElementById('pw-hide-inactive');
+        const gearBtn = document.getElementById('pw-inactive-gear');
+        const configPanel = document.getElementById('pw-inactive-config');
+        if (!hideBtn || !gearBtn || !configPanel) return;
+
+        hideBtn.classList.toggle('pw-layer-active', StatusPrefs.isHideInactive());
+        hideBtn.addEventListener('click', function () {
+            const hide = !StatusPrefs.isHideInactive();
+            StatusPrefs.setHideInactive(hide);
+            hideBtn.classList.toggle('pw-layer-active', hide);
+            _loadData();
+        });
+
+        function _rebuildConfigPanel(): void {
+            configPanel!.textContent = '';
+            const title = document.createElement('span');
+            title.className = 'pw-inactive-title';
+            title.textContent = 'Statuses considered inactive';
+            configPanel!.appendChild(title);
+
+            const available = StatusPrefs.getAvailableStatuses();
+            if (!available.length) {
+                const hint = document.createElement('span');
+                hint.textContent = 'Statuses load with the first map view.';
+                configPanel!.appendChild(hint);
+                return;
+            }
+
+            const selected = new Set(StatusPrefs.getInactiveSet());
+            available.forEach(function (status) {
+                const label = document.createElement('label');
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = selected.has(status.value);
+                cb.addEventListener('change', function () {
+                    const set = new Set(StatusPrefs.getInactiveSet());
+                    if (cb.checked) {
+                        set.add(status.value);
+                    } else {
+                        set.delete(status.value);
+                    }
+                    StatusPrefs.setInactiveSet(Array.from(set));
+                    if (StatusPrefs.isHideInactive()) _loadData();
+                });
+                label.appendChild(cb);
+                const text = document.createElement('span');
+                text.textContent = status.label;
+                label.appendChild(text);
+                configPanel!.appendChild(label);
+            });
+        }
+
+        gearBtn.addEventListener('click', function (e: MouseEvent) {
+            e.stopPropagation();
+            const open = configPanel!.style.display !== 'none';
+            if (open) {
+                configPanel!.style.display = 'none';
+            } else {
+                _rebuildConfigPanel();
+                configPanel!.style.display = '';
+            }
+        });
+        // Clicking anywhere else closes the config panel
+        document.addEventListener('click', function (e: MouseEvent) {
+            if (configPanel!.style.display === 'none') return;
+            if (!configPanel!.contains(e.target as Node)) {
+                configPanel!.style.display = 'none';
+            }
+        });
+    }
+    _buildStatusControls();
 
     // --- Data loading ---
 

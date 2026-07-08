@@ -117,6 +117,28 @@ Passed to external layers for zoom-dependent behavior:
 ?zoom=15
 ```
 
+### Excluding Statuses
+
+Hide features by lifecycle status. Accepts a comma-separated list or a
+repeated parameter; unknown values are ignored. Applies to the structure and
+pathway layers and to `/info` counts (circuit geometries carry no plugin
+status and are unaffected):
+
+```
+?exclude_status=retired,abandoned
+?exclude_status=retired&exclude_status=abandoned
+```
+
+The `/info` response also carries the available status choices for building
+filter UIs:
+
+```json
+"statuses": [
+  {"value": "active", "label": "Active", "color": "green"},
+  ...
+]
+```
+
 ### Standard Filters
 
 All standard model filters are supported:

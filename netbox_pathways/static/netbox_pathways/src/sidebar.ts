@@ -8,6 +8,7 @@
 import type { FeatureEntry, FeatureType, DetailFieldDef, ResolvedValue, ServerSearchResult } from './types/features';
 import { NATIVE_TYPES } from './types/features';
 import { getLayerConfig } from './external-layers';
+import { StatusPrefs } from './status-prefs';
 
 // ---------------------------------------------------------------------------
 // Module-level helpers imported from the outer scope at init time
@@ -478,6 +479,25 @@ function _addFieldRow(table: HTMLTableElement, label: string, val: unknown, suff
     table.appendChild(tr);
 }
 
+/** Render a status choice ({value, label}) as a NetBox-style colored badge row. */
+function _addStatusRow(table: HTMLTableElement, label: string, val: unknown): void {
+    const resolved = _resolveValue(val);
+    if (!resolved) return;
+    const choice = (typeof val === 'object' && val !== null ? val : {}) as { value?: string };
+    const tr = document.createElement('tr');
+    const tdLabel = document.createElement('td');
+    tdLabel.textContent = label;
+    const tdVal = document.createElement('td');
+    const badge = document.createElement('span');
+    const color = (choice.value && StatusPrefs.colorFor(choice.value)) || 'secondary';
+    badge.className = 'badge text-bg-' + color;
+    badge.textContent = resolved.text;
+    tdVal.appendChild(badge);
+    tr.appendChild(tdLabel);
+    tr.appendChild(tdVal);
+    table.appendChild(tr);
+}
+
 interface TagData {
     color?: string;
     display?: string;
@@ -514,6 +534,7 @@ function _addTagsRow(table: HTMLTableElement, tags: TagData[] | undefined): void
 
 const DETAIL_FIELDS: Record<string, DetailFieldDef[]> = {
     structure: [
+        ['Status', 'status'],
         ['Type', 'structure_type'],
         ['Site', 'site'],
         ['Elevation', 'elevation', ' m'],
@@ -527,6 +548,7 @@ const DETAIL_FIELDS: Record<string, DetailFieldDef[]> = {
         ['Comments', 'comments'],
     ],
     conduit_bank: [
+        ['Status', 'status'],
         ['Start Structure', 'start_structure'],
         ['End Structure', 'end_structure'],
         ['Start Face', 'start_face'],
@@ -540,6 +562,7 @@ const DETAIL_FIELDS: Record<string, DetailFieldDef[]> = {
         ['Comments', 'comments'],
     ],
     conduit: [
+        ['Status', 'status'],
         ['Start Structure', 'start_structure'],
         ['End Structure', 'end_structure'],
         ['Start Location', 'start_location'],
@@ -559,6 +582,7 @@ const DETAIL_FIELDS: Record<string, DetailFieldDef[]> = {
         ['Comments', 'comments'],
     ],
     aerial: [
+        ['Status', 'status'],
         ['Start Structure', 'start_structure'],
         ['End Structure', 'end_structure'],
         ['Start Location', 'start_location'],
@@ -578,6 +602,7 @@ const DETAIL_FIELDS: Record<string, DetailFieldDef[]> = {
         ['Comments', 'comments'],
     ],
     direct_buried: [
+        ['Status', 'status'],
         ['Start Structure', 'start_structure'],
         ['End Structure', 'end_structure'],
         ['Start Location', 'start_location'],
@@ -598,6 +623,7 @@ const DETAIL_FIELDS: Record<string, DetailFieldDef[]> = {
         ['Comments', 'comments'],
     ],
     default: [
+        ['Status', 'status'],
         ['Start Structure', 'start_structure'],
         ['End Structure', 'end_structure'],
         ['Start Location', 'start_location'],
@@ -692,6 +718,10 @@ function _renderEnrichedDetail(data: Record<string, unknown>, entry: FeatureEntr
 
     fields.forEach(function (f: DetailFieldDef) {
         const val = data[f[1]];
+        if (f[1] === 'status') {
+            _addStatusRow(table, f[0], val);
+            return;
+        }
         _addFieldRow(table, f[0], val, f[2] || '');
     });
 

@@ -305,6 +305,98 @@ class TestPathwayGeoAPI:
 
 
 # ---------------------------------------------------------------------------
+# GeoJSON API — exclude_status (issue #68: hide inactive infrastructure)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestExcludeStatus:
+    def test_structures_exclude_status(self, api_client, structures):
+        retired = structures[0]
+        retired.status = "retired"
+        retired.save()
+        resp = api_client.get(
+            "/api/plugins/pathways/geo/structures/?exclude_status=retired",
+            format="json",
+        )
+        assert resp.status_code == 200
+        ids = [f["id"] for f in resp.json()["features"]]
+        assert retired.pk not in ids
+        assert len(ids) == len(structures) - 1
+
+    def test_conduits_exclude_multiple_statuses(self, api_client, conduits):
+        conduits[0].status = "retired"
+        conduits[0].save()
+        conduits[1].status = "abandoned"
+        conduits[1].save()
+        resp = api_client.get(
+            "/api/plugins/pathways/geo/conduits/?exclude_status=retired&exclude_status=abandoned",
+            format="json",
+        )
+        assert resp.json()["features"] == []
+
+    def test_exclude_status_accepts_comma_separated_values(self, api_client, conduits):
+        """The map frontend sends one comma-joined param."""
+        conduits[0].status = "retired"
+        conduits[0].save()
+        conduits[1].status = "abandoned"
+        conduits[1].save()
+        resp = api_client.get(
+            "/api/plugins/pathways/geo/conduits/?exclude_status=retired,abandoned",
+            format="json",
+        )
+        assert resp.json()["features"] == []
+
+    def test_exclude_status_changes_etag(self, api_client, conduits):
+        conduits[0].status = "retired"
+        conduits[0].save()
+        plain = api_client.get("/api/plugins/pathways/geo/conduits/", format="json")
+        excluded = api_client.get(
+            "/api/plugins/pathways/geo/conduits/?exclude_status=retired",
+            format="json",
+        )
+        assert plain["ETag"] != excluded["ETag"]
+
+    def test_circuit_layer_ignores_exclude_status(self, api_client, db):
+        # CircuitGeometry has no own status field; the param must not 500
+        resp = api_client.get(
+            "/api/plugins/pathways/geo/circuits/?exclude_status=retired",
+            format="json",
+        )
+        assert resp.status_code == 200
+
+    def test_info_counts_respect_exclude_status(self, api_client, structures, conduits):
+        conduits[0].status = "retired"
+        conduits[0].save()
+        structures[0].status = "abandoned"
+        structures[0].save()
+        resp = api_client.get(
+            "/api/plugins/pathways/geo/info/?exclude_status=retired&exclude_status=abandoned",
+            format="json",
+        )
+        counts = resp.json()["counts"]
+        assert counts["conduits"] == len(conduits) - 1
+        assert counts["structures"] == len(structures) - 1
+
+    def test_info_etag_varies_with_exclude_status(self, api_client, structures):
+        plain = api_client.get("/api/plugins/pathways/geo/info/", format="json")
+        excluded = api_client.get(
+            "/api/plugins/pathways/geo/info/?exclude_status=retired",
+            format="json",
+        )
+        assert plain["ETag"] != excluded["ETag"]
+
+    def test_info_lists_available_statuses(self, api_client, db):
+        resp = api_client.get("/api/plugins/pathways/geo/info/", format="json")
+        statuses = resp.json()["statuses"]
+        values = [s["value"] for s in statuses]
+        assert "active" in values
+        assert "retired" in values
+        for s in statuses:
+            assert set(s) == {"value", "label", "color"}
+
+
+# ---------------------------------------------------------------------------
 # GeoJSON API — /info endpoint
 # ---------------------------------------------------------------------------
 

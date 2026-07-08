@@ -17,6 +17,8 @@ declare global {
     overlays?: OverlayConfig[];
     baseLayers?: BaseLayerConfig[];
     externalLayers?: import('./external').ExternalLayerConfig[];
+    /** Available lifecycle status choices for the hide-inactive panel. */
+    statuses?: import('../status-prefs').StatusChoice[];
   }
 
   interface OverlayConfig {

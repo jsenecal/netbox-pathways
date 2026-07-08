@@ -16,6 +16,7 @@ import {
     getCookie as _getCookie,
     haversine as _haversine,
 } from './map-utils';
+import { StatusPrefs, type StatusChoice } from './status-prefs';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -66,6 +67,7 @@ export interface MapInfo {
         circuits: LayerThresholds;
         external?: Record<string, LayerThresholds>;
     };
+    statuses?: StatusChoice[];
 }
 
 export type ClusterMode = 'off' | 'client' | 'server';
@@ -187,7 +189,9 @@ export async function fetchMapInfo(
     const controller = new AbortController();
     _infoController = controller;
 
-    const url = API_BASE + 'info/?bbox=' + bbox;
+    let url = API_BASE + 'info/?bbox=' + bbox;
+    const exclude = StatusPrefs.excludeParam();
+    if (exclude) url += '&exclude_status=' + encodeURIComponent(exclude);
     const headers: Record<string, string> = { 'Accept': 'application/json' };
     const csrfToken = _getCookie('csrftoken');
     if (csrfToken) headers['X-CSRFToken'] = csrfToken;
@@ -204,6 +208,7 @@ export async function fetchMapInfo(
             const data = await response.json() as MapInfo;
             _lastInfoEtag = response.headers.get('ETag') || '';
             _lastInfo = data;
+            StatusPrefs.setAvailableStatuses(data.statuses);
             callback(data, true);
         }
     } catch {
@@ -240,6 +245,8 @@ export async function fetchGeoJSON(
             url += '&' + key + '=' + encodeURIComponent(String(extraParams[key]));
         }
     }
+    const excludeStatus = StatusPrefs.excludeParam();
+    if (excludeStatus) url += '&exclude_status=' + encodeURIComponent(excludeStatus);
 
     const controller = new AbortController();
     _inflightControllers[endpoint] = controller;
@@ -459,6 +466,11 @@ interface GeoCacheEntry {
 
 const _geoCache: Record<string, GeoCacheEntry[]> = {};
 
+/** Cache key fragment for extra params + the active status exclusion. */
+function _extraKeyFor(extraParams?: Record<string, string | number>): string {
+    return (extraParams ? JSON.stringify(extraParams) : '') + '|' + (StatusPrefs.excludeParam() || '');
+}
+
 /** Find a cache entry that covers a given viewport at a given zoom. */
 function _findCovering(
     endpoint: string, zoom: number, extraKey: string,
@@ -497,7 +509,7 @@ export function cachedFetch(
     const west = b.getWest(), south = b.getSouth();
     const east = b.getEast(), north = b.getNorth();
     const zoom = map.getZoom();
-    const extraKey = extraParams ? JSON.stringify(extraParams) : '';
+    const extraKey = _extraKeyFor(extraParams);
 
     const cached = _findCovering(endpoint, zoom, extraKey, west, south, east, north);
     if (cached) {
@@ -548,7 +560,7 @@ export function preloadNeighbors(map: L.Map, specs: PreloadSpec[]): void {
     // Build a queue of {endpoint, bbox} pairs, skipping already-cached regions
     const queue: { endpoint: string; bbox: string; fw: number; fs: number; fe: number; fn: number; zoom: number; extraKey: string; extraParams?: Record<string, string | number> }[] = [];
     for (const spec of specs) {
-        const extraKey = spec.extraParams ? JSON.stringify(spec.extraParams) : '';
+        const extraKey = _extraKeyFor(spec.extraParams);
         for (const [dx, dy] of offsets) {
             const cw = b.getWest() + dx, cs = b.getSouth() + dy;
             const ce = b.getEast() + dx, cn = b.getNorth() + dy;

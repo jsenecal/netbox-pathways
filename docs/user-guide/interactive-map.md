@@ -40,6 +40,20 @@ Icon pill toggle buttons at the top of the map control which feature types are v
 
 External plugin layers (if registered) also appear as toggle buttons.
 
+### Hiding Inactive Infrastructure
+
+Below the layer toggles, the **Hide inactive** button removes features whose
+lifecycle status you consider inactive from every layer. The gear button next
+to it opens a small panel with one checkbox per status choice, defining the
+"inactive" set; the default is `Retired` + `Abandoned in place`. Both the
+toggle and the set persist per browser (localStorage), so the map remembers
+your preference across visits.
+
+Filtering happens server-side: the layer requests and the `/info` count
+endpoint both receive the exclusion, so viewport counts, clustering
+thresholds, and what is actually drawn always agree. Circuit routes are not
+affected -- circuits carry NetBox core statuses, not plugin pathway statuses.
+
 ### Layer Density Gating
 
 The map keeps the display readable by checking how many features each enabled layer would draw inside the current viewport. Every pan or zoom hits a lightweight `/api/plugins/pathways/geo/info/` endpoint that returns counts and thresholds; the frontend then decides per layer whether to draw it directly, draw it with client-side clustering, or hide it entirely. Hidden layer toggles dim to roughly half-opacity and show the in-view count beside the label so it is obvious why the layer is not on screen -- usually zooming in is enough to bring it back.
@@ -79,7 +93,8 @@ Clicking any feature opens a sidebar panel with two views:
 
 **Detail View:**
 
-- Full feature attributes (name, type, endpoints, dimensions)
+- Full feature attributes (name, status, type, endpoints, dimensions) --
+  the lifecycle status renders as a colored badge matching the list views
 - Links to the NetBox detail page
 - Related objects (connected pathways, routed cables)
 

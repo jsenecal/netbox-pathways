@@ -364,3 +364,58 @@ describe('Sidebar (kiosk mode)', () => {
         });
     });
 });
+
+// ---------------------------------------------------------------------------
+// Tests — detail status badge (issue #68)
+// ---------------------------------------------------------------------------
+
+import { StatusPrefs } from './status-prefs';
+
+describe('Sidebar detail status badge', () => {
+    beforeEach(() => {
+        buildDOM(false);
+        mockDeps();
+        Sidebar.init(createMockMap() as any, false);
+        StatusPrefs.setAvailableStatuses([
+            { value: 'active', label: 'Active', color: 'green' },
+            { value: 'retired', label: 'Retired', color: 'red' },
+        ]);
+    });
+
+    function stubDetailFetch(payload: Record<string, unknown>) {
+        vi.stubGlobal('fetch', vi.fn(async () => ({
+            ok: true,
+            status: 200,
+            headers: { get: () => '' },
+            json: async () => payload,
+        })));
+    }
+
+    it('renders status as a colored badge in the detail table', async () => {
+        stubDetailFetch({ id: 7, label: 'C7', status: { value: 'retired', label: 'Retired' } });
+        const entry = makeEntry({
+            featureType: 'conduit',
+            props: { id: 7, name: 'C7' },
+        });
+        Sidebar.showDetail(entry);
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        const badge = document.querySelector('#pw-detail-body .badge')!;
+        expect(badge).not.toBeNull();
+        expect(badge.textContent).toBe('Retired');
+        expect(badge.className).toContain('text-bg-red');
+    });
+
+    it('falls back to a neutral badge color for unknown statuses', async () => {
+        stubDetailFetch({ id: 8, label: 'C8', status: { value: 'custom', label: 'Custom' } });
+        const entry = makeEntry({
+            featureType: 'conduit',
+            props: { id: 8, name: 'C8' },
+        });
+        Sidebar.showDetail(entry);
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        const badge = document.querySelector('#pw-detail-body .badge')!;
+        expect(badge.className).toContain('text-bg-secondary');
+    });
+});
