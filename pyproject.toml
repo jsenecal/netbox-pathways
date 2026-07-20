@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -22,6 +22,7 @@ readme = "README.md"
 authors = [
     { name = "Jonathan Senecal", email = "contact@jonathansenecal.com" },
 ]
+license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
 

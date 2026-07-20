@@ -11,7 +11,7 @@
 [![codecov](https://codecov.io/gh/jsenecal/netbox-pathways/branch/main/graph/badge.svg)](https://codecov.io/gh/jsenecal/netbox-pathways)
 [![Documentation](https://img.shields.io/badge/docs-jsenecal.github.io-blue)](https://jsenecal.github.io/netbox-pathways/)
 ![Status](https://img.shields.io/badge/status-alpha-orange)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 
 > Local coverage note: `pytest --cov` run inside the devcontainer
 > against `/opt/netbox/venv` may report 0% due to an editable-install
@@ -173,4 +173,4 @@ PRs welcome. Use conventional-commits PR titles (`feat:`, `fix:`, `chore:`, `doc
 
 ## License
 
-[Apache License 2.0](LICENSE).
+[GNU Affero General Public License v3.0 or later](LICENSE) (AGPL-3.0-or-later).
