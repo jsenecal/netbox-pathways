@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Rounded `geo_length` display** -- computed pathway lengths are now rounded
+  to 2 decimals (centimetres) by default instead of showing 12 decimal
+  digits; even survey-grade GPS tops out around centimetre accuracy, so the
+  extra digits were noise. A new
+  `PLUGINS_CONFIG['netbox_pathways']['geo_length_decimals']` setting (default
+  `2`, `0` = whole metres) controls how many decimal digits appear in tables,
+  detail panels, and the REST/GeoJSON APIs. Sorting and
+  `geo_length__gte`/`__lte` filtering are unaffected -- they always use the
+  full-precision PostGIS value. Fixes #80.
 - **`LICENSE` file (AGPL-3.0-or-later).** The project is now explicitly licensed under the GNU Affero General Public License v3.0 or later. The README previously referenced Apache 2.0 but no license file was ever shipped; `pyproject.toml` now declares the SPDX expression `AGPL-3.0-or-later` so PyPI metadata matches.
 - **Status on the interactive map** -- the sidebar details pane now shows the clicked feature's lifecycle status as a colored badge, and a new **Hide inactive** toggle (with a gear panel choosing which statuses count as inactive, default `retired` + `abandoned`; persisted in localStorage) removes those features from every map layer. Filtering happens server-side: the GeoJSON layer endpoints and the `/info` count endpoint accept `exclude_status` (comma-separated or repeated), so viewport counts and clustering thresholds stay consistent with what is drawn. `/info` also returns the available `statuses` (value, label, color) for building filter UIs. Circuit routes are unaffected (circuits carry NetBox core statuses). Refs #68.
 - **Skip-info band + optimistic `/info` revalidation on the map.** Panning and zooming no longer block on a fresh `/info` round-trip before the GeoJSON layers start loading. The frontend now uses a three-band strategy: below `MIN_DATA_ZOOM` (11) nothing renders; in the gated band, if a recent `/info` is cached the cached decision drives the immediate render and `/info` revalidates in the background with `If-None-Match` (a 304 leaves the screen untouched, a 200 reconciles only if the decision actually changed); at or above `SKIP_INFO_ZOOM` (default 17) `/info` is skipped entirely because the viewport is too small to plausibly cross any hide/cluster threshold. Configurable via `PLUGINS_CONFIG['netbox_pathways']['map_skip_info_zoom']` if a deployment hits the edge case. The pure decision logic lives in `netbox_pathways/static/netbox_pathways/src/load-strategy.ts` (`chooseLoadStrategy`, `decideSkipInfo`, `decisionsDiffer`) and is covered by vitest. `fetchMapInfo`'s callback now also signals whether the response was a 200 (fresh) or 304 (unchanged), so callers can skip the reconciliation render in the common case.

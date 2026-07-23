@@ -115,6 +115,41 @@ class TestGeoLengthProperty:
 
 
 @pytest.mark.django_db
+class TestGeoLengthRounding:
+    """`geo_length` is a display value: survey-grade GPS is centimetre-scale
+    at best, so the property rounds to 2 decimals (centimetres) by default,
+    overridable via `PLUGINS_CONFIG['netbox_pathways']['geo_length_decimals']`
+    (0 = whole metres). Refs #80.
+    """
+
+    @pytest.fixture
+    def diagonal_conduit(self, structures, srid):
+        # sqrt(1000^2 + 1000^2) = 1414.2135623730951 m
+        return Conduit.objects.create(
+            label="GL-diag",
+            start_structure=structures[0],
+            end_structure=structures[1],
+            path=LineString((0.0, 0.0), (1000.0, 1000.0), srid=srid),
+        )
+
+    def test_default_rounds_to_centimetres(self, diagonal_conduit):
+        instance = Pathway.objects.with_geo_length().get(pk=diagonal_conduit.pk)
+        assert instance.geo_length == pytest.approx(1414.21)
+
+    def test_fallback_path_also_rounds(self, diagonal_conduit):
+        instance = Pathway.objects.get(pk=diagonal_conduit.pk)
+        assert instance.geo_length == pytest.approx(1414.21)
+
+    def test_zero_decimals_rounds_to_whole_metres(self, diagonal_conduit, settings):
+        settings.PLUGINS_CONFIG["netbox_pathways"]["geo_length_decimals"] = 0
+        try:
+            instance = Pathway.objects.with_geo_length().get(pk=diagonal_conduit.pk)
+            assert instance.geo_length == 1414
+        finally:
+            del settings.PLUGINS_CONFIG["netbox_pathways"]["geo_length_decimals"]
+
+
+@pytest.mark.django_db
 class TestGeoLengthFilterSet:
     """`PathwayFilterSet.geo_length__gte` / `__lte` must filter via PostGIS,
     not Python, even when the list view's queryset already paid for the

@@ -25,6 +25,8 @@ class NetBoxPathwaysConfig(PluginConfig):
         "map_max_native_zoom": 19,
         "map_attribution": "&copy; OpenStreetMap contributors",
         "map_overlays": [],
+        # Decimal digits shown on computed geo_length values (0 = whole metres)
+        "geo_length_decimals": 2,
     }
     django_apps = [
         "django.contrib.gis",
