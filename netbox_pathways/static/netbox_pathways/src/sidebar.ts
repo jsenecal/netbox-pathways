@@ -135,7 +135,7 @@ function _applyHighlightVisuals(entry: FeatureEntry): void {
             iconAnchor: [13, 13] as [number, number],
             popupAnchor: [0, -14] as [number, number],
         }));
-    } else {
+    } else if (typeof (layer as L.Polyline).getLatLngs === 'function') {
         const polyline = layer as L.Polyline & { _origStyle?: L.PathOptions };
         const origStyle = (polyline as any).options || {};
         polyline._origStyle = {
@@ -155,6 +155,18 @@ function _applyHighlightVisuals(entry: FeatureEntry): void {
             }).addTo(_map);
         }
         polyline.setStyle({ weight: 6, opacity: 1, dashArray: '' });
+    } else if (typeof (layer as L.CircleMarker).setStyle === 'function') {
+        // External point features (L.CircleMarker) have neither an icon nor
+        // vertices -- emphasize the marker ring in place.
+        const marker = layer as L.CircleMarker & { _origStyle?: L.PathOptions };
+        const origStyle = (marker as any).options || {};
+        marker._origStyle = {
+            weight: origStyle.weight || 2,
+            opacity: origStyle.opacity || 1,
+            color: origStyle.color,
+            dashArray: origStyle.dashArray,
+        };
+        marker.setStyle({ weight: 5, opacity: 1 });
     }
 }
 
@@ -370,7 +382,14 @@ function _applyFilters(): void {
  */
 function _detailPageUrl(entry: FeatureEntry): string {
     const id = entry.props.id;
-    if (!_isNativeType(entry.featureType) || id == null) return '';
+    if (id == null) return '';
+    if (!_isNativeType(entry.featureType)) {
+        // External layers: detail.url_template is the object's page URL.
+        const extCfg = getLayerConfig(entry.featureType);
+        return extCfg?.detail?.urlTemplate
+            ? extCfg.detail.urlTemplate.replace('{id}', String(id))
+            : '';
+    }
     const base = '/plugins/pathways/';
     switch (entry.featureType) {
         case 'structure':     return base + 'structures/' + id + '/';
@@ -410,11 +429,8 @@ function _apiUrlForFeature(entry: FeatureEntry): string {
         }
     }
 
-    // Check external layer config for detail URL
-    const extCfg = getLayerConfig(entry.featureType);
-    if (extCfg?.detail?.urlTemplate) {
-        return extCfg.detail.urlTemplate.replace('{id}', String(id));
-    }
+    // External features only enrich via an explicit `url` property (handled
+    // above); detail.urlTemplate is a page link, not a JSON endpoint.
     return '';
 }
 
@@ -1120,7 +1136,9 @@ function _renderDetail(entry: FeatureEntry): void {
     const pencilIcon = document.createElement('i');
     pencilIcon.className = 'mdi mdi-pencil';
     editBtn.appendChild(pencilIcon);
-    titleRow.appendChild(editBtn);
+    // Inline rename PATCHes the REST API; external features without an
+    // API endpoint are read-only here.
+    if (_apiUrlForFeature(entry)) titleRow.appendChild(editBtn);
 
     body.appendChild(titleRow);
 

@@ -169,16 +169,19 @@ LayerStyle(
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `url_template` | `str` | `''` | Object detail page URL with `{id}` placeholder (used for "View" link and JSON fallback) |
+| `url_template` | `str` | `''` | Object detail page URL with `{id}` placeholder (rendered as the sidebar's "View Details" link) |
 | `detail_url` | `str` | `''` | HTML fragment endpoint with `{id}` placeholder (sidebar injects HTML directly) |
-| `fields` | `list[str]` | `[]` | Fields to show in detail panel (JSON mode fallback) |
+| `fields` | `list[str]` | `[]` | Fields to show in detail panel (JSON enrichment mode) |
 | `label_field` | `str` | `'name'` | Field used as the detail panel title |
 
 The sidebar resolves detail content in this order:
 
 1. **`detail_url`** — Fetch HTML fragment, inject directly (richest option)
-2. **`url_template`** — Fetch JSON, render field table from `fields` list
+2. **Feature `url` property** — If the GeoJSON feature carries a `url` property pointing at a REST endpoint, fetch JSON and render a field table from the `fields` list
 3. **Neither** — Render raw GeoJSON properties as key-value table
+
+`url_template` is independent of that fallback: whenever it is set, the
+detail panel shows a "View Details" button linking to the object's page.
 
 **HTML fragment mode** lets plugins render domain-specific content (fiber tube diagrams, splice schematics, status indicators). The endpoint must return a self-contained HTML fragment using Tabler/NetBox CSS variables for theme compatibility.
 
@@ -279,8 +282,11 @@ Registered layers appear as toggle buttons in the map's layer control. The `labe
 Clicking an external feature opens the sidebar detail panel. The sidebar resolves content using a three-tier fallback:
 
 1. **`detail.detail_url`** — Fetches an HTML fragment from the plugin and injects it directly. This enables rich, domain-specific content like fiber tube diagrams or splice schematics. The endpoint must return a self-contained HTML fragment (no `<html>`/`<body>` wrappers) styled with Tabler/NetBox CSS variables.
-2. **`detail.url_template`** — Fetches JSON and renders a field table using the `fields` list.
+2. **Feature `url` property** — If the GeoJSON feature carries a `url` property pointing at a REST endpoint, fetches JSON and renders a field table using the `fields` list.
 3. **Neither** — Renders raw GeoJSON properties as a key-value table.
+
+Independently, `detail.url_template` renders a "View Details" button
+linking to the object's page.
 
 HTML responses are cached per feature to avoid redundant fetches.
 
