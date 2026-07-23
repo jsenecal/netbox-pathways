@@ -1,5 +1,6 @@
 from circuits.models import Circuit
 from dcim.models import Cable, Location, Site
+from django.conf import settings
 from django.contrib.gis.db import models
 from django.contrib.gis.db.models.functions import Length
 from django.core.exceptions import ValidationError
@@ -201,12 +202,20 @@ class CircuitGeometry(NetBoxModel):
 
 
 def _distance_to_m(value):
-    """Coerce a GeoDjango Distance (or numeric) to a float in metres."""
+    """Coerce a GeoDjango Distance (or numeric) to rounded metres.
+
+    geo_length is a display value and GPS accuracy tops out around
+    centimetres, so it is rounded to 2 decimals by default; deployments
+    adjust via `PLUGINS_CONFIG['netbox_pathways']['geo_length_decimals']`
+    (0 = whole metres).
+    """
     if value is None:
         return None
-    if hasattr(value, "m"):
-        return value.m
-    return float(value)
+    metres = value.m if hasattr(value, "m") else float(value)
+    decimals = settings.PLUGINS_CONFIG.get("netbox_pathways", {}).get("geo_length_decimals", 2)
+    if decimals <= 0:
+        return round(metres)
+    return round(metres, decimals)
 
 
 class PathwayQuerySet(RestrictedQuerySet):

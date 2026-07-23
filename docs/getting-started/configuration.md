@@ -38,6 +38,17 @@ PLUGINS_CONFIG = {
 | `map_base_layers`    | `list`  | --                               | Custom base layer definitions (see below)|
 | `map_overlays`       | `list`  | `[]`                            | WMS/WMTS/tile overlay layers             |
 
+## Display Settings
+
+| Setting               | Type  | Default | Description                                                              |
+|-----------------------|-------|---------|--------------------------------------------------------------------------|
+| `geo_length_decimals` | `int` | `2`     | Decimal digits shown on computed `geo_length` values (`0` = whole metres) |
+
+Computed pathway lengths (`geo_length`) are rounded for display and API
+output -- centimetre precision by default, matching the best survey-grade
+GPS accuracy; sorting and filtering always use the full-precision PostGIS
+value.
+
 ## Tile Providers
 
 By default the plugin uses OpenStreetMap tiles. For better zoom levels, dark mode support, and satellite imagery, we recommend configuring Mapbox base layers via the Styles API. A free Mapbox account provides 200,000 tile requests/month.
