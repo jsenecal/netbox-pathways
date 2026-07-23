@@ -8,6 +8,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Sidebar } from './sidebar';
+import { initExternalLayers } from './external-layers';
 import type { FeatureEntry } from './types/features';
 
 // ---------------------------------------------------------------------------
@@ -34,6 +35,7 @@ function createMockMap() {
 (globalThis as any).L = {
     divIcon: vi.fn(() => ({})),
     polyline: vi.fn(() => ({ addTo: vi.fn(), remove: vi.fn() })),
+    layerGroup: vi.fn(() => ({ addTo: vi.fn() })),
 };
 
 // ---------------------------------------------------------------------------
@@ -417,5 +419,89 @@ describe('Sidebar detail status badge', () => {
 
         const badge = document.querySelector('#pw-detail-body .badge')!;
         expect(badge.className).toContain('text-bg-secondary');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Tests -- External layer features (e.g. FMS slack loops), refs #81
+// ---------------------------------------------------------------------------
+
+describe('External layer point features', () => {
+    let map: ReturnType<typeof createMockMap>;
+
+    const SLACK_LOOP_CFG = {
+        name: 'fms_slack_loops',
+        label: 'Slack Loops',
+        geometryType: 'Point',
+        url: '/api/plugins/pathways/geo/external/fms_slack_loops/',
+        style: { color: '#ff9800' },
+        popoverFields: ['name'],
+        defaultVisible: false,
+        group: 'Fiber Management',
+        minZoom: 11,
+        maxZoom: null,
+        sortOrder: 30,
+        detail: {
+            urlTemplate: '/plugins/fms/slack-loops/{id}/',
+            detailUrl: '',
+            fields: ['name', 'site', 'fiber_cable', 'loop_length'],
+            labelField: 'name',
+        },
+    };
+
+    /** External point features are L.CircleMarker: setStyle, no getLatLngs. */
+    function makeCircleMarkerLayer() {
+        return {
+            setStyle: vi.fn(),
+            options: { weight: 2, opacity: 1, color: '#ff9800' },
+        };
+    }
+
+    function makeExternalEntry(): FeatureEntry {
+        return {
+            props: { id: 5, name: 'Loop 5', site: 'Site A', loop_length: 30 },
+            featureType: 'fms_slack_loops',
+            layer: makeCircleMarkerLayer() as any,
+            latlng: { lat: 45.5, lng: -73.5 } as any,
+        } as FeatureEntry;
+    }
+
+    beforeEach(() => {
+        buildDOM();
+        mockDeps();
+        map = createMockMap();
+        Sidebar.init(map as any, false);
+        initExternalLayers([SLACK_LOOP_CFG as any], map as any);
+        globalThis.fetch = vi.fn(() =>
+            Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+        ) as any;
+    });
+
+    it('selectFeature zooms to the feature instead of throwing on highlight', () => {
+        const entry = makeExternalEntry();
+        Sidebar.setFeatures([entry]);
+
+        expect(() => Sidebar.selectFeature(entry)).not.toThrow();
+
+        expect(map.flyTo).toHaveBeenCalled();
+        expect(detailPanelEl().style.display).toBe('');
+    });
+
+    it('renders a View Details link from the layer urlTemplate', () => {
+        Sidebar.showDetail(makeExternalEntry());
+
+        const link = document.querySelector('#pw-detail-body a.btn') as HTMLAnchorElement | null;
+        expect(link).not.toBeNull();
+        expect(link!.getAttribute('href')).toBe('/plugins/fms/slack-loops/5/');
+    });
+
+    it('renders feature properties without fetching the page URL as JSON', async () => {
+        Sidebar.showDetail(makeExternalEntry());
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+        const body = document.getElementById('pw-detail-body')!;
+        expect(body.textContent).toContain('Loop length');
+        expect(body.textContent).toContain('30');
     });
 });
