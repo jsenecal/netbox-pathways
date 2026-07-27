@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Selecting an external-layer point feature in the map sidebar did nothing.**
+  Clicking a point feature from a registered external layer (e.g. FMS slack
+  loops or splice closures) in the Features pane threw a TypeError in the
+  highlight step -- the code assumed every non-structure feature was a
+  polyline -- which silently aborted both the zoom-to-feature and the detail
+  panel rendering. Circle markers are now highlighted in place, the detail
+  panel shows the feature's properties, and `LayerDetail.url_template` is
+  rendered as the documented "View Details" link (previously it was wrongly
+  fetched as a JSON endpoint, yielding a network error instead of details).
+  The inline rename pencil is hidden for external features without a REST
+  endpoint. Fixes #81.
+
 ### Added
 
 - **Rounded `geo_length` display** -- computed pathway lengths are now rounded
