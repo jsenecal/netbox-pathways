@@ -71,12 +71,12 @@ def structures(db):
     s1 = models.Structure.objects.create(
         name="Import test A",
         structure_type="manhole",
-        location=Point(-73.5, 45.5, srid=4326).transform(SRID, clone=True),
+        geometry=Point(-73.5, 45.5, srid=4326).transform(SRID, clone=True),
     )
     s2 = models.Structure.objects.create(
         name="Import test B",
         structure_type="manhole",
-        location=Point(-73.501, 45.5, srid=4326).transform(SRID, clone=True),
+        geometry=Point(-73.501, 45.5, srid=4326).transform(SRID, clone=True),
     )
     return s1, s2
 

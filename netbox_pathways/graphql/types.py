@@ -39,7 +39,7 @@ __all__ = (
 )
 
 
-@strawberry_django.type(Structure, exclude=["location"])
+@strawberry_django.type(Structure, exclude=["geometry"])
 class StructureType(NetBoxObjectType):
     """GraphQL type for Structure (geometry omitted; use the GeoJSON API)."""
 

@@ -245,12 +245,12 @@ describe('bboxParam', () => {
 describe('STRUCTURE_COLORS', () => {
     const expectedTypes = [
         'pole', 'manhole', 'handhole', 'cabinet', 'vault', 'pedestal',
-        'building_entrance', 'splice_closure', 'tower', 'roof',
+        'building_entrance', 'tower', 'roof',
         'equipment_room', 'telecom_closet', 'riser_room',
     ];
 
-    it('has all 13 structure types', () => {
-        expect(Object.keys(STRUCTURE_COLORS)).toHaveLength(13);
+    it('has all 12 structure types', () => {
+        expect(Object.keys(STRUCTURE_COLORS)).toHaveLength(12);
     });
 
     it.each(expectedTypes)('has color for %s', (type) => {
@@ -271,12 +271,12 @@ describe('STRUCTURE_COLORS', () => {
 describe('STRUCTURE_SHAPES', () => {
     const expectedTypes = [
         'pole', 'manhole', 'handhole', 'cabinet', 'vault', 'pedestal',
-        'building_entrance', 'splice_closure', 'tower', 'roof',
+        'building_entrance', 'tower', 'roof',
         'equipment_room', 'telecom_closet', 'riser_room',
     ];
 
-    it('has all 13 structure types', () => {
-        expect(Object.keys(STRUCTURE_SHAPES)).toHaveLength(13);
+    it('has all 12 structure types', () => {
+        expect(Object.keys(STRUCTURE_SHAPES)).toHaveLength(12);
     });
 
     it.each(expectedTypes)('has SVG shape for %s', (type) => {

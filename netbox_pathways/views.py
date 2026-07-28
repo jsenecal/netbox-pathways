@@ -970,9 +970,9 @@ class PlannedRouteView(generic.ObjectView):
 
             structures = models.Structure.objects.filter(
                 pk__in=structure_pks,
-            ).only("pk", "name", "structure_type", "location")
+            ).only("pk", "name", "structure_type", "geometry")
             for s in structures:
-                geo = point_to_latlon(s.location)
+                geo = point_to_latlon(s.geometry)
                 if geo:
                     route_geometry["structures"].append(
                         {
@@ -1413,10 +1413,10 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
             # Fetch all route structures for markers
             structures = models.Structure.objects.filter(
                 pk__in=structure_pks,
-            ).only("pk", "name", "structure_type", "location")
+            ).only("pk", "name", "structure_type", "geometry")
             route_structures = []
             for s in structures:
-                geo = point_to_latlon(s.location)
+                geo = point_to_latlon(s.geometry)
                 if geo:
                     is_start = s.pk == int(start_pk)
                     is_end = s.pk == int(end_pk)
@@ -1679,16 +1679,16 @@ class MapView(LoginRequiredMixin, View):
         bbox = None
 
         with connection.cursor() as cursor:
-            # Structures — trimmed extent to reject outliers. Locations may be
-            # any geometry (polygon footprints), and ST_X/ST_Y only accept
+            # Structures — trimmed extent to reject outliers. Geometries may be
+            # any type (polygon footprints), and ST_X/ST_Y only accept
             # points, so trim on each row's centroid; extents still use the
             # full geometry so footprints are covered edge to edge.
             cursor.execute("""
                 WITH pts AS (
-                    SELECT ST_Transform(location, 4326) AS geom,
-                           ST_Centroid(ST_Transform(location, 4326)) AS ctr
+                    SELECT ST_Transform(geometry, 4326) AS geom,
+                           ST_Centroid(ST_Transform(geometry, 4326)) AS ctr
                     FROM netbox_pathways_structure
-                    WHERE location IS NOT NULL
+                    WHERE geometry IS NOT NULL
                 ),
                 med AS (
                     SELECT ST_Y(ST_Centroid(ST_Collect(ctr))) AS lat,
@@ -1757,7 +1757,7 @@ class MapView(LoginRequiredMixin, View):
             return None
 
         model_map = {
-            "structure": (models.Structure, "location"),
+            "structure": (models.Structure, "geometry"),
             "conduit": (models.Conduit, "path"),
             "conduit_bank": (models.ConduitBank, "path"),
             "aerial": (models.AerialSpan, "path"),

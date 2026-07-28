@@ -45,7 +45,6 @@ STRUCTURE_TYPES = [
     "vault",
     "pedestal",
     "building_entrance",
-    "splice_closure",
     "tower",
     "roof",
     "equipment_room",
@@ -262,7 +261,7 @@ class Command(BaseCommand):
                     name=name,
                     structure_type=stype,
                     site=site,
-                    location=_rand_point(),
+                    geometry=_rand_point(),
                     elevation=round(random.uniform(10, 200), 1) if random.random() < 0.5 else None,
                     installation_date=f"{random.randint(1990, 2025)}-{random.randint(1, 12):02d}-{random.randint(1, 28):02d}"
                     if random.random() < 0.6
@@ -293,7 +292,7 @@ class Command(BaseCommand):
             banks.append(
                 ConduitBank(
                     label=f"Bank-{i + 1:04d}",
-                    path=_line_between(s1.location, s2.location),
+                    path=_line_between(s1.geometry, s2.geometry),
                     start_structure=s1,
                     end_structure=s2,
                     start_face=random.choice(faces),
@@ -314,7 +313,7 @@ class Command(BaseCommand):
         used_bank_positions = set()
         for i in range(600):
             s1, s2 = random.sample(structures, 2)
-            path = _line_between(s1.location, s2.location)
+            path = _line_between(s1.geometry, s2.geometry)
             bank = random.choice(banks) if random.random() < 0.3 else None
             bank_pos = ""
             if bank:
@@ -360,7 +359,7 @@ class Command(BaseCommand):
             pole_structures = structures[:200]
         for i in range(500):
             s1, s2 = random.sample(pole_structures, 2)
-            path = _line_between(s1.location, s2.location)
+            path = _line_between(s1.geometry, s2.geometry)
             spans.append(
                 AerialSpan(
                     label=f"AER-{i + 1:04d}",
@@ -391,7 +390,7 @@ class Command(BaseCommand):
         dbs = []
         for i in range(500):
             s1, s2 = random.sample(structures, 2)
-            path = _line_between(s1.location, s2.location)
+            path = _line_between(s1.geometry, s2.geometry)
             dbs.append(
                 DirectBuried(
                     label=f"DB-{i + 1:04d}",
@@ -533,7 +532,7 @@ class Command(BaseCommand):
                 site=site,
                 defaults={
                     "structure": struct,
-                    "geometry": struct.location if struct else _rand_point(),
+                    "geometry": struct.geometry if struct else _rand_point(),
                 },
             )
 

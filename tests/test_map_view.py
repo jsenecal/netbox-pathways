@@ -91,7 +91,7 @@ class TestDataExtent:
     def _structure_at(name, lon, lat):
         location = Point(lon, lat, srid=4326)
         location.transform(get_srid())
-        return Structure.objects.create(name=name, location=location, structure_type="manhole")
+        return Structure.objects.create(name=name, geometry=location, structure_type="manhole")
 
     def test_outlier_structures_trimmed(self):
         """Structures more than 2 degrees from the cluster's mean position are
@@ -113,12 +113,12 @@ class TestDataExtent:
         srid = get_srid()
         Structure.objects.create(
             name="Extent-Point",
-            location=Point(100, 100, srid=srid),
+            geometry=Point(100, 100, srid=srid),
             structure_type="manhole",
         )
         Structure.objects.create(
             name="Extent-Footprint",
-            location=Polygon(((0, 0), (50, 0), (50, 50), (0, 50), (0, 0)), srid=srid),
+            geometry=Polygon(((0, 0), (50, 0), (50, 50), (0, 50), (0, 0)), srid=srid),
             structure_type="vault",
         )
 

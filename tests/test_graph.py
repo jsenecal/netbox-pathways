@@ -31,7 +31,7 @@ class TestPathwayGraph:
         return [
             Structure.objects.create(
                 name=f"G-{i}",
-                location=Point(i * 0.01, i * 0.01, srid=srid),
+                geometry=Point(i * 0.01, i * 0.01, srid=srid),
             )
             for i in range(4)
         ]
@@ -75,8 +75,8 @@ class TestPathwayGraph:
 
     def test_shortest_path_no_route(self, srid):
         """Disconnected nodes return None."""
-        s1 = Structure.objects.create(name="ISO-1", location=Point(0, 0, srid=srid))
-        s2 = Structure.objects.create(name="ISO-2", location=Point(1, 1, srid=srid))
+        s1 = Structure.objects.create(name="ISO-1", geometry=Point(0, 0, srid=srid))
+        s2 = Structure.objects.create(name="ISO-2", geometry=Point(1, 1, srid=srid))
         graph = PathwayGraph.build()
         result = graph.shortest_path(("structure", s1.pk), ("structure", s2.pk))
         assert result is None
@@ -167,8 +167,8 @@ class TestPathwayGraph:
 
     def test_astar_no_path_returns_none(self, srid):
         """A* returns None when no path exists between nodes (lines 279-280)."""
-        s1 = Structure.objects.create(name="AS-1", location=Point(0, 0, srid=srid))
-        s2 = Structure.objects.create(name="AS-2", location=Point(1, 1, srid=srid))
+        s1 = Structure.objects.create(name="AS-1", geometry=Point(0, 0, srid=srid))
+        s2 = Structure.objects.create(name="AS-2", geometry=Point(1, 1, srid=srid))
         # Pathways exist for s1 only so both nodes are in the graph but disconnected.
         Conduit.objects.create(
             label="AS-self-loop",
@@ -252,9 +252,9 @@ class TestBuildTopology:
 
         # Conduit with a junction endpoint exercises the _start_junction_id /
         # _end_junction_id annotation branches.
-        s0 = Structure.objects.create(name="ep-s0", location=Point(0, 0, srid=srid))
-        s1 = Structure.objects.create(name="ep-s1", location=Point(0.02, 0.02, srid=srid))
-        s2 = Structure.objects.create(name="ep-s2", location=Point(0.03, 0.01, srid=srid))
+        s0 = Structure.objects.create(name="ep-s0", geometry=Point(0, 0, srid=srid))
+        s1 = Structure.objects.create(name="ep-s1", geometry=Point(0.02, 0.02, srid=srid))
+        s2 = Structure.objects.create(name="ep-s2", geometry=Point(0.03, 0.01, srid=srid))
         trunk = Conduit.objects.create(
             label="ep-trunk",
             start_structure=s0,
@@ -306,10 +306,10 @@ class TestBuildTopology:
 
         site_a = Site.objects.create(name="bf-site-a", slug="bf-site-a")
         site_b = Site.objects.create(name="bf-site-b", slug="bf-site-b")
-        a1 = Structure.objects.create(name="bf-a1", location=Point(0, 0, srid=srid), site=site_a)
-        a2 = Structure.objects.create(name="bf-a2", location=Point(0.01, 0.01, srid=srid), site=site_a)
-        b1 = Structure.objects.create(name="bf-b1", location=Point(1, 1, srid=srid), site=site_b)
-        b2 = Structure.objects.create(name="bf-b2", location=Point(1.01, 1.01, srid=srid), site=site_b)
+        a1 = Structure.objects.create(name="bf-a1", geometry=Point(0, 0, srid=srid), site=site_a)
+        a2 = Structure.objects.create(name="bf-a2", geometry=Point(0.01, 0.01, srid=srid), site=site_a)
+        b1 = Structure.objects.create(name="bf-b1", geometry=Point(1, 1, srid=srid), site=site_b)
+        b2 = Structure.objects.create(name="bf-b2", geometry=Point(1.01, 1.01, srid=srid), site=site_b)
         Pathway.objects.create(
             label="bf-a-pw",
             pathway_type="conduit",
@@ -353,7 +353,7 @@ class TestBuildTopology:
 
     def test_build_topology_skips_self_loop(self, srid):
         """A pathway whose start and end resolve to the same node is skipped (line 121)."""
-        s = Structure.objects.create(name="self-loop", location=Point(0, 0, srid=srid))
+        s = Structure.objects.create(name="self-loop", geometry=Point(0, 0, srid=srid))
         Pathway.objects.create(
             label="self",
             pathway_type="conduit",
@@ -368,15 +368,15 @@ class TestBuildTopology:
 
     def test_build_topology_cache_returns_same_instance(self, srid):
         """A second call within TTL returns the cached instance (line 87)."""
-        Structure.objects.create(name="cache-s", location=Point(0, 0, srid=srid))
+        Structure.objects.create(name="cache-s", geometry=Point(0, 0, srid=srid))
         first = PathwayGraph.build_topology()
         second = PathwayGraph.build_topology()
         assert first is second
 
     def test_build_topology_with_qs_bypasses_cache(self, srid):
         """Passing pathway_qs bypasses the cache entirely (use_cache=False branch)."""
-        s1 = Structure.objects.create(name="qs-s1", location=Point(0, 0, srid=srid))
-        s2 = Structure.objects.create(name="qs-s2", location=Point(0.01, 0.01, srid=srid))
+        s1 = Structure.objects.create(name="qs-s1", geometry=Point(0, 0, srid=srid))
+        s2 = Structure.objects.create(name="qs-s2", geometry=Point(0.01, 0.01, srid=srid))
         pw = Pathway.objects.create(
             label="qs-pw",
             pathway_type="conduit",
@@ -401,9 +401,9 @@ class TestBuildTopology:
         After build_topology, ('junction', J.pk) is a node and the branch
         edge runs from the junction to ('structure', S2).
         """
-        s0 = Structure.objects.create(name="J-s0", location=Point(0, 0, srid=srid))
-        s1 = Structure.objects.create(name="J-s1", location=Point(0.02, 0.02, srid=srid))
-        s2 = Structure.objects.create(name="J-s2", location=Point(0.03, 0.01, srid=srid))
+        s0 = Structure.objects.create(name="J-s0", geometry=Point(0, 0, srid=srid))
+        s1 = Structure.objects.create(name="J-s1", geometry=Point(0.02, 0.02, srid=srid))
+        s2 = Structure.objects.create(name="J-s2", geometry=Point(0.03, 0.01, srid=srid))
         trunk = Conduit.objects.create(
             label="J-trunk",
             start_structure=s0,
@@ -455,9 +455,9 @@ class TestConnectedPathwaysDb:
 
     def test_structure_node(self, srid):
         """connected_pathways_db filters by structure on either end (line 392)."""
-        s1 = Structure.objects.create(name="cpd-s1", location=Point(0, 0, srid=srid))
-        s2 = Structure.objects.create(name="cpd-s2", location=Point(0.01, 0.01, srid=srid))
-        s3 = Structure.objects.create(name="cpd-s3", location=Point(0.02, 0.02, srid=srid))
+        s1 = Structure.objects.create(name="cpd-s1", geometry=Point(0, 0, srid=srid))
+        s2 = Structure.objects.create(name="cpd-s2", geometry=Point(0.01, 0.01, srid=srid))
+        s3 = Structure.objects.create(name="cpd-s3", geometry=Point(0.02, 0.02, srid=srid))
         pw_in = Pathway.objects.create(
             label="cpd-in",
             pathway_type="conduit",
@@ -483,7 +483,7 @@ class TestConnectedPathwaysDb:
 
         site = Site.objects.create(name="cpd-site", slug="cpd-site")
         loc = Location.objects.create(name="cpd-loc", slug="cpd-loc", site=site)
-        s = Structure.objects.create(name="cpd-loc-s", location=Point(0, 0, srid=srid))
+        s = Structure.objects.create(name="cpd-loc-s", geometry=Point(0, 0, srid=srid))
         pw = Pathway.objects.create(
             label="cpd-loc-pw",
             pathway_type="conduit",
@@ -496,9 +496,9 @@ class TestConnectedPathwaysDb:
 
     def test_junction_node(self, srid):
         """connected_pathways_db handles junction nodes (line 396)."""
-        s0 = Structure.objects.create(name="cpd-j0", location=Point(0, 0, srid=srid))
-        s1 = Structure.objects.create(name="cpd-j1", location=Point(0.02, 0.02, srid=srid))
-        s2 = Structure.objects.create(name="cpd-j2", location=Point(0.03, 0.01, srid=srid))
+        s0 = Structure.objects.create(name="cpd-j0", geometry=Point(0, 0, srid=srid))
+        s1 = Structure.objects.create(name="cpd-j1", geometry=Point(0.02, 0.02, srid=srid))
+        s2 = Structure.objects.create(name="cpd-j2", geometry=Point(0.03, 0.01, srid=srid))
         trunk = Conduit.objects.create(
             label="cpd-trunk",
             start_structure=s0,
@@ -557,9 +557,9 @@ class TestTraceCable:
         """trace_cable orders segments by sequence and exposes pathway metadata."""
         from dcim.models import Cable
 
-        s1 = Structure.objects.create(name="tc-s1", location=Point(0, 0, srid=srid))
-        s2 = Structure.objects.create(name="tc-s2", location=Point(0.01, 0.01, srid=srid))
-        s3 = Structure.objects.create(name="tc-s3", location=Point(0.02, 0.02, srid=srid))
+        s1 = Structure.objects.create(name="tc-s1", geometry=Point(0, 0, srid=srid))
+        s2 = Structure.objects.create(name="tc-s2", geometry=Point(0.01, 0.01, srid=srid))
+        s3 = Structure.objects.create(name="tc-s3", geometry=Point(0.02, 0.02, srid=srid))
         pw1 = Pathway.objects.create(
             label="tc-pw1",
             pathway_type="conduit",
@@ -595,8 +595,8 @@ class TestTraceCable:
         """A segment whose pathway was deleted (SET_NULL) still appears with null fields."""
         from dcim.models import Cable
 
-        s1 = Structure.objects.create(name="tc-null-s1", location=Point(0, 0, srid=srid))
-        s2 = Structure.objects.create(name="tc-null-s2", location=Point(0.01, 0.01, srid=srid))
+        s1 = Structure.objects.create(name="tc-null-s1", geometry=Point(0, 0, srid=srid))
+        s2 = Structure.objects.create(name="tc-null-s2", geometry=Point(0.01, 0.01, srid=srid))
         pw = Pathway.objects.create(
             label="tc-null-pw",
             pathway_type="conduit",
@@ -626,7 +626,7 @@ class TestBatchResolveNodes:
         return get_srid()
 
     def test_resolves_structure_label_and_geo(self, srid):
-        s = Structure.objects.create(name="brn-s", location=Point(1.5, 2.5, srid=srid))
+        s = Structure.objects.create(name="brn-s", geometry=Point(1.5, 2.5, srid=srid))
         resolved = batch_resolve_nodes([("structure", s.pk)])
         entry = resolved[("structure", s.pk)]
         assert entry["label"] == str(s)
@@ -658,11 +658,11 @@ class TestBatchResolveNodes:
     # both use `label`, not `name`, so the query raises FieldDoesNotExist on eval.
 
     def test_node_to_label_single_node_convenience(self, srid):
-        s = Structure.objects.create(name="ntl-s", location=Point(0, 0, srid=srid))
+        s = Structure.objects.create(name="ntl-s", geometry=Point(0, 0, srid=srid))
         assert node_to_label(("structure", s.pk)) == str(s)
 
     def test_node_to_geo_single_node_convenience(self, srid):
-        s = Structure.objects.create(name="ntg-s", location=Point(1, 2, srid=srid))
+        s = Structure.objects.create(name="ntg-s", geometry=Point(1, 2, srid=srid))
         geo = node_to_geo(("structure", s.pk))
         assert geo is not None
         lat, lon = geo

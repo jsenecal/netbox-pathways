@@ -50,7 +50,6 @@ class StructureTypeChoices(ChoiceSet):
         ("vault", "Vault", "purple"),
         ("pedestal", "Pedestal", "yellow"),
         ("building_entrance", "Building Entrance", "red"),
-        ("splice_closure", "Splice Closure", "brown"),
         ("tower", "Tower", "darkred"),
         ("roof", "Rooftop", "gray"),
         ("equipment_room", "Equipment Room", "teal"),

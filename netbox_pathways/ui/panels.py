@@ -32,6 +32,7 @@ class StructurePanel(ObjectAttributesPanel):
     status = attrs.ChoiceAttr("status", label=_("Status"))
     structure_type = attrs.ChoiceAttr("structure_type", label=_("Type"))
     site = attrs.RelatedObjectAttr("site", linkify=True, label=_("Site"))
+    location = attrs.RelatedObjectAttr("location", linkify=True, label=_("Location"))
     tenant = attrs.RelatedObjectAttr("tenant", linkify=True, label=_("Tenant"))
     installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
     height = attrs.NumericAttr("height", label=_("Height (m)"))

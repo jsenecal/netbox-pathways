@@ -12,7 +12,7 @@ Navigate to **Plugins > Pathways > Map** or visit `/plugins/pathways/map/`.
 
 Structures appear as SVG markers with shapes and colors specific to their type:
 
-- **Circles** — Poles, manholes, handholes, splice closures
+- **Circles** — Poles, manholes, handholes
 - **Squares** — Cabinets, vaults, pedestals, equipment rooms, building entrances
 - **Diamonds** — Telecom closets, riser rooms
 - **Triangles** — Roof mounts
@@ -126,6 +126,30 @@ Override default map position via URL:
 | `lon` | `?lon=-74.0060` | Center longitude |
 | `zoom` | `?zoom=15` | Zoom level |
 | `bbox` | `?bbox=-74,40,-73,41` | Bounding box (W,S,E,N) |
+
+## Map Panels on Detail Pages
+
+Besides the full-page map, a read-only map panel is injected into detail
+pages so infrastructure is visible in context:
+
+| Page | What the panel shows |
+|------|----------------------|
+| Structure, Pathway (and subtypes), Conduit Bank, Conduit Junction | The object's own geometry, plus endpoint structures for pathways |
+| Site | The site boundary from [Site Geometry](site-geometry.md), every structure assigned to the site, and pathways with an endpoint structure at the site |
+| Location | Every structure in the location, plus pathways starting or ending at it with their far-end structures |
+
+The Location panel walks the location tree: viewing a parent shows the
+structures and pathways of its child locations too, matching how NetBox counts
+related objects on the same page. Each structure is drawn once even when
+several pathways share it as an endpoint.
+
+Markers shown only for context are drawn faded -- on a Location page that means
+the far-end structure of a pathway leaving the location, so the location's own
+structures read first. A structure that is both in the location and a pathway
+endpoint is drawn at full strength.
+
+Indoor pathways that run location-to-location carry no geographic path, so they
+contribute nothing to the map -- they appear in the Pathways tables instead.
 
 ## External Layers
 

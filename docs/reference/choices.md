@@ -13,7 +13,6 @@ All choice fields use NetBox's `ChoiceSet` base class and allow blank values (fi
 | `vault` | Vault | Purple |
 | `pedestal` | Pedestal | Yellow |
 | `building_entrance` | Building Entrance | Red |
-| `splice_closure` | Splice Closure | Brown |
 | `tower` | Tower | Dark Red |
 | `roof` | Roof | Gray |
 | `equipment_room` | Equipment Room | Teal |

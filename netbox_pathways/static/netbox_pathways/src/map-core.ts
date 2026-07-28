@@ -151,7 +151,7 @@ export function createLegend(map: L.Map): void {
             structTitle.textContent = 'Structures';
 
             const structTypes = ['pole', 'manhole', 'handhole', 'cabinet', 'vault',
-                'pedestal', 'building_entrance', 'splice_closure', 'tower',
+                'pedestal', 'building_entrance', 'tower',
                 'equipment_room', 'telecom_closet', 'riser_room'];
             for (let i = 0; i < structTypes.length; i++) {
                 const stype = structTypes[i];

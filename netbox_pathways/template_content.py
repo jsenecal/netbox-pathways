@@ -51,7 +51,6 @@ STRUCTURE_COLORS = {
     "vault": "purple",
     "pedestal": "yellow",
     "building_entrance": "red",
-    "splice_closure": "brown",
     "tower": "darkred",
     "roof": "gray",
     "equipment_room": "teal",
@@ -72,12 +71,18 @@ def _pathway_line(pathway):
     }
 
 
-def _structure_point(structure, color=None):
-    """Build a point dict from a Structure instance."""
+def _structure_point(structure, color=None, muted=False):
+    """Build a point dict from a Structure instance.
+
+    `muted` marks a structure shown only as context for something else (the far
+    end of a pathway leaving the page's subject); the map draws those faded.
+    The key is omitted when false so the common case costs nothing in a payload
+    that can carry 500 points.
+    """
     latlon = point_to_latlon(structure.centroid)
     if latlon is None:
         return None
-    return {
+    point = {
         "lat": latlon[0],
         "lon": latlon[1],
         "name": structure.name,
@@ -85,6 +90,9 @@ def _structure_point(structure, color=None):
         "color": color or STRUCTURE_COLORS.get(structure.structure_type, "gray"),
         "url": structure.get_absolute_url(),
     }
+    if muted:
+        point["muted"] = True
+    return point
 
 
 class LeafletHeadExtension(PluginTemplateExtension):
@@ -272,7 +280,7 @@ class CoreModelMapExtension(PluginTemplateExtension):
             for s in models.Structure.objects.filter(site=obj).only(
                 "name",
                 "structure_type",
-                "location",
+                "geometry",
             )[:500]:
                 pt = _structure_point(s)
                 if pt:
@@ -291,9 +299,28 @@ class CoreModelMapExtension(PluginTemplateExtension):
                     data["lines"].append(line)
 
         elif isinstance(obj, Location):
+            # Locations nest, and core's LocationView counts related objects
+            # across the whole subtree -- so roll up here too, or the map
+            # contradicts the Related Objects card on the same page.
+            locations = obj.get_descendants(include_self=True)
+
+            # Structures sitting in those locations, keyed by pk so that a
+            # structure reached from more than one direction below (several
+            # pathways sharing an endpoint, or an endpoint that is itself in
+            # this subtree) yields a single marker rather than stacked ones.
+            structures = {
+                s.pk: s
+                for s in models.Structure.objects.filter(location__in=locations).only(
+                    "name",
+                    "structure_type",
+                    "geometry",
+                )[:500]
+            }
+            in_location = set(structures)
+
             pathways = (
                 models.Pathway.objects.filter(
-                    Q(start_location=obj) | Q(end_location=obj),
+                    Q(start_location__in=locations) | Q(end_location__in=locations),
                 )
                 .select_related(
                     "start_structure",
@@ -307,25 +334,25 @@ class CoreModelMapExtension(PluginTemplateExtension):
                     "end_structure_id",
                     "start_structure__name",
                     "start_structure__structure_type",
-                    "start_structure__location",
+                    "start_structure__geometry",
                     "end_structure__name",
                     "end_structure__structure_type",
-                    "end_structure__location",
+                    "end_structure__geometry",
                 )[:500]
             )
             for p in pathways:
                 line = _pathway_line(p)
                 if line:
                     data["lines"].append(line)
-                # Also show endpoint structures
-                if p.start_structure_id:
-                    pt = _structure_point(p.start_structure)
-                    if pt:
-                        data["points"].append(pt)
-                if p.end_structure_id:
-                    pt = _structure_point(p.end_structure)
-                    if pt:
-                        data["points"].append(pt)
+                # Endpoint structures give the far end of pathways leaving here
+                for endpoint in (p.start_structure, p.end_structure):
+                    if endpoint:
+                        structures.setdefault(endpoint.pk, endpoint)
+
+            for pk, s in structures.items():
+                pt = _structure_point(s, muted=pk not in in_location)
+                if pt:
+                    data["points"].append(pt)
 
         if not data["points"] and not data["lines"]:
             return None

@@ -10,7 +10,7 @@ SRID = get_srid()
 
 
 def _make_structure(name, geom):
-    return Structure.objects.create(name=name, location=geom)
+    return Structure.objects.create(name=name, geometry=geom)
 
 
 def _make_pathway(path, start_structure=None, end_structure=None, **kwargs):
@@ -65,7 +65,7 @@ class TestPathwayEndpointValidation:
         pw = _make_pathway(path, start_structure=struct)
         pw.clean()
         snapped = Point(pw.path.coords[0][0], pw.path.coords[0][1], srid=SRID)
-        assert struct.location.boundary.distance(snapped) < 0.01
+        assert struct.geometry.boundary.distance(snapped) < 0.01
 
     def test_polygon_structure_on_boundary_snaps(self):
         poly = Polygon(((0, 0), (100, 0), (100, 100), (0, 100), (0, 0)), srid=SRID)
@@ -81,7 +81,7 @@ class TestPathwayEndpointValidation:
         pw = _make_pathway(path, start_structure=struct)
         pw.clean()
         snapped = Point(pw.path.coords[0][0], pw.path.coords[0][1], srid=SRID)
-        assert struct.location.boundary.distance(snapped) < 0.01
+        assert struct.geometry.boundary.distance(snapped) < 0.01
 
     def test_polygon_structure_far_outside_raises(self):
         poly = Polygon(((0, 0), (100, 0), (100, 100), (0, 100), (0, 0)), srid=SRID)

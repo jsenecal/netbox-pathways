@@ -29,7 +29,7 @@ class TestValidateCableRoute:
         return [
             Structure.objects.create(
                 name=f"MH-R-{i}",
-                location=Point(i, i, srid=srid),
+                geometry=Point(i, i, srid=srid),
             )
             for i in range(4)
         ]

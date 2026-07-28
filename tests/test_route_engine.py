@@ -29,7 +29,7 @@ class TestRouteEngine:
         structures = [
             Structure.objects.create(
                 name=f"RE-{i}",
-                location=Point(i * 0.01, i * 0.01, srid=srid),
+                geometry=Point(i * 0.01, i * 0.01, srid=srid),
             )
             for i in range(4)
         ]
@@ -116,11 +116,11 @@ class TestRouteEngine:
         """Isolated structures with no connecting pathways return None."""
         s1 = Structure.objects.create(
             name="ISO-RE-1",
-            location=Point(0, 0, srid=srid),
+            geometry=Point(0, 0, srid=srid),
         )
         s2 = Structure.objects.create(
             name="ISO-RE-2",
-            location=Point(1, 1, srid=srid),
+            geometry=Point(1, 1, srid=srid),
         )
         result = find_route(
             start_node=("structure", s1.pk),

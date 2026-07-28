@@ -41,7 +41,7 @@ class StructureFilterForm(NetBoxModelFilterSetForm):
     model = Structure
     fieldsets = (
         FieldSet("q", "filter_id", "tag"),
-        FieldSet("status", "structure_type", "site_id", name="Attributes"),
+        FieldSet("status", "structure_type", "site_id", "location_id", name="Attributes"),
         FieldSet("tenant_id", "installed_by_id", name="Tenant"),
     )
     status = forms.MultipleChoiceField(choices=StructureStatusChoices, required=False)
@@ -50,6 +50,13 @@ class StructureFilterForm(NetBoxModelFilterSetForm):
         queryset=Site.objects.all(),
         required=False,
         label="Site",
+    )
+    location_id = DynamicModelMultipleChoiceField(
+        queryset=Location.objects.all(),
+        required=False,
+        null_option="None",
+        query_params={"site_id": "$site_id"},
+        label="Location",
     )
     tenant_id = DynamicModelMultipleChoiceField(
         queryset=Tenant.objects.all(),

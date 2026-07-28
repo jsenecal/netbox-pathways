@@ -46,7 +46,8 @@ curl -X POST \
        "name": "MH-042",
        "structure_type": "manhole",
        "site": 1,
-       "location": "POINT(-73.5 45.5)"
+       "location": 3,
+       "geometry": "POINT(-73.5 45.5)"
      }' \
      "$NETBOX/api/plugins/pathways/structures/"
 ```

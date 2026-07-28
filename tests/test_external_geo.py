@@ -25,7 +25,7 @@ class TestResolveGeoColumn:
 
         # Pathway.start_structure is a FK to Structure
         col, label = _resolve_geo_column(Pathway, "start_structure")
-        assert col == "start_structure__location"
+        assert col == "start_structure__geometry"
         assert "structure" in label.lower()
 
     def test_site_fk_resolves_via_sitegeometry(self):
@@ -96,5 +96,5 @@ class TestBuildProperties:
         assert props["id"] == 1
         assert props["name"] == "Test Structure"
         assert props["structure_type"] == "manhole"
-        # Geometry field 'location' should be excluded
-        assert "location" not in props
+        # Geometry field 'geometry' should be excluded
+        assert "geometry" not in props

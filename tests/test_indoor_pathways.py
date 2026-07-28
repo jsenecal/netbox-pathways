@@ -27,7 +27,7 @@ def locations(db):
 
 
 def _make_structure(name, geom):
-    return Structure.objects.create(name=name, location=geom)
+    return Structure.objects.create(name=name, geometry=geom)
 
 
 def _make_conduit(**kwargs):

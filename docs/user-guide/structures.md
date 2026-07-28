@@ -13,7 +13,6 @@ Structures are the anchor points of your cable plant. Every pathway starts and e
 | Vault | Square filled | Purple | Underground concrete vault |
 | Pedestal | Square outline | Yellow | Above-ground distribution |
 | Building Entrance | Square dot | Red | Cable entry to building |
-| Splice Closure | Circle dot | Brown | Inline splice housing |
 | Tower | Crosshair | Dark Red | Communication tower |
 | Roof | Triangle | Gray | Rooftop mount |
 | Equipment Room | Square outline | Teal | Indoor telecom room |
@@ -32,7 +31,8 @@ Structures are the anchor points of your cable plant. Every pathway starts and e
 | Status | No | Lifecycle state: `Planned`, `Active`, `Under Construction`, `Decommissioning`, `Retired`, or `Abandoned in place` (still physically present, no longer in service) |
 | Structure Type | No | Type from the table above |
 | Site | No | NetBox site this structure belongs to |
-| Location | Yes | Geographic point or polygon -- click the map or enter coordinates |
+| Location | No | NetBox location inside the site (e.g., a floor, room, or vault row). Must belong to the selected site; if you set a location and leave Site blank, the site is filled in from the location |
+| Geometry | Yes | Geographic point or polygon -- click the map or enter coordinates |
 | Elevation | No | Elevation in meters |
 | Dimensions | No | Height, width, length, depth in meters |
 | Installation Date | No | When the structure was physically installed |
@@ -41,11 +41,22 @@ Structures are the anchor points of your cable plant. Every pathway starts and e
 | Installed By | No | Tenant entry for the contractor or workforce that physically installed the structure (distinct from `Tenant`) |
 | Access Notes | No | Instructions for field crews (e.g., "Key #42, contact dispatch") |
 
-## Location Geometry
+## Site and Location
 
-Structure locations can be either a **Point** (lat/lon) or a **Polygon** (footprint). The map and GIS tools use the structure's centroid for marker placement regardless of geometry type.
+`Site` and `Location` are the NetBox place hierarchy, not geography. A
+structure can sit in a site with no location, or in a location inside that
+site. The two must agree: assigning a location from a different site is
+rejected, and a location on its own fills in the site for you. Use these to
+tie a structure to indoor space (a floor, an equipment room, a vault row) so
+devices in the same location can be reconciled against it.
 
-The location picker on the form supports:
+Geographic position is the separate `Geometry` field, described below.
+
+## Geometry
+
+Structure geometry can be either a **Point** (lat/lon) or a **Polygon** (footprint). The map and GIS tools use the structure's centroid for marker placement regardless of geometry type.
+
+The geometry picker on the form supports:
 
 - **Click to place** — Click the map to set a point
 - **Draw polygon** — Use polygon draw tools for building footprints
@@ -66,12 +77,14 @@ On the interactive map, structures appear as markers with shapes and colors matc
 The structure list supports filtering by:
 
 - **Site** -- Filter by NetBox site
+- **Location** -- Filter by NetBox location within a site
 - **Structure Type** -- Filter by type (pole, manhole, etc.)
 - **Status** -- Filter by lifecycle state (including `Abandoned in place`)
 - **Tenant** -- Filter by owning tenant (served customer)
 - **Installed By** -- Filter by installer/contractor tenant
 - **Installation Date** / **Commissioned Date** -- Filter by date
-- **Has Location** -- Filter structures with/without coordinates
+- **Occupied** -- Filter structures that have routed cables
+- **Has Connected Pathways** -- Filter structures with/without attached pathways
 
 ## Conduit Banks
 

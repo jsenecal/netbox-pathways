@@ -37,9 +37,9 @@ def _disable_routability_signal():
 @pytest.fixture
 def linear_topology(db):
     """Three structures linked by two pathways: A -- P1 -- B -- P2 -- C."""
-    a = Structure.objects.create(name="A", location=Point(0, 0, srid=SRID))
-    b = Structure.objects.create(name="B", location=Point(100, 0, srid=SRID))
-    c = Structure.objects.create(name="C", location=Point(200, 0, srid=SRID))
+    a = Structure.objects.create(name="A", geometry=Point(0, 0, srid=SRID))
+    b = Structure.objects.create(name="B", geometry=Point(100, 0, srid=SRID))
+    c = Structure.objects.create(name="C", geometry=Point(200, 0, srid=SRID))
     p1 = Pathway.objects.create(
         label="P1",
         pathway_type="conduit",
@@ -196,7 +196,7 @@ def site_structure(site):
     return Structure.objects.create(
         name="CR-struct",
         site=site,
-        location=Point(0, 0, srid=SRID),
+        geometry=Point(0, 0, srid=SRID),
     )
 
 
@@ -238,12 +238,12 @@ class TestStartEndNode:
         s1 = Structure.objects.create(
             name="CR-multi-1",
             site=site,
-            location=Point(0, 0, srid=SRID),
+            geometry=Point(0, 0, srid=SRID),
         )
         s2 = Structure.objects.create(
             name="CR-multi-2",
             site=site,
-            location=Point(10, 10, srid=SRID),
+            geometry=Point(10, 10, srid=SRID),
         )
         mixin = CableRoutingMixin()
         cable = build_cable_with_terminations(

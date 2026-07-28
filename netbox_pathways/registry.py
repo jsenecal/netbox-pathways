@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # Maps FK target model label → geometry column (or ORM lookup path) on that model.
 # Multi-hop paths (e.g. 'pathways_geometry__geometry') are valid Django ORM lookups.
 SUPPORTED_GEO_MODELS: dict[str, str] = {
-    "netbox_pathways.Structure": "location",
+    "netbox_pathways.Structure": "geometry",
     "netbox_pathways.SiteGeometry": "geometry",
     "dcim.Site": "pathways_geometry__geometry",
 }

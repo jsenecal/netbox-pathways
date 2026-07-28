@@ -32,6 +32,7 @@ class StructureTable(NetBoxTable):
     name = tables.Column(linkify=True)
     status = columns.ChoiceFieldColumn()
     site = tables.Column(linkify=True)
+    location = tables.Column(linkify=True)
     structure_type = columns.ChoiceFieldColumn()
     tenant = tables.Column(linkify=True)
     installed_by = tables.Column(linkify=True, verbose_name="Installed by")
@@ -46,6 +47,7 @@ class StructureTable(NetBoxTable):
             "status",
             "structure_type",
             "site",
+            "location",
             "height",
             "width",
             "length",

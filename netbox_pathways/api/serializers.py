@@ -42,6 +42,7 @@ class StructureSerializer(NetBoxModelSerializer):
     status = ChoiceField(choices=StructureStatusChoices, required=False)
     structure_type = ChoiceField(choices=StructureTypeChoices, required=False, allow_blank=True)
     site = SiteSerializer(nested=True, required=False, allow_null=True)
+    location = LocationSerializer(nested=True, required=False, allow_null=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
     installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
     no_pathways = drf_serializers.SerializerMethodField(read_only=True)
@@ -59,6 +60,7 @@ class StructureSerializer(NetBoxModelSerializer):
             "structure_type",
             "site",
             "location",
+            "geometry",
             "height",
             "width",
             "length",

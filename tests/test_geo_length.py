@@ -34,7 +34,7 @@ def structures(db, srid):
     return [
         Structure.objects.create(
             name=f"GL-S{i}",
-            location=Point(i * 1000.0, 0.0, srid=srid),
+            geometry=Point(i * 1000.0, 0.0, srid=srid),
             structure_type="manhole",
         )
         for i in range(3)
