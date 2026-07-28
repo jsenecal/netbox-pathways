@@ -46,6 +46,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The map panel on a Location detail page ignored the structures in that
+  location.** It only drew pathways whose start or end was the location, plus
+  those pathways' endpoint structures -- so a location holding structures but
+  touched by no pathway rendered no panel at all. It now shows the structures
+  in the location, and walks the location tree the way NetBox's own related
+  object counts do, so viewing a parent location includes its children instead
+  of contradicting the count shown beside it. Structures are also de-duplicated:
+  two pathways sharing an endpoint previously stacked two identical markers on
+  the same coordinates. Structures present only as the far end of a pathway
+  leaving the location are drawn faded (a new `muted` flag on the panel's point
+  data) so the location's own plant reads first. Refs #89.
+
 - **Selecting an external-layer point feature in the map sidebar did nothing.**
   Clicking a point feature from a registered external layer (e.g. FMS slack
   loops or splice closures) in the Features pane threw a TypeError in the

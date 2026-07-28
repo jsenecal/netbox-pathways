@@ -3,7 +3,7 @@
  *
  * Inline data format (passed directly):
  * {
- *   points: [{ lat, lon, name, color, url }],
+ *   points: [{ lat, lon, name, color, url, muted }],
  *   lines:  [{ coords: [[lon,lat],...], name, color, url }]
  * }
  *
@@ -34,6 +34,9 @@
         color?: string;
         url?: string;
         structure_type?: string;
+        /** Context-only marker (e.g. the far end of a pathway leaving this
+         *  page's subject); drawn faded so the subject's own plant reads first. */
+        muted?: boolean;
     }
 
     interface LineData {
@@ -206,6 +209,11 @@
 
     // --- Color & Icon Maps ---
 
+    /** Opacity for context-only markers (see PointData.muted). Matches the
+     *  edit widget's nearby-structures reference layer closely enough that the
+     *  two read as the same "for context" treatment. */
+    const MUTED_OPACITY = 0.45;
+
     const STRUCTURE_COLORS: Record<string, string> = {
         'Pole': '#2e7d32', 'Manhole': '#1565c0', 'Handhole': '#00838f',
         'Cabinet': '#e65100', 'Vault': '#6a1b9a', 'Pedestal': '#f9a825',
@@ -359,7 +367,10 @@
                         iconAnchor: [14, 14] as [number, number],
                         popupAnchor: [0, -16] as [number, number],
                     });
-                const marker: L.Marker = L.marker([pt.lat, pt.lon], { icon: icon });
+                const marker: L.Marker = L.marker([pt.lat, pt.lon], {
+                    icon: icon,
+                    opacity: pt.muted ? MUTED_OPACITY : 1,
+                });
                 marker.bindPopup(_makePopup(pt.name, pt.url));
                 marker.addTo(pointsLayer);
                 bounds.extend([pt.lat, pt.lon]);
