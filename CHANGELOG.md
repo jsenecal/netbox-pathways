@@ -33,7 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   endpoint on pan/zoom from zoom 13, with name labels from zoom 17.
   Reference markers never intercept clicks and nothing snaps to them --
   endpoint snapping still applies only to the configured start/end
-  structures. Refs #83.
+  structures. The locked start/end endpoint markers now carry the same
+  name labels. Refs #83.
+- **Zoom-out floor on the edit widget** -- the geometry widget no longer
+  zooms out to world level (editing a single geometry never needs it);
+  the floor defaults to zoom 14 (about 5 km across a typical widget) and
+  is configurable via
+  `PLUGINS_CONFIG['netbox_pathways']['map_widget_min_zoom']`. The
+  full-page infrastructure map is unaffected.
 - **Rounded `geo_length` display** -- computed pathway lengths are now rounded
   to 2 decimals (centimetres) by default instead of showing 12 decimal
   digits; even survey-grade GPS tops out around centimetre accuracy, so the

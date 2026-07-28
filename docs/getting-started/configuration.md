@@ -34,6 +34,7 @@ PLUGINS_CONFIG = {
 | `map_zoom`           | `int`   | `10`                            | Default zoom level (1-22)                |
 | `map_tiles`          | `str`   | OpenStreetMap URL               | Tile URL template (fallback, see below)  |
 | `map_max_native_zoom`| `int`   | `19`                            | Max native zoom for fallback tiles       |
+| `map_widget_min_zoom`| `int`   | `14`                            | Zoom-out floor for the edit widget map (about 5 km across) |
 | `map_attribution`    | `str`   | `(c) OpenStreetMap contributors`| Attribution for fallback tiles           |
 | `map_base_layers`    | `list`  | --                               | Custom base layer definitions (see below)|
 | `map_overlays`       | `list`  | `[]`                            | WMS/WMTS/tile overlay layers             |

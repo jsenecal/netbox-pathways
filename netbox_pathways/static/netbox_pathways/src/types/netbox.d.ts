@@ -14,6 +14,8 @@ declare global {
      * via `PLUGINS_CONFIG['netbox_pathways']['map_skip_info_zoom']`.
      */
     skipInfoZoom?: number;
+    /** Zoom-out floor for the edit widget map (default 14 in the client). */
+    widgetMinZoom?: number;
     overlays?: OverlayConfig[];
     baseLayers?: BaseLayerConfig[];
     externalLayers?: import('./external').ExternalLayerConfig[];

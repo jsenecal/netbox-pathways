@@ -16,6 +16,19 @@ function isLineMode(geomType: string): boolean {
   return geomType.replace(/\s+/g, '').toLowerCase() === 'linestring';
 }
 
+/**
+ * Zoom-out floor for the edit widget. Editing a single geometry never needs
+ * a world-level view, so the widget clamps zoom-out independently of the
+ * full-page map (whose server config pins minZoom at 1). Zoom 14 puts about
+ * 5 km across a typical widget at mid-latitudes. Overridable via
+ * PLUGINS_CONFIG['netbox_pathways']['map_widget_min_zoom'].
+ */
+export const WIDGET_MIN_ZOOM = 14;
+
+export function resolveWidgetMinZoom(config: Partial<PathwaysConfig>): number {
+  return config.widgetMinZoom ?? WIDGET_MIN_ZOOM;
+}
+
 interface FieldReadyDetail {
   map: L.Map;
   drawnItems: L.FeatureGroup;
@@ -38,7 +51,7 @@ function initWidget(container: HTMLElement): void {
   const map = L.map(container, {
     center: L.latLng(center[0], center[1]),
     zoom: zoom,
-    minZoom: config.minZoom ?? 1,
+    minZoom: resolveWidgetMinZoom(config),
     maxZoom: config.maxZoom ?? 22,
   });
 
