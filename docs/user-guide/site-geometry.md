@@ -28,7 +28,7 @@ needs a way to anchor data on a Site for two cases:
 |------------|---------------------|----------------------------------------------------------------------------------------|
 | `site`     | OneToOne `dcim.Site`| Required. Each site has at most one geometry record.                                   |
 | `structure`| OneToOne Structure  | Optional. If set, the site "is" this structure.                                        |
-| `geometry` | Point or Polygon    | Optional. Explicit geometry. Auto-populated from `structure.location` if blank on save.|
+| `geometry` | Point or Polygon    | Optional. Explicit geometry. Auto-populated from `structure.geometry` if blank on save.|
 | `comments` | text                |                                                                                        |
 
 ## Geometry Resolution
@@ -36,8 +36,8 @@ needs a way to anchor data on a Site for two cases:
 The `effective_geometry` property returns the right geometry to use:
 
 1. If `geometry` is set, use it.
-2. Otherwise, if `structure` is set and the structure has a `location`,
-   use `structure.location`.
+2. Otherwise, if `structure` is set and the structure has a `geometry`,
+   use `structure.geometry`.
 3. Otherwise, return `None`.
 
 `SiteGeometry.save()` automatically copies the structure's geometry into

@@ -12,7 +12,7 @@ Navigate to **Plugins > Pathways > Map** or visit `/plugins/pathways/map/`.
 
 Structures appear as SVG markers with shapes and colors specific to their type:
 
-- **Circles** — Poles, manholes, handholes, splice closures
+- **Circles** — Poles, manholes, handholes
 - **Squares** — Cabinets, vaults, pedestals, equipment rooms, building entrances
 - **Diamonds** — Telecom closets, riser rooms
 - **Triangles** — Roof mounts

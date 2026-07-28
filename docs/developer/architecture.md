@@ -109,7 +109,7 @@ All geographic fields use PostGIS via `django.contrib.gis`:
 
 | Model | Field | Geometry Type |
 |-------|-------|---------------|
-| Structure | `location` | Point or Polygon |
+| Structure | `geometry` | Point or Polygon |
 | Pathway | `path` | LineString |
 | SiteGeometry | `geometry` | Point or Polygon |
 | CableSegment | `enter_point`, `exit_point`, `slack_loop_location` | Point |

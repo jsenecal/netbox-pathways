@@ -458,7 +458,7 @@ def _batch_fetch_structures(pks):
         "id",
         "name",
         "structure_type",
-        "location",
+        "geometry",
     ).in_bulk(list(pks))
 
 

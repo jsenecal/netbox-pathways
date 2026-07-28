@@ -11,7 +11,7 @@ SRID = get_srid()
 
 
 def _make_structure(name, geom):
-    return Structure.objects.create(name=name, location=geom)
+    return Structure.objects.create(name=name, geometry=geom)
 
 
 @pytest.mark.django_db

@@ -209,7 +209,7 @@
     const STRUCTURE_COLORS: Record<string, string> = {
         'Pole': '#2e7d32', 'Manhole': '#1565c0', 'Handhole': '#00838f',
         'Cabinet': '#e65100', 'Vault': '#6a1b9a', 'Pedestal': '#f9a825',
-        'Building Entrance': '#c62828', 'Splice Closure': '#795548',
+        'Building Entrance': '#c62828',
         'Tower': '#b71c1c', 'Rooftop': '#616161', 'Equipment Room': '#00796b',
         'Telecom Closet': '#283593', 'Riser Room': '#ad1457',
     };
@@ -222,7 +222,6 @@
         'Vault':              '<rect x="2" y="2" width="16" height="16" rx="2"/>',
         'Pedestal':           '<rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke-width="2.5"/>',
         'Building Entrance':  '<rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke-width="2.5"/><circle cx="10" cy="10" r="2.5"/>',
-        'Splice Closure':     '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/><circle cx="10" cy="10" r="2.5"/>',
         'Tower':              '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/><line x1="10" y1="2" x2="10" y2="18" stroke-width="1.5"/><line x1="2" y1="10" x2="18" y2="10" stroke-width="1.5"/>',
         'Rooftop':            '<polygon points="10,2 18,17 2,17"/>',
         'Equipment Room':     '<rect x="3" y="3" width="14" height="14" rx="4" fill="none" stroke-width="2.5"/>',

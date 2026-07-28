@@ -44,7 +44,7 @@ class TestIntrospectColumnSrids:
 
     def test_introspects_real_columns(self, db):
         result = _introspect_column_srids(connection, "netbox_pathways")
-        assert ("netbox_pathways_structure", "location") in result
+        assert ("netbox_pathways_structure", "geometry") in result
 
 
 class TestCheckGeometryColumnSrids:

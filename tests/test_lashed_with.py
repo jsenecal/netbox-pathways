@@ -29,8 +29,8 @@ def disable_routability_signal():
 
 @pytest.fixture
 def aerial_route(db):
-    s1 = Structure.objects.create(name="LASH-S1", location=Point(0, 0, srid=SRID))
-    s2 = Structure.objects.create(name="LASH-S2", location=Point(100, 0, srid=SRID))
+    s1 = Structure.objects.create(name="LASH-S1", geometry=Point(0, 0, srid=SRID))
+    s2 = Structure.objects.create(name="LASH-S2", geometry=Point(100, 0, srid=SRID))
     span = AerialSpan(
         path=LineString((0, 0), (100, 0), srid=SRID),
         start_structure=s1,

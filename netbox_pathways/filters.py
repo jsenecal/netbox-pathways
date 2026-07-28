@@ -95,6 +95,19 @@ class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
         distinct=False,
         label="Site (slug)",
     )
+    location_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="location",
+        queryset=Location.objects.all(),
+        distinct=False,
+        label="Location (ID)",
+    )
+    location = django_filters.ModelMultipleChoiceFilter(
+        field_name="location__slug",
+        queryset=Location.objects.all(),
+        to_field_name="slug",
+        distinct=False,
+        label="Location (slug)",
+    )
     installed_by_id = django_filters.ModelMultipleChoiceFilter(
         field_name="installed_by",
         queryset=Tenant.objects.all(),

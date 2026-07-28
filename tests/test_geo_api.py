@@ -94,7 +94,7 @@ def structures(srid, site):
     return [
         Structure.objects.create(
             name=f"Geo-S{i}",
-            location=Point(i * 100, i * 100, srid=srid),
+            geometry=Point(i * 100, i * 100, srid=srid),
             site=site,
             structure_type="manhole",
         )

@@ -42,7 +42,15 @@ class Structure(NetBoxModel):
         blank=True,
         related_name="pathways_structures",
     )
-    location = models.GeometryField(
+    location = models.ForeignKey(
+        Location,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="pathways_structures",
+        help_text="Location within the site where this structure sits",
+    )
+    geometry = models.GeometryField(
         srid=get_srid(),
         help_text="Geographic geometry (point for simple structures, polygon for footprints)",
     )
@@ -90,11 +98,22 @@ class Structure(NetBoxModel):
     @property
     def centroid(self):
         """Return the centroid point regardless of geometry type."""
-        if self.location is None:
+        if self.geometry is None:
             return None
-        if self.location.geom_type == "Point":
-            return self.location
-        return self.location.centroid
+        if self.geometry.geom_type == "Point":
+            return self.geometry
+        return self.geometry.centroid
+
+    def clean(self):
+        super().clean()
+        if self.location_id:
+            if self.site_id and self.location.site_id != self.site_id:
+                raise ValidationError({"location": f"Location {self.location} does not belong to site {self.site}."})
+            # Structure.site is nullable (Device.site is not), so a location
+            # without a site completes it rather than being rejected -- that
+            # keeps the site-centroid map fallback working.
+            if not self.site_id:
+                self.site = self.location.site
 
     def __str__(self):
         if self.structure_type:
@@ -146,8 +165,8 @@ class SiteGeometry(NetBoxModel):
         """Return explicit geometry, or fall back to linked structure's geometry."""
         if self.geometry:
             return self.geometry
-        if self.structure_id and self.structure.location:
-            return self.structure.location
+        if self.structure_id and self.structure.geometry:
+            return self.structure.geometry
         return None
 
     def __str__(self):
@@ -158,7 +177,7 @@ class SiteGeometry(NetBoxModel):
 
     def save(self, *args, **kwargs):
         if self.structure_id and not self.geometry:
-            self.geometry = self.structure.location
+            self.geometry = self.structure.geometry
         super().save(*args, **kwargs)
 
 
@@ -360,13 +379,13 @@ class Pathway(NetBoxModel):
         from django.contrib.gis.geos import LineString, Point
 
         structure = getattr(self, f"{side}_structure", None)
-        if not structure or not structure.location:
+        if not structure or not structure.geometry:
             return
 
         coords = list(self.path.coords)
         idx = 0 if side == "start" else -1
         endpoint = Point(coords[idx][0], coords[idx][1], srid=self.path.srid)
-        geom = structure.location
+        geom = structure.geometry
 
         if geom.geom_type == "Point":
             if endpoint.distance(geom) <= ENDPOINT_TOLERANCE:

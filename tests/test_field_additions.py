@@ -28,7 +28,7 @@ def contractor(db):
 
 @pytest.fixture
 def structure(db):
-    return Structure.objects.create(name="P-001", location=Point(0, 0, srid=SRID))
+    return Structure.objects.create(name="P-001", geometry=Point(0, 0, srid=SRID))
 
 
 @pytest.mark.django_db
@@ -36,7 +36,7 @@ class TestStructureFieldAdditions:
     def test_installed_by_fk_to_tenant(self, contractor):
         s = Structure.objects.create(
             name="P-INS-1",
-            location=Point(1, 1, srid=SRID),
+            geometry=Point(1, 1, srid=SRID),
             installed_by=contractor,
         )
         s.refresh_from_db()
@@ -44,13 +44,13 @@ class TestStructureFieldAdditions:
         assert s.installed_by.name == "Acme Splicing"
 
     def test_installed_by_optional(self):
-        s = Structure.objects.create(name="P-INS-2", location=Point(2, 2, srid=SRID))
+        s = Structure.objects.create(name="P-INS-2", geometry=Point(2, 2, srid=SRID))
         assert s.installed_by is None
 
     def test_commissioned_date_stored(self, contractor):
         s = Structure.objects.create(
             name="P-INS-3",
-            location=Point(3, 3, srid=SRID),
+            geometry=Point(3, 3, srid=SRID),
             installed_by=contractor,
             commissioned_date=date(2025, 4, 9),
         )
@@ -58,7 +58,7 @@ class TestStructureFieldAdditions:
         assert s.commissioned_date == date(2025, 4, 9)
 
     def test_commissioned_date_optional(self):
-        s = Structure.objects.create(name="P-INS-4", location=Point(4, 4, srid=SRID))
+        s = Structure.objects.create(name="P-INS-4", geometry=Point(4, 4, srid=SRID))
         assert s.commissioned_date is None
 
 
@@ -106,7 +106,7 @@ class TestAbandonedStatus:
     def test_structure_can_be_saved_with_abandoned_status(self):
         s = Structure.objects.create(
             name="P-AB-1",
-            location=Point(7, 7, srid=SRID),
+            geometry=Point(7, 7, srid=SRID),
             status=StructureStatusChoices.STATUS_ABANDONED,
         )
         s.refresh_from_db()

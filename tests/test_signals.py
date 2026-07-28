@@ -22,8 +22,8 @@ def site(db):
 def cable_and_pathway(db):
     from dcim.models import Cable
 
-    s1 = Structure.objects.create(name="SA", location=Point(0, 0, srid=SRID))
-    s2 = Structure.objects.create(name="SB", location=Point(100, 0, srid=SRID))
+    s1 = Structure.objects.create(name="SA", geometry=Point(0, 0, srid=SRID))
+    s2 = Structure.objects.create(name="SB", geometry=Point(100, 0, srid=SRID))
     pw = Pathway.objects.create(
         label="P1",
         pathway_type="conduit",
@@ -37,8 +37,8 @@ def cable_and_pathway(db):
 
 @pytest.fixture
 def pathway(db):
-    s1 = Structure.objects.create(name="SP-A", location=Point(0, 0, srid=SRID))
-    s2 = Structure.objects.create(name="SP-B", location=Point(100, 0, srid=SRID))
+    s1 = Structure.objects.create(name="SP-A", geometry=Point(0, 0, srid=SRID))
+    s2 = Structure.objects.create(name="SP-B", geometry=Point(100, 0, srid=SRID))
     return Pathway.objects.create(
         label="P-sig",
         pathway_type="conduit",

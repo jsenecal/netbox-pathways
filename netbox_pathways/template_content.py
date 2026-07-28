@@ -51,7 +51,6 @@ STRUCTURE_COLORS = {
     "vault": "purple",
     "pedestal": "yellow",
     "building_entrance": "red",
-    "splice_closure": "brown",
     "tower": "darkred",
     "roof": "gray",
     "equipment_room": "teal",
@@ -272,7 +271,7 @@ class CoreModelMapExtension(PluginTemplateExtension):
             for s in models.Structure.objects.filter(site=obj).only(
                 "name",
                 "structure_type",
-                "location",
+                "geometry",
             )[:500]:
                 pt = _structure_point(s)
                 if pt:
@@ -307,10 +306,10 @@ class CoreModelMapExtension(PluginTemplateExtension):
                     "end_structure_id",
                     "start_structure__name",
                     "start_structure__structure_type",
-                    "start_structure__location",
+                    "start_structure__geometry",
                     "end_structure__name",
                     "end_structure__structure_type",
-                    "end_structure__location",
+                    "end_structure__geometry",
                 )[:500]
             )
             for p in pathways:

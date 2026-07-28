@@ -88,7 +88,7 @@ class TestResolveTermination:
         return Structure.objects.create(
             name="RP-struct",
             site=site,
-            location=Point(0, 0, srid=srid),
+            geometry=Point(0, 0, srid=srid),
         )
 
     def test_no_termination_returns_none(self, view):
@@ -120,8 +120,8 @@ def factory():
 
 @pytest.fixture
 def two_structures(db):
-    s1 = Structure.objects.create(name="A", location=Point(0, 0, srid=SRID))
-    s2 = Structure.objects.create(name="B", location=Point(100, 100, srid=SRID))
+    s1 = Structure.objects.create(name="A", geometry=Point(0, 0, srid=SRID))
+    s2 = Structure.objects.create(name="B", geometry=Point(100, 100, srid=SRID))
     return s1, s2
 
 

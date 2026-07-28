@@ -27,7 +27,7 @@ class TestCableSegmentSequence:
         return [
             Structure.objects.create(
                 name=f"MH-{i}",
-                location=Point(i, i, srid=srid),
+                geometry=Point(i, i, srid=srid),
             )
             for i in range(3)
         ]
@@ -93,7 +93,7 @@ class TestCableSegmentRoutability:
         return [
             Structure.objects.create(
                 name=f"MH-RT-{i}",
-                location=Point(i, i, srid=srid),
+                geometry=Point(i, i, srid=srid),
             )
             for i in range(2)
         ]

@@ -170,9 +170,9 @@ class PathwayPathFallbackMixin:
             return cleaned
 
         # Auto-generate path from structures
-        if start_struct and end_struct and start_struct.location and end_struct.location:
-            start_geom = start_struct.location
-            end_geom = end_struct.location
+        if start_struct and end_struct and start_struct.geometry and end_struct.geometry:
+            start_geom = start_struct.geometry
+            end_geom = end_struct.geometry
             start_pt = start_geom.centroid if start_geom.geom_type != "Point" else start_geom
             end_pt = end_geom.centroid if end_geom.geom_type != "Point" else end_geom
             cleaned["path"] = LineString(
@@ -209,8 +209,8 @@ class PathwayEndpointFormMixin(PathwayPathFallbackMixin):
         endpoint_data = {}
         for side in ("start", "end"):
             structure = getattr(self.instance, f"{side}_structure", None)
-            if structure and structure.location:
-                geom_4326 = to_leaflet(structure.location)
+            if structure and structure.geometry:
+                geom_4326 = to_leaflet(structure.geometry)
                 endpoint_data[side] = json.loads(geom_4326.geojson)
                 endpoint_data[f"{side}_name"] = structure.name
         widget = self.fields["path"].widget
@@ -222,6 +222,13 @@ class PathwayEndpointFormMixin(PathwayPathFallbackMixin):
 
 class StructureForm(NetBoxModelForm):
     site = DynamicModelChoiceField(queryset=Site.objects.all(), required=False, selector=True, quick_add=True)
+    location = DynamicModelChoiceField(
+        queryset=Location.objects.all(),
+        required=False,
+        selector=True,
+        quick_add=True,
+        query_params={"site_id": "$site"},
+    )
     tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
     installed_by = DynamicModelChoiceField(
         queryset=Tenant.objects.all(),
@@ -233,10 +240,10 @@ class StructureForm(NetBoxModelForm):
     )
 
     fieldsets = (
-        FieldSet("name", "status", "structure_type", "site", "tenant", name="Structure"),
+        FieldSet("name", "status", "structure_type", "site", "location", "tenant", name="Structure"),
         FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("height", "width", "length", "depth", "elevation", name="Dimensions"),
-        FieldSet("location", name="Geometry"),
+        FieldSet("geometry", name="Geometry"),
         FieldSet("access_notes", "tags", name="Details"),
     )
 
@@ -247,9 +254,10 @@ class StructureForm(NetBoxModelForm):
             "status",
             "structure_type",
             "site",
+            "location",
             "tenant",
             "installed_by",
-            "location",
+            "geometry",
             "height",
             "width",
             "length",
@@ -262,7 +270,7 @@ class StructureForm(NetBoxModelForm):
             "tags",
         ]
         widgets = {
-            "location": PathwaysMapWidget(geom_type="Geometry"),
+            "geometry": PathwaysMapWidget(geom_type="Geometry"),
         }
 
 
@@ -281,7 +289,13 @@ class StructureImportForm(NetBoxModelImportForm):
         help_text="Tenant name",
     )
     installed_by = _csv_tenant_field("Installer tenant name")
-    location = ForgivingGeometryField(
+    location = CSVModelChoiceField(
+        queryset=Location.objects.all(),
+        to_field_name="name",
+        required=False,
+        help_text="Location name",
+    )
+    geometry = ForgivingGeometryField(
         required=False,
         srid=get_srid(),
         help_text=_IMPORT_GEOMETRY_HELP,
@@ -294,6 +308,7 @@ class StructureImportForm(NetBoxModelImportForm):
             "status",
             "structure_type",
             "site",
+            "location",
             "tenant",
             "installed_by",
             "height",
@@ -303,7 +318,7 @@ class StructureImportForm(NetBoxModelImportForm):
             "elevation",
             "installation_date",
             "commissioned_date",
-            "location",
+            "geometry",
             "access_notes",
             "comments",
         ]
@@ -311,6 +326,12 @@ class StructureImportForm(NetBoxModelImportForm):
 
 class StructureBulkEditForm(NetBoxModelBulkEditForm):
     site = DynamicModelChoiceField(queryset=Site.objects.all(), required=False, selector=True)
+    location = DynamicModelChoiceField(
+        queryset=Location.objects.all(),
+        required=False,
+        selector=True,
+        query_params={"site_id": "$site"},
+    )
     tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
     installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
     status = forms.ChoiceField(choices=StructureStatusChoices, required=False)
@@ -319,10 +340,10 @@ class StructureBulkEditForm(NetBoxModelBulkEditForm):
 
     model = Structure
     fieldsets = (
-        FieldSet("status", "site", "structure_type", "tenant", name="Structure"),
+        FieldSet("status", "site", "location", "structure_type", "tenant", name="Structure"),
         FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
     )
-    nullable_fields = ("site", "tenant", "installed_by", "commissioned_date", "access_notes")
+    nullable_fields = ("site", "location", "tenant", "installed_by", "commissioned_date", "access_notes")
 
 
 # --- Pathway (base) ---

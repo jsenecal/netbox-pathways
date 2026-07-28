@@ -84,7 +84,7 @@ Reference mode resolves geometry through foreign keys to these models:
 
 | Model | Geometry Lookup | Geometry Type |
 |-------|----------------|---------------|
-| `netbox_pathways.Structure` | `location` | Point/Polygon |
+| `netbox_pathways.Structure` | `geometry` | Point/Polygon |
 | `netbox_pathways.SiteGeometry` | `geometry` | Point/Polygon |
 | `dcim.Site` | `pathways_geometry__geometry` | Point/Polygon |
 

@@ -21,12 +21,12 @@ class TestConduitBankHeightWidth:
         s1 = Structure.objects.create(
             name="ConduitBank HW test A",
             structure_type="manhole",
-            location=Point(0, 0, srid=SRID),
+            geometry=Point(0, 0, srid=SRID),
         )
         s2 = Structure.objects.create(
             name="ConduitBank HW test B",
             structure_type="manhole",
-            location=Point(100, 0, srid=SRID),
+            geometry=Point(100, 0, srid=SRID),
         )
         cb = ConduitBank.objects.create(
             label="HW test bank",
@@ -42,12 +42,12 @@ class TestConduitBankHeightWidth:
         s1 = Structure.objects.create(
             name="ConduitBank HW test C",
             structure_type="manhole",
-            location=Point(200, 0, srid=SRID),
+            geometry=Point(200, 0, srid=SRID),
         )
         s2 = Structure.objects.create(
             name="ConduitBank HW test D",
             structure_type="manhole",
-            location=Point(300, 0, srid=SRID),
+            geometry=Point(300, 0, srid=SRID),
         )
         cb = ConduitBank.objects.create(
             label="HW test bank 2",

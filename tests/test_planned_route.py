@@ -16,7 +16,7 @@ class TestPlannedRoute:
         return [
             Structure.objects.create(
                 name=f"PR-{i}",
-                location=Point(i * 0.01, i * 0.01, srid=srid),
+                geometry=Point(i * 0.01, i * 0.01, srid=srid),
             )
             for i in range(3)
         ]

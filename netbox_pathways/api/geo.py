@@ -209,7 +209,7 @@ class BboxFilterMixin:
     still filter the queryset before slicing.
     """
 
-    bbox_geo_field = "location"  # native geometry column name
+    bbox_geo_field = "geometry"  # native geometry column name
 
     def _apply_bbox(self, qs):
         """Annotate geo_4326 and apply bbox filter (no result cap)."""
@@ -254,14 +254,14 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
             "id",
             "name",
             "structure_type",
-            "location",
+            "geometry",
             "site__name",
         )
         .order_by("pk")
     )
     serializer_class = StructureGeoSerializer
     filterset_class = filters.StructureFilterSet
-    bbox_geo_field = "location"
+    bbox_geo_field = "geometry"
     pagination_class = None
 
     def list(self, request, *args, **kwargs):
@@ -288,12 +288,12 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
     def _clustered_response(self, zoom, etag=None):
         # Get bbox-filtered queryset WITHOUT the result cap (aggregation reduces rows)
-        qs = models.Structure.objects.only("id", "location").order_by()
+        qs = models.Structure.objects.only("id", "geometry").order_by()
         qs = _exclude_status(qs, _parse_exclude_status(self.request))
         qs = self._apply_bbox(qs)
 
         grid_size = _grid_size_for_zoom(zoom)
-        geo_expr = Transform("location", LEAFLET_SRID)
+        geo_expr = Transform("geometry", LEAFLET_SRID)
         clusters = (
             qs
             # Grid used only for grouping — the actual display point is the
@@ -460,7 +460,7 @@ class CircuitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 # mirroring the corresponding GeoJSON viewset's queryset constraints (so e.g.
 # banked conduits aren't double-counted between "conduits" and "conduit_banks").
 _INFO_LAYERS = (
-    ("structures", models.Structure, "location", None),
+    ("structures", models.Structure, "geometry", None),
     ("conduit_banks", models.ConduitBank, "path", None),
     ("conduits", models.Conduit, "path", {"conduit_bank__isnull": True}),
     ("aerial_spans", models.AerialSpan, "path", None),

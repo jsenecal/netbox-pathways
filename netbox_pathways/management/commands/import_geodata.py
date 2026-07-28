@@ -233,7 +233,7 @@ class Command(BaseCommand):
             source_srid = storage_srid
             self._log(f"  Reprojected to {reprojected}")
 
-        geom_field = schema.get("geometry_field", "location")
+        geom_field = schema.get("geometry_field", "geometry")
         field_specs = schema.get("fields", {})
         filters = schema.get("filters", {})
         excludes = schema.get("exclude", {})

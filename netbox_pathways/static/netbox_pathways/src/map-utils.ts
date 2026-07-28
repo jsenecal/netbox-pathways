@@ -11,7 +11,7 @@
 export const STRUCTURE_COLORS: Record<string, string> = {
     'pole': '#2e7d32', 'manhole': '#1565c0', 'handhole': '#00838f',
     'cabinet': '#e65100', 'vault': '#6a1b9a', 'pedestal': '#f9a825',
-    'building_entrance': '#c62828', 'splice_closure': '#795548',
+    'building_entrance': '#c62828',
     'tower': '#b71c1c', 'roof': '#616161', 'equipment_room': '#00796b',
     'telecom_closet': '#283593', 'riser_room': '#ad1457',
 };
@@ -24,7 +24,6 @@ export const STRUCTURE_SHAPES: Record<string, string> = {
     'vault':              '<rect x="2" y="2" width="16" height="16" rx="2"/>',
     'pedestal':           '<rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke-width="2.5"/>',
     'building_entrance':  '<rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke-width="2.5"/><circle cx="10" cy="10" r="2.5"/>',
-    'splice_closure':     '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/><circle cx="10" cy="10" r="2.5"/>',
     'tower':              '<circle cx="10" cy="10" r="7" fill="none" stroke-width="2.5"/><line x1="10" y1="2" x2="10" y2="18" stroke-width="1.5"/><line x1="2" y1="10" x2="18" y2="10" stroke-width="1.5"/>',
     'roof':               '<polygon points="10,2 18,17 2,17"/>',
     'equipment_room':     '<rect x="3" y="3" width="14" height="14" rx="4" fill="none" stroke-width="2.5"/>',

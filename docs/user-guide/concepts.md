@@ -23,14 +23,18 @@ erDiagram
 
 ## Structures
 
-A **Structure** is any physical location where cables can enter, exit, or transition between pathway types. Structures have geographic coordinates (Point or Polygon geometry) and belong to a NetBox Site.
+A **Structure** is any physical location where cables can enter, exit, or transition between pathway types. Structures have geographic coordinates (Point or Polygon geometry) in their `geometry` field, and can be assigned to a NetBox Site and to a Location within that site.
 
 | Category | Types |
 |----------|-------|
-| **Outdoor** | Pole, Manhole, Handhole, Cabinet, Vault, Pedestal, Splice Closure, Tower, Roof |
+| **Outdoor** | Pole, Manhole, Handhole, Cabinet, Vault, Pedestal, Tower, Roof |
 | **Indoor** | Equipment Room, Telecom Closet, Riser Room, Building Entrance |
 
 Structures serve as endpoints for Pathways and anchor points for Conduit Banks.
+
+A structure is a *container*. Equipment that lives inside one -- a splice
+closure, for instance -- is a `dcim.Device` assigned to the same site and
+location, not a structure in its own right.
 
 ## Pathways
 

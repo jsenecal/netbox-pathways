@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: `Structure.location` is now a FK to `dcim.Location`; the
+  geometry moved to `Structure.geometry`.** `location` previously held the
+  Point/Polygon geometry, which made it the odd one out -- `location` means
+  `dcim.Location` everywhere else in this plugin (`Pathway.start_location`,
+  `PathwayLocation.location`) and in core NetBox (`Device.location`).
+  The geometry column is renamed to `geometry`, matching
+  `SiteGeometry.geometry` and `CircuitGeometry.geometry`.
+
+  The `location` key survives in the REST API, GraphQL, CSV import/export
+  and the form, but its **meaning changes** from a geometry to a nested
+  Location object. Existing API consumers, scripts, saved table
+  configurations and CSV templates that read or write `structure.location`
+  expecting coordinates must be updated to `geometry`. Migration
+  `0021_structure_geometry_and_location` renames the column in place, so no
+  data is lost. Refs #89.
+
+- **BREAKING: `splice_closure` removed from `StructureTypeChoices`.** A
+  splice closure is `dcim.Device`-shaped -- it has FrontPorts, RearPorts and
+  Modules -- and lives *in* a structure rather than *being* one. A Structure
+  typed `splice_closure` could only ever be a map pin, and it invited
+  modelling the same physical closure twice (once as a Structure, once as a
+  Device) with two site anchors that could disagree. Existing rows have
+  `structure_type` blanked by the migration; reclassify them to the real
+  container type (handhole, pedestal, cabinet, ...). Refs #89.
+
+### Added
+
+- **`Structure.location`** -- an optional FK to `dcim.Location`, recording
+  which location inside the site a structure sits in. Validated like
+  `Device.clean()`: a location must belong to the assigned site. Because
+  `Structure.site` is nullable (unlike `Device.site`), setting a location
+  with no site fills the site in from the location rather than rejecting it.
+  Exposed in the form, filters, bulk edit, CSV import, table, detail panel,
+  search results and the REST API. Refs #89.
+
 ### Fixed
 
 - **Selecting an external-layer point feature in the map sidebar did nothing.**

@@ -14,7 +14,7 @@ how the widget interacts with the rest of the form.
 
 | Model            | Geometry field        | Geometry type                 |
 |------------------|-----------------------|-------------------------------|
-| Structure        | `location`            | Point or Polygon              |
+| Structure        | `geometry`            | Point or Polygon              |
 | ConduitBank      | `path`                | LineString                    |
 | Conduit          | `path`                | LineString                    |
 | AerialSpan       | `path`                | LineString                    |
@@ -166,7 +166,7 @@ choice is remembered in the browser across forms and defaults to on.
 ## CSV Bulk Import
 
 The same forgiving parser is wired into the bulk-import forms for
-`Structure` (column name `location`), `SiteGeometry` (column name
+`Structure` (column name `geometry`), `SiteGeometry` (column name
 `geometry`), and the LineString models `Conduit`, `AerialSpan`,
 `DirectBuried`, `Innerduct`, `ConduitBank`, and `CircuitGeometry`
 (column name `path`). Spreadsheets can supply any of the textarea

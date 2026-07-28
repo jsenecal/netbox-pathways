@@ -111,18 +111,18 @@ has been loaded, you must:
     ```sql
     -- Example for the structures table
     UPDATE netbox_pathways_structure
-    SET location = ST_Transform(ST_SetSRID(location, OLD_SRID), NEW_SRID);
+    SET geometry = ST_Transform(ST_SetSRID(geometry, OLD_SRID), NEW_SRID);
 
     -- Update the column constraint
     SELECT UpdateGeometrySRID(
       'netbox_pathways_structure',
-      'location',
+      'geometry',
       NEW_SRID
     );
     ```
 
 4. Repeat for every geometry column on every pathways model
-   (`structure.location`, `pathway.path`, `sitegeometry.geometry`,
+   (`structure.geometry`, `pathway.path`, `sitegeometry.geometry`,
    `circuitgeometry.path`).
 5. Update `PLUGINS_CONFIG['netbox_pathways']['srid']` to `NEW_SRID` and restart
    NetBox.

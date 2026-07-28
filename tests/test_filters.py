@@ -67,17 +67,17 @@ def topology(db, _disable_routability_signal):
 
     s_start = Structure.objects.create(
         name="connected-start",
-        location=Point(0, 0, srid=SRID),
+        geometry=Point(0, 0, srid=SRID),
         tenant=tenant,
         access_notes="access via gate B",
     )
     s_end = Structure.objects.create(
         name="connected-end",
-        location=Point(100, 0, srid=SRID),
+        geometry=Point(100, 0, srid=SRID),
     )
     s_isolated = Structure.objects.create(
         name="alone",
-        location=Point(500, 500, srid=SRID),
+        geometry=Point(500, 500, srid=SRID),
     )
 
     # Generic Pathway (no subclass) - used for searchable label tests.
