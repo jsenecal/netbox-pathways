@@ -23,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Nearby structures as a read-only reference layer in the map edit
+  widget.** The geometry widget on add/edit forms can now display the
+  structures already recorded in the plugin as faded, non-interactive
+  markers (same shapes and colours as the infrastructure map), so paths
+  can be lined up against the surrounding plant without flipping to the
+  GIS map. A new toolbar button toggles the layer (default on, persisted
+  in localStorage); the viewport is fetched from the GeoJSON structures
+  endpoint on pan/zoom from zoom 13, with name labels from zoom 17.
+  Reference markers never intercept clicks and nothing snaps to them --
+  endpoint snapping still applies only to the configured start/end
+  structures. Refs #83.
 - **Rounded `geo_length` display** -- computed pathway lengths are now rounded
   to 2 decimals (centimetres) by default instead of showing 12 decimal
   digits; even survey-grade GPS tops out around centimetre accuracy, so the

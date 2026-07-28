@@ -107,6 +107,7 @@ class PathwaysMapWidget(BaseGeometryWidget):
             "netbox_pathways/vendor/geoman/leaflet-geoman.js",
             "netbox_pathways/dist/pathways-field.min.js",
             "netbox_pathways/dist/endpoint-markers.min.js",
+            "netbox_pathways/dist/reference-layer.min.js",
         )
 
     def __init__(self, geom_type=None, *args, **kwargs):

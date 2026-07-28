@@ -140,6 +140,29 @@ The second invocation materializes a two-vertex LineString. Drawing a
 shape with the geoman tool or trashing the geometry clears any pending
 vertex.
 
+## Nearby Structures Reference Layer
+
+The Map tab can show the structures already recorded in the plugin as
+faded, read-only markers, so you can line the geometry up against the
+surrounding plant without flipping between the form and the
+infrastructure map. A toolbar button (**Show nearby structures**, the
+multi-marker icon under the point helpers) toggles the layer; the
+choice is remembered in the browser across forms and defaults to on.
+
+- Markers reuse the shapes and colours of the main infrastructure map
+  at reduced size and opacity, and they never intercept clicks --
+  clicking "through" a reference marker places a vertex at that spot
+  as usual.
+- The layer fetches the current viewport from the GeoJSON API on every
+  pan or zoom, starting at zoom 13. Structure names appear as labels
+  from zoom 17. Structures sitting exactly on the pathway's locked
+  start/end markers are hidden so those stay visible.
+- Reference markers are context only: nothing snaps to them. Endpoint
+  snapping still applies exclusively to the configured start/end
+  structures. If a run physically passes intermediate structures, model
+  it as one span per adjacent structure pair rather than bending a
+  single polyline through them.
+
 ## CSV Bulk Import
 
 The same forgiving parser is wired into the bulk-import forms for
