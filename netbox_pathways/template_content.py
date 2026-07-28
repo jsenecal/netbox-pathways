@@ -22,6 +22,7 @@ def _leaflet_head():
         static("netbox_pathways/vendor/leaflet.markercluster.js"),
         static("netbox_pathways/dist/pathways-field.min.js"),
         static("netbox_pathways/dist/endpoint-markers.min.js"),
+        static("netbox_pathways/dist/reference-layer.min.js"),
     ]
     html = ""
     for href in css:

@@ -285,6 +285,16 @@
          1px  0   0 var(--tblr-body-bg, #fff);
     pointer-events: none;
 }
+/* Reference-layer structure labels: sit to the right of the marker,
+   text flowing left-to-right from it, no tooltip arrow. */
+.pw-ref-label {
+    text-align: left;
+    margin-left: 0;
+    padding: 0 2px;
+}
+.pw-ref-label::before {
+    display: none;
+}
 [data-bs-theme="dark"] .pw-line-label {
     color: #ccc;
     text-shadow:

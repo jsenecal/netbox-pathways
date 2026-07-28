@@ -23,6 +23,9 @@ class NetBoxPathwaysConfig(PluginConfig):
         "map_zoom": 10,
         "map_tiles": "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
         "map_max_native_zoom": 19,
+        # Zoom-out floor for the geometry edit widget (full-page map stays at
+        # 1); 14 shows about 5 km across a typical widget at mid-latitudes
+        "map_widget_min_zoom": 14,
         "map_attribution": "&copy; OpenStreetMap contributors",
         "map_overlays": [],
         # Decimal digits shown on computed geo_length values (0 = whole metres)
@@ -87,6 +90,7 @@ class NetBoxPathwaysConfig(PluginConfig):
             "zoom": plugin_cfg.get("map_zoom", 10),
             "minZoom": 1,
             "maxZoom": max_zoom,
+            "widgetMinZoom": plugin_cfg.get("map_widget_min_zoom", 14),
         }
 
         super().ready()
