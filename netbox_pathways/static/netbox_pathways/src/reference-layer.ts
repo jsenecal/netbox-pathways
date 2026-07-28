@@ -111,9 +111,9 @@ export function renderReferenceStructures(
         if (name && opts.zoom >= LABEL_ZOOM) {
             marker.bindTooltip(esc(name), {
                 permanent: true,
-                direction: 'top',
-                offset: L.point ? L.point(0, -MARKER_SIZE / 2) : undefined,
-                className: 'pw-line-label',
+                direction: 'right',
+                offset: L.point ? L.point(MARKER_SIZE / 2 + 2, 0) : undefined,
+                className: 'pw-line-label pw-ref-label',
             });
         }
         group.addLayer(marker);

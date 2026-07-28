@@ -203,7 +203,7 @@ class PathwayEndpointFormMixin(PathwayPathFallbackMixin):
         self._inject_endpoint_geometry()
 
     def _inject_endpoint_geometry(self):
-        """Serialize structure geometry into the widget for client-side markers."""
+        """Serialize structure geometry (and names, for labels) into the widget."""
         if "path" not in self.fields:
             return
         endpoint_data = {}
@@ -212,6 +212,7 @@ class PathwayEndpointFormMixin(PathwayPathFallbackMixin):
             if structure and structure.location:
                 geom_4326 = to_leaflet(structure.location)
                 endpoint_data[side] = json.loads(geom_4326.geojson)
+                endpoint_data[f"{side}_name"] = structure.name
         widget = self.fields["path"].widget
         widget.endpoint_geojson = endpoint_data if endpoint_data else None
 

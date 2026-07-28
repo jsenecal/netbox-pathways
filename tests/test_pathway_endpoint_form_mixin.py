@@ -98,3 +98,31 @@ class TestPathwayEndpointFormMixinClean:
         form = ConduitForm(data={"tags": []})
         assert not form.is_valid()
         assert "path" in form.errors
+
+
+@pytest.mark.django_db
+class TestInjectEndpointGeometry:
+    def test_injects_geometry_and_names(self):
+        """The widget payload must carry each endpoint's name so the map can
+        label the locked markers like it labels reference structures."""
+        s1 = _make_structure("MH-100", Point(0, 0, srid=SRID))
+        s2 = _make_structure("MH-200", Point(100, 100, srid=SRID))
+        conduit = Conduit(
+            label="C1",
+            path=LineString((0, 0), (100, 100), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+        conduit.pathway_type = "conduit"
+        conduit.save()
+
+        form = ConduitForm(instance=conduit)
+        data = form.fields["path"].widget.endpoint_geojson
+        assert data["start"]["type"] == "Point"
+        assert data["end"]["type"] == "Point"
+        assert data["start_name"] == "MH-100"
+        assert data["end_name"] == "MH-200"
+
+    def test_no_endpoints_injects_nothing(self):
+        form = ConduitForm()
+        assert form.fields["path"].widget.endpoint_geojson is None

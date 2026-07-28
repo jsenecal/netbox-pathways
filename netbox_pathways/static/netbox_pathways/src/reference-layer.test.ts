@@ -191,6 +191,8 @@ describe('renderReferenceStructures', () => {
         const [content, tooltipOpts] = marker.bindTooltip.mock.calls[0];
         expect(content).toBe('P-1');
         expect(tooltipOpts.permanent).toBe(true);
+        expect(tooltipOpts.direction).toBe('right');
+        expect(tooltipOpts.className).toContain('pw-ref-label');
     });
 });
 
