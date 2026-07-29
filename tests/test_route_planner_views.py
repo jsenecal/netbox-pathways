@@ -9,12 +9,14 @@ from django.test import RequestFactory
 from netbox_pathways.geo import get_srid
 from netbox_pathways.models import Pathway, PlannedRoute, Structure
 from netbox_pathways.views import (
+    MapView,
     RoutePlannerConstraintView,
     RoutePlannerFindView,
     RoutePlannerSaveView,
     RoutePlannerView,
 )
 from tests.conftest import build_cable_with_terminations
+from tests.test_map_view import parse_json_script
 
 SRID = get_srid()
 
@@ -257,3 +259,51 @@ class TestRoutePlannerConstraintView:
         # Rendered widget must include the api-select hook so the frontend
         # lazy-loads options instead of materializing all rows.
         assert "api-select" in body
+
+
+# ---------------------------------------------------------------------------
+# RoutePlannerView.get — client config payload
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestRoutePlannerMapConfig:
+    def _render(self, factory, admin_user, extent=None):
+        request = factory.get("/pathways/route-planner/")
+        request.user = admin_user
+        with patch.object(MapView, "_data_extent", return_value=extent):
+            return RoutePlannerView().get(request).content.decode()
+
+    def test_window_config_carries_api_base_and_layers(self, factory, admin_user):
+        """The planner reads apiBase and baseLayers off window.PATHWAYS_CONFIG;
+        an empty payload leaves the map without tiles or a data source.
+        """
+        config = parse_json_script(self._render(factory, admin_user), "pathways-config")
+
+        assert config["apiBase"]
+        assert "baseLayers" in config
+
+    def test_center_is_json_not_localized(self, factory, admin_user, settings):
+        """Regression for #93 on the planner map -- see the MapView test."""
+        from django.utils import translation
+
+        settings.PLUGINS_CONFIG = {
+            **settings.PLUGINS_CONFIG,
+            "netbox_pathways": {
+                **settings.PLUGINS_CONFIG.get("netbox_pathways", {}),
+                "map_center_lat": 52.42,
+                "map_center_lon": 10.78,
+            },
+        }
+
+        with translation.override("de"):
+            content = self._render(factory, admin_user)
+
+        assert parse_json_script(content, "pathways-map-init")["center"] == [52.42, 10.78]
+
+    def test_data_extent_becomes_bounds(self, factory, admin_user):
+        content = self._render(factory, admin_user, extent=(-73.6, 45.4, -73.5, 45.6))
+
+        config = parse_json_script(content, "pathways-map-init")
+        assert config["center"] == [45.5, -73.55]
+        assert config["bounds"] == [[45.4, -73.6], [45.6, -73.5]]

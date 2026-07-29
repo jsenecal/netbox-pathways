@@ -1,5 +1,7 @@
 """Tests for MapView — kiosk param, URL params, parse_box, safe casts, data extent."""
 
+import json
+import re
 from unittest.mock import patch
 
 import pytest
@@ -14,6 +16,17 @@ from netbox_pathways.views import MapView
 @pytest.fixture
 def factory():
     return RequestFactory()
+
+
+def parse_json_script(content, element_id):
+    """Extract and parse the payload of a Django `json_script` tag."""
+    match = re.search(
+        rf'<script id="{element_id}" type="application/json">(.*?)</script>',
+        content,
+        re.DOTALL,
+    )
+    assert match, f"no json_script tag with id={element_id!r} in the response"
+    return json.loads(match.group(1))
 
 
 @pytest.fixture
@@ -185,17 +198,6 @@ class TestMapViewGet:
         content = response.content.decode()
         assert "pathways-map-wrapper pw-kiosk" in content
 
-    def test_lat_lon_zoom_params(self, factory):
-        response = self._get(factory, "lat=48.8&lon=2.3&zoom=15")
-        content = response.content.decode()
-        assert "48.8" in content
-        assert "2.3" in content
-        assert "15" in content
-
-    def test_lat_lon_without_zoom_uses_default(self, factory):
-        response = self._get(factory, "lat=48.8&lon=2.3")
-        assert response.status_code == 200
-
     def test_config_carries_status_choices(self, factory):
         """The inactive-set panel must not depend on an /info round-trip
         (skipped entirely at high zoom), so statuses ship with the page."""
@@ -204,33 +206,140 @@ class TestMapViewGet:
         assert '"statuses"' in content
         assert '"retired"' in content
 
-    def test_kiosk_js_config(self, factory):
-        """The JS init config should contain kiosk: true when param is set."""
-        response = self._get(factory, "kiosk=true")
-        content = response.content.decode()
-        assert "kiosk: true" in content
-
-    def test_no_kiosk_js_config(self, factory):
-        """The JS init config should contain kiosk: false when param is not set."""
-        response = self._get(factory, "")
-        content = response.content.decode()
-        assert "kiosk: false" in content
-
     def test_invalid_lat_uses_default(self, factory):
         response = self._get(factory, "lat=notanumber&lon=2.3")
         assert response.status_code == 200
 
-    def test_extent_used_when_no_params(self, factory):
-        """When no lat/lon params, _data_extent result is used."""
-        request = factory.get("/plugins/pathways/map/")
-        from django.contrib.auth.models import AnonymousUser
 
-        request.user = AnonymousUser()
-        view = MapView()
-        extent = (-73.6, 45.4, -73.5, 45.6)
-        with patch.object(view, "_data_extent", return_value=extent):
-            response = view.get(request)
-        content = response.content.decode()
-        # Center should be midpoint of extent
-        expected_lat = (45.4 + 45.6) / 2
-        assert str(expected_lat) in content
+# ---------------------------------------------------------------------------
+# MapView.get — client config payload
+# ---------------------------------------------------------------------------
+
+
+def render_map(factory, query_string="", extent=None, feature_extent=None):
+    """Render MapView.get() and return the response body.
+
+    `extent` stands in for the trimmed data extent; `feature_extent` for the
+    bbox a `?select=` value resolves to. Both are patched to keep the test
+    off the database.
+    """
+    from django.contrib.auth.models import AnonymousUser
+
+    request = factory.get(f"/plugins/pathways/map/?{query_string}")
+    request.user = AnonymousUser()
+    view = MapView()
+    with (
+        patch.object(view, "_data_extent", return_value=extent),
+        patch.object(MapView, "_resolve_feature_extent", return_value=feature_extent),
+    ):
+        return view.get(request).content.decode()
+
+
+@pytest.mark.django_db
+class TestMapConfigPayload:
+    """The client config must survive any active locale and honour the
+    documented precedence: lat/lon params > ?select= > data extent > defaults.
+    """
+
+    def test_center_is_json_not_localized(self, factory, settings):
+        """Regression for #93: under a locale that formats decimals with a
+        comma, template interpolation rendered `center: [52,42, 10,78]` --
+        four array items -- and Leaflet threw on `t.lat`. The config must be
+        serialized as JSON, which is locale-independent.
+        """
+        from django.utils import translation
+
+        settings.PLUGINS_CONFIG = {
+            **settings.PLUGINS_CONFIG,
+            "netbox_pathways": {
+                **settings.PLUGINS_CONFIG.get("netbox_pathways", {}),
+                "map_center_lat": 52.42,
+                "map_center_lon": 10.78,
+            },
+        }
+
+        with translation.override("de"):
+            content = render_map(factory)
+
+        assert parse_json_script(content, "pathways-map-init")["center"] == [52.42, 10.78]
+        # No comma-formatted decimal may reach the page at all.
+        assert "52,42" not in content
+
+    def test_lat_lon_params_win_over_data_extent(self, factory):
+        """An explicit viewport must not be overridden by the data extent:
+        `bounds` would otherwise reach Leaflet and fitBounds beats setView.
+        """
+        content = render_map(
+            factory,
+            "lat=48.8&lon=2.3&zoom=15",
+            extent=(-73.6, 45.4, -73.5, 45.6),
+        )
+
+        config = parse_json_script(content, "pathways-map-init")
+        assert config["center"] == [48.8, 2.3]
+        assert config["zoom"] == 15
+        assert config["bounds"] is None
+
+    def test_lat_lon_without_zoom_falls_back_to_configured_zoom(self, factory, settings):
+        settings.PLUGINS_CONFIG = {
+            **settings.PLUGINS_CONFIG,
+            "netbox_pathways": {
+                **settings.PLUGINS_CONFIG.get("netbox_pathways", {}),
+                "map_zoom": 12,
+            },
+        }
+
+        content = render_map(factory, "lat=48.8&lon=2.3")
+
+        assert parse_json_script(content, "pathways-map-init")["zoom"] == 12
+
+    def test_selected_feature_reaches_client(self, factory):
+        """The sidebar auto-opens the selected feature from this value."""
+        content = render_map(
+            factory,
+            "select=structure-123",
+            feature_extent=(-73.6, 45.4, -73.5, 45.6),
+        )
+
+        config = parse_json_script(content, "pathways-map-init")
+        assert config["select"] == "structure-123"
+        assert config["bounds"] == [[45.4, -73.6], [45.6, -73.5]]
+        # Close zoom for a single feature, used only if fitBounds is skipped.
+        assert config["zoom"] == 18
+
+    def test_selected_feature_bounds_win_over_data_extent(self, factory):
+        content = render_map(
+            factory,
+            "select=structure-123",
+            extent=(-10.0, -10.0, 10.0, 10.0),
+            feature_extent=(-73.6, 45.4, -73.5, 45.6),
+        )
+
+        assert parse_json_script(content, "pathways-map-init")["bounds"] == [
+            [45.4, -73.6],
+            [45.6, -73.5],
+        ]
+
+    def test_unresolvable_selection_falls_back_to_data_extent(self, factory):
+        content = render_map(
+            factory,
+            "select=structure-999",
+            extent=(-73.6, 45.4, -73.5, 45.6),
+            feature_extent=None,
+        )
+
+        assert parse_json_script(content, "pathways-map-init")["bounds"] == [
+            [45.4, -73.6],
+            [45.6, -73.5],
+        ]
+
+    def test_data_extent_used_when_no_params(self, factory):
+        content = render_map(factory, extent=(-73.6, 45.4, -73.5, 45.6))
+
+        config = parse_json_script(content, "pathways-map-init")
+        assert config["center"] == [45.5, -73.55]
+        assert config["bounds"] == [[45.4, -73.6], [45.6, -73.5]]
+
+    def test_kiosk_flag_in_config(self, factory):
+        assert parse_json_script(render_map(factory, "kiosk=true"), "pathways-map-init")["kiosk"] is True
+        assert parse_json_script(render_map(factory), "pathways-map-init")["kiosk"] is False

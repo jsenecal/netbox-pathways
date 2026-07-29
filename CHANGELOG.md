@@ -46,6 +46,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The map and route planner failed to load for users on a non-English
+  locale.** Django localizes numbers when a template renders them, so under
+  a language that uses a comma as the decimal separator (German, French,
+  Spanish, ...) the map center was written into the page as
+  `center: [52,42, 10,78]` -- a four-element array -- and Leaflet threw
+  `TypeError: null is not an object (evaluating 't.lat')`, leaving a blank
+  map. The client config is now built in the view and emitted with Django's
+  `json_script`, which is locale-independent and escapes the payload against
+  script-tag breakout. Reported and diagnosed by @JulianJacobi. Fixes #93.
+
 - **The map panel on a Location detail page ignored the structures in that
   location.** It only drew pathways whose start or end was the location, plus
   those pathways' endpoint structures -- so a location holding structures but

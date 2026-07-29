@@ -455,14 +455,14 @@
 <link rel="stylesheet" href="{% static 'netbox_pathways/vendor/leaflet/leaflet.css' %}" />
 <link rel="stylesheet" href="{% static 'netbox_pathways/css/leaflet-theme.css' %}" />
 <script src="{% static 'netbox_pathways/vendor/leaflet/leaflet.js' %}"></script>
+{{ pathways_config|json_script:"pathways-config" }}
+{{ map_init_config|json_script:"pathways-map-init" }}
+{# PATHWAYS_CONFIG must be set before the bundle: its modules read it at load time. #}
+<script>window.PATHWAYS_CONFIG=JSON.parse(document.getElementById('pathways-config').textContent);</script>
 <script src="{% static 'netbox_pathways/dist/route-planner-map.min.js' %}"></script>
 <script>
 (function() {
-    // --- Config ---
-    window.PATHWAYS_CONFIG = {{ pathways_config_json|safe }};
-    var CENTER = [{{ map_center_lat }}, {{ map_center_lon }}];
-    var ZOOM = {{ map_zoom }};
-    var BOUNDS = {{ map_bounds|default:"null" }};
+    var MAP_INIT = JSON.parse(document.getElementById('pathways-map-init').textContent);
 
     // --- Viewport sizing ---
     function sizeMap() {
@@ -487,11 +487,7 @@
         sizeMap();
 
         try {
-            window.initializeRoutePlannerMap('pathways-map', {
-                center: CENTER,
-                zoom: ZOOM,
-                bounds: BOUNDS
-            });
+            window.initializeRoutePlannerMap('pathways-map', MAP_INIT);
         } catch (err) {
             console.error('[pathways] Map init failed:', err);
         }
