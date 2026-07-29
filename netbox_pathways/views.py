@@ -1270,24 +1270,20 @@ class RoutePlannerView(LoginRequiredMixin, View):
             "cable": cable,
             "start_structure": start_structure,
             "end_structure": end_structure,
-            "pathways_config_json": json.dumps(pathways_config),
+            "pathways_config_json": pathways_config,
+            "map_config": {
+                "center": [default_lat, default_lon],
+                "zoom": default_zoom,
+                "bounds": None,
+            }
         }
 
         if extent:
-            ctx["map_center_lat"] = (extent[1] + extent[3]) / 2
-            ctx["map_center_lon"] = (extent[0] + extent[2]) / 2
-            ctx["map_zoom"] = default_zoom
-            ctx["map_bounds"] = json.dumps(
-                [
-                    [extent[1], extent[0]],
-                    [extent[3], extent[2]],
-                ]
-            )
-        else:
-            ctx["map_center_lat"] = default_lat
-            ctx["map_center_lon"] = default_lon
-            ctx["map_zoom"] = default_zoom
-            ctx["map_bounds"] = ""
+            ctx["map_config"]["center"] = [(extent[1] + extent[3]) / 2, (extent[0] + extent[2]) / 2]
+            ctx["map_config"]["bounds"] = [
+                [extent[1], extent[0]],
+                [extent[3], extent[2]],
+            ]
 
         return render(request, "netbox_pathways/route_planner.html", ctx)
 
@@ -1784,8 +1780,6 @@ class MapView(LoginRequiredMixin, View):
         return None
 
     def get(self, request):
-        import json
-
         from django.conf import settings
 
         from .api.geo import _available_statuses
@@ -1813,61 +1807,34 @@ class MapView(LoginRequiredMixin, View):
         default_lon = plugin_cfg.get("map_center_lon", -73.5673)
         default_zoom = plugin_cfg.get("map_zoom", 10)
 
-        ctx = {
-            "pathways_config_json": json.dumps(pathways_config),
-        }
+        ctx = dict(
+            pathways_config=pathways_config,
+            map_config=dict(
+                kiosk=request.GET.get("kiosk", "").lower() == "true",
+                select="",
+                center=[default_lat, default_lon],
+                zoom=default_zoom,
+                bounds=None,
+            )
+        )
 
-        ctx["kiosk"] = request.GET.get("kiosk", "").lower() == "true"
-        ctx["selected_feature"] = request.GET.get("select", "")
-
-        if request.GET.get("lat") or request.GET.get("lon"):
-            ctx["map_center_lat"] = self._safe_float(request.GET.get("lat"), default_lat)
-            ctx["map_center_lon"] = self._safe_float(request.GET.get("lon"), default_lon)
-            ctx["map_zoom"] = self._safe_int(request.GET.get("zoom"), default_zoom)
-            ctx["map_bounds"] = ""
-        elif ctx["selected_feature"]:
+        if "lat" in request.GET and "lon" in request.GET:
+            ctx["map_config"]["center"][0] = self._safe_float(request.GET.get("lat"), default_lat)
+            ctx["map_config"]["center"][1] = self._safe_float(request.GET.get("lon"), default_lon)
+            ctx["map_config"]["zoom"] = self._safe_int(request.GET.get("zoom"), default_zoom)
+        if "select" in request.GET or extent:
             # Resolve bounds from the selected feature's geometry
-            sel_ext = self._resolve_feature_extent(ctx["selected_feature"])
+            select = request.GET.get("select")
+            sel_ext = self._resolve_feature_extent(select)
             if sel_ext:
-                ctx["map_center_lat"] = (sel_ext[1] + sel_ext[3]) / 2
-                ctx["map_center_lon"] = (sel_ext[0] + sel_ext[2]) / 2
-                ctx["map_zoom"] = 18  # fallback if fitBounds not used
-                ctx["map_bounds"] = json.dumps(
-                    [
-                        [sel_ext[1], sel_ext[0]],
-                        [sel_ext[3], sel_ext[2]],
-                    ]
-                )
-            elif extent:
-                ctx["map_center_lat"] = (extent[1] + extent[3]) / 2
-                ctx["map_center_lon"] = (extent[0] + extent[2]) / 2
-                ctx["map_zoom"] = default_zoom
-                ctx["map_bounds"] = json.dumps(
-                    [
-                        [extent[1], extent[0]],
-                        [extent[3], extent[2]],
-                    ]
-                )
-            else:
-                ctx["map_center_lat"] = default_lat
-                ctx["map_center_lon"] = default_lon
-                ctx["map_zoom"] = default_zoom
-                ctx["map_bounds"] = ""
-        elif extent:
-            ctx["map_center_lat"] = (extent[1] + extent[3]) / 2
-            ctx["map_center_lon"] = (extent[0] + extent[2]) / 2
-            ctx["map_zoom"] = default_zoom
-            ctx["map_bounds"] = json.dumps(
-                [
+                extent = sel_ext
+
+            if extent:
+                ctx["map_config"]["center"] = [(extent[1] + extent[3]) / 2, (extent[0] + extent[2]) / 2]
+                ctx["map_config"]["bounds"] = [
                     [extent[1], extent[0]],
                     [extent[3], extent[2]],
                 ]
-            )
-        else:
-            ctx["map_center_lat"] = default_lat
-            ctx["map_center_lon"] = default_lon
-            ctx["map_zoom"] = default_zoom
-            ctx["map_bounds"] = ""
 
         return render(request, "netbox_pathways/map.html", ctx)
 

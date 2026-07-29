@@ -456,13 +456,12 @@
 <link rel="stylesheet" href="{% static 'netbox_pathways/css/leaflet-theme.css' %}" />
 <script src="{% static 'netbox_pathways/vendor/leaflet/leaflet.js' %}"></script>
 <script src="{% static 'netbox_pathways/dist/route-planner-map.min.js' %}"></script>
+{{ pathways_config|json_script:"pathways-config" }}
+{{ map_config|json_script:"map-config" }}
 <script>
 (function() {
     // --- Config ---
-    window.PATHWAYS_CONFIG = {{ pathways_config_json|safe }};
-    var CENTER = [{{ map_center_lat }}, {{ map_center_lon }}];
-    var ZOOM = {{ map_zoom }};
-    var BOUNDS = {{ map_bounds|default:"null" }};
+    window.PATHWAYS_CONFIG = JSON.parse(document.getElementById('pathways-config').textContent);
 
     // --- Viewport sizing ---
     function sizeMap() {
@@ -487,11 +486,7 @@
         sizeMap();
 
         try {
-            window.initializeRoutePlannerMap('pathways-map', {
-                center: CENTER,
-                zoom: ZOOM,
-                bounds: BOUNDS
-            });
+            window.initializeRoutePlannerMap('pathways-map', JSON.parse(document.getElementById('map-config').textContent));
         } catch (err) {
             console.error('[pathways] Map init failed:', err);
         }

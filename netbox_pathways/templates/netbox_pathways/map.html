@@ -460,7 +460,7 @@
         color: var(--tblr-body-color, #212529);
     }
 </style>
-<div class="pathways-map-wrapper{% if kiosk %} pw-kiosk{% endif %}">
+<div class="pathways-map-wrapper{% if map_config.kiosk %} pw-kiosk{% endif %}">
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h3 class="card-title mb-0">Infrastructure Map</h3>
@@ -474,7 +474,7 @@
                 </div>
                 <div id="pw-sidebar" class="pw-sidebar">
                     <!-- Kiosk close button -->
-                    {% if kiosk %}
+                    {% if map_config.kiosk %}
                     <button id="pw-kiosk-close" type="button" class="btn btn-sm btn-link p-1 text-decoration-none pw-kiosk-close-btn" title="Close panel (Esc)">
                         <i class="mdi mdi-close" style="font-size:1.2em;"></i>
                     </button>
@@ -529,7 +529,9 @@
 
 {% block javascript %}
 {{ block.super }}
-<script>window.PATHWAYS_CONFIG={{ pathways_config_json|safe }};</script>
+{{ pathways_config|json_script:"pathways-config" }}
+{{ map_config|json_script:"map-config" }}
+<script>window.PATHWAYS_CONFIG=JSON.parse(document.getElementById('pathways-config').textContent);</script>
 <script src="{% static 'netbox_pathways/dist/pathways-map.min.js' %}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -564,13 +566,7 @@
             if (crumbs) crumbs.parentElement.style.display = 'none';
         }
         sizeMap();
-        initializePathwaysMap('pathways-map', {
-            center: [{{ map_center_lat }}, {{ map_center_lon }}],
-            zoom: {{ map_zoom }},
-            bounds: {{ map_bounds|default:"null" }},
-            kiosk: {{ kiosk|yesno:"true,false" }},
-            select: '{{ selected_feature|escapejs }}'
-        });
+        initializePathwaysMap('pathways-map', JSON.parse(document.getElementById('map-config').textContent));
         // Re-size after layout settles and on window resize
         setTimeout(sizeMap, 200);
         setTimeout(sizeMap, 500);
