@@ -46,6 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The Route tab on a Cable raised `TemplateDoesNotExist` on NetBox 4.6.**
+  `cable_route_tab.html` extended `dcim/cable.html`, which NetBox 4.6 removed
+  when the cable detail view moved to the layout system, so opening the Route
+  tab of any cable returned a server error. The template now extends
+  `generic/object.html`, like every other detail template in this plugin, and
+  renders identically on 4.5 and 4.6. Contributed by @JulianJacobi. Fixes #73.
+
 - **The map and route planner failed to load for users on a non-English
   locale.** Django localizes numbers when a template renders them, so under
   a language that uses a comma as the decimal separator (German, French,
