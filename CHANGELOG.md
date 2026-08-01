@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Polygon structures draw their real footprint.** A structure whose
+  geometry is a polygon now renders as a filled outline in its structure-type
+  color -- on the interactive map, on its own detail page and on the Site /
+  Location map panels -- instead of a marker dropped at the centroid. Below
+  `map_structure_polygon_zoom` (new setting, default `18`) the footprint
+  collapses back to the type icon at the centroid, since an outline that small
+  is a sub-pixel smudge on a wide view. Detail pages open zoomed in far enough
+  to show the outline of the structure they are about. Refs #96.
+
+- **`Structure.location`** -- an optional FK to `dcim.Location`, recording
+  which location inside the site a structure sits in. Validated like
+  `Device.clean()`: a location must belong to the assigned site. Because
+  `Structure.site` is nullable (unlike `Device.site`), setting a location
+  with no site fills the site in from the location rather than rejecting it.
+  Exposed in the form, filters, bulk edit, CSV import, table, detail panel,
+  search results and the REST API. Refs #89.
+
+- **Nearby structures as a read-only reference layer in the map edit
+  widget.** The geometry widget on add/edit forms can now display the
+  structures already recorded in the plugin as faded, non-interactive
+  markers (same shapes and colours as the infrastructure map), so paths
+  can be lined up against the surrounding plant without flipping to the
+  GIS map. A new toolbar button toggles the layer (default on, persisted
+  in localStorage); the viewport is fetched from the GeoJSON structures
+  endpoint on pan/zoom from zoom 13, with name labels from zoom 17.
+  Reference markers never intercept clicks and nothing snaps to them --
+  endpoint snapping still applies only to the configured start/end
+  structures. The locked start/end endpoint markers now carry the same
+  name labels. Refs #83.
+- **Zoom-out floor on the edit widget** -- the geometry widget no longer
+  zooms out to world level (editing a single geometry never needs it);
+  the floor defaults to zoom 14 (about 5 km across a typical widget) and
+  is configurable via
+  `PLUGINS_CONFIG['netbox_pathways']['map_widget_min_zoom']`. The
+  full-page infrastructure map is unaffected.
+- **Rounded `geo_length` display** -- computed pathway lengths are now rounded
+  to 2 decimals (centimetres) by default instead of showing 12 decimal
+  digits; even survey-grade GPS tops out around centimetre accuracy, so the
+  extra digits were noise. A new
+  `PLUGINS_CONFIG['netbox_pathways']['geo_length_decimals']` setting (default
+  `2`, `0` = whole metres) controls how many decimal digits appear in tables,
+  detail panels, and the REST/GeoJSON APIs. Sorting and
+  `geo_length__gte`/`__lte` filtering are unaffected -- they always use the
+  full-precision PostGIS value. Fixes #80.
+- **`LICENSE` file (AGPL-3.0-or-later).** The project is now explicitly licensed under the GNU Affero General Public License v3.0 or later. The README previously referenced Apache 2.0 but no license file was ever shipped; `pyproject.toml` now declares the SPDX expression `AGPL-3.0-or-later` so PyPI metadata matches.
+- **Status on the interactive map** -- the sidebar details pane now shows the clicked feature's lifecycle status as a colored badge, and a new **Hide inactive** toggle (with a gear panel choosing which statuses count as inactive, default `retired` + `abandoned`; persisted in localStorage) removes those features from every map layer. Filtering happens server-side: the GeoJSON layer endpoints and the `/info` count endpoint accept `exclude_status` (comma-separated or repeated), so viewport counts and clustering thresholds stay consistent with what is drawn. `/info` also returns the available `statuses` (value, label, color) for building filter UIs. Circuit routes are unaffected (circuits carry NetBox core statuses). Refs #68.
+- **Skip-info band + optimistic `/info` revalidation on the map.** Panning and zooming no longer block on a fresh `/info` round-trip before the GeoJSON layers start loading. The frontend now uses a three-band strategy: below `MIN_DATA_ZOOM` (11) nothing renders; in the gated band, if a recent `/info` is cached the cached decision drives the immediate render and `/info` revalidates in the background with `If-None-Match` (a 304 leaves the screen untouched, a 200 reconciles only if the decision actually changed); at or above `SKIP_INFO_ZOOM` (default 17) `/info` is skipped entirely because the viewport is too small to plausibly cross any hide/cluster threshold. Configurable via `PLUGINS_CONFIG['netbox_pathways']['map_skip_info_zoom']` if a deployment hits the edge case. The pure decision logic lives in `netbox_pathways/static/netbox_pathways/src/load-strategy.ts` (`chooseLoadStrategy`, `decideSkipInfo`, `decisionsDiffer`) and is covered by vitest. `fetchMapInfo`'s callback now also signals whether the response was a 200 (fresh) or 304 (unchanged), so callers can skip the reconciliation render in the common case.
+- **`status` field on the Pathway base model** -- every pathway type (`Conduit`, `AerialSpan`, `DirectBuried`, `Innerduct`, `ConduitBank`) now carries a lifecycle status with the same states as structures (`planned`, `active`, `construction`, `decommissioning`, `retired`, `abandoned`; default `active`, new `PathwayStatusChoices` ChoiceSet). Surfaced everywhere structures already surface theirs: edit/bulk-edit/import forms (blank CSV column defaults to `active`), list-view filters and default table columns, detail panels, REST serializers, GraphQL filters, and global-search result attributes. The route planner's existing "Include inactive/retired" toggle now also applies to the pathway's own status: `retired` / `decommissioning` pathways are excluded from route searches by default, in addition to the existing exclusion of pathways touching retired/decommissioning structures. Structure CSV import's `status` column is now optional too (blank defaults to `active`); previously it was required. Migration `0020_pathway_status`. Refs #60.
+- `opgw` (OPGW -- optical ground wire) added to `AerialTypeChoices`, selectable as the Aerial Type on Aerial Spans in forms, filters, and CSV import. Refs #59.
+- **CSV bulk import for every catalogued model** -- `DirectBuried`, `Innerduct`, `ConduitJunction`, `PlannedRoute`, `SiteGeometry`, and `CircuitGeometry` gain import forms, views, and `/import/` pages; previously only `Structure`, `Conduit`, `AerialSpan`, `ConduitBank`, and `CableSegment` were importable. Every importable model's left-menu entry and list view now shows an Import button. The pathway import forms (`Conduit`, `AerialSpan`, `DirectBuried`, `Innerduct`, `ConduitBank`, `PlannedRoute`) also accept `start_location` / `end_location` columns (by location name) so indoor endpoints can be imported, and `AerialSpanImportForm` no longer hard-requires structure endpoints. Import forms now cover every editable model field: `ConduitImportForm` gains `conduit_bank` and `start_junction` / `end_junction` (matched by label), `bank_position`, `start_face` / `end_face`, and owner `tenant` columns; the other pathway import forms gain `tenant`; `CableSegmentImportForm` gains an optional `sequence` (blank auto-assigns as before). Pathway rows whose endpoints are both structures no longer require a `path` value -- the straight-line path is auto-generated at import exactly as the interactive form does. A coverage test now pins every import form to its model's editable fields so new fields cannot silently go missing from CSV import. Refs #58.
+- **Computed `geo_length` on Pathway and subclasses** -- the drawn length of a pathway's LineString, in metres, is now exposed as a read-only `geo_length` property computed by PostGIS (`ST_Length`) rather than entered manually. The existing `length` field stays for as-built / field-measured lengths (slack, sag, riser drops) and is now labelled "Length (m, as-built)" in detail panels alongside the new "Geo length (m, drawn)". A custom `PathwayQuerySet.with_geo_length()` adds an `_geo_length` annotation that the list views (`Pathway`, `Conduit`, `AerialSpan`, `DirectBuried`, `Innerduct`, `ConduitBank`) already apply so the new sortable "Geo length (m)" table column hits PostGIS, not Python. REST and GeoJSON serializers emit `geo_length`; `PathwayFilterSet` (and the per-subclass filtersets) gain `geo_length__gte` / `geo_length__lte` URL range filters via a `GeoLengthFilterMixin`. Requires a projected, metre-based SRID (`PLUGINS_CONFIG['netbox_pathways']['srid']`) -- which is already required for the rest of the plugin's geometry support.
+- **`/info` map endpoint and count-based layer gating** -- new `GET /api/plugins/pathways/geo/info/?bbox=...` returns per-layer feature counts (`structures`, `conduit_banks`, `conduits`, `aerial_spans`, `direct_buried`, `circuits`, and an `external` map for reference-mode registered layers) plus the per-layer thresholds the frontend uses to decide whether to render, client-cluster, or hide each layer. Thresholds default to `{structures: {cluster: 200, hide: 5000}, ...others: {hide: 500}}` and are overridable per-layer via `PLUGINS_CONFIG['netbox_pathways']['map_thresholds']`. The map frontend now consults `/info` on every pan/zoom and applies a single "structures clustered -> no supports" rule: whenever structures cross either threshold (client or server cluster), every pathway and reference-mode external layer is suppressed for that viewport. The hardcoded `MIN_BANK_ZOOM = 18` heuristic is removed; banks become visible whenever their viewport count is below the configured threshold. Over-budget layer toggles in the sidebar dim and display a count chip. `MapLayerRegistration` gains an optional `max_features` (default 500) for reference-mode external layers.
+- **Geometry on CSV bulk import** -- `StructureImportForm` (Point) and the LineString import forms (`ConduitImportForm`, `AerialSpanImportForm`, `ConduitBankImportForm`) now expose a `location` / `path` column. Values pass through the same forgiving parser as the interactive map widget, so spreadsheets can carry GeoJSON, WKT, DMS (hemispheres optional), or Google-Maps-style decimal `lat,lon` pairs. The parser produces WGS84 and Django GIS reprojects to the configured storage SRID at save time. New helper `netbox_pathways.coord_parser.parse_geometry_input` plus `ForgivingGeometryField` are also importable by downstream code that wants the same lenient parsing.
+- **Manual coordinate entry on the map widget** -- the geometry widget now has a tabbed UI with a **Map** tab (existing Leaflet/geoman editor) and a **Coordinates** tab containing a free-text editor. The textarea accepts GeoJSON (Geometry, Feature, or FeatureCollection -- first feature wins), WKT (`POINT`/`LINESTRING`/`POLYGON`), DMS (hemisphere letters optional; lat-first when omitted), and decimal `lat,lon` pairs in Google-Maps order. Invalid input is reported inline without clobbering the previous geometry. The Map tab also exposes two helper buttons: **Use my location** (`navigator.geolocation`, requires HTTPS) and **Paste lat/lon...** (an inline mini-form). On Point widgets the helpers set or replace the marker; on LineString widgets they append a vertex (the first invocation stashes a pending vertex shown as a faded marker, and the second materializes a two-vertex line). Refs #32.
+- `ConduitBank.height` and `ConduitBank.width` (PositiveIntegerField, nullable). Captures duct-bank dimensions distinct from `total_conduits`. Surfaced in list tables (toggleable, off by default), forms (single and bulk), detail panel, import form, and REST API serializer. Migration `0017_conduitbank_height_width`.
+
 ### Changed
 
 - **BREAKING: `Structure.location` is now a FK to `dcim.Location`; the
@@ -34,24 +92,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `structure_type` blanked by the migration; reclassify them to the real
   container type (handhole, pedestal, cabinet, ...). Refs #89.
 
-### Added
+- **`Pathway.path` is now optional for indoor pathways.** A pathway whose both
+  endpoints are locations (rooms, floors) can be saved without a geographic
+  path -- NetBox locations carry no coordinates, so previously such pathways
+  could not be created at all without drawing a meaningless map line. A path
+  is still required whenever either endpoint is geographic (a structure or,
+  for conduits, a junction); this rule now lives in `Pathway.clean()` instead
+  of the database NOT NULL constraint. Pathless indoor pathways are excluded
+  from the GeoJSON map layers. Innerducts now inherit locations (not just
+  structures) from their parent conduit, at validation time as well as save
+  time. Migration `0019_alter_pathway_path`.
+- **`AerialSpan.attachment_height` is now per-endpoint.** The single
+  `attachment_height` field is replaced by `start_attachment_height` and
+  `end_attachment_height` (both nullable floats, meters). A read-only
+  `attachment_height` property returns the mean of the two sides (or whichever
+  side is populated; `None` if both are unset). Existing data is preserved on
+  migration: the previous single value is copied into both per-side fields.
+  Migration `0018_aerialspan_attachment_height_per_side`.
 
-- **Polygon structures draw their real footprint.** A structure whose
-  geometry is a polygon now renders as a filled outline in its structure-type
-  color -- on the interactive map, on its own detail page and on the Site /
-  Location map panels -- instead of a marker dropped at the centroid. Below
-  `map_structure_polygon_zoom` (new setting, default `18`) the footprint
-  collapses back to the type icon at the centroid, since an outline that small
-  is a sub-pixel smudge on a wide view. Detail pages open zoomed in far enough
-  to show the outline of the structure they are about. Refs #96.
-
-- **`Structure.location`** -- an optional FK to `dcim.Location`, recording
-  which location inside the site a structure sits in. Validated like
-  `Device.clean()`: a location must belong to the assigned site. Because
-  `Structure.site` is nullable (unlike `Device.site`), setting a location
-  with no site fills the site in from the location rather than rejecting it.
-  Exposed in the form, filters, bulk edit, CSV import, table, detail panel,
-  search results and the REST API. Refs #89.
+- **BREAKING: CSV import column `attachment_height` is removed.** Update imports to use
+  `start_attachment_height` and `end_attachment_height`. The REST API field
+  `attachment_height` becomes read-only and derived; clients writing to it
+  must target the per-side fields.
 
 ### Fixed
 
@@ -107,76 +169,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fetched as a JSON endpoint, yielding a network error instead of details).
   The inline rename pencil is hidden for external features without a REST
   endpoint. Fixes #81.
-
-### Added
-
-- **Nearby structures as a read-only reference layer in the map edit
-  widget.** The geometry widget on add/edit forms can now display the
-  structures already recorded in the plugin as faded, non-interactive
-  markers (same shapes and colours as the infrastructure map), so paths
-  can be lined up against the surrounding plant without flipping to the
-  GIS map. A new toolbar button toggles the layer (default on, persisted
-  in localStorage); the viewport is fetched from the GeoJSON structures
-  endpoint on pan/zoom from zoom 13, with name labels from zoom 17.
-  Reference markers never intercept clicks and nothing snaps to them --
-  endpoint snapping still applies only to the configured start/end
-  structures. The locked start/end endpoint markers now carry the same
-  name labels. Refs #83.
-- **Zoom-out floor on the edit widget** -- the geometry widget no longer
-  zooms out to world level (editing a single geometry never needs it);
-  the floor defaults to zoom 14 (about 5 km across a typical widget) and
-  is configurable via
-  `PLUGINS_CONFIG['netbox_pathways']['map_widget_min_zoom']`. The
-  full-page infrastructure map is unaffected.
-- **Rounded `geo_length` display** -- computed pathway lengths are now rounded
-  to 2 decimals (centimetres) by default instead of showing 12 decimal
-  digits; even survey-grade GPS tops out around centimetre accuracy, so the
-  extra digits were noise. A new
-  `PLUGINS_CONFIG['netbox_pathways']['geo_length_decimals']` setting (default
-  `2`, `0` = whole metres) controls how many decimal digits appear in tables,
-  detail panels, and the REST/GeoJSON APIs. Sorting and
-  `geo_length__gte`/`__lte` filtering are unaffected -- they always use the
-  full-precision PostGIS value. Fixes #80.
-- **`LICENSE` file (AGPL-3.0-or-later).** The project is now explicitly licensed under the GNU Affero General Public License v3.0 or later. The README previously referenced Apache 2.0 but no license file was ever shipped; `pyproject.toml` now declares the SPDX expression `AGPL-3.0-or-later` so PyPI metadata matches.
-- **Status on the interactive map** -- the sidebar details pane now shows the clicked feature's lifecycle status as a colored badge, and a new **Hide inactive** toggle (with a gear panel choosing which statuses count as inactive, default `retired` + `abandoned`; persisted in localStorage) removes those features from every map layer. Filtering happens server-side: the GeoJSON layer endpoints and the `/info` count endpoint accept `exclude_status` (comma-separated or repeated), so viewport counts and clustering thresholds stay consistent with what is drawn. `/info` also returns the available `statuses` (value, label, color) for building filter UIs. Circuit routes are unaffected (circuits carry NetBox core statuses). Refs #68.
-- **Skip-info band + optimistic `/info` revalidation on the map.** Panning and zooming no longer block on a fresh `/info` round-trip before the GeoJSON layers start loading. The frontend now uses a three-band strategy: below `MIN_DATA_ZOOM` (11) nothing renders; in the gated band, if a recent `/info` is cached the cached decision drives the immediate render and `/info` revalidates in the background with `If-None-Match` (a 304 leaves the screen untouched, a 200 reconciles only if the decision actually changed); at or above `SKIP_INFO_ZOOM` (default 17) `/info` is skipped entirely because the viewport is too small to plausibly cross any hide/cluster threshold. Configurable via `PLUGINS_CONFIG['netbox_pathways']['map_skip_info_zoom']` if a deployment hits the edge case. The pure decision logic lives in `netbox_pathways/static/netbox_pathways/src/load-strategy.ts` (`chooseLoadStrategy`, `decideSkipInfo`, `decisionsDiffer`) and is covered by vitest. `fetchMapInfo`'s callback now also signals whether the response was a 200 (fresh) or 304 (unchanged), so callers can skip the reconciliation render in the common case.
-- **`status` field on the Pathway base model** -- every pathway type (`Conduit`, `AerialSpan`, `DirectBuried`, `Innerduct`, `ConduitBank`) now carries a lifecycle status with the same states as structures (`planned`, `active`, `construction`, `decommissioning`, `retired`, `abandoned`; default `active`, new `PathwayStatusChoices` ChoiceSet). Surfaced everywhere structures already surface theirs: edit/bulk-edit/import forms (blank CSV column defaults to `active`), list-view filters and default table columns, detail panels, REST serializers, GraphQL filters, and global-search result attributes. The route planner's existing "Include inactive/retired" toggle now also applies to the pathway's own status: `retired` / `decommissioning` pathways are excluded from route searches by default, in addition to the existing exclusion of pathways touching retired/decommissioning structures. Structure CSV import's `status` column is now optional too (blank defaults to `active`); previously it was required. Migration `0020_pathway_status`. Refs #60.
-- `opgw` (OPGW -- optical ground wire) added to `AerialTypeChoices`, selectable as the Aerial Type on Aerial Spans in forms, filters, and CSV import. Refs #59.
-- **CSV bulk import for every catalogued model** -- `DirectBuried`, `Innerduct`, `ConduitJunction`, `PlannedRoute`, `SiteGeometry`, and `CircuitGeometry` gain import forms, views, and `/import/` pages; previously only `Structure`, `Conduit`, `AerialSpan`, `ConduitBank`, and `CableSegment` were importable. Every importable model's left-menu entry and list view now shows an Import button. The pathway import forms (`Conduit`, `AerialSpan`, `DirectBuried`, `Innerduct`, `ConduitBank`, `PlannedRoute`) also accept `start_location` / `end_location` columns (by location name) so indoor endpoints can be imported, and `AerialSpanImportForm` no longer hard-requires structure endpoints. Import forms now cover every editable model field: `ConduitImportForm` gains `conduit_bank` and `start_junction` / `end_junction` (matched by label), `bank_position`, `start_face` / `end_face`, and owner `tenant` columns; the other pathway import forms gain `tenant`; `CableSegmentImportForm` gains an optional `sequence` (blank auto-assigns as before). Pathway rows whose endpoints are both structures no longer require a `path` value -- the straight-line path is auto-generated at import exactly as the interactive form does. A coverage test now pins every import form to its model's editable fields so new fields cannot silently go missing from CSV import. Refs #58.
-- **Computed `geo_length` on Pathway and subclasses** -- the drawn length of a pathway's LineString, in metres, is now exposed as a read-only `geo_length` property computed by PostGIS (`ST_Length`) rather than entered manually. The existing `length` field stays for as-built / field-measured lengths (slack, sag, riser drops) and is now labelled "Length (m, as-built)" in detail panels alongside the new "Geo length (m, drawn)". A custom `PathwayQuerySet.with_geo_length()` adds an `_geo_length` annotation that the list views (`Pathway`, `Conduit`, `AerialSpan`, `DirectBuried`, `Innerduct`, `ConduitBank`) already apply so the new sortable "Geo length (m)" table column hits PostGIS, not Python. REST and GeoJSON serializers emit `geo_length`; `PathwayFilterSet` (and the per-subclass filtersets) gain `geo_length__gte` / `geo_length__lte` URL range filters via a `GeoLengthFilterMixin`. Requires a projected, metre-based SRID (`PLUGINS_CONFIG['netbox_pathways']['srid']`) -- which is already required for the rest of the plugin's geometry support.
-- **`/info` map endpoint and count-based layer gating** -- new `GET /api/plugins/pathways/geo/info/?bbox=...` returns per-layer feature counts (`structures`, `conduit_banks`, `conduits`, `aerial_spans`, `direct_buried`, `circuits`, and an `external` map for reference-mode registered layers) plus the per-layer thresholds the frontend uses to decide whether to render, client-cluster, or hide each layer. Thresholds default to `{structures: {cluster: 200, hide: 5000}, ...others: {hide: 500}}` and are overridable per-layer via `PLUGINS_CONFIG['netbox_pathways']['map_thresholds']`. The map frontend now consults `/info` on every pan/zoom and applies a single "structures clustered -> no supports" rule: whenever structures cross either threshold (client or server cluster), every pathway and reference-mode external layer is suppressed for that viewport. The hardcoded `MIN_BANK_ZOOM = 18` heuristic is removed; banks become visible whenever their viewport count is below the configured threshold. Over-budget layer toggles in the sidebar dim and display a count chip. `MapLayerRegistration` gains an optional `max_features` (default 500) for reference-mode external layers.
-- **Geometry on CSV bulk import** -- `StructureImportForm` (Point) and the LineString import forms (`ConduitImportForm`, `AerialSpanImportForm`, `ConduitBankImportForm`) now expose a `location` / `path` column. Values pass through the same forgiving parser as the interactive map widget, so spreadsheets can carry GeoJSON, WKT, DMS (hemispheres optional), or Google-Maps-style decimal `lat,lon` pairs. The parser produces WGS84 and Django GIS reprojects to the configured storage SRID at save time. New helper `netbox_pathways.coord_parser.parse_geometry_input` plus `ForgivingGeometryField` are also importable by downstream code that wants the same lenient parsing.
-- **Manual coordinate entry on the map widget** -- the geometry widget now has a tabbed UI with a **Map** tab (existing Leaflet/geoman editor) and a **Coordinates** tab containing a free-text editor. The textarea accepts GeoJSON (Geometry, Feature, or FeatureCollection -- first feature wins), WKT (`POINT`/`LINESTRING`/`POLYGON`), DMS (hemisphere letters optional; lat-first when omitted), and decimal `lat,lon` pairs in Google-Maps order. Invalid input is reported inline without clobbering the previous geometry. The Map tab also exposes two helper buttons: **Use my location** (`navigator.geolocation`, requires HTTPS) and **Paste lat/lon...** (an inline mini-form). On Point widgets the helpers set or replace the marker; on LineString widgets they append a vertex (the first invocation stashes a pending vertex shown as a faded marker, and the second materializes a two-vertex line). Refs #32.
-- `ConduitBank.height` and `ConduitBank.width` (PositiveIntegerField, nullable). Captures duct-bank dimensions distinct from `total_conduits`. Surfaced in list tables (toggleable, off by default), forms (single and bulk), detail panel, import form, and REST API serializer. Migration `0017_conduitbank_height_width`.
-
-### Changed
-
-- **`Pathway.path` is now optional for indoor pathways.** A pathway whose both
-  endpoints are locations (rooms, floors) can be saved without a geographic
-  path -- NetBox locations carry no coordinates, so previously such pathways
-  could not be created at all without drawing a meaningless map line. A path
-  is still required whenever either endpoint is geographic (a structure or,
-  for conduits, a junction); this rule now lives in `Pathway.clean()` instead
-  of the database NOT NULL constraint. Pathless indoor pathways are excluded
-  from the GeoJSON map layers. Innerducts now inherit locations (not just
-  structures) from their parent conduit, at validation time as well as save
-  time. Migration `0019_alter_pathway_path`.
-- **`AerialSpan.attachment_height` is now per-endpoint.** The single
-  `attachment_height` field is replaced by `start_attachment_height` and
-  `end_attachment_height` (both nullable floats, meters). A read-only
-  `attachment_height` property returns the mean of the two sides (or whichever
-  side is populated; `None` if both are unset). Existing data is preserved on
-  migration: the previous single value is copied into both per-side fields.
-  Migration `0018_aerialspan_attachment_height_per_side`.
-
-### Breaking
-
-- **CSV import column `attachment_height` is removed.** Update imports to use
-  `start_attachment_height` and `end_attachment_height`. The REST API field
-  `attachment_height` becomes read-only and derived; clients writing to it
-  must target the per-side fields.
-
-### Fixed
 
 - **Map page crashed when any structure had a polygon footprint.** The
   initial-extent query trimmed GPS outliers with `ST_X()`/`ST_Y()` on raw
