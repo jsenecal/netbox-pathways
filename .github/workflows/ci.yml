@@ -42,7 +42,7 @@ jobs:
           enable-cache: true
       - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: netbox_pathways/static/netbox_pathways/package-lock.json
       - run: uv sync --extra dev
@@ -60,7 +60,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: netbox_pathways/static/netbox_pathways/package-lock.json
       - name: Install JS toolchain
