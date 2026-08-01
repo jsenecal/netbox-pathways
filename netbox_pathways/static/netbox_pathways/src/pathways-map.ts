@@ -93,7 +93,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
     // Map controls (topleft, below zoom)
     createKioskControl(map, !!config.kiosk).addTo(map);
-    createSidebarToggleControl(map, !!config.kiosk, function () { Sidebar.show(); }).addTo(map);
+    createSidebarToggleControl(!!config.kiosk, function () { Sidebar.show(); }).addTo(map);
     createLocateControl(map).addTo(map);
 
     // Counters

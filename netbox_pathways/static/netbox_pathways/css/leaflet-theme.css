@@ -202,6 +202,26 @@
     text-align: center;
 }
 
+/* --- Maximized map ---------------------------------------------------- */
+
+/*
+ * Full-viewport overlay, shared by the full-page map's kiosk mode and the
+ * geometry edit widget's maximize toggle. Covers the NetBox navbar rather
+ * than hiding it, so nothing has to be restored on the way out.
+ *
+ * Both !important flags earn their keep: the map page sizes its wrapper with
+ * an inline style (see sizeMap() in map.html), and the widget carries an
+ * inline height on its map div.
+ */
+.pw-maximized {
+    position: fixed !important;
+    inset: 0;
+    z-index: 1050;
+    height: 100vh !important;
+    overflow: hidden;
+    background: var(--tblr-body-bg, #fff);
+}
+
 /* --- Form map widget ------------------------------------------------- */
 
 .pathways-map-widget {
