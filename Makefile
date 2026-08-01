@@ -4,7 +4,8 @@ STATIC_DIR = netbox_pathways/static/netbox_pathways
 
 .PHONY: help migrations migrate runserver createsuperuser shell dbshell \
 	collectstatic check lint test install showurls showmigrations \
-	js-install js-build js-watch js-typecheck js-clean clean
+	js-install js-build js-watch js-typecheck js-test js-dist-check \
+	js-clean clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -56,6 +57,18 @@ js-watch: js-install ## Watch mode — rebuild on save
 
 js-typecheck: ## Type-check TypeScript without emitting
 	cd $(STATIC_DIR) && npm run typecheck
+
+js-test: ## Run the TypeScript test suite (vitest)
+	cd $(STATIC_DIR) && npm test
+
+# The minified bundles are committed, so a source change landed without a
+# rebuild ships stale JS to every install.
+js-dist-check: ## Rebuild and fail if the committed bundles are stale
+	cd $(STATIC_DIR) && npm run build
+	@git diff --stat --exit-code -- $(STATIC_DIR)/dist || { \
+		echo "dist/ is stale -- run 'make js-build' and commit the result"; \
+		exit 1; \
+	}
 
 js-clean: ## Remove JS build artifacts and node_modules
 	rm -rf $(STATIC_DIR)/dist $(STATIC_DIR)/node_modules

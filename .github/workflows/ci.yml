@@ -53,6 +53,24 @@ jobs:
       # and tsc --noEmit over the TypeScript sources.
       - run: uv run make lint
 
+  js:
+    name: JS tests and bundles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: netbox_pathways/static/netbox_pathways/package-lock.json
+      - name: Install JS toolchain
+        run: npm ci
+        working-directory: netbox_pathways/static/netbox_pathways
+      - run: make js-test
+      # The minified bundles are committed, so a source change landed without
+      # a rebuild ships stale JS to every install.
+      - run: make js-dist-check
+
   test:
     name: Test (Python ${{ matrix.python }}, NetBox ${{ matrix.netbox }})
     runs-on: ubuntu-latest
