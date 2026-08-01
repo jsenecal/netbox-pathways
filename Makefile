@@ -62,18 +62,19 @@ js-clean: ## Remove JS build artifacts and node_modules
 
 # --- Code quality ---
 
-lint: ## Run ruff linter + TypeScript type-check
-	ruff check netbox_pathways/
+lint: ## Run ruff lint + format check + TypeScript type-check (the CI gate)
+	ruff check netbox_pathways tests
+	ruff format --check netbox_pathways tests
 	cd $(STATIC_DIR) && npm run typecheck
 
 lint-fix: ## Run ruff linter with auto-fix
-	ruff check --fix netbox_pathways/
+	ruff check --fix netbox_pathways tests
 
 format: ## Run ruff formatter
-	ruff format netbox_pathways/
+	ruff format netbox_pathways tests
 
 format-check: ## Check formatting without modifying files
-	ruff format --check netbox_pathways/
+	ruff format --check netbox_pathways tests
 
 # --- Testing ---
 

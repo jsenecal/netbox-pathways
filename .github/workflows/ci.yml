@@ -40,9 +40,18 @@ jobs:
       - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: netbox_pathways/static/netbox_pathways/package-lock.json
       - run: uv sync --extra dev
-      - run: uv run ruff check netbox_pathways tests
-      - run: uv run ruff format --check netbox_pathways tests
+      - name: Install JS toolchain
+        run: npm ci
+        working-directory: netbox_pathways/static/netbox_pathways
+      # Same gate developers run locally: ruff check, ruff format --check,
+      # and tsc --noEmit over the TypeScript sources.
+      - run: uv run make lint
 
   test:
     name: Test (Python ${{ matrix.python }}, NetBox ${{ matrix.netbox }})
