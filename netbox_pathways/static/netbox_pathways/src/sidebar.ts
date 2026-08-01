@@ -9,6 +9,7 @@ import type { FeatureEntry, FeatureType, DetailFieldDef, ResolvedValue, ServerSe
 import { NATIVE_TYPES } from './types/features';
 import { getLayerConfig } from './external-layers';
 import { StatusPrefs } from './status-prefs';
+import { setLayerDimmed } from './map-utils';
 
 // ---------------------------------------------------------------------------
 // Module-level helpers imported from the outer scope at init time
@@ -119,7 +120,9 @@ function _applyHighlightVisuals(entry: FeatureEntry): void {
     if (!layer) return;
     _highlightedLayer = layer as any;
 
-    if (entry.featureType === 'structure') {
+    // A structure with a footprint geometry is an L.Polygon, not a marker --
+    // it falls through to the path highlight below.
+    if (entry.featureType === 'structure' && typeof (layer as L.Marker).setIcon === 'function') {
         const marker = layer as L.Marker & { _origIcon?: L.Icon | L.DivIcon };
         marker._origIcon = (marker as any).getIcon();
         const type = entry.props.structure_type || '';
@@ -204,11 +207,7 @@ function _applyDim(): void {
         if (!f.layer) return;
 
         _dimmedFeatures.push(f);
-        if (f.featureType === 'structure') {
-            (f.layer as L.Marker).setOpacity(DIM_OPACITY);
-        } else if (typeof (f.layer as L.Polyline).setStyle === 'function') {
-            (f.layer as L.Polyline).setStyle({ opacity: DIM_OPACITY });
-        }
+        setLayerDimmed(f.layer, DIM_OPACITY);
     });
 }
 
@@ -216,12 +215,7 @@ function _restoreDim(): void {
     _activeConnectedIds = null;
     _dimmedFeatures.forEach(function (f: FeatureEntry) {
         if (!f.layer) return;
-        if (f.featureType === 'structure') {
-            (f.layer as L.Marker).setOpacity(1);
-        } else if (typeof (f.layer as L.Polyline).setStyle === 'function') {
-            const orig = (f.layer as any)._origStyle;
-            (f.layer as L.Polyline).setStyle({ opacity: orig ? orig.opacity : 0.7 });
-        }
+        setLayerDimmed(f.layer, null);
     });
     _dimmedFeatures = [];
 }

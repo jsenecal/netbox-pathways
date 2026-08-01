@@ -18,6 +18,8 @@ import {
     bboxParam,
     debounce,
     haversine,
+    layerCenter,
+    setLayerDimmed,
 } from './map-utils';
 
 // ---------------------------------------------------------------------------
@@ -434,5 +436,60 @@ describe('clusterIcon', () => {
     it('centers the icon anchor', () => {
         clusterIcon(5);
         expect(lastDivIconArgs.iconAnchor).toEqual([17, 17]); // 34/2
+    });
+});
+
+// ---------------------------------------------------------------------------
+// layerCenter / setLayerDimmed -- both must cope with a Structure whose
+// geometry is a polygon footprint (#96), which Leaflet renders as a path
+// rather than a marker.
+// ---------------------------------------------------------------------------
+
+function markerStub() {
+    return {
+        getLatLng: vi.fn(() => ({ lat: 45.5, lng: -73.5 })),
+        setOpacity: vi.fn(),
+    };
+}
+
+function pathStub(options: Record<string, unknown> = { opacity: 0.9, fillOpacity: 0.25 }) {
+    return {
+        getBounds: vi.fn(() => ({ getCenter: () => ({ lat: 1, lng: 2 }) })),
+        setStyle: vi.fn(),
+        options,
+    };
+}
+
+describe('layerCenter', () => {
+    it('uses getLatLng for marker layers', () => {
+        expect(layerCenter(markerStub() as any)).toEqual({ lat: 45.5, lng: -73.5 });
+    });
+
+    it('falls back to the bounds center for path layers', () => {
+        expect(layerCenter(pathStub() as any)).toEqual({ lat: 1, lng: 2 });
+    });
+});
+
+describe('setLayerDimmed', () => {
+    it('dims and restores a marker via setOpacity', () => {
+        const marker = markerStub();
+        setLayerDimmed(marker as any, 0.15);
+        expect(marker.setOpacity).toHaveBeenCalledWith(0.15);
+
+        setLayerDimmed(marker as any, null);
+        expect(marker.setOpacity).toHaveBeenLastCalledWith(1);
+    });
+
+    it('dims a path layer including its fill', () => {
+        const path = pathStub();
+        setLayerDimmed(path as any, 0.15);
+        expect(path.setStyle).toHaveBeenCalledWith({ opacity: 0.15, fillOpacity: 0.15 });
+    });
+
+    it('restores a path layer to the opacity it had before dimming', () => {
+        const path = pathStub({ opacity: 0.8, fillOpacity: 0.3 });
+        setLayerDimmed(path as any, 0.15);
+        setLayerDimmed(path as any, null);
+        expect(path.setStyle).toHaveBeenLastCalledWith({ opacity: 0.8, fillOpacity: 0.3 });
     });
 });

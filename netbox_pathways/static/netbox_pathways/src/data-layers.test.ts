@@ -143,6 +143,7 @@ describe('decideLayerRendering', () => {
 import { vi, beforeEach } from 'vitest';
 import { fetchGeoJSON, fetchMapInfo, _resetInfoCache } from './data-layers';
 import { StatusPrefs } from './status-prefs';
+import { STRUCTURE_COLORS } from './map-utils';
 
 describe('exclude_status request param', () => {
     let requestedUrls: string[];
@@ -193,5 +194,105 @@ describe('exclude_status request param', () => {
         await fetchMapInfo('0,0,1,1', () => {});
         expect(requestedUrls[0]).toContain('exclude_status=decommissioning');
         expect(StatusPrefs.colorFor('active')).toBe('green');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Structure layer options (#96): a Structure's geometry may be a polygon
+// footprint, not just a point, so the layer Leaflet hands back has no
+// getLatLng().
+// ---------------------------------------------------------------------------
+
+import { structureGeoJSONOptions, collapseAreasToPoints } from './data-layers';
+import type { FeatureEntry } from './types/features';
+
+function polygonFeature(): GeoJSON.Feature {
+    return {
+        type: 'Feature',
+        id: 7,
+        geometry: { type: 'Polygon', coordinates: [[[0, 0], [0, 2], [2, 2], [0, 0]]] },
+        properties: { name: 'Vault 7', structure_type: 'vault' },
+    } as GeoJSON.Feature;
+}
+
+/** Stand-in for the L.Polygon Leaflet builds from a Polygon feature. */
+function polygonLayerStub() {
+    return {
+        getBounds: () => ({ getCenter: () => ({ lat: 1, lng: 1 }) }),
+        setStyle: vi.fn(),
+        on: vi.fn(),
+    } as unknown as L.Layer;
+}
+
+describe('structureGeoJSONOptions', () => {
+    it('registers a polygon structure at its bounds center', () => {
+        const features: FeatureEntry[] = [];
+        const opts = structureGeoJSONOptions(features, {});
+
+        opts.onEachFeature!(polygonFeature(), polygonLayerStub());
+
+        expect(features).toHaveLength(1);
+        expect(features[0].featureType).toBe('structure');
+        expect(features[0].latlng).toEqual({ lat: 1, lng: 1 });
+    });
+
+    it('copies the feature id onto the properties for polygon features', () => {
+        const features: FeatureEntry[] = [];
+        const opts = structureGeoJSONOptions(features, {});
+
+        opts.onEachFeature!(polygonFeature(), polygonLayerStub());
+
+        expect(features[0].props.id).toBe(7);
+    });
+
+    it('styles a polygon structure with its structure-type color', () => {
+        const opts = structureGeoJSONOptions([], {});
+        const style = (opts.style as (f?: GeoJSON.Feature) => L.PathOptions)(polygonFeature());
+
+        expect(style.color).toBe(STRUCTURE_COLORS['vault']);
+        expect(style.fillOpacity).toBeGreaterThan(0);
+    });
+});
+
+describe('collapseAreasToPoints', () => {
+    function collection(): GeoJSON.FeatureCollection {
+        return {
+            type: 'FeatureCollection',
+            features: [
+                polygonFeature(),
+                {
+                    type: 'Feature',
+                    geometry: { type: 'Point', coordinates: [10, 20] },
+                    properties: { name: 'MH-1', structure_type: 'manhole' },
+                } as GeoJSON.Feature,
+            ],
+        };
+    }
+
+    it('replaces area geometry with its center below the footprint zoom', () => {
+        const out = collapseAreasToPoints(collection(), 14, 18);
+
+        expect(out.features[0].geometry).toEqual({ type: 'Point', coordinates: [1, 1] });
+        expect((out.features[0].properties as any).name).toBe('Vault 7');
+    });
+
+    it('keeps area geometry at or above the footprint zoom', () => {
+        const data = collection();
+        const out = collapseAreasToPoints(data, 18, 18);
+
+        expect(out).toBe(data);
+    });
+
+    it('leaves point features alone', () => {
+        const out = collapseAreasToPoints(collection(), 14, 18);
+
+        expect(out.features[1].geometry).toEqual({ type: 'Point', coordinates: [10, 20] });
+    });
+
+    it('does not mutate the cached collection it was given', () => {
+        const data = collection();
+        collapseAreasToPoints(data, 14, 18);
+
+        expect(data.features[0].geometry.type).toBe('Polygon');
     });
 });

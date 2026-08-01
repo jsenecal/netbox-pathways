@@ -414,7 +414,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
             },
             onFeatureMouseOver: function (entry: FeatureEntry, e: L.LeafletMouseEvent, feature: GeoJSON.Feature) {
                 Popover.show(
-                    e.latlng || (entry.layer as L.Marker).getLatLng(),
+                    e.latlng || entry.latlng,
                     feature.properties as GeoJSONProperties,
                 );
             },

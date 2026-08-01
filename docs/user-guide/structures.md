@@ -54,7 +54,15 @@ Geographic position is the separate `Geometry` field, described below.
 
 ## Geometry
 
-Structure geometry can be either a **Point** (lat/lon) or a **Polygon** (footprint). The map and GIS tools use the structure's centroid for marker placement regardless of geometry type.
+Structure geometry can be either a **Point** (lat/lon) or a **Polygon** (footprint).
+
+A polygon structure draws its real outline once you are zoomed in to
+`map_structure_polygon_zoom` (default 18) or closer, on both the interactive
+map and the map panel of a detail page. Zoomed out past that, it collapses to
+the same icon marker a point structure uses, placed at the centroid -- a
+manhole footprint is a sub-pixel smudge on a city-wide view. Lower the setting
+to see footprints sooner; raise it to keep the map iconic for longer. GIS
+exports always carry the stored geometry, point or polygon.
 
 The geometry picker on the form supports:
 
@@ -64,7 +72,7 @@ The geometry picker on the form supports:
 
 ## Structures on the Map
 
-On the interactive map, structures appear as markers with shapes and colors matching their type (see table above). Clicking a structure marker opens the sidebar detail panel with:
+On the interactive map, structures appear as markers with shapes and colors matching their type (see table above); polygon structures appear as filled outlines in the same type color once past the footprint zoom. Clicking a structure marker opens the sidebar detail panel with:
 
 - Structure name and type
 - Site assignment

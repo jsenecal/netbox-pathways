@@ -15,6 +15,8 @@ import {
     esc as _esc,
     getCookie as _getCookie,
     haversine as _haversine,
+    layerCenter as _layerCenter,
+    STRUCTURE_COLORS,
 } from './map-utils';
 import { StatusPrefs, type StatusChoice } from './status-prefs';
 
@@ -610,6 +612,103 @@ export interface LoadCallbacks {
 }
 
 /**
+ * Zoom at or above which structures with an area geometry draw their real
+ * footprint; below it they collapse to a single icon marker, since a manhole
+ * or cabinet footprint is a sub-pixel smudge on a city-wide view.
+ * Server-configurable via ``map_structure_polygon_zoom``.
+ */
+export const STRUCTURE_POLYGON_ZOOM: number = CFG.structurePolygonZoom ?? 18;
+
+/** Bounding-box center of a polygon's exterior ring, as [lon, lat]. */
+function _polygonCenter(geometry: GeoJSON.Geometry): [number, number] | null {
+    if (geometry.type !== 'Polygon') return null;
+    const ring = (geometry as GeoJSON.Polygon).coordinates[0];
+    if (!ring || !ring.length) return null;
+    let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
+    ring.forEach(function (c: GeoJSON.Position) {
+        if (c[0] < west) west = c[0];
+        if (c[0] > east) east = c[0];
+        if (c[1] < south) south = c[1];
+        if (c[1] > north) north = c[1];
+    });
+    return [(west + east) / 2, (south + north) / 2];
+}
+
+/**
+ * Below ``threshold``, swap every footprint polygon for its center point so
+ * the structures layer stays a field of readable icons.
+ *
+ * Returns a new collection -- the input belongs to the viewport cache and is
+ * re-rendered at other zoom levels, so it must not be mutated. Feature
+ * properties are shared by reference on purpose: the id normalisation done in
+ * ``onEachFeature`` should stick to the cached feature.
+ */
+export function collapseAreasToPoints(
+    data: GeoJSON.FeatureCollection,
+    zoom: number,
+    threshold: number = STRUCTURE_POLYGON_ZOOM,
+): GeoJSON.FeatureCollection {
+    if (zoom >= threshold || !data.features) return data;
+    return {
+        type: 'FeatureCollection',
+        features: data.features.map(function (f: GeoJSON.Feature) {
+            const center = f.geometry ? _polygonCenter(f.geometry) : null;
+            if (!center) return f;
+            return { ...f, geometry: { type: 'Point', coordinates: center } as GeoJSON.Point };
+        }),
+    };
+}
+
+/**
+ * GeoJSON options for the structures layer.
+ *
+ * A Structure's geometry is a plain GeometryField: most are points, but a
+ * footprint is stored as a polygon.  Point features become icon markers;
+ * polygons keep their shape, filled in the structure-type color, and are
+ * registered at their bounds center so the sidebar and popover can locate
+ * them the same way they locate a marker.
+ */
+export function structureGeoJSONOptions(
+    allFeatures: FeatureEntry[],
+    callbacks: LoadCallbacks,
+): L.GeoJSONOptions {
+    return {
+        pointToLayer: function (feature: GeoJSON.Feature, latlng: L.LatLng) {
+            return L.marker(latlng, {
+                icon: _structureIcon((feature.properties as GeoJSONProperties).structure_type || ''),
+            });
+        },
+        style: function (feature?: GeoJSON.Feature) {
+            const type = (feature?.properties as GeoJSONProperties)?.structure_type || '';
+            const color = STRUCTURE_COLORS[type] || '#616161';
+            return { color: color, weight: 2, opacity: 0.9, fillColor: color, fillOpacity: 0.25 };
+        },
+        onEachFeature: function (feature: GeoJSON.Feature, layer: L.Layer) {
+            if (feature.id != null && (feature.properties as GeoJSONProperties).id == null) {
+                (feature.properties as GeoJSONProperties).id = feature.id as number;
+            }
+            const entry: FeatureEntry = {
+                props: feature.properties as GeoJSONProperties,
+                featureType: 'structure',
+                layer: layer,
+                latlng: _layerCenter(layer),
+            };
+            allFeatures.push(entry);
+            if (callbacks.onFeatureCreated) callbacks.onFeatureCreated(entry);
+            layer.on('click', function (e: L.LeafletMouseEvent) {
+                if (callbacks.onFeatureClick) callbacks.onFeatureClick(entry, e);
+            });
+            layer.on('mouseover', function (e: L.LeafletMouseEvent) {
+                if (callbacks.onFeatureMouseOver) callbacks.onFeatureMouseOver(entry, e, feature);
+            });
+            layer.on('mouseout', function () {
+                if (callbacks.onFeatureMouseOut) callbacks.onFeatureMouseOut();
+            });
+        },
+    };
+}
+
+/**
  * Load all data layers for the current viewport.
  *
  * Decision-driven: the caller supplies a ``RenderingDecision`` (from
@@ -731,35 +830,10 @@ export function loadDataLayers(
                 });
                 if (callbacks.onStructuresLoaded) callbacks.onStructuresLoaded(total);
             } else {
-                const geoLayer = L.geoJSON(data, {
-                    pointToLayer: function (feature: GeoJSON.Feature, latlng: L.LatLng) {
-                        return L.marker(latlng, {
-                            icon: _structureIcon((feature.properties as GeoJSONProperties).structure_type || ''),
-                        });
-                    },
-                    onEachFeature: function (feature: GeoJSON.Feature, layer: L.Layer) {
-                        if (feature.id != null && (feature.properties as GeoJSONProperties).id == null) {
-                            (feature.properties as GeoJSONProperties).id = feature.id as number;
-                        }
-                        const entry: FeatureEntry = {
-                            props: feature.properties as GeoJSONProperties,
-                            featureType: 'structure',
-                            layer: layer,
-                            latlng: (layer as L.Marker).getLatLng(),
-                        };
-                        allFeatures.push(entry);
-                        if (callbacks.onFeatureCreated) callbacks.onFeatureCreated(entry);
-                        layer.on('click', function (e: L.LeafletMouseEvent) {
-                            if (callbacks.onFeatureClick) callbacks.onFeatureClick(entry, e);
-                        });
-                        layer.on('mouseover', function (e: L.LeafletMouseEvent) {
-                            if (callbacks.onFeatureMouseOver) callbacks.onFeatureMouseOver(entry, e, feature);
-                        });
-                        layer.on('mouseout', function () {
-                            if (callbacks.onFeatureMouseOut) callbacks.onFeatureMouseOut();
-                        });
-                    },
-                });
+                const geoLayer = L.geoJSON(
+                    collapseAreasToPoints(data, zoom),
+                    structureGeoJSONOptions(allFeatures, callbacks),
+                );
                 if (clusterGroup) {
                     clusterGroup.addLayers(geoLayer.getLayers());
                     dataLayers.structures.addLayer(clusterGroup);
@@ -793,7 +867,7 @@ export function loadDataLayers(
                     props: props,
                     featureType: featureType,
                     layer: layer,
-                    latlng: (layer as L.Polyline).getBounds().getCenter(),
+                    latlng: _layerCenter(layer),
                 };
                 allFeatures.push(entry);
                 if (callbacks.onFeatureCreated) callbacks.onFeatureCreated(entry);

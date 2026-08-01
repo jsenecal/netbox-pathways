@@ -505,3 +505,47 @@ describe('External layer point features', () => {
         expect(body.textContent).toContain('30');
     });
 });
+
+// ---------------------------------------------------------------------------
+// #96: a Structure whose geometry is a polygon footprint becomes an L.Polygon,
+// which has no setIcon -- the marker highlight path must not assume one.
+// ---------------------------------------------------------------------------
+
+describe('Polygon structure features', () => {
+    let map: ReturnType<typeof createMockMap>;
+
+    /** Stand-in for the L.Polygon Leaflet builds from a Polygon feature. */
+    function makePolygonLayer() {
+        return {
+            getLatLngs: vi.fn(() => [[{ lat: 45.5, lng: -73.5 }, { lat: 45.6, lng: -73.4 }]]),
+            setStyle: vi.fn(),
+            options: { weight: 2, opacity: 0.9, color: '#6a1b9a' },
+        };
+    }
+
+    function makePolygonEntry(): FeatureEntry {
+        return {
+            props: { id: 9, name: 'Vault 9', url: '/structures/9/', structure_type: 'vault' },
+            featureType: 'structure',
+            layer: makePolygonLayer() as any,
+            latlng: { lat: 45.5, lng: -73.5 } as any,
+        } as FeatureEntry;
+    }
+
+    beforeEach(() => {
+        buildDOM();
+        mockDeps();
+        map = createMockMap();
+        Sidebar.init(map as any, false);
+    });
+
+    it('selectFeature highlights the polygon instead of throwing', () => {
+        const entry = makePolygonEntry();
+        Sidebar.setFeatures([entry]);
+
+        expect(() => Sidebar.selectFeature(entry)).not.toThrow();
+
+        expect((entry.layer as any).setStyle).toHaveBeenCalled();
+        expect(map.flyTo).toHaveBeenCalled();
+    });
+});

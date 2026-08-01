@@ -31,6 +31,7 @@ declare global {
     export type Icon = import('leaflet').Icon;
     export type DivIcon = import('leaflet').DivIcon;
     export type Marker = import('leaflet').Marker;
+    export type Path = import('leaflet').Path;
     export type Polyline = import('leaflet').Polyline;
     export type TileLayer = import('leaflet').TileLayer;
     export type GeoJSON = import('leaflet').GeoJSON;

@@ -107,6 +107,54 @@ export function clusterIcon(count: number): L.DivIcon {
 // Utility helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Representative point for any layer type.
+ *
+ * Markers answer getLatLng(); paths (polylines, and the polygon a Structure
+ * with a footprint geometry becomes) only have bounds.
+ */
+export function layerCenter(layer: L.Layer): L.LatLng {
+    const marker = layer as L.Marker;
+    if (typeof marker.getLatLng === 'function') return marker.getLatLng();
+    return (layer as L.Polyline).getBounds().getCenter();
+}
+
+interface DimmablePath extends L.Path {
+    _preDimStyle?: { opacity?: number; fillOpacity?: number };
+}
+
+/**
+ * Fade `layer` to `opacity`, or restore it when `opacity` is null.
+ *
+ * Markers fade via setOpacity; paths -- polylines and the polygon a Structure
+ * with a footprint geometry becomes -- fade via setStyle, remembering the
+ * values they carried before the first dim.
+ */
+export function setLayerDimmed(layer: L.Layer, opacity: number | null): void {
+    const marker = layer as L.Marker;
+    if (typeof marker.setOpacity === 'function') {
+        marker.setOpacity(opacity == null ? 1 : opacity);
+        return;
+    }
+    const path = layer as DimmablePath;
+    if (typeof path.setStyle !== 'function') return;
+
+    if (opacity == null) {
+        const orig = path._preDimStyle;
+        delete path._preDimStyle;
+        path.setStyle({
+            opacity: orig && orig.opacity != null ? orig.opacity : 1,
+            fillOpacity: orig && orig.fillOpacity != null ? orig.fillOpacity : 0.2,
+        });
+        return;
+    }
+    if (!path._preDimStyle) {
+        const opts = (path.options || {}) as L.PathOptions;
+        path._preDimStyle = { opacity: opts.opacity, fillOpacity: opts.fillOpacity };
+    }
+    path.setStyle({ opacity: opacity, fillOpacity: opacity });
+}
+
 export function esc(text: string): string {
     const el = document.createElement('span');
     el.textContent = text;
