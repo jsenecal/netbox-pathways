@@ -54,6 +54,11 @@ declare global {
     _rpMap?: L.Map;
     _rpRouteLayer?: L.FeatureGroup | null;
     _rpMarkerLayer?: L.FeatureGroup | null;
+    /** Map helpers the route planner templates reach for inline. */
+    pwStructureIcon?: typeof import('../map-utils').structureIcon;
+    pwPathwayStyle?: typeof import('../map-utils').pathwayStyle;
+    pwPopover?: typeof import('../popover').Popover;
+    pwTitleCase?: typeof import('../map-utils').titleCase;
   }
 }
 

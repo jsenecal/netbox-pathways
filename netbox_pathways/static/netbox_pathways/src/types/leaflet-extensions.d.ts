@@ -28,6 +28,7 @@ declare global {
     export type LatLng = import('leaflet').LatLng;
     export type LatLngBounds = import('leaflet').LatLngBounds;
     export type LayerGroup = import('leaflet').LayerGroup;
+    export type FeatureGroup = import('leaflet').FeatureGroup;
     export type Icon = import('leaflet').Icon;
     export type DivIcon = import('leaflet').DivIcon;
     export type Marker = import('leaflet').Marker;
@@ -38,6 +39,7 @@ declare global {
     export type PathOptions = import('leaflet').PathOptions;
     export type TileLayerOptions = import('leaflet').TileLayerOptions;
     export type ControlOptions = import('leaflet').ControlOptions;
+    export type ControlPosition = import('leaflet').ControlPosition;
     export type LayersControlEvent = import('leaflet').LayersControlEvent;
     export type Control = import('leaflet').Control;
     export type LeafletMouseEvent = import('leaflet').LeafletMouseEvent;

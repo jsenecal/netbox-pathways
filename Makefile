@@ -4,7 +4,8 @@ STATIC_DIR = netbox_pathways/static/netbox_pathways
 
 .PHONY: help migrations migrate runserver createsuperuser shell dbshell \
 	collectstatic check lint test install showurls showmigrations \
-	js-install js-build js-watch js-typecheck js-clean clean
+	js-install js-build js-watch js-typecheck js-test js-dist-check \
+	js-clean clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -57,23 +58,36 @@ js-watch: js-install ## Watch mode — rebuild on save
 js-typecheck: ## Type-check TypeScript without emitting
 	cd $(STATIC_DIR) && npm run typecheck
 
+js-test: ## Run the TypeScript test suite (vitest)
+	cd $(STATIC_DIR) && npm test
+
+# The minified bundles are committed, so a source change landed without a
+# rebuild ships stale JS to every install.
+js-dist-check: ## Rebuild and fail if the committed bundles are stale
+	cd $(STATIC_DIR) && npm run build
+	@git diff --stat --exit-code -- $(STATIC_DIR)/dist || { \
+		echo "dist/ is stale -- run 'make js-build' and commit the result"; \
+		exit 1; \
+	}
+
 js-clean: ## Remove JS build artifacts and node_modules
 	rm -rf $(STATIC_DIR)/dist $(STATIC_DIR)/node_modules
 
 # --- Code quality ---
 
-lint: ## Run ruff linter + TypeScript type-check
-	ruff check netbox_pathways/
+lint: ## Run ruff lint + format check + TypeScript type-check (the CI gate)
+	ruff check netbox_pathways tests
+	ruff format --check netbox_pathways tests
 	cd $(STATIC_DIR) && npm run typecheck
 
 lint-fix: ## Run ruff linter with auto-fix
-	ruff check --fix netbox_pathways/
+	ruff check --fix netbox_pathways tests
 
 format: ## Run ruff formatter
-	ruff format netbox_pathways/
+	ruff format netbox_pathways tests
 
 format-check: ## Check formatting without modifying files
-	ruff format --check netbox_pathways/
+	ruff format --check netbox_pathways tests
 
 # --- Testing ---
 

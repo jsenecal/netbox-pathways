@@ -43,7 +43,7 @@ function initWidget(container: HTMLElement): void {
   const input = document.getElementById(fieldId) as HTMLInputElement | null;
   if (!input) return;
 
-  const config = window.PATHWAYS_CONFIG || {};
+  const config: Partial<PathwaysConfig> = window.PATHWAYS_CONFIG || {};
   const center: [number, number] = (config.center as [number, number]) || [45.5, -73.5];
   const zoom = config.zoom ?? 10;
 
