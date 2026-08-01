@@ -36,6 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Polygon structures draw their real footprint.** A structure whose
+  geometry is a polygon now renders as a filled outline in its structure-type
+  color -- on the interactive map, on its own detail page and on the Site /
+  Location map panels -- instead of a marker dropped at the centroid. Below
+  `map_structure_polygon_zoom` (new setting, default `18`) the footprint
+  collapses back to the type icon at the centroid, since an outline that small
+  is a sub-pixel smudge on a wide view. Detail pages open zoomed in far enough
+  to show the outline of the structure they are about. Refs #96.
+
 - **`Structure.location`** -- an optional FK to `dcim.Location`, recording
   which location inside the site a structure sits in. Validated like
   `Device.clean()`: a location must belong to the assigned site. Because
@@ -45,6 +54,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   search results and the REST API. Refs #89.
 
 ### Fixed
+
+- **Structures with a polygon geometry broke the whole structures layer.**
+  The map assumed every structure feature was a marker and asked the layer
+  Leaflet built for its `getLatLng()`; a footprint polygon has no such method,
+  so rendering threw `TypeError: I.getLatLng is not a function` part-way
+  through and no structures appeared at all -- silently on first load, where
+  the fetch wrapper swallowed the error, and with a console error when the
+  layer was toggled off and on from cache. Structure layers are now located by
+  marker position or bounds center, whichever the layer supports, and the same
+  assumption is gone from the sidebar highlight and focus-dimming paths, which
+  would have thrown on `setIcon` / `setOpacity` next. Reported by
+  @JulianJacobi. Fixes #96.
 
 - **The Route tab on a Cable raised `TemplateDoesNotExist` on NetBox 4.6.**
   `cable_route_tab.html` extended `dcim/cable.html`, which NetBox 4.6 removed

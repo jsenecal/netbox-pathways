@@ -4,7 +4,7 @@ from django.urls import reverse
 from netbox.plugins.templates import PluginTemplateExtension
 
 from . import models
-from .geo import linestring_to_coords, point_to_latlon
+from .geo import linestring_to_coords, point_to_latlon, to_leaflet
 
 
 def _leaflet_head():
@@ -95,6 +95,36 @@ def _structure_point(structure, color=None, muted=False):
     return point
 
 
+def _footprint_ring(structure):
+    """Return the exterior ring of a Structure's footprint, or None.
+
+    A Structure is drawn as either a marker or a footprint -- the geometry
+    widget offers drawMarker and drawPolygon only -- so anything that is not a
+    polygon is a point as far as the map is concerned.
+    """
+    geom = structure.geometry
+    if geom is None or geom.geom_type != "Polygon":
+        return None
+    return [[p[0], p[1]] for p in to_leaflet(geom).exterior_ring.coords]
+
+
+def _add_structure(data, structure, color=None, muted=False):
+    """Append a Structure to `data` as a footprint outline or a point marker.
+
+    Footprints keep their centroid alongside the ring so the client can swap in
+    a single icon below the footprint zoom, where an outline is sub-pixel.
+    """
+    shape = _structure_point(structure, color=color, muted=muted)
+    if shape is None:
+        return
+    ring = _footprint_ring(structure)
+    if ring is None:
+        data["points"].append(shape)
+    else:
+        shape["coords"] = ring
+        data["polygons"].append(shape)
+
+
 class LeafletHeadExtension(PluginTemplateExtension):
     """Load Leaflet + detail-map assets globally via {% plugin_head %}.
 
@@ -157,12 +187,10 @@ class PluginModelMapExtension(PluginTemplateExtension):
         )
 
     def _get_geo_data(self, obj):
-        data = {"points": [], "lines": []}
+        data = {"points": [], "lines": [], "polygons": []}
 
         if isinstance(obj, models.Structure):
-            pt = _structure_point(obj)
-            if pt:
-                data["points"].append(pt)
+            _add_structure(data, obj)
 
         elif isinstance(obj, models.ConduitBank):
             line = _pathway_line(obj)
@@ -170,9 +198,7 @@ class PluginModelMapExtension(PluginTemplateExtension):
                 data["lines"].append(line)
             for struct in (obj.start_structure, obj.end_structure):
                 if struct:
-                    pt = _structure_point(struct, color="orange")
-                    if pt:
-                        data["points"].append(pt)
+                    _add_structure(data, struct, color="orange")
 
         elif isinstance(obj, models.ConduitJunction):
             # Show the trunk conduit line for context
@@ -199,29 +225,11 @@ class PluginModelMapExtension(PluginTemplateExtension):
                 data["lines"].append(line)
             # Start/end structure markers
             if obj.start_structure_id:
-                latlon = point_to_latlon(obj.start_structure.centroid)
-                if latlon:
-                    data["points"].append(
-                        {
-                            "lat": latlon[0],
-                            "lon": latlon[1],
-                            "name": str(obj.start_structure),
-                            "color": "green",
-                        }
-                    )
+                _add_structure(data, obj.start_structure, color="green")
             if obj.end_structure_id:
-                latlon = point_to_latlon(obj.end_structure.centroid)
-                if latlon:
-                    data["points"].append(
-                        {
-                            "lat": latlon[0],
-                            "lon": latlon[1],
-                            "name": str(obj.end_structure),
-                            "color": "red",
-                        }
-                    )
+                _add_structure(data, obj.end_structure, color="red")
 
-        if not data["points"] and not data["lines"]:
+        if not data["points"] and not data["lines"] and not data["polygons"]:
             return None
         return data
 
@@ -251,7 +259,7 @@ class CoreModelMapExtension(PluginTemplateExtension):
     def _get_geo_data(self, obj):
         from dcim.models import Location, Site
 
-        data = {"points": [], "lines": []}
+        data = {"points": [], "lines": [], "polygons": []}
 
         if isinstance(obj, Site):
             # Show site boundary if present
@@ -282,9 +290,7 @@ class CoreModelMapExtension(PluginTemplateExtension):
                 "structure_type",
                 "geometry",
             )[:500]:
-                pt = _structure_point(s)
-                if pt:
-                    data["points"].append(pt)
+                _add_structure(data, s)
 
             pathways = models.Pathway.objects.filter(
                 Q(start_structure__site=obj) | Q(end_structure__site=obj),
@@ -350,11 +356,9 @@ class CoreModelMapExtension(PluginTemplateExtension):
                         structures.setdefault(endpoint.pk, endpoint)
 
             for pk, s in structures.items():
-                pt = _structure_point(s, muted=pk not in in_location)
-                if pt:
-                    data["points"].append(pt)
+                _add_structure(data, s, muted=pk not in in_location)
 
-        if not data["points"] and not data["lines"]:
+        if not data["points"] and not data["lines"] and not data["polygons"]:
             return None
         return data
 

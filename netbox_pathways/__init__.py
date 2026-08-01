@@ -26,6 +26,9 @@ class NetBoxPathwaysConfig(PluginConfig):
         # Zoom-out floor for the geometry edit widget (full-page map stays at
         # 1); 14 shows about 5 km across a typical widget at mid-latitudes
         "map_widget_min_zoom": 14,
+        # Zoom at or above which structures with an area geometry draw their
+        # real footprint; below it they collapse to a single icon marker
+        "map_structure_polygon_zoom": 18,
         "map_attribution": "&copy; OpenStreetMap contributors",
         "map_overlays": [],
         # Decimal digits shown on computed geo_length values (0 = whole metres)
@@ -91,6 +94,7 @@ class NetBoxPathwaysConfig(PluginConfig):
             "minZoom": 1,
             "maxZoom": max_zoom,
             "widgetMinZoom": plugin_cfg.get("map_widget_min_zoom", 14),
+            "structurePolygonZoom": plugin_cfg.get("map_structure_polygon_zoom", 18),
         }
 
         super().ready()

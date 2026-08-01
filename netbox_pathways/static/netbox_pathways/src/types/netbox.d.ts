@@ -16,6 +16,13 @@ declare global {
     skipInfoZoom?: number;
     /** Zoom-out floor for the edit widget map (default 14 in the client). */
     widgetMinZoom?: number;
+    /**
+     * Zoom at or above which structures with an area geometry draw their real
+     * footprint instead of a single icon marker. Defaults to 18 in the client;
+     * overridable via
+     * `PLUGINS_CONFIG['netbox_pathways']['map_structure_polygon_zoom']`.
+     */
+    structurePolygonZoom?: number;
     overlays?: OverlayConfig[];
     baseLayers?: BaseLayerConfig[];
     externalLayers?: import('./external').ExternalLayerConfig[];

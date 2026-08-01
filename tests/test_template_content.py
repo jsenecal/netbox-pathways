@@ -9,11 +9,11 @@ structures but touched by no pathway rendered nothing at all.
 
 import pytest
 from dcim.models import Location, Site
-from django.contrib.gis.geos import LineString, Point
+from django.contrib.gis.geos import LineString, Point, Polygon
 
 from netbox_pathways.geo import get_srid
 from netbox_pathways.models import Conduit, Structure
-from netbox_pathways.template_content import CoreModelMapExtension
+from netbox_pathways.template_content import CoreModelMapExtension, PluginModelMapExtension
 
 SRID = get_srid()
 
@@ -218,3 +218,65 @@ class TestLocationGeoDataRollsUpTheTree:
         _structure("PARENT-MH", 0, 0, site=site, location=parent)
 
         assert _extension()._get_geo_data(child) is None
+
+
+@pytest.mark.django_db
+class TestPolygonStructures:
+    """A Structure's geometry may be a footprint polygon (#96). Those render as
+    the real outline rather than a marker dropped at the centroid; the centroid
+    still rides along so the client can collapse the shape to an icon when
+    zoomed out past the footprint zoom.
+    """
+
+    def _footprint(self, name, **kwargs):
+        ring = ((0, 0), (0, 10), (10, 10), (10, 0), (0, 0))
+        return Structure.objects.create(
+            name=name,
+            geometry=Polygon(ring, srid=SRID),
+            structure_type="vault",
+            **kwargs,
+        )
+
+    def test_structure_page_renders_the_footprint_outline(self):
+        vault = self._footprint("V-1")
+
+        data = PluginModelMapExtension(context={})._get_geo_data(vault)
+
+        assert data["points"] == []
+        assert len(data["polygons"]) == 1
+        poly = data["polygons"][0]
+        assert poly["name"] == "V-1"
+        assert len(poly["coords"]) == 5
+        assert poly["coords"][0] == poly["coords"][-1]
+
+    def test_footprint_carries_its_centroid_for_the_collapsed_marker(self):
+        vault = self._footprint("V-2")
+
+        poly = PluginModelMapExtension(context={})._get_geo_data(vault)["polygons"][0]
+
+        lons = [c[0] for c in poly["coords"]]
+        lats = [c[1] for c in poly["coords"]]
+        assert min(lons) < poly["lon"] < max(lons)
+        assert min(lats) < poly["lat"] < max(lats)
+
+    def test_point_structures_still_render_as_points(self, site):
+        _structure("MH-P", 0, 0, site=site)
+
+        data = PluginModelMapExtension(context={})._get_geo_data(Structure.objects.get(name="MH-P"))
+
+        assert data["polygons"] == []
+        assert _names(data) == ["MH-P"]
+
+    def test_footprint_on_a_location_panel_keeps_the_muted_flag(self, site, room):
+        far = self._footprint("V-FAR", site=site)
+        _conduit(
+            label="C-poly",
+            path=LineString((0, 0), (100, 100), srid=SRID),
+            start_location=room,
+            end_structure=far,
+        )
+
+        data = _extension()._get_geo_data(room)
+
+        assert [p["name"] for p in data["polygons"]] == ["V-FAR"]
+        assert data["polygons"][0]["muted"] is True

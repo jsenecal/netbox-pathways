@@ -3,9 +3,14 @@
  *
  * Inline data format (passed directly):
  * {
- *   points: [{ lat, lon, name, color, url, muted }],
- *   lines:  [{ coords: [[lon,lat],...], name, color, url }]
+ *   points:   [{ lat, lon, name, color, url, muted }],
+ *   lines:    [{ coords: [[lon,lat],...], name, color, url }],
+ *   polygons: [{ coords: [[lon,lat],...], lat, lon, name, color, url, muted }]
  * }
+ *
+ * Polygons are structure footprints: drawn as outlines at or above
+ * `structurePolygonZoom`, and as a single icon at the carried centroid below
+ * it.
  *
  * Also supports:
  * - Dynamic GeoJSON overlay layers fetched from the plugin API
@@ -46,9 +51,16 @@
         url?: string;
     }
 
+    /** A structure whose geometry is a footprint: outline plus its centroid,
+     *  so the map can fall back to an icon when zoomed out. */
+    interface PolygonData extends PointData {
+        coords: [number, number][];
+    }
+
     interface InlineData {
         points?: PointData[];
         lines?: LineData[];
+        polygons?: PolygonData[];
     }
 
     interface InitGeoMapOptions {
@@ -64,6 +76,10 @@
 
     const CFG: Partial<PathwaysConfig> = window.PATHWAYS_CONFIG || {};
     const MAX_NATIVE_ZOOM: number = CFG.maxNativeZoom || 19;
+    /** Zoom at or above which footprints draw as outlines rather than icons. */
+    const STRUCTURE_POLYGON_ZOOM: number = CFG.structurePolygonZoom ?? 18;
+    /** Zoom cap when fitting the initial view to the data. */
+    const DEFAULT_FIT_ZOOM = 17;
     const API_BASE: string = CFG.apiBase || '/api/plugins/pathways/geo/';
     const USER_OVERLAYS: OverlayConfig[] = CFG.overlays || [];
 
@@ -92,8 +108,13 @@
 
     // --- Reset Control ---
 
+    interface ResetHomeOptions extends L.ControlOptions {
+        /** Zoom cap applied when the control refits the home bounds. */
+        fitMaxZoom?: number;
+    }
+
     interface ResetHomeConstructor {
-        new(homeBounds: L.LatLngBounds, homeCenter: L.LatLng, homeZoom: number, opts?: L.ControlOptions): L.Control;
+        new(homeBounds: L.LatLngBounds, homeCenter: L.LatLng, homeZoom: number, opts?: ResetHomeOptions): L.Control;
     }
 
     const ResetHome: ResetHomeConstructor = L.Control.extend({
@@ -104,7 +125,7 @@
             homeBounds: L.LatLngBounds,
             homeCenter: L.LatLng,
             homeZoom: number,
-            opts?: L.ControlOptions,
+            opts?: ResetHomeOptions,
         ) {
             this._homeBounds = homeBounds;
             this._homeCenter = homeCenter;
@@ -127,7 +148,10 @@
             L.DomEvent.on(link, 'click', L.DomEvent.preventDefault);
             L.DomEvent.on(link, 'click', function (this: any) {
                 if (this._homeBounds && this._homeBounds.isValid()) {
-                    this._map.fitBounds(this._homeBounds, { padding: [40, 40] as [number, number], maxZoom: 17 });
+                    this._map.fitBounds(this._homeBounds, {
+                        padding: [40, 40] as [number, number],
+                        maxZoom: this.options.fitMaxZoom || DEFAULT_FIT_ZOOM,
+                    });
                 } else if (this._homeCenter) {
                     this._map.setView(this._homeCenter, this._homeZoom || 10);
                 }
@@ -265,6 +289,13 @@
         });
     }
 
+    /** Footprint structures in the dynamic overlay keep their type color. */
+    function _structureAreaStyle(feature?: GeoJSON.Feature): L.PathOptions {
+        const type: string = (feature?.properties as Record<string, any>)?.structure_type;
+        const color: string = STRUCTURE_COLORS[type] || '#616161';
+        return { color: color, weight: 2, opacity: 0.9, fillColor: color, fillOpacity: 0.25 };
+    }
+
     function _structurePopup(feature: GeoJSON.Feature, layer: L.Layer): void {
         const p = feature.properties as Record<string, any>;
         (layer as L.Marker).bindPopup(_makePopup(p.name, p.url));
@@ -307,6 +338,7 @@
         _fetchGeoJSON('structures/', function (data: GeoJSON.FeatureCollection) {
             const layer: L.GeoJSON = L.geoJSON(data, {
                 pointToLayer: _structurePointToLayer,
+                style: _structureAreaStyle,
                 onEachFeature: _structurePopup,
             });
             layerControl.addOverlay(layer, 'Structures (all)');
@@ -347,6 +379,70 @@
 
     // --- Inline Data Rendering ---
 
+    function _pointMarker(pt: PointData): L.Marker {
+        const icon: L.DivIcon = pt.structure_type
+            ? _structureIcon(pt.structure_type)
+            : L.divIcon({
+                className: 'pw-marker',
+                html: '<svg class="pw-marker-svg" viewBox="0 0 20 20" width="28" height="28"' +
+                      ' stroke="white" fill="' + (pt.color || '#1565c0') + '">' +
+                      '<circle cx="10" cy="10" r="8"/></svg>',
+                iconSize: [28, 28] as [number, number],
+                iconAnchor: [14, 14] as [number, number],
+                popupAnchor: [0, -16] as [number, number],
+            });
+        const marker: L.Marker = L.marker([pt.lat, pt.lon], {
+            icon: icon,
+            opacity: pt.muted ? MUTED_OPACITY : 1,
+        });
+        marker.bindPopup(_makePopup(pt.name, pt.url));
+        return marker;
+    }
+
+    /**
+     * Footprint structures: the outline at or above the footprint zoom, the
+     * structure icon below it. Both layers are built once and swapped as the
+     * user zooms, so a footprint is never invisible and never a smudge.
+     */
+    function _addPolygons(
+        map: L.Map,
+        polygons: PolygonData[],
+        overlays: Record<string, L.LayerGroup>,
+        bounds: L.LatLngBounds,
+    ): void {
+        const group: L.LayerGroup = L.layerGroup();
+        const pairs = polygons.map(function (poly: PolygonData) {
+            const latlngs: [number, number][] = poly.coords.map(
+                function (c: [number, number]): [number, number] { return [c[1], c[0]]; },
+            );
+            const color: string = poly.color || '#1565c0';
+            const shape: L.Polygon = L.polygon(latlngs, {
+                color: color,
+                weight: 2,
+                opacity: poly.muted ? MUTED_OPACITY : 0.9,
+                fillColor: color,
+                fillOpacity: poly.muted ? MUTED_OPACITY / 2 : 0.25,
+            });
+            shape.bindPopup(_makePopup(poly.name, poly.url));
+            latlngs.forEach(function (ll: [number, number]) { bounds.extend(ll); });
+            bounds.extend([poly.lat, poly.lon]);
+            return { shape: shape, marker: _pointMarker(poly) };
+        });
+
+        function sync(): void {
+            const outlines: boolean = map.getZoom() >= STRUCTURE_POLYGON_ZOOM;
+            pairs.forEach(function (pair) {
+                group.removeLayer(outlines ? pair.marker : pair.shape);
+                group.addLayer(outlines ? pair.shape : pair.marker);
+            });
+        }
+
+        map.on('zoomend', sync);
+        map.whenReady(sync);
+        group.addTo(map);
+        overlays['Footprints'] = group;
+    }
+
     function _addInlineData(
         map: L.Map,
         data: InlineData,
@@ -356,23 +452,7 @@
         if (data.points && data.points.length) {
             const pointsLayer: L.LayerGroup = L.layerGroup();
             data.points.forEach(function (pt: PointData) {
-                const icon: L.DivIcon = pt.structure_type
-                    ? _structureIcon(pt.structure_type)
-                    : L.divIcon({
-                        className: 'pw-marker',
-                        html: '<svg class="pw-marker-svg" viewBox="0 0 20 20" width="28" height="28"' +
-                              ' stroke="white" fill="' + (pt.color || '#1565c0') + '">' +
-                              '<circle cx="10" cy="10" r="8"/></svg>',
-                        iconSize: [28, 28] as [number, number],
-                        iconAnchor: [14, 14] as [number, number],
-                        popupAnchor: [0, -16] as [number, number],
-                    });
-                const marker: L.Marker = L.marker([pt.lat, pt.lon], {
-                    icon: icon,
-                    opacity: pt.muted ? MUTED_OPACITY : 1,
-                });
-                marker.bindPopup(_makePopup(pt.name, pt.url));
-                marker.addTo(pointsLayer);
+                _pointMarker(pt).addTo(pointsLayer);
                 bounds.extend([pt.lat, pt.lon]);
             });
             pointsLayer.addTo(map);
@@ -392,6 +472,10 @@
             });
             linesLayer.addTo(map);
             overlays['Lines'] = linesLayer;
+        }
+
+        if (data.polygons && data.polygons.length) {
+            _addPolygons(map, data.polygons, overlays, bounds);
         }
     }
 
@@ -441,15 +525,21 @@
             loadDynamicLayers(map, layerControl);
         }
 
+        // A footprint subject has to open zoomed in far enough to draw as an
+        // outline, or the page about it shows a bare icon (#96).
+        const fitMaxZoom: number = data.polygons && data.polygons.length
+            ? Math.max(DEFAULT_FIT_ZOOM, STRUCTURE_POLYGON_ZOOM)
+            : DEFAULT_FIT_ZOOM;
+
         // Set view
         if (bounds.isValid()) {
-            map.fitBounds(bounds, { padding: [40, 40] as [number, number], maxZoom: 17 });
+            map.fitBounds(bounds, { padding: [40, 40] as [number, number], maxZoom: fitMaxZoom });
         } else {
             map.setView([0, 0], 2);
         }
 
         // Reset control
-        new ResetHome(bounds, map.getCenter(), map.getZoom()).addTo(map);
+        new ResetHome(bounds, map.getCenter(), map.getZoom(), { fitMaxZoom: fitMaxZoom }).addTo(map);
 
         container._leafletMap = map;
         return map;
