@@ -2,6 +2,10 @@
   "compilerOptions": {
     "strict": true,
     "target": "ES2016",
+    // Syntax is lowered to ES2016 to match the esbuild target, but ES2017
+    // runtime built-ins (Object.values, ...) are fair game -- every browser
+    // that can run Leaflet 1.9 has them, and the bundler emits them as-is.
+    "lib": ["ES2017", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "noEmit": true,
