@@ -70,6 +70,9 @@ site/
 
 # TypeScript build artifacts
 !netbox_pathways/static/netbox_pathways/dist/
-netbox_pathways/static/netbox_pathways/node_modules/
+# Anywhere, not just the static dir: running npm or npx from the repo root
+# drops a stray node_modules/.vite cache here that is easy to commit by
+# accident.
+node_modules/
 
 schemas/
