@@ -98,6 +98,20 @@ describe('addMaximizeControl', () => {
         expect(icon.className).not.toContain('mdi-fullscreen-exit');
     });
 
+    it('holds the page still and drops the scrollbar gutter while maximized', () => {
+        // NetBox reserves a gutter with scrollbar-gutter: stable, and a fixed
+        // overlay cannot cover it -- see setPageLocked.
+        const root = document.documentElement;
+
+        button.click();
+        expect(root.style.overflow).toBe('hidden');
+        expect(root.style.scrollbarGutter).toBe('auto');
+
+        button.click();
+        expect(root.style.overflow).toBe('');
+        expect(root.style.scrollbarGutter).toBe('');
+    });
+
     it('asks the map to re-measure on the way in and on the way out', () => {
         button.click();
         expect(onResize).toHaveBeenCalledTimes(1);

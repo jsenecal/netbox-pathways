@@ -216,10 +216,29 @@ export function addMaximizeControl(map: L.Map, opts: MaximizeControlOptions): L.
         return opts.target.classList.contains(MAXIMIZED_CLASS);
     }
 
+    /**
+     * Hold the page still behind the overlay, and give up the scrollbar
+     * gutter while we are over it.
+     *
+     * NetBox sets `scrollbar-gutter: stable` on :root above 992px. That
+     * gutter is outside the initial containing block, so a `position: fixed;
+     * inset: 0` overlay stops short of it and the page shows through in a
+     * strip down the right. Dropping the gutter costs nothing here because
+     * `overflow: hidden` has already taken the scrollbar away. Clearing both
+     * inline styles hands control back to the stylesheet. The full-page map
+     * does the same thing for kiosk mode.
+     */
+    function setPageLocked(locked: boolean): void {
+        const root = document.documentElement;
+        root.style.overflow = locked ? 'hidden' : '';
+        root.style.scrollbarGutter = locked ? 'auto' : '';
+    }
+
     function toggle(): void {
         const on = opts.target.classList.toggle(MAXIMIZED_CLASS);
         if (icon) icon.className = 'mdi ' + (on ? 'mdi-fullscreen-exit' : 'mdi-fullscreen');
         if (link) link.title = on ? 'Exit full screen' : 'Full screen';
+        setPageLocked(on);
         opts.onResize();
     }
 
