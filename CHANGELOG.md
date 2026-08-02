@@ -129,6 +129,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The detail-page map came up narrower than the card holding it.** Leaflet
+  lays its panes out from the container width measured at init, and on an
+  object detail page the column is still settling at that point, so the map
+  was drawn short and the missing strip never filled in. The map now
+  re-measures whenever its box actually changes, which also covers window
+  resizes and the expand modal, and its sizing moved out of inline styles
+  into `.pw-detail-map`. Refs #75.
+
 - **Structures with a polygon geometry broke the whole structures layer.**
   The map assumed every structure feature was a marker and asked the layer
   Leaflet built for its `getLatLng()`; a footprint polygon has no such method,

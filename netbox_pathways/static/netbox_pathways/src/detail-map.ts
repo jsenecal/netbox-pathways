@@ -541,6 +541,18 @@
         // Reset control
         new ResetHome(bounds, map.getCenter(), map.getZoom(), { fitMaxZoom: fitMaxZoom }).addTo(map);
 
+        // Leaflet sizes its panes once, from whatever the container measured
+        // at init. On a detail page the column is still settling then -- the
+        // reserved scrollbar gutter, related-object cards and tables all land
+        // after us -- so the map ends up drawn to a stale width and comes up
+        // short of its card. Re-measure whenever the box actually changes,
+        // which also covers window resizes and the expand modal.
+        if (typeof ResizeObserver !== 'undefined') {
+            new ResizeObserver(function () {
+                map.invalidateSize({ animate: false });
+            }).observe(container);
+        }
+
         container._leafletMap = map;
         return map;
     }

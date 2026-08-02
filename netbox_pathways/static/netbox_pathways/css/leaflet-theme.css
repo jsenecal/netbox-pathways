@@ -221,6 +221,29 @@
     background: var(--tblr-body-bg, #fff);
 }
 
+/* --- Detail-page map panel -------------------------------------------- */
+
+.pw-detail-map {
+    height: 450px;
+    width: 100%;
+}
+
+/* Inside the expand modal the map fills the body instead of a fixed box. */
+.pw-detail-map.pw-detail-map-expanded {
+    height: 100%;
+}
+
+/*
+ * Leaflet lays its panes out from the container width it measured at init,
+ * and nothing forces the rendered map back to the box afterwards. Pin it, the
+ * same way the form widget does below -- belt and braces alongside the
+ * ResizeObserver in detail-map.ts.
+ */
+.pw-detail-map .leaflet-container {
+    width: 100% !important;
+    max-width: 100%;
+}
+
 /* --- Form map widget ------------------------------------------------- */
 
 .pathways-map-widget {
