@@ -210,8 +210,7 @@
  * than hiding it, so nothing has to be restored on the way out.
  *
  * Both !important flags earn their keep: the map page sizes its wrapper with
- * an inline style (see sizeMap() in map.html), and the widget carries an
- * inline height on its map div.
+ * an inline style (see sizeMap() in map.html).
  */
 .pw-maximized {
     position: fixed !important;
@@ -225,9 +224,21 @@
 /* --- Form map widget ------------------------------------------------- */
 
 .pathways-map-widget {
+    height: 400px;
+    width: 100%;
     border-radius: 4px;
     border: 1px solid var(--pw-map-border);
     margin-bottom: 0.5rem;
+}
+
+/*
+ * Maximized widget. The height comes from .pw-maximized (100vh !important,
+ * which beats the 400px above); only the inline-box trim needs undoing.
+ */
+.pathways-map-widget.pw-maximized {
+    border: none;
+    border-radius: 0;
+    margin-bottom: 0;
 }
 
 .pathways-map-widget .leaflet-container {

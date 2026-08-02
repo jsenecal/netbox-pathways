@@ -140,6 +140,22 @@ The second invocation materializes a two-vertex LineString. Drawing a
 shape with the geoman tool or trashing the geometry clears any pending
 vertex.
 
+## Full Screen
+
+The **Full screen** button (the expand icon in the top-right corner of
+the map) grows the map to fill the browser window. The 400px box that
+fits beside a form is cramped for tracing a route with many
+intermediate vertices; full screen removes the constant zoom-and-pan
+without leaving the form.
+
+Press **Escape** or click the button again (it turns into a collapse
+icon) to return. Nothing is lost on the way in or out -- the geometry
+is held in the form field the entire time, and the form is still there,
+underneath, when you come back.
+
+If the paste-coordinate panel is open, the first Escape closes that
+panel and leaves full screen alone.
+
 ## Nearby Structures Reference Layer
 
 The Map tab can show the structures already recorded in the plugin as

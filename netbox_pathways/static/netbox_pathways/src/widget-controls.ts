@@ -1,15 +1,18 @@
 /**
- * In-map Leaflet controls for the geometry widget: "Use my current location"
- * and "Paste coordinate". Both emit a single [lon, lat] point via the
- * `onPoint` callback; the consumer decides whether to set or append.
+ * In-map Leaflet controls for the geometry widget.
  *
- * Rendered as a single `leaflet-bar` with two stacked buttons, sitting in
- * the top-left corner between the default zoom control and geoman's draw
- * toolbar. The paste button expands a small inline form to the right of
- * the bar. See issue #32.
+ * "Use my current location" and "Paste coordinate" both emit a single
+ * [lon, lat] point via the `onPoint` callback; the consumer decides whether
+ * to set or append. They render as a single `leaflet-bar` with two stacked
+ * buttons, sitting in the top-left corner between the default zoom control
+ * and geoman's draw toolbar. The paste button expands a small inline form to
+ * the right of the bar. See issue #32.
+ *
+ * The maximize toggle is a third, separate bar. See issue #75.
  */
 
 import { parseGeometryInput } from './coord-parser';
+import { createIconButtonControl } from './map-utils';
 
 export interface PointHelperOptions {
     onPoint: (lon: number, lat: number) => void;
@@ -180,4 +183,72 @@ export function addPointHelperControl(map: L.Map, opts: PointHelperOptions): L.C
     const instance = new HelperControl();
     instance.addTo(map);
     return instance;
+}
+
+/** Class that turns the widget wrapper into a full-viewport overlay. */
+export const MAXIMIZED_CLASS = 'pw-maximized';
+
+export interface MaximizeControlOptions {
+    /** The map element that becomes the full-viewport overlay. */
+    target: HTMLElement;
+    /** Called after the box resizes, so Leaflet can re-measure. */
+    onResize: () => void;
+}
+
+/**
+ * Toggle the map between its inline 400px box and a full-viewport overlay,
+ * for drawing a route without fighting a postage stamp. See #75.
+ *
+ * The map alone goes full screen -- the surrounding tab strip and the
+ * Coordinates tab have nothing to offer someone who asked for more room to
+ * draw. The overlay covers the NetBox navbar instead of hiding it, so
+ * leaving restores nothing.
+ *
+ * Docked top-right: the top-left stack already carries zoom, the point
+ * helpers, the reference-layer toggle and geoman's draw tools, which is
+ * taller than the widget itself.
+ */
+export function addMaximizeControl(map: L.Map, opts: MaximizeControlOptions): L.Control {
+    let link: HTMLAnchorElement | null = null;
+    let icon: HTMLElement | null = null;
+
+    function isMaximized(): boolean {
+        return opts.target.classList.contains(MAXIMIZED_CLASS);
+    }
+
+    function toggle(): void {
+        const on = opts.target.classList.toggle(MAXIMIZED_CLASS);
+        if (icon) icon.className = 'mdi ' + (on ? 'mdi-fullscreen-exit' : 'mdi-fullscreen');
+        if (link) link.title = on ? 'Exit full screen' : 'Full screen';
+        opts.onResize();
+    }
+
+    const control = createIconButtonControl({
+        icon: 'mdi-fullscreen',
+        title: 'Full screen',
+        position: 'topright',
+        onClick: toggle,
+        onReady: function (container: HTMLElement) {
+            link = container.querySelector('a');
+            icon = container.querySelector('i');
+        },
+    });
+    control.addTo(map);
+
+    // Escape leaves full screen. Bound to the document because focus may sit
+    // anywhere -- the map pane, a helper button, or nothing at all -- but the
+    // handler stays inert unless this map is both on the page and maximized,
+    // since a form can carry more than one geometry field.
+    //
+    // defaultPrevented is the ordering rule: the paste panel calls
+    // preventDefault() on its own Escape, and it lives inside this map, so a
+    // keystroke that closed the panel must not also collapse the map.
+    document.addEventListener('keydown', function (e: KeyboardEvent) {
+        if (e.key !== 'Escape' || e.defaultPrevented) return;
+        if (!opts.target.isConnected || !isMaximized()) return;
+        e.preventDefault();
+        toggle();
+    });
+
+    return control;
 }

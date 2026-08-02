@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Full-screen toggle on the geometry edit widget.** A new button in the
+  map's top-right corner grows it to fill the browser window, so tracing a
+  route with many intermediate vertices no longer means repeatedly zooming
+  and panning inside a 400px box. Escape or a second click returns to the
+  inline size. The geometry stays in the form field throughout, so nothing
+  is saved, lost or reloaded on the way in or out.
+  Requested by @marcusyuri. Refs #75.
+
 - **Polygon structures draw their real footprint.** A structure whose
   geometry is a polygon now renders as a filled outline in its structure-type
   color -- on the interactive map, on its own detail page and on the Site /

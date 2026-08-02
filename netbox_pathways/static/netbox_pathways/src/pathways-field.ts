@@ -9,7 +9,7 @@
 
 import { getControlOptions } from './draw-controls';
 import { computeAppendVertex, type AppendResult } from './geom-ops';
-import { addPointHelperControl } from './widget-controls';
+import { addMaximizeControl, addPointHelperControl } from './widget-controls';
 import { wireWidgetShell } from './widget-shell';
 
 function isLineMode(geomType: string): boolean {
@@ -71,7 +71,11 @@ function initWidget(container: HTMLElement): void {
       layerControl[bl.name] = tl;
     });
     if (Object.keys(layerControl).length > 1) {
-      L.control.layers(layerControl).addTo(map);
+      // Bottom-right, matching the full-page map, and out of the way of the
+      // full-screen button now docked top-right.
+      L.control.layers(layerControl, undefined, {
+        position: 'bottomright', collapsed: true,
+      }).addTo(map);
     }
   } else {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -91,6 +95,12 @@ function initWidget(container: HTMLElement): void {
     onPoint: (lon: number, lat: number) => applyHelperPoint(lon, lat),
   };
   addPointHelperControl(map, helperOpts);
+
+  // Full-screen toggle, docked opposite the crowded top-left stack.
+  addMaximizeControl(map, {
+    target: container,
+    onResize: () => map.invalidateSize(),
+  });
 
   // Add geoman controls (rendered below the helper bar)
   const controlOpts = getControlOptions(geomType);
