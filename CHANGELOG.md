@@ -75,6 +75,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The base-layer selector now sits bottom-right on every map.** The
+  full-page map already put it there; the geometry edit widget and the
+  detail-page mini maps had it top-right. Refs #75.
+
 - **BREAKING: `Structure.location` is now a FK to `dcim.Location`; the
   geometry moved to `Structure.geometry`.** `location` previously held the
   Point/Polygon geometry, which made it the odd one out -- `location` means

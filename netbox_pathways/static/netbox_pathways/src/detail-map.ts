@@ -515,9 +515,9 @@
             (overlayLayers as Record<string, L.Layer>)[name] = userOverlays[name];
         }
 
-        // Layer control
+        // Layer control -- bottom-right on every map in the plugin
         const layerControl: L.Control.Layers = L.control.layers(baseLayers, overlayLayers, {
-            position: 'topright', collapsed: true,
+            position: 'bottomright', collapsed: true,
         }).addTo(map);
 
         // Dynamic GeoJSON layers from API (fetched async, added to control)
