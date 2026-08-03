@@ -161,9 +161,12 @@ panel and leaves full screen alone.
 The Map tab can show the structures already recorded in the plugin as
 faded, read-only markers, so you can line the geometry up against the
 surrounding plant without flipping between the form and the
-infrastructure map. A toolbar button (**Show nearby structures**, the
-multi-marker icon under the point helpers) toggles the layer; the
-choice is remembered in the browser across forms and defaults to on.
+infrastructure map. A toolbar button (the multi-marker icon under the
+point helpers) toggles the layer; the choice is remembered in the
+browser across forms and defaults to on. The button fills with the
+accent colour while the layer is on, and its tooltip reads **Hide
+nearby structures**; unfilled with **Show nearby structures** means the
+layer is off.
 
 - Markers reuse the shapes and colours of the main infrastructure map
   at reduced size and opacity, and they never intercept clicks --

@@ -18,6 +18,7 @@ import {
     extractExcludePoints,
     renderReferenceStructures,
     refreshReferenceLayer,
+    addToggleControl,
 } from './reference-layer';
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,34 @@ function createMockLayerGroup() {
     marker: vi.fn((_latlng: any, _opts: any) => createMockMarker()),
     divIcon: vi.fn((opts: any) => ({ _type: 'divIcon', opts })),
     latLng: vi.fn((lat: number, lng: number) => ({ lat, lng })),
+    Control: {
+        extend: (proto: any) =>
+            class {
+                options = proto.options;
+                onAdd = proto.onAdd;
+                _container: HTMLElement | undefined;
+                addTo(map: any) {
+                    this._container = this.onAdd(map);
+                    return this;
+                }
+                getContainer() {
+                    return this._container;
+                }
+            },
+    },
+    DomUtil: {
+        create: (tag: string, className?: string, parent?: HTMLElement) => {
+            const el = document.createElement(tag);
+            if (className) el.className = className;
+            if (parent) parent.appendChild(el);
+            return el;
+        },
+    },
+    DomEvent: {
+        on: (el: HTMLElement, type: string, fn: EventListener) => el.addEventListener(type, fn),
+        preventDefault: (e: Event) => e.preventDefault(),
+        disableClickPropagation: vi.fn(),
+    },
 };
 
 function createMockMap(zoom: number) {
@@ -243,5 +272,59 @@ describe('refreshReferenceLayer', () => {
         await expect(
             refreshReferenceLayer(createMockMap(15), group as unknown as L.LayerGroup, []),
         ).resolves.toBeUndefined();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Toggle control -- the layer state is sticky, so the button has to show
+// which way it is latched rather than looking identical either way.
+// ---------------------------------------------------------------------------
+
+describe('addToggleControl', () => {
+    function build() {
+        const onToggle = vi.fn();
+        const control = addToggleControl({} as L.Map, onToggle);
+        const button = control.getContainer()!.querySelector('a')!;
+        return { button, onToggle };
+    }
+
+    beforeEach(() => {
+        window.localStorage.clear();
+    });
+
+    it('starts pressed when the layer is already on', () => {
+        setRefEnabled(true);
+        const { button } = build();
+
+        expect(button.classList.contains('is-active')).toBe(true);
+        expect(button.getAttribute('aria-pressed')).toBe('true');
+        expect(button.title).toBe('Hide nearby structures');
+    });
+
+    it('starts unpressed when the layer is off', () => {
+        setRefEnabled(false);
+        const { button } = build();
+
+        expect(button.classList.contains('is-active')).toBe(false);
+        expect(button.getAttribute('aria-pressed')).toBe('false');
+        expect(button.title).toBe('Show nearby structures');
+    });
+
+    it('flips its own appearance on click, not just the layer', () => {
+        setRefEnabled(false);
+        const { button, onToggle } = build();
+
+        button.click();
+        expect(button.classList.contains('is-active')).toBe(true);
+        expect(button.getAttribute('aria-pressed')).toBe('true');
+        expect(button.title).toBe('Hide nearby structures');
+        expect(isRefEnabled()).toBe(true);
+        expect(onToggle).toHaveBeenLastCalledWith(true);
+
+        button.click();
+        expect(button.classList.contains('is-active')).toBe(false);
+        expect(button.title).toBe('Show nearby structures');
+        expect(isRefEnabled()).toBe(false);
+        expect(onToggle).toHaveBeenLastCalledWith(false);
     });
 });

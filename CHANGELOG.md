@@ -136,6 +136,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The "Show nearby structures" button looked the same on and off.** Its
+  pressed state was a `#f4f4f4` tint, indistinguishable from Leaflet's white
+  control background -- and the same colour Leaflet already uses for plain
+  hover -- so a layer that persists across page loads gave no clue which way
+  it was set. The button now fills with the accent colour while the layer is
+  on, and its tooltip and screen-reader label switch between "Show" and
+  "Hide". Refs #75.
+
 - **Expanding a detail-page map shifted the whole page sideways.** Bootstrap
   hides the scrollbar when a modal opens and adds an equal `padding-right` to
   replace the width it assumes it reclaimed -- but NetBox reserves that width

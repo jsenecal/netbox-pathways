@@ -454,9 +454,16 @@
     justify-content: center;
     font-size: 18px;
 }
+/*
+ * Pressed state. This has to carry a latched toggle -- the nearby-structures
+ * layer stays on across page loads -- not just the paste panel's momentary
+ * open state, so it fills rather than tints: #f4f4f4 against Leaflet's white
+ * control was indistinguishable from idle, and matched the colour Leaflet
+ * already uses for plain hover.
+ */
 .pathways-helpers .pathways-helper-btn.is-active {
-    background-color: #f4f4f4;
-    color: #000;
+    background-color: var(--tblr-primary, #206bc4);
+    color: #fff;
 }
 .pathways-helpers .pathways-helper-btn.is-busy {
     opacity: 0.6;

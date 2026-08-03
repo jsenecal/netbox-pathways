@@ -164,7 +164,7 @@ export async function refreshReferenceLayer(
 // Toggle control
 // ---------------------------------------------------------------------------
 
-function addToggleControl(map: L.Map, onToggle: (on: boolean) => void): void {
+export function addToggleControl(map: L.Map, onToggle: (on: boolean) => void): L.Control {
     const ToggleControl = L.Control.extend({
         options: { position: 'topleft' },
 
@@ -173,14 +173,18 @@ function addToggleControl(map: L.Map, onToggle: (on: boolean) => void): void {
             const bar = L.DomUtil.create('div', 'leaflet-bar pathways-helpers');
             const btn = L.DomUtil.create('a', 'pathways-helper-btn', bar) as HTMLAnchorElement;
             btn.href = '#';
-            btn.title = 'Show nearby structures';
             btn.setAttribute('role', 'button');
-            btn.setAttribute('aria-label', 'Show nearby structures');
             L.DomUtil.create('i', 'mdi mdi-map-marker-multiple-outline', btn);
 
+            // The layer state is sticky across page loads, so the button has
+            // to say which way it is latched -- by fill, by label and to a
+            // screen reader.
             function reflect(on: boolean): void {
+                const label = on ? 'Hide nearby structures' : 'Show nearby structures';
                 btn.classList.toggle('is-active', on);
                 btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+                btn.title = label;
+                btn.setAttribute('aria-label', label);
             }
             reflect(isRefEnabled());
 
@@ -195,7 +199,9 @@ function addToggleControl(map: L.Map, onToggle: (on: boolean) => void): void {
             return bar;
         },
     });
-    new ToggleControl().addTo(map);
+    const instance = new ToggleControl();
+    instance.addTo(map);
+    return instance;
 }
 
 // ---------------------------------------------------------------------------
