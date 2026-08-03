@@ -13,6 +13,7 @@ import {
     structureIcon,
     clusterIcon,
     createIconButtonControl,
+    bindModalScrollbarGutter,
     esc,
     titleCase,
     getCookie,
@@ -516,6 +517,43 @@ describe('createIconButtonControl', () => {
     it('defaults to topleft and honours an explicit position', () => {
         expect((build().control as any).options.position).toBe('topleft');
         expect((build({ position: 'topright' }).control as any).options.position).toBe('topright');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// bindModalScrollbarGutter
+// ---------------------------------------------------------------------------
+
+describe('bindModalScrollbarGutter', () => {
+    function fire(modal: HTMLElement, type: string): void {
+        modal.dispatchEvent(new Event(type, { bubbles: true }));
+    }
+
+    it('releases the gutter for the life of the modal', () => {
+        const modal = document.createElement('div');
+        bindModalScrollbarGutter(modal);
+        const root = document.documentElement;
+
+        fire(modal, 'show.bs.modal');
+        expect(root.style.scrollbarGutter).toBe('auto');
+
+        fire(modal, 'hidden.bs.modal');
+        expect(root.style.scrollbarGutter).toBe('');
+    });
+
+    it('brackets Bootstrap: not shown/hide, which fire inside its adjustment', () => {
+        const modal = document.createElement('div');
+        bindModalScrollbarGutter(modal);
+        const root = document.documentElement;
+
+        fire(modal, 'shown.bs.modal');
+        expect(root.style.scrollbarGutter).toBe('');
+
+        fire(modal, 'show.bs.modal');
+        fire(modal, 'hide.bs.modal');
+        expect(root.style.scrollbarGutter).toBe('auto');
+
+        fire(modal, 'hidden.bs.modal');
     });
 });
 

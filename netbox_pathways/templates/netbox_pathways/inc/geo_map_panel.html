@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     var modalEl = document.getElementById('{{ map_id }}-modal');
+    bindModalScrollbarGutter(modalEl);
     modalEl.addEventListener('shown.bs.modal', function() {
         var expanded = document.getElementById('{{ map_id }}-expanded');
         if (expanded._leafletMap) {

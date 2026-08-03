@@ -162,6 +162,37 @@ export function createIconButtonControl(opts: IconButtonControlOptions): L.Contr
     return new IconButtonControl();
 }
 
+/**
+ * Stop a Bootstrap modal from shifting the page sideways as it opens.
+ *
+ * Bootstrap takes the scrollbar away (`overflow: hidden` on body) and adds an
+ * equal `padding-right` to replace the width it assumes it just reclaimed.
+ * NetBox reserves that width permanently instead, with `scrollbar-gutter:
+ * stable` on :root above 992px, so hiding the scrollbar reclaims nothing and
+ * the padding is pure surplus -- the content jumps left on open and back on
+ * close.
+ *
+ * Releasing the gutter while the modal is up makes Bootstrap's assumption
+ * true rather than overriding its arithmetic: the width it reclaims is the
+ * width it pays back. That also degrades to a no-op if NetBox ever drops the
+ * gutter (their code carries a TODO to, once Tabler #2271 ships), where
+ * fighting the padding with !important would start causing the very shift it
+ * was added to prevent.
+ *
+ * `show`/`hidden` rather than `shown`/`hide`: Bootstrap adjusts the scrollbar
+ * after firing `show` and restores it before firing `hidden`, so this brackets
+ * its work from outside.
+ */
+export function bindModalScrollbarGutter(modal: HTMLElement): void {
+    const root = document.documentElement;
+    modal.addEventListener('show.bs.modal', function () {
+        root.style.scrollbarGutter = 'auto';
+    });
+    modal.addEventListener('hidden.bs.modal', function () {
+        root.style.scrollbarGutter = '';
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Utility helpers
 // ---------------------------------------------------------------------------

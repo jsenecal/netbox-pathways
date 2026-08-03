@@ -27,6 +27,8 @@
  * }
  */
 
+import { bindModalScrollbarGutter } from './map-utils';
+
 (function () {
     'use strict';
 
@@ -558,6 +560,7 @@
     }
 
     // Expose globally
+    (window as any).bindModalScrollbarGutter = bindModalScrollbarGutter;
     (window as any).initGeoMap = initGeoMap;
     (window as any).loadDynamicLayers = loadDynamicLayers;
     (window as any)._createBaseLayers = _createBaseLayers;

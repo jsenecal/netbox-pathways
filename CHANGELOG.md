@@ -129,12 +129,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **The detail-page map came up narrower than the card holding it.** Leaflet
-  lays its panes out from the container width measured at init, and on an
-  object detail page the column is still settling at that point, so the map
-  was drawn short and the missing strip never filled in. The map now
-  re-measures whenever its box actually changes, which also covers window
-  resizes and the expand modal, and its sizing moved out of inline styles
+- **Expanding a detail-page map shifted the whole page sideways.** Bootstrap
+  hides the scrollbar when a modal opens and adds an equal `padding-right` to
+  replace the width it assumes it reclaimed -- but NetBox reserves that width
+  permanently (`scrollbar-gutter: stable` on `:root` above 992px), so nothing
+  was reclaimed and the padding was pure surplus. Content jumped left on open
+  and back on close. The map modal now releases the gutter while it is up, so
+  Bootstrap's arithmetic comes out even. Refs #75.
+
+- **The detail-page map now re-measures when its box changes.** Leaflet sizes
+  its panes once, from the container width at init, and an object detail page
+  is often still settling then. A ResizeObserver replaces the fixed 150ms
+  guess the panel was using, and the map's sizing moved out of inline styles
   into `.pw-detail-map`. Refs #75.
 
 - **Structures with a polygon geometry broke the whole structures layer.**
