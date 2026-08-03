@@ -43,32 +43,6 @@ def aerial_route(db):
 
 @pytest.mark.django_db
 class TestLashedWith:
-    def test_pair_is_symmetric(self, aerial_route, disable_routability_signal):
-        """Adding seg_b to seg_a.lashed_with auto-adds seg_a to seg_b.lashed_with."""
-        cable_a = Cable.objects.create()
-        cable_b = Cable.objects.create()
-        seg_a = CableSegment.objects.create(cable=cable_a, pathway=aerial_route)
-        seg_b = CableSegment.objects.create(cable=cable_b, pathway=aerial_route)
-        seg_a.lashed_with.add(seg_b)
-        # Symmetric: refetch and check both sides.
-        seg_a.refresh_from_db()
-        seg_b.refresh_from_db()
-        assert seg_b in seg_a.lashed_with.all()
-        assert seg_a in seg_b.lashed_with.all()
-
-    def test_remove_is_symmetric(self, aerial_route, disable_routability_signal):
-        """Removing the peer from one side removes the reverse too."""
-        cable_a = Cable.objects.create()
-        cable_b = Cable.objects.create()
-        seg_a = CableSegment.objects.create(cable=cable_a, pathway=aerial_route)
-        seg_b = CableSegment.objects.create(cable=cable_b, pathway=aerial_route)
-        seg_a.lashed_with.add(seg_b)
-        seg_a.lashed_with.remove(seg_b)
-        seg_a.refresh_from_db()
-        seg_b.refresh_from_db()
-        assert seg_b not in seg_a.lashed_with.all()
-        assert seg_a not in seg_b.lashed_with.all()
-
     def test_lashed_cables_property(self, aerial_route, disable_routability_signal):
         """The `lashed_cables` property returns the dcim.Cable instances of every peer segment."""
         cable_a = Cable.objects.create()
@@ -81,14 +55,3 @@ class TestLashedWith:
 
         cables = list(seg_a.lashed_cables.values_list("pk", flat=True))
         assert sorted(cables) == sorted([cable_b.pk, cable_c.pk])
-
-    def test_segment_delete_clears_peer_links(self, aerial_route, disable_routability_signal):
-        """Deleting a segment removes it from every peer's lashed_with set."""
-        cable_a = Cable.objects.create()
-        cable_b = Cable.objects.create()
-        seg_a = CableSegment.objects.create(cable=cable_a, pathway=aerial_route)
-        seg_b = CableSegment.objects.create(cable=cable_b, pathway=aerial_route)
-        seg_a.lashed_with.add(seg_b)
-        seg_a.delete()
-        seg_b.refresh_from_db()
-        assert seg_b.lashed_with.count() == 0

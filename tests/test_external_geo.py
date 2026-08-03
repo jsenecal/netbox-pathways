@@ -7,7 +7,7 @@ Run via: python -m pytest tests/test_external_geo.py -v
 import pytest
 
 from netbox_pathways.api.external_geo import _build_properties, _resolve_geo_column
-from netbox_pathways.registry import registry
+from netbox_pathways.registry import LayerStyle, MapLayerRegistration, registry
 
 
 @pytest.fixture(autouse=True)
@@ -98,3 +98,75 @@ class TestBuildProperties:
         assert props["structure_type"] == "manhole"
         # Geometry field 'geometry' should be excluded
         assert "geometry" not in props
+
+
+@pytest.mark.django_db
+class TestExternalLayerGeoView:
+    """The endpoint that serves reference-mode registered layers as GeoJSON."""
+
+    URL = "/api/plugins/pathways/geo/external/ext_test/"
+
+    @pytest.fixture
+    def api_client(self, admin_user):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=admin_user)
+        return client
+
+    @pytest.fixture
+    def conduit(self):
+        from django.contrib.gis.geos import LineString, Point
+
+        from netbox_pathways.geo import get_srid
+        from netbox_pathways.models import Conduit, Structure
+
+        srid = get_srid()
+        s1 = Structure.objects.create(name="EXT-S1", geometry=Point(0, 0, srid=srid))
+        s2 = Structure.objects.create(name="EXT-S2", geometry=Point(100, 100, srid=srid))
+        return Conduit.objects.create(
+            label="EXT-C1",
+            start_structure=s1,
+            end_structure=s2,
+            path=LineString((0, 0), (100, 100), srid=srid),
+        )
+
+    @pytest.fixture
+    def ext_layer(self, conduit):
+        from netbox_pathways.models import Conduit
+
+        registry.register(
+            MapLayerRegistration(
+                name="ext_test",
+                label="External Test",
+                geometry_type="Point",
+                source="reference",
+                queryset=lambda request: Conduit.objects.all(),
+                geometry_field="start_structure",
+                feature_fields=["label"],
+                style=LayerStyle(color="#000"),
+            )
+        )
+
+    def test_unknown_layer_returns_404(self, api_client):
+        resp = api_client.get("/api/plugins/pathways/geo/external/nope/")
+        assert resp.status_code == 404
+
+    def test_reference_layer_serves_fk_geometry_as_features(self, api_client, conduit, ext_layer):
+        """The layer's rows are serialized at their FK target's geometry, in
+        WGS84, carrying the declared feature fields."""
+        resp = api_client.get(self.URL)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["type"] == "FeatureCollection"
+        assert len(data["features"]) == 1
+        feat = data["features"][0]
+        assert feat["properties"] == {"id": conduit.pk, "label": "EXT-C1"}
+        lon, lat = feat["geometry"]["coordinates"]
+        assert -180 <= lon <= 180
+        assert -90 <= lat <= 90
+
+    def test_bbox_excludes_far_features(self, api_client, conduit, ext_layer):
+        resp = api_client.get(f"{self.URL}?bbox=170,80,171,81")
+        assert resp.status_code == 200
+        assert resp.json()["features"] == []

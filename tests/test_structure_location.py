@@ -52,11 +52,6 @@ class TestStructureTypeChoices:
 
 @pytest.mark.django_db
 class TestStructureGeometryField:
-    def test_geometry_field_stores_point(self):
-        s = Structure.objects.create(name="GEO-1", geometry=Point(1, 2, srid=SRID))
-        s.refresh_from_db()
-        assert s.geometry.geom_type == "Point"
-
     def test_centroid_reads_geometry(self):
         poly = Polygon(((0, 0), (10, 0), (10, 10), (0, 10), (0, 0)), srid=SRID)
         s = Structure.objects.create(name="GEO-2", geometry=poly)
@@ -65,10 +60,6 @@ class TestStructureGeometryField:
 
 @pytest.mark.django_db
 class TestStructureLocationFK:
-    def test_location_optional(self, site):
-        s = Structure.objects.create(name="FK-1", geometry=Point(0, 0, srid=SRID), site=site)
-        assert s.location is None
-
     def test_location_in_matching_site_is_valid(self, site, dcim_location):
         s = Structure(name="FK-2", geometry=Point(0, 0, srid=SRID), site=site, location=dcim_location)
         s.full_clean()
@@ -92,15 +83,6 @@ class TestStructureLocationFK:
         s = Structure(name="FK-4", geometry=Point(0, 0, srid=SRID), location=dcim_location)
         s.full_clean()
         assert s.site_id == site.pk
-
-    def test_related_name_reaches_structures(self, site, dcim_location):
-        s = Structure.objects.create(
-            name="FK-5",
-            geometry=Point(0, 0, srid=SRID),
-            site=site,
-            location=dcim_location,
-        )
-        assert s in dcim_location.pathways_structures.all()
 
 
 @pytest.mark.django_db

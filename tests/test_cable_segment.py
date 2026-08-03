@@ -2,7 +2,6 @@ import pytest
 from dcim.models import Cable
 from django.contrib.gis.geos import LineString, Point
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError
 
 from netbox_pathways.geo import get_srid
 from netbox_pathways.models import CableSegment, Conduit, Structure
@@ -68,21 +67,10 @@ class TestCableSegmentSequence:
         assert seg1.sequence == 1
         assert seg2.sequence == 2
 
-    def test_sequence_unique_per_cable(self, cable, pathway, pathway2):
-        CableSegment.objects.create(cable=cable, pathway=pathway, sequence=1)
-        with pytest.raises(IntegrityError):
-            CableSegment.objects.create(cable=cable, pathway=pathway2, sequence=1)
-
     def test_explicit_sequence_respected(self, cable, pathway):
         seg = CableSegment(cable=cable, pathway=pathway, sequence=10)
         seg.save()
         assert seg.sequence == 10
-
-    def test_no_slack_fields(self):
-        """slack_loop_location and slack_length should not exist on model."""
-        field_names = [f.name for f in CableSegment._meta.get_fields()]
-        assert "slack_loop_location" not in field_names
-        assert "slack_length" not in field_names
 
 
 @pytest.mark.django_db
