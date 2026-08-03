@@ -13,13 +13,13 @@ def admin_user(db):
     )
 
 
-def build_cable_with_terminations(*, label, site, terminate_a=True, terminate_b=True):
+def build_cable_with_terminations(*, label, site, terminate_a=True, terminate_b=True, location=None):
     """Build a Cable with optional A-/B-side terminations rooted in `site`.
 
     Each side is wired to an Interface on a Device in `site`, which causes
     `CableTermination.cache_related_objects()` to populate `_site` from
-    `termination.device.site` on save. Used by tests that exercise view
-    helpers which resolve cable terminations to graph nodes.
+    `termination.device.site` and `_location` from `termination.device.location`
+    on save. Pass `location` to exercise location-based anchor resolution.
     """
     from dcim.models import (
         Cable,
@@ -49,6 +49,7 @@ def build_cable_with_terminations(*, label, site, terminate_a=True, terminate_b=
             device_type=dt,
             role=dr,
             site=site,
+            location=location,
         )
         iface_a = Interface.objects.create(name="eth0", device=dev_a, type="1000base-t")
         CableTermination.objects.create(
@@ -63,6 +64,7 @@ def build_cable_with_terminations(*, label, site, terminate_a=True, terminate_b=
             device_type=dt,
             role=dr,
             site=site,
+            location=location,
         )
         iface_b = Interface.objects.create(name="eth0", device=dev_b, type="1000base-t")
         CableTermination.objects.create(
