@@ -8,6 +8,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.urls import reverse
 from netbox.models import NetBoxModel
 from tenancy.models import Tenant
+from utilities.fields import ColorField
 from utilities.querysets import RestrictedQuerySet
 
 from .choices import (
@@ -711,7 +712,7 @@ class Innerduct(Pathway):
         return False
 
     size = models.CharField(max_length=50, help_text='Innerduct size (e.g., 1.25", 32mm)')
-    color = models.CharField(max_length=50, blank=True, help_text="Innerduct color for identification")
+    color = ColorField(blank=True, help_text="Innerduct color for identification")
     position = models.CharField(max_length=50, blank=True, help_text="Position within parent conduit")
 
     class Meta:

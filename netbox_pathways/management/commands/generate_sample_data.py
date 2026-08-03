@@ -10,6 +10,7 @@ import random
 from dcim.models import Cable, Location, Site
 from django.contrib.gis.geos import LineString, Point
 from django.core.management.base import BaseCommand
+from netbox.choices import ColorChoices
 from tenancy.models import Tenant
 
 from netbox_pathways.geo import get_srid
@@ -57,7 +58,15 @@ AERIAL_TYPES = ["messenger", "self_support", "lashed", "wrapped", "adss"]
 BANK_CONFIGS = ["1x2", "1x3", "1x4", "2x2", "2x3", "3x3", "3x4", "custom"]
 ENCASEMENT_TYPES = ["concrete", "direct_buried", "bore", "bridge_attachment", "tunnel"]
 INNERDUCT_SIZES = ['1.25"', '1"', "32mm", "25mm", '1.5"']
-INNERDUCT_COLORS = ["orange", "blue", "green", "red", "yellow", "white", "black"]
+INNERDUCT_COLORS = [
+    ColorChoices.COLOR_ORANGE,
+    ColorChoices.COLOR_BLUE,
+    ColorChoices.COLOR_GREEN,
+    ColorChoices.COLOR_RED,
+    ColorChoices.COLOR_YELLOW,
+    ColorChoices.COLOR_WHITE,
+    ColorChoices.COLOR_BLACK,
+]
 
 CITY_NAMES = [
     "Montreal",

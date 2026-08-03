@@ -95,6 +95,9 @@ class DirectBuriedType(NetBoxObjectType):
 class InnerductType(NetBoxObjectType):
     """GraphQL type for Innerduct."""
 
+    # ColorField has no strawberry mapping; core declares it the same way.
+    color: str
+
 
 @strawberry_django.type(ConduitJunction, fields="__all__")
 class ConduitJunctionType(NetBoxObjectType):

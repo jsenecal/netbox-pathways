@@ -283,6 +283,7 @@ class InnerductTable(NetBoxTable):
     )
     status = columns.ChoiceFieldColumn()
     parent_conduit = tables.Column(linkify=True)
+    color = columns.ColorColumn()
     installed_by = tables.Column(linkify=True, verbose_name="Installed by")
     cables_routed = tables.Column(verbose_name="Cables", orderable=True)
     in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
