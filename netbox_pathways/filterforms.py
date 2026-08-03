@@ -5,7 +5,7 @@ from dcim.models import Cable, Location, Site
 from django import forms
 from netbox.forms import NetBoxModelFilterSetForm
 from tenancy.models import Tenant
-from utilities.forms.fields import DynamicModelMultipleChoiceField, TagFilterField
+from utilities.forms.fields import ColorField, DynamicModelMultipleChoiceField, TagFilterField
 from utilities.forms.rendering import FieldSet
 
 from .choices import (
@@ -222,7 +222,7 @@ class InnerductFilterForm(NetBoxModelFilterSetForm):
     model = Innerduct
     fieldsets = (
         FieldSet("q", "filter_id", "tag"),
-        FieldSet("status", "parent_conduit_id", name="Attributes"),
+        FieldSet("status", "parent_conduit_id", "size", "color", "position", name="Attributes"),
     )
     status = forms.MultipleChoiceField(choices=PathwayStatusChoices, required=False)
     parent_conduit_id = DynamicModelMultipleChoiceField(
@@ -230,6 +230,10 @@ class InnerductFilterForm(NetBoxModelFilterSetForm):
         required=False,
         label="Parent Conduit",
     )
+    size = forms.CharField(required=False)
+    # The picker is the only practical way to filter on a stored hex code.
+    color = ColorField(required=False)
+    position = forms.CharField(required=False)
     tag = TagFilterField(model)
 
 

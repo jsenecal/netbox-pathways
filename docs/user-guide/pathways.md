@@ -52,8 +52,14 @@ A smaller duct installed inside a parent conduit to subdivide capacity.
 |-------|-------------|
 | Parent Conduit | The conduit this innerduct is inside |
 | Size | Innerduct size (e.g., `1.25"`, `32mm`) |
-| Color | Innerduct color for identification |
+| Color | Innerduct color, chosen from NetBox's color palette |
 | Position | Position within the parent conduit |
+
+Color is picked from NetBox's standard palette, the same widget used for rack
+roles and cables, and renders as a swatch in innerduct tables and on the
+parent conduit's detail page. CSV import also accepts a color name (`Blue`) or
+a bare hex code (`2196f3`); `slate` and `violet` from the telecom 12-color code
+map onto the nearest palette entries.
 
 Innerducts inherit start and end endpoints (structures or locations) from their parent conduit if not explicitly set.
 

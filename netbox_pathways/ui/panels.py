@@ -130,7 +130,7 @@ class InnerductPanel(ObjectAttributesPanel):
     status = attrs.ChoiceAttr("status", label=_("Status"))
     parent_conduit = attrs.RelatedObjectAttr("parent_conduit", linkify=True, label=_("Parent conduit"))
     size = attrs.TextAttr("size", label=_("Size"))
-    color = attrs.TextAttr("color", label=_("Color"))
+    color = attrs.ColorAttr("color", label=_("Color"))
     position = attrs.TextAttr("position", label=_("Position"))
     length = attrs.NumericAttr("length", label=_("Length (m, as-built)"))
     geo_length = attrs.NumericAttr("geo_length", label=_("Geo length (m, drawn)"))

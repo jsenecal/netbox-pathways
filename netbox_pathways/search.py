@@ -56,11 +56,12 @@ class InnerductIndex(SearchIndex):
     fields = (
         ("label", 100),
         ("size", 200),
-        ("color", 300),
         ("position", 300),
         ("comments", 5000),
     )
-    display_attrs = ("status", "parent_conduit", "size", "color")
+    # Color is a hex code since issue #79 -- not worth indexing or displaying
+    # as text.
+    display_attrs = ("status", "parent_conduit", "size")
 
 
 @register_search

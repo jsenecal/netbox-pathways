@@ -75,6 +75,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Innerduct color is now picked from NetBox's color palette** instead of
+  typed as free text. The edit, bulk-edit and list-filter forms use the core
+  color widget, and innerduct tables -- including the one on a conduit's
+  detail page -- render the value as a swatch rather than a color name.
+  Refs #79.
+
+  Migration `0022_innerduct_color_hex` converts the existing free-text
+  values: names in the palette become their hex code, and `slate`,
+  `violet`, `magenta`, `silver`, `natural`, `clear` and US "gray" spellings
+  map onto the nearest palette entry. **A value matching none of these is
+  cleared**, because the column narrows from 50 characters to 6; the
+  migration prints every value it drops, so check that list before
+  migrating a database with hand-written colors. Reversing the migration
+  restores palette names.
+
+  CSV import still accepts a color name (`Blue`) or a hex code (`2196f3`)
+  and rejects anything it cannot resolve, so existing import files keep
+  working. Color is no longer indexed for global search: it holds a hex
+  code now, which nobody searches for.
+
+- **The innerduct list filter now renders its size and position fields.**
+  `InnerductFilterSet` accepted both parameters already, but the filter
+  form omitted them, so they could only be reached by editing the URL.
+
 - **The base-layer selector now sits bottom-right on every map.** The
   full-page map already put it there; the geometry edit widget and the
   detail-page mini maps had it top-right. Refs #75.

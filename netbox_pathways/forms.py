@@ -9,6 +9,7 @@ from django.utils.safestring import mark_safe
 from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelForm, NetBoxModelImportForm
 from tenancy.models import Tenant
 from utilities.forms.fields import (
+    ColorField,
     CSVChoiceField,
     CSVModelChoiceField,
     DynamicModelChoiceField,
@@ -27,6 +28,7 @@ from .choices import (
     StructureStatusChoices,
     StructureTypeChoices,
 )
+from .colors import color_to_hex
 from .coord_parser import ForgivingGeometryField
 from .geo import get_srid, to_leaflet
 from .models import (
@@ -867,7 +869,7 @@ class InnerductBulkEditForm(NetBoxModelBulkEditForm):
         selector=True,
     )
     status = forms.ChoiceField(choices=PathwayStatusChoices, required=False)
-    color = forms.CharField(max_length=50, required=False)
+    color = ColorField(required=False)
     size = forms.CharField(max_length=50, required=False)
     installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
     commissioned_date = forms.DateField(required=False)
@@ -970,12 +972,27 @@ class InnerductImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
     end_location = _csv_location_field("Ending")
     tenant = _csv_tenant_field("Owner tenant name")
     installed_by = _csv_tenant_field("Installer tenant name")
+    color = forms.CharField(
+        required=False,
+        max_length=16,
+        help_text='Color name (e.g. "Blue") or hex code (e.g. "2196f3")',
+    )
     path = ForgivingGeometryField(
         required=False,
         srid=get_srid(),
         geom_type="LINESTRING",
         help_text=_IMPORT_GEOMETRY_HELP,
     )
+
+    def clean_color(self):
+        # Colors were free text before issue #79, so imports that still name
+        # them keep working; anything unrecognized is an error rather than a
+        # silently blank field.
+        color = self.cleaned_data.get("color")
+        hex_code = color_to_hex(color)
+        if hex_code is None:
+            raise forms.ValidationError(f'"{color}" is not a known color name or hex code')
+        return hex_code
 
     class Meta:
         model = Innerduct
