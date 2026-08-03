@@ -1,7 +1,7 @@
 from django.db.models import Count, Exists, OuterRef, Q
 from netbox.api.viewsets import NetBoxModelViewSet
 
-from .. import filters, models
+from .. import filtersets, models
 from . import serializers
 
 
@@ -12,7 +12,7 @@ class StructureViewSet(NetBoxModelViewSet):
         ),
     )
     serializer_class = serializers.StructureSerializer
-    filterset_class = filters.StructureFilterSet
+    filterset_class = filtersets.StructureFilterSet
 
 
 class ConduitBankViewSet(NetBoxModelViewSet):
@@ -24,7 +24,7 @@ class ConduitBankViewSet(NetBoxModelViewSet):
         "tenant",
     )
     serializer_class = serializers.ConduitBankSerializer
-    filterset_class = filters.ConduitBankFilterSet
+    filterset_class = filtersets.ConduitBankFilterSet
 
 
 class PathwayViewSet(NetBoxModelViewSet):
@@ -36,7 +36,7 @@ class PathwayViewSet(NetBoxModelViewSet):
         "tenant",
     ).annotate(cables_routed=Count("cable_segments"))
     serializer_class = serializers.PathwaySerializer
-    filterset_class = filters.PathwayFilterSet
+    filterset_class = filtersets.PathwayFilterSet
 
 
 class ConduitViewSet(NetBoxModelViewSet):
@@ -51,7 +51,7 @@ class ConduitViewSet(NetBoxModelViewSet):
         "tenant",
     ).annotate(cables_routed=Count("cable_segments"))
     serializer_class = serializers.ConduitSerializer
-    filterset_class = filters.ConduitFilterSet
+    filterset_class = filtersets.ConduitFilterSet
 
 
 class AerialSpanViewSet(NetBoxModelViewSet):
@@ -63,7 +63,7 @@ class AerialSpanViewSet(NetBoxModelViewSet):
         "tenant",
     ).annotate(cables_routed=Count("cable_segments"))
     serializer_class = serializers.AerialSpanSerializer
-    filterset_class = filters.AerialSpanFilterSet
+    filterset_class = filtersets.AerialSpanFilterSet
 
 
 class DirectBuriedViewSet(NetBoxModelViewSet):
@@ -75,7 +75,7 @@ class DirectBuriedViewSet(NetBoxModelViewSet):
         "tenant",
     ).annotate(cables_routed=Count("cable_segments"))
     serializer_class = serializers.DirectBuriedSerializer
-    filterset_class = filters.DirectBuriedFilterSet
+    filterset_class = filtersets.DirectBuriedFilterSet
 
 
 class InnerductViewSet(NetBoxModelViewSet):
@@ -90,7 +90,7 @@ class InnerductViewSet(NetBoxModelViewSet):
         cables_routed=Count("cable_segments"),
     )
     serializer_class = serializers.InnerductSerializer
-    filterset_class = filters.InnerductFilterSet
+    filterset_class = filtersets.InnerductFilterSet
 
 
 class ConduitJunctionViewSet(NetBoxModelViewSet):
@@ -100,31 +100,31 @@ class ConduitJunctionViewSet(NetBoxModelViewSet):
         "towards_structure",
     )
     serializer_class = serializers.ConduitJunctionSerializer
-    filterset_class = filters.ConduitJunctionFilterSet
+    filterset_class = filtersets.ConduitJunctionFilterSet
 
 
 class PathwayLocationViewSet(NetBoxModelViewSet):
     queryset = models.PathwayLocation.objects.select_related("pathway", "site", "location")
     serializer_class = serializers.PathwayLocationSerializer
-    filterset_class = filters.PathwayLocationFilterSet
+    filterset_class = filtersets.PathwayLocationFilterSet
 
 
 class CableSegmentViewSet(NetBoxModelViewSet):
     queryset = models.CableSegment.objects.select_related("cable", "pathway")
     serializer_class = serializers.CableSegmentSerializer
-    filterset_class = filters.CableSegmentFilterSet
+    filterset_class = filtersets.CableSegmentFilterSet
 
 
 class SiteGeometryViewSet(NetBoxModelViewSet):
     queryset = models.SiteGeometry.objects.select_related("site", "structure")
     serializer_class = serializers.SiteGeometrySerializer
-    filterset_class = filters.SiteGeometryFilterSet
+    filterset_class = filtersets.SiteGeometryFilterSet
 
 
 class CircuitGeometryViewSet(NetBoxModelViewSet):
     queryset = models.CircuitGeometry.objects.select_related("circuit", "circuit__provider")
     serializer_class = serializers.CircuitGeometrySerializer
-    filterset_class = filters.CircuitGeometryFilterSet
+    filterset_class = filtersets.CircuitGeometryFilterSet
 
 
 class PlannedRouteViewSet(NetBoxModelViewSet):
@@ -137,4 +137,4 @@ class PlannedRouteViewSet(NetBoxModelViewSet):
         "cable",
     )
     serializer_class = serializers.PlannedRouteSerializer
-    filterset_class = filters.PlannedRouteFilterSet
+    filterset_class = filtersets.PlannedRouteFilterSet

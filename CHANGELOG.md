@@ -260,6 +260,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ConduitBankImportForm` was missing the `length` column that the GUI add
   form exposes. Fixes #58.
 
+- Object selector modals no longer fail with a blank grey overlay. NetBox
+  resolves plugin filter forms at `<app>.forms.<Model>FilterForm` and
+  filtersets at `<app>.filtersets.<Model>FilterSet`; the plugin's modules were
+  named `filterforms.py` and `filters.py`, so every `selector=True` field
+  returned a server error when its selector button was clicked (#106).
+
 ## [0.2.2] - 2026-06-30
 
 ### Fixed

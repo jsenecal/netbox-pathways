@@ -26,7 +26,7 @@ from rest_framework.viewsets import ReadOnlyModelViewSet
 from rest_framework_gis.fields import GeometryField
 from rest_framework_gis.serializers import GeoFeatureModelSerializer
 
-from .. import filters, models
+from .. import filtersets, models
 from ..choices import PathwayStatusChoices, StructureStatusChoices
 from ..geo import LEAFLET_SRID, get_srid
 
@@ -260,7 +260,7 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
         .order_by("pk")
     )
     serializer_class = StructureGeoSerializer
-    filterset_class = filters.StructureFilterSet
+    filterset_class = filtersets.StructureFilterSet
     bbox_geo_field = "geometry"
     pagination_class = None
 
@@ -355,7 +355,7 @@ class PathwayGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
         .order_by("pk")
     )
     serializer_class = PathwayGeoSerializer
-    filterset_class = filters.PathwayFilterSet
+    filterset_class = filtersets.PathwayFilterSet
     bbox_geo_field = "path"
     pagination_class = None
 
@@ -377,7 +377,7 @@ class ConduitBankGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
         .order_by("pk")
     )
     serializer_class = ConduitBankGeoSerializer
-    filterset_class = filters.ConduitBankFilterSet
+    filterset_class = filtersets.ConduitBankFilterSet
     bbox_geo_field = "path"
     pagination_class = None
 
@@ -399,7 +399,7 @@ class ConduitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
         .order_by("pk")
     )
     serializer_class = ConduitGeoSerializer
-    filterset_class = filters.ConduitFilterSet
+    filterset_class = filtersets.ConduitFilterSet
     bbox_geo_field = "path"
     pagination_class = None
 
@@ -417,7 +417,7 @@ class AerialSpanGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
         .order_by("pk")
     )
     serializer_class = AerialSpanGeoSerializer
-    filterset_class = filters.AerialSpanFilterSet
+    filterset_class = filtersets.AerialSpanFilterSet
     bbox_geo_field = "path"
     pagination_class = None
 
@@ -435,7 +435,7 @@ class DirectBuriedGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
         .order_by("pk")
     )
     serializer_class = DirectBuriedGeoSerializer
-    filterset_class = filters.DirectBuriedFilterSet
+    filterset_class = filtersets.DirectBuriedFilterSet
     bbox_geo_field = "path"
     pagination_class = None
 
@@ -447,7 +447,7 @@ class CircuitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
         "circuit__type",
     ).order_by("pk")
     serializer_class = CircuitGeoSerializer
-    filterset_class = filters.CircuitGeometryFilterSet
+    filterset_class = filtersets.CircuitGeometryFilterSet
     bbox_geo_field = "path"
     pagination_class = None
 

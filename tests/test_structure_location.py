@@ -123,7 +123,7 @@ class TestSiteGeometryReadsStructureGeometry:
 @pytest.mark.django_db
 class TestStructureFilterSetLocation:
     def test_location_id_filter(self, site, dcim_location):
-        from netbox_pathways.filters import StructureFilterSet
+        from netbox_pathways.filtersets import StructureFilterSet
 
         inside = Structure.objects.create(
             name="F-IN",
@@ -137,7 +137,7 @@ class TestStructureFilterSetLocation:
         assert list(fs.qs) == [inside]
 
     def test_location_slug_filter(self, site, dcim_location):
-        from netbox_pathways.filters import StructureFilterSet
+        from netbox_pathways.filtersets import StructureFilterSet
 
         inside = Structure.objects.create(
             name="F-SLUG",
