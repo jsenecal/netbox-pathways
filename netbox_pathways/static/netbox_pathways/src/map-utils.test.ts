@@ -12,6 +12,8 @@ import {
     PATHWAY_COLORS,
     structureIcon,
     clusterIcon,
+    createIconButtonControl,
+    bindModalScrollbarGutter,
     esc,
     titleCase,
     getCookie,
@@ -24,6 +26,9 @@ import {
 
 // ---------------------------------------------------------------------------
 // Stub Leaflet globals
+//
+// Control.extend / DomUtil / DomEvent are modelled closely enough that
+// createIconButtonControl builds a real DOM tree we can assert against.
 // ---------------------------------------------------------------------------
 
 let lastDivIconArgs: any = null;
@@ -33,6 +38,26 @@ let lastDivIconArgs: any = null;
         lastDivIconArgs = opts;
         return { options: opts };
     }),
+    Control: {
+        extend: (proto: any) =>
+            class {
+                options = proto.options;
+                onAdd = proto.onAdd;
+            },
+    },
+    DomUtil: {
+        create: (tag: string, className?: string, parent?: HTMLElement) => {
+            const el = document.createElement(tag);
+            if (className) el.className = className;
+            if (parent) parent.appendChild(el);
+            return el;
+        },
+    },
+    DomEvent: {
+        on: (el: HTMLElement, type: string, fn: EventListener) => el.addEventListener(type, fn),
+        preventDefault: (e: Event) => e.preventDefault(),
+        disableClickPropagation: vi.fn(),
+    },
 };
 
 // ---------------------------------------------------------------------------
@@ -436,6 +461,99 @@ describe('clusterIcon', () => {
     it('centers the icon anchor', () => {
         clusterIcon(5);
         expect(lastDivIconArgs.iconAnchor).toEqual([17, 17]); // 34/2
+    });
+});
+
+// ---------------------------------------------------------------------------
+// createIconButtonControl -- the one button behind the locate, kiosk and
+// sidebar-toggle controls, so a regression here breaks all of them at once.
+// ---------------------------------------------------------------------------
+
+describe('createIconButtonControl', () => {
+    function build(overrides: Record<string, unknown> = {}) {
+        const control = createIconButtonControl({
+            icon: 'mdi-fullscreen',
+            title: 'Kiosk mode',
+            onClick: vi.fn(),
+            ...overrides,
+        } as any);
+        return { control, container: (control as any).onAdd() as HTMLElement };
+    }
+
+    it('builds a leaflet-bar carrying the requested icon and title', () => {
+        const { container } = build();
+        const link = container.querySelector('a')!;
+
+        expect(container.className).toContain('leaflet-bar');
+        expect(link.title).toBe('Kiosk mode');
+        expect(link.querySelector('i')!.className).toBe('mdi mdi-fullscreen');
+    });
+
+    it('appends a caller-supplied class to the container', () => {
+        const { container } = build({ className: 'pw-sidebar-toggle-ctrl' });
+
+        expect(container.className).toContain('leaflet-bar');
+        expect(container.className).toContain('pw-sidebar-toggle-ctrl');
+    });
+
+    it('runs onClick and suppresses the anchor navigation', () => {
+        const onClick = vi.fn();
+        const { container } = build({ onClick });
+        const event = new MouseEvent('click', { cancelable: true });
+
+        container.querySelector('a')!.dispatchEvent(event);
+
+        expect(onClick).toHaveBeenCalledOnce();
+        expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('hands the finished container to onReady', () => {
+        const onReady = vi.fn();
+        const { container } = build({ onReady });
+
+        expect(onReady).toHaveBeenCalledWith(container);
+    });
+
+    it('defaults to topleft and honours an explicit position', () => {
+        expect((build().control as any).options.position).toBe('topleft');
+        expect((build({ position: 'topright' }).control as any).options.position).toBe('topright');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// bindModalScrollbarGutter
+// ---------------------------------------------------------------------------
+
+describe('bindModalScrollbarGutter', () => {
+    function fire(modal: HTMLElement, type: string): void {
+        modal.dispatchEvent(new Event(type, { bubbles: true }));
+    }
+
+    it('releases the gutter for the life of the modal', () => {
+        const modal = document.createElement('div');
+        bindModalScrollbarGutter(modal);
+        const root = document.documentElement;
+
+        fire(modal, 'show.bs.modal');
+        expect(root.style.scrollbarGutter).toBe('auto');
+
+        fire(modal, 'hidden.bs.modal');
+        expect(root.style.scrollbarGutter).toBe('');
+    });
+
+    it('brackets Bootstrap: not shown/hide, which fire inside its adjustment', () => {
+        const modal = document.createElement('div');
+        bindModalScrollbarGutter(modal);
+        const root = document.documentElement;
+
+        fire(modal, 'shown.bs.modal');
+        expect(root.style.scrollbarGutter).toBe('');
+
+        fire(modal, 'show.bs.modal');
+        fire(modal, 'hide.bs.modal');
+        expect(root.style.scrollbarGutter).toBe('auto');
+
+        fire(modal, 'hidden.bs.modal');
     });
 });
 

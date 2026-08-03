@@ -30,11 +30,11 @@
              id="{{ id }}-tab-map"
              role="tabpanel"
              aria-labelledby="{{ id }}-tab-map-btn">
+            {# Height lives in .pathways-map-widget so the maximized state can override it. #}
             <div id="{{ id }}-map"
                  class="pathways-map-widget"
                  data-field-id="{{ id }}"
-                 data-geom-type="{{ geom_type }}"
-                 style="height: 400px; width: 100%;">
+                 data-geom-type="{{ geom_type }}">
             </div>
         </div>
         <div class="tab-pane"

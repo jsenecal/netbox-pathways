@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Full-screen toggle on the geometry edit widget.** A new button in the
+  map's top-right corner grows it to fill the browser window, so tracing a
+  route with many intermediate vertices no longer means repeatedly zooming
+  and panning inside a 400px box. Escape or a second click returns to the
+  inline size. The geometry stays in the form field throughout, so nothing
+  is saved, lost or reloaded on the way in or out.
+  Requested by @marcusyuri. Refs #75.
+
 - **Polygon structures draw their real footprint.** A structure whose
   geometry is a polygon now renders as a filled outline in its structure-type
   color -- on the interactive map, on its own detail page and on the Site /
@@ -67,6 +75,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The base-layer selector now sits bottom-right on every map.** The
+  full-page map already put it there; the geometry edit widget and the
+  detail-page mini maps had it top-right. Refs #75.
+
+- **The kiosk-mode button moved to the top-right of the full-page map**,
+  matching the edit widget's full-screen button and the detail panel's
+  expand button, so the same action is in the same corner throughout.
+  Note that the kiosk sidebar overlays that corner when it is open; close
+  it with Escape or its own close button to reach the exit-kiosk button.
+  Refs #75.
+
 - **BREAKING: `Structure.location` is now a FK to `dcim.Location`; the
   geometry moved to `Structure.geometry`.** `location` previously held the
   Point/Polygon geometry, which made it the odd one out -- `location` means
@@ -116,6 +135,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   must target the per-side fields.
 
 ### Fixed
+
+- **The "Show nearby structures" button looked the same on and off.** Its
+  pressed state was a `#f4f4f4` tint, indistinguishable from Leaflet's white
+  control background -- and the same colour Leaflet already uses for plain
+  hover -- so a layer that persists across page loads gave no clue which way
+  it was set. The button now fills with the accent colour while the layer is
+  on, and its tooltip and screen-reader label switch between "Show" and
+  "Hide". Refs #75.
+
+- **Expanding a detail-page map shifted the whole page sideways.** Bootstrap
+  hides the scrollbar when a modal opens and adds an equal `padding-right` to
+  replace the width it assumes it reclaimed -- but NetBox reserves that width
+  permanently (`scrollbar-gutter: stable` on `:root` above 992px), so nothing
+  was reclaimed and the padding was pure surplus. Content jumped left on open
+  and back on close. The map modal now releases the gutter while it is up, so
+  Bootstrap's arithmetic comes out even. Refs #75.
+
+- **The detail-page map now re-measures when its box changes.** Leaflet sizes
+  its panes once, from the container width at init, and an object detail page
+  is often still settling then. A ResizeObserver replaces the fixed 150ms
+  guess the panel was using, and the map's sizing moved out of inline styles
+  into `.pw-detail-map`. Refs #75.
 
 - **Structures with a polygon geometry broke the whole structures layer.**
   The map assumed every structure feature was a marker and asked the layer

@@ -202,12 +202,66 @@
     text-align: center;
 }
 
+/* --- Maximized map ---------------------------------------------------- */
+
+/*
+ * Full-viewport overlay, shared by the full-page map's kiosk mode and the
+ * geometry edit widget's maximize toggle. Covers the NetBox navbar rather
+ * than hiding it, so nothing has to be restored on the way out.
+ *
+ * Both !important flags earn their keep: the map page sizes its wrapper with
+ * an inline style (see sizeMap() in map.html).
+ */
+.pw-maximized {
+    position: fixed !important;
+    inset: 0;
+    z-index: 1050;
+    height: 100vh !important;
+    overflow: hidden;
+    background: var(--tblr-body-bg, #fff);
+}
+
+/* --- Detail-page map panel -------------------------------------------- */
+
+.pw-detail-map {
+    height: 450px;
+    width: 100%;
+}
+
+/* Inside the expand modal the map fills the body instead of a fixed box. */
+.pw-detail-map.pw-detail-map-expanded {
+    height: 100%;
+}
+
+/*
+ * Leaflet lays its panes out from the container width it measured at init,
+ * and nothing forces the rendered map back to the box afterwards. Pin it, the
+ * same way the form widget does below -- belt and braces alongside the
+ * ResizeObserver in detail-map.ts.
+ */
+.pw-detail-map .leaflet-container {
+    width: 100% !important;
+    max-width: 100%;
+}
+
 /* --- Form map widget ------------------------------------------------- */
 
 .pathways-map-widget {
+    height: 400px;
+    width: 100%;
     border-radius: 4px;
     border: 1px solid var(--pw-map-border);
     margin-bottom: 0.5rem;
+}
+
+/*
+ * Maximized widget. The height comes from .pw-maximized (100vh !important,
+ * which beats the 400px above); only the inline-box trim needs undoing.
+ */
+.pathways-map-widget.pw-maximized {
+    border: none;
+    border-radius: 0;
+    margin-bottom: 0;
 }
 
 .pathways-map-widget .leaflet-container {
@@ -400,9 +454,16 @@
     justify-content: center;
     font-size: 18px;
 }
+/*
+ * Pressed state. This has to carry a latched toggle -- the nearby-structures
+ * layer stays on across page loads -- not just the paste panel's momentary
+ * open state, so it fills rather than tints: #f4f4f4 against Leaflet's white
+ * control was indistinguishable from idle, and matched the colour Leaflet
+ * already uses for plain hover.
+ */
 .pathways-helpers .pathways-helper-btn.is-active {
-    background-color: #f4f4f4;
-    color: #000;
+    background-color: var(--tblr-primary, #206bc4);
+    color: #fff;
 }
 .pathways-helpers .pathways-helper-btn.is-busy {
     opacity: 0.6;

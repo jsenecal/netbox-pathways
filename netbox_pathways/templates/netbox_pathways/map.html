@@ -417,15 +417,9 @@
     .pw-section-body.collapsed {
         display: none;
     }
-    /* --- Kiosk mode: full-viewport, no chrome --- */
-    .pw-kiosk {
-        position: fixed !important;
-        inset: 0;
-        z-index: 1050;
-        height: 100vh !important;
-        overflow: hidden;
-        background: var(--tblr-body-bg, #fff);
-    }
+    /* --- Kiosk mode: full-viewport, no navbar or breadcrumbs ---
+       The overlay box itself is .pw-maximized in leaflet-theme.css, shared
+       with the geometry edit widget. Only the page-specific parts live here. */
     .pw-kiosk .card {
         border: none;
         border-radius: 0;
@@ -460,7 +454,7 @@
         color: var(--tblr-body-color, #212529);
     }
 </style>
-<div class="pathways-map-wrapper{% if map_init_config.kiosk %} pw-kiosk{% endif %}">
+<div class="pathways-map-wrapper{% if map_init_config.kiosk %} pw-maximized pw-kiosk{% endif %}">
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h3 class="card-title mb-0">Infrastructure Map</h3>

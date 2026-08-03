@@ -1,7 +1,9 @@
 /**
- * Pure utility functions and constants extracted from pathways-map.ts.
+ * Shared helpers and constants extracted from pathways-map.ts: colors,
+ * marker icons, the common map control button, and small utilities.
  *
- * These are used by pathways-map, sidebar, popover, and tests.
+ * These are used by pathways-map, map-core, sidebar, popover, the geometry
+ * edit widget, and tests.
  */
 
 // ---------------------------------------------------------------------------
@@ -100,6 +102,94 @@ export function clusterIcon(count: number): L.DivIcon {
               count + '</span></div></div>',
         iconSize: [size, size] as [number, number],
         iconAnchor: [size / 2, size / 2] as [number, number],
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Control helpers
+// ---------------------------------------------------------------------------
+
+export interface IconButtonControlOptions {
+    /** Material Design Icons class for the glyph, e.g. 'mdi-fullscreen'. */
+    icon: string;
+    title: string;
+    onClick: () => void;
+    /** Leaflet corner to dock in. Defaults to 'topleft'. */
+    position?: L.ControlPosition;
+    /** Extra classes for the bar, on top of the shared leaflet-bar styling. */
+    className?: string;
+    /**
+     * Called once with the finished container. For controls that must show,
+     * hide or observe their own button after it exists.
+     */
+    onReady?: (container: HTMLElement) => void;
+}
+
+/**
+ * A single-button `leaflet-bar` control styled like Leaflet's own zoom
+ * buttons.
+ *
+ * Every icon button on our maps -- locate, kiosk, sidebar toggle, and the
+ * widget's maximize toggle -- is this same bar with a different glyph and
+ * click handler, so the markup lives here and callers bring only behavior.
+ */
+export function createIconButtonControl(opts: IconButtonControlOptions): L.Control {
+    const IconButtonControl = L.Control.extend({
+        options: { position: opts.position || 'topleft' },
+        onAdd: function (): HTMLElement {
+            const classes = 'leaflet-control-zoom leaflet-bar' +
+                            (opts.className ? ' ' + opts.className : '');
+            const container = L.DomUtil.create('div', classes);
+            const link = L.DomUtil.create('a', '', container) as HTMLAnchorElement;
+            link.href = '#';
+            link.title = opts.title;
+            L.DomUtil.create('i', 'mdi ' + opts.icon, link);
+            link.style.display = 'flex';
+            link.style.alignItems = 'center';
+            link.style.justifyContent = 'center';
+            link.style.fontSize = '18px';
+
+            L.DomEvent.disableClickPropagation(container);
+            L.DomEvent.on(link, 'click', function (e: Event) {
+                L.DomEvent.preventDefault(e);
+                opts.onClick();
+            });
+
+            if (opts.onReady) opts.onReady(container);
+            return container;
+        },
+    });
+    return new IconButtonControl();
+}
+
+/**
+ * Stop a Bootstrap modal from shifting the page sideways as it opens.
+ *
+ * Bootstrap takes the scrollbar away (`overflow: hidden` on body) and adds an
+ * equal `padding-right` to replace the width it assumes it just reclaimed.
+ * NetBox reserves that width permanently instead, with `scrollbar-gutter:
+ * stable` on :root above 992px, so hiding the scrollbar reclaims nothing and
+ * the padding is pure surplus -- the content jumps left on open and back on
+ * close.
+ *
+ * Releasing the gutter while the modal is up makes Bootstrap's assumption
+ * true rather than overriding its arithmetic: the width it reclaims is the
+ * width it pays back. That also degrades to a no-op if NetBox ever drops the
+ * gutter (their code carries a TODO to, once Tabler #2271 ships), where
+ * fighting the padding with !important would start causing the very shift it
+ * was added to prevent.
+ *
+ * `show`/`hidden` rather than `shown`/`hide`: Bootstrap adjusts the scrollbar
+ * after firing `show` and restores it before firing `hidden`, so this brackets
+ * its work from outside.
+ */
+export function bindModalScrollbarGutter(modal: HTMLElement): void {
+    const root = document.documentElement;
+    modal.addEventListener('show.bs.modal', function () {
+        root.style.scrollbarGutter = 'auto';
+    });
+    modal.addEventListener('hidden.bs.modal', function () {
+        root.style.scrollbarGutter = '';
     });
 }
 

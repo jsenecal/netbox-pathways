@@ -173,30 +173,38 @@ class TestMapViewGet:
             response = view.get(request)
         return response
 
+    def _wrapper_classes(self, content):
+        """Classes on the map wrapper div.
+
+        Matched as a set rather than a literal substring: the CSS rules in the
+        page mention the same class names, and the wrapper carries more than
+        one of them in kiosk mode.
+        """
+        match = re.search(r'class="(pathways-map-wrapper[^"]*)"', content)
+        return set(match.group(1).split()) if match else set()
+
     def test_kiosk_true(self, factory):
         response = self._get(factory, "kiosk=true")
         assert response.status_code == 200
-        content = response.content.decode()
-        # The wrapper div should have the pw-kiosk class
-        assert "pathways-map-wrapper pw-kiosk" in content
+        classes = self._wrapper_classes(response.content.decode())
+        # pw-maximized is the shared full-viewport box; pw-kiosk adds the
+        # map-page specifics on top of it.
+        assert "pw-kiosk" in classes
+        assert "pw-maximized" in classes
 
     def test_kiosk_false(self, factory):
         response = self._get(factory, "kiosk=false")
         assert response.status_code == 200
-        content = response.content.decode()
-        # Wrapper div should NOT have pw-kiosk class (CSS rules still mention it)
-        assert "pathways-map-wrapper pw-kiosk" not in content
+        assert "pw-kiosk" not in self._wrapper_classes(response.content.decode())
 
     def test_kiosk_missing(self, factory):
         response = self._get(factory, "")
         assert response.status_code == 200
-        content = response.content.decode()
-        assert "pathways-map-wrapper pw-kiosk" not in content
+        assert "pw-kiosk" not in self._wrapper_classes(response.content.decode())
 
     def test_kiosk_case_insensitive(self, factory):
         response = self._get(factory, "kiosk=TRUE")
-        content = response.content.decode()
-        assert "pathways-map-wrapper pw-kiosk" in content
+        assert "pw-kiosk" in self._wrapper_classes(response.content.decode())
 
     def test_config_carries_status_choices(self, factory):
         """The inactive-set panel must not depend on an /info round-trip

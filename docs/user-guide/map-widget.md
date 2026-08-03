@@ -140,14 +140,33 @@ The second invocation materializes a two-vertex LineString. Drawing a
 shape with the geoman tool or trashing the geometry clears any pending
 vertex.
 
+## Full Screen
+
+The **Full screen** button (the expand icon in the top-right corner of
+the map) grows the map to fill the browser window. The 400px box that
+fits beside a form is cramped for tracing a route with many
+intermediate vertices; full screen removes the constant zoom-and-pan
+without leaving the form.
+
+Press **Escape** or click the button again (it turns into a collapse
+icon) to return. Nothing is lost on the way in or out -- the geometry
+is held in the form field the entire time, and the form is still there,
+underneath, when you come back.
+
+If the paste-coordinate panel is open, the first Escape closes that
+panel and leaves full screen alone.
+
 ## Nearby Structures Reference Layer
 
 The Map tab can show the structures already recorded in the plugin as
 faded, read-only markers, so you can line the geometry up against the
 surrounding plant without flipping between the form and the
-infrastructure map. A toolbar button (**Show nearby structures**, the
-multi-marker icon under the point helpers) toggles the layer; the
-choice is remembered in the browser across forms and defaults to on.
+infrastructure map. A toolbar button (the multi-marker icon under the
+point helpers) toggles the layer; the choice is remembered in the
+browser across forms and defaults to on. The button fills with the
+accent colour while the layer is on, and its tooltip reads **Hide
+nearby structures**; unfilled with **Show nearby structures** means the
+layer is off.
 
 - Markers reuse the shapes and colours of the main infrastructure map
   at reduced size and opacity, and they never intercept clicks --

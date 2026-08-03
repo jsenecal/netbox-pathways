@@ -27,6 +27,8 @@
  * }
  */
 
+import { bindModalScrollbarGutter } from './map-utils';
+
 (function () {
     'use strict';
 
@@ -515,9 +517,9 @@
             (overlayLayers as Record<string, L.Layer>)[name] = userOverlays[name];
         }
 
-        // Layer control
+        // Layer control -- bottom-right on every map in the plugin
         const layerControl: L.Control.Layers = L.control.layers(baseLayers, overlayLayers, {
-            position: 'topright', collapsed: true,
+            position: 'bottomright', collapsed: true,
         }).addTo(map);
 
         // Dynamic GeoJSON layers from API (fetched async, added to control)
@@ -541,11 +543,24 @@
         // Reset control
         new ResetHome(bounds, map.getCenter(), map.getZoom(), { fitMaxZoom: fitMaxZoom }).addTo(map);
 
+        // Leaflet sizes its panes once, from whatever the container measured
+        // at init. On a detail page the column is still settling then -- the
+        // reserved scrollbar gutter, related-object cards and tables all land
+        // after us -- so the map ends up drawn to a stale width and comes up
+        // short of its card. Re-measure whenever the box actually changes,
+        // which also covers window resizes and the expand modal.
+        if (typeof ResizeObserver !== 'undefined') {
+            new ResizeObserver(function () {
+                map.invalidateSize({ animate: false });
+            }).observe(container);
+        }
+
         container._leafletMap = map;
         return map;
     }
 
     // Expose globally
+    (window as any).bindModalScrollbarGutter = bindModalScrollbarGutter;
     (window as any).initGeoMap = initGeoMap;
     (window as any).loadDynamicLayers = loadDynamicLayers;
     (window as any)._createBaseLayers = _createBaseLayers;

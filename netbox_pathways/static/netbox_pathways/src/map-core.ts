@@ -10,6 +10,7 @@ import {
     STRUCTURE_SHAPES,
     PATHWAY_COLORS,
     PATHWAY_DASH,
+    createIconButtonControl,
     titleCase as _titleCase,
 } from './map-utils';
 
@@ -235,122 +236,95 @@ export function createStatsControl(map: L.Map): void {
 // ---------------------------------------------------------------------------
 
 export function createLocateControl(map: L.Map): L.Control {
-    const LocateControl = L.Control.extend({
-        options: { position: 'topleft' },
-        onAdd: function (): HTMLElement {
-            const container = L.DomUtil.create('div', 'leaflet-control-zoom leaflet-bar');
-            const link = L.DomUtil.create('a', '', container) as HTMLAnchorElement;
-            link.href = '#';
-            link.title = 'Go to my location';
-            L.DomUtil.create('i', 'mdi mdi-crosshairs-gps', link);
-            link.style.display = 'flex';
-            link.style.alignItems = 'center';
-            link.style.justifyContent = 'center';
-            link.style.fontSize = '18px';
-
-            L.DomEvent.disableClickPropagation(container);
-            L.DomEvent.on(link, 'click', function (e: Event) {
-                L.DomEvent.preventDefault(e);
-                if (!navigator.geolocation) return;
-                navigator.geolocation.getCurrentPosition(
-                    function (pos: GeolocationPosition) {
-                        map.flyTo([pos.coords.latitude, pos.coords.longitude], 17, { duration: 1 });
-                    },
-                    function () { /* silently ignore denial */ },
-                    { enableHighAccuracy: true, timeout: 10000 },
-                );
-            });
-            return container;
+    return createIconButtonControl({
+        icon: 'mdi-crosshairs-gps',
+        title: 'Go to my location',
+        onClick: function () {
+            if (!navigator.geolocation) return;
+            navigator.geolocation.getCurrentPosition(
+                function (pos: GeolocationPosition) {
+                    map.flyTo([pos.coords.latitude, pos.coords.longitude], 17, { duration: 1 });
+                },
+                function () { /* silently ignore denial */ },
+                { enableHighAccuracy: true, timeout: 10000 },
+            );
         },
     });
-    return new LocateControl();
 }
 
 // ---------------------------------------------------------------------------
 // Kiosk control
 // ---------------------------------------------------------------------------
 
+/**
+ * Enter or leave kiosk mode on the full-page map.
+ *
+ * Unlike the edit widget's maximize toggle, this is a navigation: kiosk state
+ * lives in the URL so the view can render the page without the navbar and
+ * breadcrumbs, and so a kiosk view stays shareable. The current position rides
+ * along in the query string to survive the reload.
+ *
+ * Top-right, matching the edit widget's full-screen button and the detail
+ * panel's expand button, so the same action is in the same corner everywhere.
+ * It is added before the sidebar toggle so it keeps the top slot rather than
+ * shifting as that button shows and hides itself.
+ */
 export function createKioskControl(map: L.Map, isKiosk: boolean): L.Control {
-    const KioskControl = L.Control.extend({
-        options: { position: 'topleft' },
-        onAdd: function (): HTMLElement {
-            const container = L.DomUtil.create('div', 'leaflet-control-zoom leaflet-bar');
-            const link = L.DomUtil.create('a', '', container) as HTMLAnchorElement;
-            link.href = '#';
-            link.title = isKiosk ? 'Exit kiosk mode' : 'Kiosk mode';
-            L.DomUtil.create('i', 'mdi ' + (isKiosk ? 'mdi-fullscreen-exit' : 'mdi-fullscreen'), link);
-            link.style.display = 'flex';
-            link.style.alignItems = 'center';
-            link.style.justifyContent = 'center';
-            link.style.fontSize = '18px';
-
-            L.DomEvent.disableClickPropagation(container);
-            L.DomEvent.on(link, 'click', function (e: Event) {
-                L.DomEvent.preventDefault(e);
-                const center = map.getCenter();
-                const zoom = map.getZoom();
-                const params = new URLSearchParams();
-                params.set('lat', center.lat.toFixed(6));
-                params.set('lon', center.lng.toFixed(6));
-                params.set('zoom', String(zoom));
-                if (!isKiosk) {
-                    params.set('kiosk', 'true');
-                }
-                window.location.search = params.toString();
-            });
-            return container;
+    return createIconButtonControl({
+        icon: isKiosk ? 'mdi-fullscreen-exit' : 'mdi-fullscreen',
+        title: isKiosk ? 'Exit kiosk mode' : 'Kiosk mode',
+        position: 'topright',
+        onClick: function () {
+            const center = map.getCenter();
+            const params = new URLSearchParams();
+            params.set('lat', center.lat.toFixed(6));
+            params.set('lon', center.lng.toFixed(6));
+            params.set('zoom', String(map.getZoom()));
+            if (!isKiosk) {
+                params.set('kiosk', 'true');
+            }
+            window.location.search = params.toString();
         },
     });
-    return new KioskControl();
 }
 
 // ---------------------------------------------------------------------------
 // Sidebar toggle control
 // ---------------------------------------------------------------------------
 
-export function createSidebarToggleControl(map: L.Map, isKiosk: boolean, showCallback: () => void): L.Control {
-    const SidebarToggle = L.Control.extend({
-        options: { position: 'topright' },
-        onAdd: function (): HTMLElement {
-            const container = L.DomUtil.create('div', 'leaflet-control-zoom leaflet-bar pw-sidebar-toggle-ctrl');
-            const link = L.DomUtil.create('a', '', container) as HTMLAnchorElement;
-            link.href = '#';
-            link.title = 'Show sidebar';
-            L.DomUtil.create('i', 'mdi mdi-chevron-left', link);
-            link.style.display = 'flex';
-            link.style.alignItems = 'center';
-            link.style.justifyContent = 'center';
-            link.style.fontSize = '18px';
+export function createSidebarToggleControl(isKiosk: boolean, showCallback: () => void): L.Control {
+    // Kiosk mode slides the sidebar in over the map; docked mode hides it
+    // out of the flex row. Opposite classes, same question.
+    function sidebarVisible(sidebar: HTMLElement): boolean {
+        return isKiosk
+            ? sidebar.classList.contains('pw-sidebar-open')
+            : !sidebar.classList.contains('pw-sidebar-hidden');
+    }
 
-            L.DomEvent.disableClickPropagation(container);
-            L.DomEvent.on(link, 'click', function (e: Event) {
-                L.DomEvent.preventDefault(e);
-                showCallback();
-            });
-
-            // Watch sidebar visibility to show/hide this button
-            const observer = new MutationObserver(function () {
+    return createIconButtonControl({
+        icon: 'mdi-chevron-left',
+        title: 'Show sidebar',
+        position: 'topright',
+        className: 'pw-sidebar-toggle-ctrl',
+        onClick: showCallback,
+        onReady: function (container: HTMLElement) {
+            // The button is redundant while the sidebar is on screen, so it
+            // tracks the sidebar's class instead of being toggled by hand
+            // from each of the several places that open or close it.
+            function sync(): void {
                 const sidebar = document.getElementById('pw-sidebar');
                 if (!sidebar) return;
-                const sidebarVisible = isKiosk
-                    ? sidebar.classList.contains('pw-sidebar-open')
-                    : !sidebar.classList.contains('pw-sidebar-hidden');
-                container.style.display = sidebarVisible ? 'none' : '';
-            });
-            const sidebar = document.getElementById('pw-sidebar');
-            if (sidebar) {
-                observer.observe(sidebar, { attributes: true, attributeFilter: ['class'] });
-                // Initial state
-                const sidebarVisible = isKiosk
-                    ? sidebar.classList.contains('pw-sidebar-open')
-                    : !sidebar.classList.contains('pw-sidebar-hidden');
-                container.style.display = sidebarVisible ? 'none' : '';
+                container.style.display = sidebarVisible(sidebar) ? 'none' : '';
             }
-
-            return container;
+            const sidebar = document.getElementById('pw-sidebar');
+            if (!sidebar) return;
+            new MutationObserver(sync).observe(sidebar, {
+                attributes: true,
+                attributeFilter: ['class'],
+            });
+            sync();
         },
     });
-    return new SidebarToggle();
 }
 
 // ---------------------------------------------------------------------------

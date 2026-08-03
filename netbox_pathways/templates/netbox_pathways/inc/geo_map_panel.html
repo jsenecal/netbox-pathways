@@ -7,7 +7,8 @@
             </a>
         </div>
     </h2>
-    <div id="{{ map_id }}" style="height: 450px; width: 100%;"></div>
+    {# Sizing lives in .pw-detail-map so the map cannot be left narrower than its card. #}
+    <div id="{{ map_id }}" class="pw-detail-map"></div>
 </div>
 
 <!-- Fullscreen modal -->
@@ -21,7 +22,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-0">
-                <div id="{{ map_id }}-expanded" style="height: 100%;"></div>
+                <div id="{{ map_id }}-expanded" class="pw-detail-map pw-detail-map-expanded"></div>
             </div>
         </div>
     </div>
@@ -41,6 +42,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     var modalEl = document.getElementById('{{ map_id }}-modal');
+    bindModalScrollbarGutter(modalEl);
     modalEl.addEventListener('shown.bs.modal', function() {
         var expanded = document.getElementById('{{ map_id }}-expanded');
         if (expanded._leafletMap) {
