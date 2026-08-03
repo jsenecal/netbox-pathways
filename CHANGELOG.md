@@ -136,6 +136,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The nearby-structures layer drew the structure you were editing.** A
+  Structure edit form fetches the surrounding structures for context, and the
+  record being edited came back with them -- so a faded read-only copy sat
+  directly under the editable marker, and once the marker was dragged the copy
+  stayed behind at the old position looking like a second structure. The
+  widget now tells the layer which record to skip, matched by ID rather than
+  by position, so it stays hidden wherever the marker goes. Structures that
+  genuinely share the location are still drawn. Refs #75.
+
 - **The "Show nearby structures" button looked the same on and off.** Its
   pressed state was a `#f4f4f4` tint, indistinguishable from Leaflet's white
   control background -- and the same colour Leaflet already uses for plain

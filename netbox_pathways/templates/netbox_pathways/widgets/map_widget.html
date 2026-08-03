@@ -34,7 +34,8 @@
             <div id="{{ id }}-map"
                  class="pathways-map-widget"
                  data-field-id="{{ id }}"
-                 data-geom-type="{{ geom_type }}">
+                 data-geom-type="{{ geom_type }}"
+                 {% if ref_exclude_pk %}data-ref-exclude-id="{{ ref_exclude_pk }}"{% endif %}>
             </div>
         </div>
         <div class="tab-pane"

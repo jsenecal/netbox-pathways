@@ -16,6 +16,7 @@ import {
     setRefEnabled,
     buildRefUrl,
     extractExcludePoints,
+    readExclusions,
     renderReferenceStructures,
     refreshReferenceLayer,
     addToggleControl,
@@ -92,13 +93,15 @@ function featureCollection(features: GeoJSON.Feature[]): GeoJSON.FeatureCollecti
 }
 
 function pointFeature(
-    lng: number, lat: number, props: Record<string, unknown> = {},
+    lng: number, lat: number, props: Record<string, unknown> = {}, id?: number,
 ): GeoJSON.Feature {
-    return {
+    const feature: GeoJSON.Feature = {
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [lng, lat] },
         properties: props,
     };
+    if (id !== undefined) feature.id = id;
+    return feature;
 }
 
 beforeEach(() => {
@@ -202,9 +205,61 @@ describe('renderReferenceStructures', () => {
         ]);
         const count = renderReferenceStructures(group as unknown as L.LayerGroup, data, {
             zoom: 15,
-            exclude: [[-73.55000000004, 45.44999999996]],  // within epsilon
+            exclude: { points: [[-73.55000000004, 45.44999999996]] },  // within epsilon
         });
         expect(count).toBe(1);
+    });
+
+    it('skips the structure being edited, wherever its marker has been dragged', () => {
+        const group = createMockLayerGroup();
+        const data = featureCollection([
+            pointFeature(-73.55, 45.45, { name: 'This structure' }, 42),
+            pointFeature(-73.56, 45.46, { name: 'Neighbour' }, 43),
+        ]);
+        const count = renderReferenceStructures(group as unknown as L.LayerGroup, data, {
+            zoom: 15,
+            exclude: { ids: ['42'] },
+        });
+        expect(count).toBe(1);
+        expect(group._layers).toHaveLength(1);
+    });
+
+    it('matches the excluded id in properties when the feature has no top-level id', () => {
+        const group = createMockLayerGroup();
+        const data = featureCollection([pointFeature(-73.55, 45.45, { name: 'This', id: 42 })]);
+        const count = renderReferenceStructures(group as unknown as L.LayerGroup, data, {
+            zoom: 15,
+            exclude: { ids: ['42'] },
+        });
+        expect(count).toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Exclusions read off the widget container
+// ---------------------------------------------------------------------------
+
+describe('readExclusions', () => {
+    function container(dataset: Record<string, string>): HTMLElement {
+        const el = document.createElement('div');
+        for (const [key, value] of Object.entries(dataset)) el.dataset[key] = value;
+        return el;
+    }
+
+    it('reads the edited object id and the locked endpoint points', () => {
+        document.body.innerHTML =
+            '<script type="application/json" id="id_geometry-endpoints">' +
+            '{"start": {"type": "Point", "coordinates": [-73.55, 45.45]}}</script>';
+        const excl = readExclusions(container({ fieldId: 'id_geometry', refExcludeId: '42' }));
+        expect(excl.ids).toEqual(['42']);
+        expect(excl.points).toEqual([[-73.55, 45.45]]);
+    });
+
+    it('yields nothing to exclude on an add form', () => {
+        document.body.innerHTML = '';
+        const excl = readExclusions(container({ fieldId: 'id_geometry' }));
+        expect(excl.ids).toEqual([]);
+        expect(excl.points).toEqual([]);
     });
 
     it('adds permanent name labels only at high zoom', () => {
@@ -242,7 +297,7 @@ describe('refreshReferenceLayer', () => {
     it('fetches the viewport and renders when enabled at data zoom', async () => {
         const fetchFn = mockFetch([pointFeature(-73.55, 45.45, { name: 'P-1' })]);
         const group = createMockLayerGroup();
-        await refreshReferenceLayer(createMockMap(15), group as unknown as L.LayerGroup, []);
+        await refreshReferenceLayer(createMockMap(15), group as unknown as L.LayerGroup, {});
         expect(fetchFn).toHaveBeenCalledTimes(1);
         const url = fetchFn.mock.calls[0][0] as string;
         expect(url).toContain('structures/?format=json&bbox=-73.6,45.4,-73.5,45.5&zoom=15');
@@ -252,7 +307,7 @@ describe('refreshReferenceLayer', () => {
     it('does not fetch below the minimum zoom and clears the layer', async () => {
         const fetchFn = mockFetch([]);
         const group = createMockLayerGroup();
-        await refreshReferenceLayer(createMockMap(MIN_REF_ZOOM - 1), group as unknown as L.LayerGroup, []);
+        await refreshReferenceLayer(createMockMap(MIN_REF_ZOOM - 1), group as unknown as L.LayerGroup, {});
         expect(fetchFn).not.toHaveBeenCalled();
         expect(group.clearLayers).toHaveBeenCalled();
     });
@@ -261,7 +316,7 @@ describe('refreshReferenceLayer', () => {
         setRefEnabled(false);
         const fetchFn = mockFetch([]);
         const group = createMockLayerGroup();
-        await refreshReferenceLayer(createMockMap(15), group as unknown as L.LayerGroup, []);
+        await refreshReferenceLayer(createMockMap(15), group as unknown as L.LayerGroup, {});
         expect(fetchFn).not.toHaveBeenCalled();
         expect(group.clearLayers).toHaveBeenCalled();
     });
@@ -270,7 +325,7 @@ describe('refreshReferenceLayer', () => {
         (globalThis as any).fetch = vi.fn(async () => { throw new Error('network'); });
         const group = createMockLayerGroup();
         await expect(
-            refreshReferenceLayer(createMockMap(15), group as unknown as L.LayerGroup, []),
+            refreshReferenceLayer(createMockMap(15), group as unknown as L.LayerGroup, {}),
         ).resolves.toBeUndefined();
     });
 });
