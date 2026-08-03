@@ -79,6 +79,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   full-page map already put it there; the geometry edit widget and the
   detail-page mini maps had it top-right. Refs #75.
 
+- **The kiosk-mode button moved to the top-right of the full-page map**,
+  matching the edit widget's full-screen button and the detail panel's
+  expand button, so the same action is in the same corner throughout.
+  Note that the kiosk sidebar overlays that corner when it is open; close
+  it with Escape or its own close button to reach the exit-kiosk button.
+  Refs #75.
+
 - **BREAKING: `Structure.location` is now a FK to `dcim.Location`; the
   geometry moved to `Structure.geometry`.** `location` previously held the
   Point/Polygon geometry, which made it the odd one out -- `location` means

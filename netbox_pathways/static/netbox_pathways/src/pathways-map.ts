@@ -91,7 +91,9 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
     createStatsControl(map);
     createLegend(map);
 
-    // Map controls (topleft, below zoom)
+    // Map controls. Kiosk and the sidebar toggle sit top-right, locate goes
+    // below the zoom control on the left. Kiosk is added first so it holds the
+    // top slot instead of moving as the sidebar toggle hides and shows itself.
     createKioskControl(map, !!config.kiosk).addTo(map);
     createSidebarToggleControl(!!config.kiosk, function () { Sidebar.show(); }).addTo(map);
     createLocateControl(map).addTo(map);

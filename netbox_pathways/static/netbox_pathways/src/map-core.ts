@@ -263,11 +263,17 @@ export function createLocateControl(map: L.Map): L.Control {
  * lives in the URL so the view can render the page without the navbar and
  * breadcrumbs, and so a kiosk view stays shareable. The current position rides
  * along in the query string to survive the reload.
+ *
+ * Top-right, matching the edit widget's full-screen button and the detail
+ * panel's expand button, so the same action is in the same corner everywhere.
+ * It is added before the sidebar toggle so it keeps the top slot rather than
+ * shifting as that button shows and hides itself.
  */
 export function createKioskControl(map: L.Map, isKiosk: boolean): L.Control {
     return createIconButtonControl({
         icon: isKiosk ? 'mdi-fullscreen-exit' : 'mdi-fullscreen',
         title: isKiosk ? 'Exit kiosk mode' : 'Kiosk mode',
+        position: 'topright',
         onClick: function () {
             const center = map.getCenter();
             const params = new URLSearchParams();
