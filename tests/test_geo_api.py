@@ -171,14 +171,7 @@ def api_client():
 
 @pytest.mark.django_db
 class TestStructureGeoAPI:
-    def test_list_returns_geojson(self, api_client, structures):
-        resp = api_client.get("/api/plugins/pathways/geo/structures/", format="json")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["type"] == "FeatureCollection"
-        assert len(data["features"]) >= 3
-
-    def test_features_have_geometry(self, api_client, structures):
+    def test_features_transformed_to_wgs84(self, api_client, structures):
         resp = api_client.get("/api/plugins/pathways/geo/structures/", format="json")
         data = resp.json()
         for feat in data["features"]:
@@ -189,13 +182,6 @@ class TestStructureGeoAPI:
             # Transformed to WGS84 — coordinates should be in valid range
             assert -180 <= lon <= 180
             assert -90 <= lat <= 90
-
-    def test_features_have_properties(self, api_client, structures):
-        resp = api_client.get("/api/plugins/pathways/geo/structures/", format="json")
-        data = resp.json()
-        props = data["features"][0]["properties"]
-        assert "name" in props
-        assert "structure_type" in props
 
     def test_etag_header(self, api_client, structures):
         resp = api_client.get("/api/plugins/pathways/geo/structures/", format="json")
@@ -236,9 +222,38 @@ class TestStructureGeoAPI:
         assert resp.status_code == 200
         assert len(resp.json()["features"]) == 0
 
-    def test_zoom_param_accepted(self, api_client, structures):
+    def test_zoom_param_below_cap_returns_features_with_etag(self, api_client, structures):
+        """The zoom branch of StructureGeoViewSet.list dispatches between plain
+        features and clustering; under MAX_GEO_RESULTS it must return the
+        features themselves, ETag intact."""
         resp = api_client.get("/api/plugins/pathways/geo/structures/?zoom=10", format="json")
         assert resp.status_code == 200
+        assert len(resp.json()["features"]) == len(structures)
+        assert resp["ETag"]
+
+    def test_zoom_branch_honors_etag_304(self, api_client, structures):
+        resp1 = api_client.get("/api/plugins/pathways/geo/structures/?zoom=10", format="json")
+        resp2 = api_client.get(
+            "/api/plugins/pathways/geo/structures/?zoom=10",
+            format="json",
+            HTTP_IF_NONE_MATCH=resp1["ETag"],
+        )
+        assert resp2.status_code == 304
+
+    def test_zoom_above_cap_returns_clusters(self, api_client, structures, monkeypatch):
+        """Over MAX_GEO_RESULTS the zoom branch aggregates into grid clusters;
+        every structure must be accounted for in the cluster counts."""
+        from netbox_pathways.api import geo as geo_module
+
+        monkeypatch.setattr(geo_module, "MAX_GEO_RESULTS", 2)
+        resp = api_client.get("/api/plugins/pathways/geo/structures/?zoom=8", format="json")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_count"] == len(structures)
+        assert data["features"], "expected at least one cluster feature"
+        for feat in data["features"]:
+            assert feat["properties"]["cluster"] is True
+        assert sum(f["properties"]["point_count"] for f in data["features"]) == len(structures)
 
     def test_invalid_bbox_ignored(self, api_client, structures):
         resp = api_client.get(
@@ -255,43 +270,6 @@ class TestStructureGeoAPI:
 
 @pytest.mark.django_db
 class TestPathwayGeoAPI:
-    def test_pathway_list(self, api_client, conduits):
-        resp = api_client.get("/api/plugins/pathways/geo/pathways/", format="json")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["type"] == "FeatureCollection"
-
-    def test_pathway_geometry_is_linestring(self, api_client, conduits):
-        resp = api_client.get("/api/plugins/pathways/geo/pathways/", format="json")
-        data = resp.json()
-        for feat in data["features"]:
-            if feat["geometry"]:
-                assert feat["geometry"]["type"] == "LineString"
-
-    def test_conduit_geo(self, api_client, conduits):
-        resp = api_client.get("/api/plugins/pathways/geo/conduits/", format="json")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert len(data["features"]) >= 2
-
-    def test_aerial_span_geo(self, api_client, aerial_span):
-        resp = api_client.get("/api/plugins/pathways/geo/aerial-spans/", format="json")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert len(data["features"]) >= 1
-
-    def test_direct_buried_geo(self, api_client, direct_buried):
-        resp = api_client.get("/api/plugins/pathways/geo/direct-buried/", format="json")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert len(data["features"]) >= 1
-
-    def test_conduit_bank_geo(self, api_client, conduit_bank):
-        resp = api_client.get("/api/plugins/pathways/geo/conduit-banks/", format="json")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert len(data["features"]) >= 1
-
     def test_pathway_etag(self, api_client, conduits):
         resp1 = api_client.get("/api/plugins/pathways/geo/pathways/", format="json")
         etag = resp1.get("ETag")

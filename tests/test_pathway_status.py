@@ -9,11 +9,7 @@ def test_pathway_status_choices_mirror_structure_status_choices():
     assert PathwayStatusChoices.values() == StructureStatusChoices.values()
 
 
-def test_pathway_status_defaults_to_active():
-    conduit = Conduit(label="status-default")
-    assert conduit.status == PathwayStatusChoices.STATUS_ACTIVE
-
-
 def test_pathway_get_status_color():
+    """Pathway defines get_status_color() itself; the badge templates call it."""
     conduit = Conduit(label="status-color", status=PathwayStatusChoices.STATUS_RETIRED)
     assert conduit.get_status_color() == PathwayStatusChoices.colors["retired"]

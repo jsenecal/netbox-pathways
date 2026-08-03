@@ -280,3 +280,100 @@ class TestPolygonStructures:
 
         assert [p["name"] for p in data["polygons"]] == ["V-FAR"]
         assert data["polygons"][0]["muted"] is True
+
+
+@pytest.mark.django_db
+class TestPluginModelDetailMaps:
+    """Per-model branches of PluginModelMapExtension._get_geo_data."""
+
+    def _plugin_ext(self):
+        return PluginModelMapExtension(context={})
+
+    def test_pathway_page_shows_line_with_colored_endpoints(self, site):
+        """Start renders green, end renders red, so direction is readable."""
+        s1 = _structure("PW-A", 0, 0, site=site)
+        s2 = _structure("PW-B", 100, 100, site=site)
+        conduit = _conduit(
+            label="C-detail",
+            path=LineString((0, 0), (100, 100), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+
+        data = self._plugin_ext()._get_geo_data(conduit)
+
+        assert len(data["lines"]) == 1
+        colors = {p["name"]: p["color"] for p in data["points"]}
+        assert colors == {"PW-A": "green", "PW-B": "red"}
+
+    def test_conduit_bank_page_shows_line_and_orange_endpoints(self, site):
+        from netbox_pathways.models import ConduitBank
+
+        s1 = _structure("CB-A", 0, 0, site=site)
+        s2 = _structure("CB-B", 100, 100, site=site)
+        bank = ConduitBank.objects.create(
+            label="CB-detail",
+            path=LineString((0, 0), (100, 100), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+
+        data = self._plugin_ext()._get_geo_data(bank)
+
+        assert len(data["lines"]) == 1
+        colors = {p["name"]: p["color"] for p in data["points"]}
+        assert colors == {"CB-A": "orange", "CB-B": "orange"}
+
+    def test_junction_page_shows_trunk_line_and_red_junction_point(self, site):
+        from netbox_pathways.models import ConduitJunction
+
+        s1 = _structure("JX-A", 0, 0, site=site)
+        s2 = _structure("JX-B", 1000, 0, site=site)
+        trunk = _conduit(
+            label="JX-trunk",
+            path=LineString((0, 0), (1000, 0), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+        branch = _conduit(
+            label="JX-branch",
+            path=LineString((500, 100), (500, 500), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+        junction = ConduitJunction.objects.create(
+            trunk_conduit=trunk,
+            branch_conduit=branch,
+            towards_structure=s1,
+            position_on_trunk=0.5,
+        )
+
+        data = self._plugin_ext()._get_geo_data(junction)
+
+        assert len(data["lines"]) == 1
+        assert len(data["points"]) == 1
+        assert data["points"][0]["color"] == "red"
+
+
+@pytest.mark.django_db
+class TestSiteBoundary:
+    """A SiteGeometry with a polygon footprint draws the site's outline."""
+
+    def test_site_boundary_polygon_rendered_as_line(self, site):
+        from netbox_pathways.models import SiteGeometry
+
+        ring = ((0, 0), (0, 100), (100, 100), (100, 0), (0, 0))
+        footprint = Structure.objects.create(
+            name="SB-vault",
+            geometry=Polygon(ring, srid=SRID),
+            structure_type="vault",
+            site=site,
+        )
+        SiteGeometry.objects.create(site=site, structure=footprint)
+
+        data = _extension()._get_geo_data(site)
+
+        boundary = [line for line in data["lines"] if line["name"].startswith("Site boundary")]
+        assert len(boundary) == 1
+        # Closed ring, in [lon, lat] pairs
+        assert boundary[0]["coords"][0] == boundary[0]["coords"][-1]
