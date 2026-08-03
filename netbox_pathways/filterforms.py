@@ -222,7 +222,7 @@ class InnerductFilterForm(NetBoxModelFilterSetForm):
     model = Innerduct
     fieldsets = (
         FieldSet("q", "filter_id", "tag"),
-        FieldSet("status", "parent_conduit_id", "color", name="Attributes"),
+        FieldSet("status", "parent_conduit_id", "size", "color", "position", name="Attributes"),
     )
     status = forms.MultipleChoiceField(choices=PathwayStatusChoices, required=False)
     parent_conduit_id = DynamicModelMultipleChoiceField(
@@ -230,8 +230,10 @@ class InnerductFilterForm(NetBoxModelFilterSetForm):
         required=False,
         label="Parent Conduit",
     )
+    size = forms.CharField(required=False)
     # The picker is the only practical way to filter on a stored hex code.
     color = ColorField(required=False)
+    position = forms.CharField(required=False)
     tag = TagFilterField(model)
 
 

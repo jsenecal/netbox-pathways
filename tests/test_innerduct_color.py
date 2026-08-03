@@ -83,6 +83,11 @@ class TestInnerductColorWiring:
     def test_filter_form_uses_the_core_color_widget(self, db):
         assert isinstance(filterforms.InnerductFilterForm().fields["color"].widget, ColorSelect)
 
+    def test_filter_form_exposes_every_innerduct_attribute_filter(self, db):
+        """The filterset has always accepted these; the form omitted them."""
+        rendered = {item for fieldset in filterforms.InnerductFilterForm.fieldsets for item in fieldset.items}
+        assert {"size", "color", "position"} <= rendered
+
     def test_table_renders_color_as_a_swatch(self):
         assert isinstance(tables.InnerductTable.base_columns["color"], columns.ColorColumn)
 
