@@ -176,6 +176,11 @@ layer is off.
   pan or zoom, starting at zoom 13. Structure names appear as labels
   from zoom 17. Structures sitting exactly on the pathway's locked
   start/end markers are hidden so those stay visible.
+- On a Structure form, the structure being edited is left out of the
+  layer -- otherwise its own faded copy would sit under the editable
+  marker, and stay behind as a ghost at the old position once you moved
+  the marker. Other structures at the same spot are still drawn, since
+  coincident plant is exactly the context the layer is for.
 - Reference markers are context only: nothing snaps to them. Endpoint
   snapping still applies exclusively to the configured start/end
   structures. If a run physically passes intermediate structures, model

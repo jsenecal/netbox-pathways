@@ -8,7 +8,8 @@ the map container renders with an empty ``data-field-id`` (so the JS bails and
 no map appears). See issue #52.
 """
 
-from netbox_pathways.forms import PathwaysMapWidget
+from netbox_pathways.forms import PathwaysMapWidget, StructureForm
+from netbox_pathways.models import Structure
 
 
 def _render(widget):
@@ -33,3 +34,18 @@ def test_geom_type_is_exposed():
     """The configured geometry type must reach the template's data-geom-type."""
     assert 'data-geom-type="Geometry"' in _render(PathwaysMapWidget(geom_type="Geometry"))
     assert 'data-geom-type="LineString"' in _render(PathwaysMapWidget(geom_type="LineString"))
+
+
+def test_ref_exclude_pk_reaches_the_map_container():
+    """The nearby-structures layer reads the id to skip off the map container."""
+    widget = PathwaysMapWidget(geom_type="Geometry")
+    assert "data-ref-exclude-id" not in _render(widget)
+
+    widget.ref_exclude_pk = 42
+    assert 'data-ref-exclude-id="42"' in _render(widget)
+
+
+def test_structure_form_excludes_the_edited_structure(db):
+    """Editing a structure hides its own reference marker; adding one has nothing to hide."""
+    assert StructureForm(instance=Structure(pk=42)).fields["geometry"].widget.ref_exclude_pk == 42
+    assert StructureForm().fields["geometry"].widget.ref_exclude_pk is None

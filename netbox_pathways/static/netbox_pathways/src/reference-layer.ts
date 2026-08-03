@@ -57,6 +57,24 @@ interface EndpointData {
     end?: GeoJSON.Geometry;
 }
 
+function getEndpointData(fieldId: string): EndpointData | null {
+    const el = document.getElementById(fieldId + '-endpoints');
+    if (!el) return null;
+    try {
+        return JSON.parse(el.textContent || '') as EndpointData;
+    } catch {
+        return null;
+    }
+}
+
+/** Reference features the widget must not draw. */
+export interface RefExclusions {
+    /** Coordinates of locked endpoint markers, matched within COORD_EPSILON. */
+    points?: GeoJSON.Position[];
+    /** Structure PKs, as strings; matched wherever the feature now sits. */
+    ids?: string[];
+}
+
 /**
  * Point coordinates of the pathway's own locked endpoint markers; reference
  * markers at these spots are skipped so the locked markers stay visible.
@@ -72,11 +90,34 @@ export function extractExcludePoints(data: EndpointData | null): GeoJSON.Positio
     return points;
 }
 
-function isExcluded(coords: GeoJSON.Position, exclude: GeoJSON.Position[]): boolean {
-    return exclude.some(
+/**
+ * Everything the widget container says to leave out: the object being edited
+ * (data-ref-exclude-id) plus any locked endpoint markers.
+ *
+ * On a Structure form the record's own saved point comes back in the viewport
+ * fetch, so without the id exclusion a faded read-only copy sits under the
+ * editable marker -- and stays behind as a ghost once the marker is dragged.
+ */
+export function readExclusions(container: HTMLElement): RefExclusions {
+    const fieldId = container.dataset.fieldId;
+    const excludeId = container.dataset.refExcludeId;
+    return {
+        points: fieldId ? extractExcludePoints(getEndpointData(fieldId)) : [],
+        ids: excludeId ? [excludeId] : [],
+    };
+}
+
+function isExcludedPoint(coords: GeoJSON.Position, points: GeoJSON.Position[]): boolean {
+    return points.some(
         (p) => Math.abs(p[0] - coords[0]) < COORD_EPSILON &&
                Math.abs(p[1] - coords[1]) < COORD_EPSILON,
     );
+}
+
+/** The API serializes the PK as the feature id; other layers copy it to props. */
+function featureId(feature: GeoJSON.Feature, props: Record<string, unknown>): string | null {
+    const id = feature.id ?? props.id;
+    return id == null ? null : String(id);
 }
 
 // ---------------------------------------------------------------------------
@@ -85,21 +126,25 @@ function isExcluded(coords: GeoJSON.Position, exclude: GeoJSON.Position[]): bool
 
 export interface RenderOptions {
     zoom: number;
-    exclude?: GeoJSON.Position[];
+    exclude?: RefExclusions;
 }
 
 export function renderReferenceStructures(
     group: L.LayerGroup, data: GeoJSON.FeatureCollection, opts: RenderOptions,
 ): number {
     group.clearLayers();
+    const excludePoints = opts.exclude?.points || [];
+    const excludeIds = opts.exclude?.ids || [];
     let count = 0;
     for (const feature of data.features || []) {
         if (!feature.geometry || feature.geometry.type !== 'Point') continue;
         const props = (feature.properties || {}) as Record<string, unknown>;
         // Server-side cluster blobs are not useful reference context.
         if (props.cluster) continue;
+        const id = featureId(feature, props);
+        if (id !== null && excludeIds.includes(id)) continue;
         const coords = (feature.geometry as GeoJSON.Point).coordinates;
-        if (opts.exclude && isExcluded(coords, opts.exclude)) continue;
+        if (isExcludedPoint(coords, excludePoints)) continue;
 
         const marker = L.marker([coords[1], coords[0]], {
             icon: structureIcon((props.structure_type as string) || '', MARKER_SIZE),
@@ -129,7 +174,7 @@ export function renderReferenceStructures(
 let _controller: AbortController | null = null;
 
 export async function refreshReferenceLayer(
-    map: L.Map, group: L.LayerGroup, exclude: GeoJSON.Position[],
+    map: L.Map, group: L.LayerGroup, exclude: RefExclusions,
 ): Promise<void> {
     const zoom = map.getZoom();
     if (!isRefEnabled() || zoom < MIN_REF_ZOOM) {
@@ -212,24 +257,13 @@ interface FieldReadyDetail {
     map: L.Map;
 }
 
-function getEndpointData(fieldId: string): EndpointData | null {
-    const el = document.getElementById(fieldId + '-endpoints');
-    if (!el) return null;
-    try {
-        return JSON.parse(el.textContent || '') as EndpointData;
-    } catch {
-        return null;
-    }
-}
-
 document.addEventListener('pathways:field-ready', (e: Event) => {
     const detail = (e as CustomEvent<FieldReadyDetail>).detail;
     if (!detail) return;
     const { map } = detail;
 
     const container = map.getContainer();
-    const fieldId = container.dataset.fieldId;
-    const exclude = fieldId ? extractExcludePoints(getEndpointData(fieldId)) : [];
+    const exclude = readExclusions(container);
 
     const group = L.layerGroup().addTo(map);
     addToggleControl(map, () => { void refreshReferenceLayer(map, group, exclude); });

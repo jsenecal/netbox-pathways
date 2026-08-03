@@ -93,6 +93,8 @@ class PathwaysMapWidget(BaseGeometryWidget):
     map_srid = 4326
     geom_type = "LINESTRING"  # Default for pathway forms (overrides BaseGeometryWidget 'GEOMETRY')
     endpoint_geojson = None
+    # Structure PK the nearby-structures layer must skip -- see StructureForm.
+    ref_exclude_pk = None
 
     class Media:
         css = {
@@ -131,6 +133,7 @@ class PathwaysMapWidget(BaseGeometryWidget):
         context.setdefault("geom_type", widget["attrs"].get("geom_name", self.geom_type))
         if self.endpoint_geojson:
             context["endpoint_json"] = mark_safe(json.dumps(self.endpoint_geojson))  # noqa: S308
+        context["ref_exclude_pk"] = self.ref_exclude_pk
         return context
 
 
@@ -246,6 +249,14 @@ class StructureForm(NetBoxModelForm):
         FieldSet("geometry", name="Geometry"),
         FieldSet("access_notes", "tags", name="Details"),
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # This structure is in the widget's nearby-structures fetch too. Tell
+        # the layer to skip it, or its faded read-only copy sits under the
+        # editable marker and stays behind as a ghost once the marker moves.
+        if self.instance.pk:
+            self.fields["geometry"].widget.ref_exclude_pk = self.instance.pk
 
     class Meta:
         model = Structure
