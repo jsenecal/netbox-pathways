@@ -34,7 +34,7 @@ from .coord_parser import ForgivingGeometryField
 # NetBox's ObjectSelectorView resolves `<app_label>.forms.<Model>FilterForm`
 # (netbox/views/htmx.py), so every filter form must be importable from this
 # module even though they are defined in filterforms.py. Without this, the
-# object-selector modal 500s for every model. See issue #106.
+# object-selector modal 500s for every model.
 from .filterforms import (
     AerialSpanFilterForm,  # noqa: F401
     CableSegmentFilterForm,  # noqa: F401
