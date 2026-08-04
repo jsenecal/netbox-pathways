@@ -34,3 +34,10 @@ class TestPlannerPrefill:
     def test_returns_none_when_nothing_is_modeled(self, site):
         cable = build_cable_with_terminations(label="PP-none", site=site)
         assert RoutePlannerView()._prefill_structure(cable, "A") is None
+
+    def test_pins_b_side_resolution_independent_of_a(self, site):
+        # Replaces the B-side coverage lost when TestResolveTermination was deleted.
+        structure = Structure.objects.create(name="PP-b-only", site=site, geometry=Point(0, 0, srid=SRID))
+        cable = build_cable_with_terminations(label="PP-b-side", site=site, terminate_a=False, terminate_b=True)
+        assert RoutePlannerView()._prefill_structure(cable, "B") == structure
+        assert RoutePlannerView()._prefill_structure(cable, "A") is None
