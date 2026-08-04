@@ -376,7 +376,8 @@ class Pathway(NetBoxModel):
         self._validate_and_snap_endpoint("end")
 
     def _validate_and_snap_endpoint(self, side):
-        """Validate and snap one endpoint of self.path to the attached structure."""
+        """Validate and snap one endpoint of self.path to the attached structure, or to the
+        endpoint location's identity structure when no structure is set."""
         from django.contrib.gis.geos import LineString, Point
 
         structure = getattr(self, f"{side}_structure", None)
