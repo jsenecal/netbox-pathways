@@ -69,6 +69,26 @@ class TestRegistration:
         layer = register_map_layer(**ref_layer_kwargs)
         assert layer.style.color_field == "status"
 
+    def test_reference_mode_accepts_geometry_field_tuple(self, ref_layer_kwargs):
+        ref_layer_kwargs["geometry_field"] = ("location", "site")
+        layer = register_map_layer(**ref_layer_kwargs)
+        assert layer.geometry_field == ("location", "site")
+
+    def test_reference_mode_normalizes_geometry_field_list(self, ref_layer_kwargs):
+        ref_layer_kwargs["geometry_field"] = ["location", "site"]
+        layer = register_map_layer(**ref_layer_kwargs)
+        assert layer.geometry_field == ("location", "site")
+
+    def test_reference_mode_rejects_empty_geometry_field_tuple(self, ref_layer_kwargs):
+        ref_layer_kwargs["geometry_field"] = ()
+        with pytest.raises(ValueError, match="geometry_field"):
+            register_map_layer(**ref_layer_kwargs)
+
+    def test_reference_mode_rejects_non_string_geometry_field_entries(self, ref_layer_kwargs):
+        ref_layer_kwargs["geometry_field"] = ("location", None)
+        with pytest.raises(ValueError, match="geometry_field"):
+            register_map_layer(**ref_layer_kwargs)
+
 
 class TestUnregister:
     def test_unregister(self, url_layer_kwargs):

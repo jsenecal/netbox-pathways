@@ -527,10 +527,13 @@ class MapInfoView(APIView):
         max_updated = None
         total = 0
 
-        def _count(qs, geo_field):
+        def _count(qs, geo):
             nonlocal max_updated, total
             if bbox_poly is not None:
-                qs = qs.filter(**{f"{geo_field}__intersects": bbox_poly})
+                if isinstance(geo, str):
+                    qs = qs.filter(**{f"{geo}__intersects": bbox_poly})
+                else:
+                    qs = qs.annotate(_pw_geo=geo).filter(_pw_geo__intersects=bbox_poly)
             t, c = _etag_components(qs)
             total += c
             if t and (max_updated is None or t > max_updated):
@@ -544,18 +547,18 @@ class MapInfoView(APIView):
             qs = _exclude_status(qs, excluded_statuses)
             counts[key] = _count(qs, geo_field)
 
-        from .external_geo import _resolve_geo_column
+        from .external_geo import resolve_geometry_expression
 
         for layer_reg in _external_reference_layers():
             try:
                 qs = layer_reg.queryset(request)
-                geo_path, _ = _resolve_geo_column(qs.model, layer_reg.geometry_field)
+                geo_expr = resolve_geometry_expression(qs.model, layer_reg.geometry_field)
             except Exception:
                 logger.warning(
                     "Skipping external layer '%s' in /info: invalid registration", layer_reg.name, exc_info=True
                 )
                 continue
-            external_counts[layer_reg.name] = _count(qs, geo_path)
+            external_counts[layer_reg.name] = _count(qs, geo_expr)
             external_thresholds[layer_reg.name] = {"hide": layer_reg.max_features}
 
         if external_counts:

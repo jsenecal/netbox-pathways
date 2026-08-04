@@ -6,7 +6,11 @@ Run via: python -m pytest tests/test_external_geo.py -v
 
 import pytest
 
-from netbox_pathways.api.external_geo import _build_properties, _resolve_geo_column
+from netbox_pathways.api.external_geo import (
+    _build_properties,
+    _resolve_geo_column,
+    resolve_geometry_expression,
+)
 from netbox_pathways.registry import LayerStyle, MapLayerRegistration, registry
 
 
@@ -50,6 +54,36 @@ class TestResolveGeoColumn:
         # Conduit.conduit_bank is a FK to ConduitBank — not in SUPPORTED_GEO_MODELS
         with pytest.raises(ValueError, match="not in SUPPORTED_GEO_MODELS"):
             _resolve_geo_column(Conduit, "conduit_bank")
+
+
+class TestResolveGeometryExpression:
+    def test_single_entry_returns_column_reference(self):
+        from django.db.models import F
+
+        from netbox_pathways.models import Pathway
+
+        expr = resolve_geometry_expression(Pathway, "start_structure")
+        assert isinstance(expr, F)
+        assert expr.name == "start_structure__geometry"
+
+    def test_tuple_coalesces_in_declared_order(self):
+        from django.db.models.functions import Coalesce
+
+        from netbox_pathways.models import Pathway
+
+        expr = resolve_geometry_expression(Pathway, ("start_location", "start_structure"))
+        assert isinstance(expr, Coalesce)
+        names = [e.name for e in expr.get_source_expressions()]
+        assert names == [
+            "start_location__pathways_structure__geometry",
+            "start_structure__geometry",
+        ]
+
+    def test_unresolvable_tuple_entry_raises(self):
+        from netbox_pathways.models import Conduit
+
+        with pytest.raises(ValueError, match="not in SUPPORTED_GEO_MODELS"):
+            resolve_geometry_expression(Conduit, ("start_location", "conduit_bank"))
 
 
 class TestBuildProperties:
@@ -254,3 +288,37 @@ class TestLocationGeometryResolution:
         lon, lat = features[0]["geometry"]["coordinates"]
         assert lon == pytest.approx(expected.x)
         assert lat == pytest.approx(expected.y)
+
+    @pytest.fixture
+    def loc_fallback_layer(self):
+        from netbox_pathways.models import Conduit
+
+        registry.register(
+            MapLayerRegistration(
+                name="loc_test",
+                label="Location Fallback",
+                geometry_type="Point",
+                source="reference",
+                queryset=lambda request: Conduit.objects.all(),
+                geometry_field=("end_location", "start_structure"),
+                feature_fields=["label"],
+                style=LayerStyle(color="#000"),
+            )
+        )
+
+    def test_tuple_falls_back_instead_of_dropping(self, api_client, location_conduits, loc_fallback_layer):
+        """A location without an identity structure degrades to the next
+        entry's geometry rather than vanishing from the map (#90)."""
+        c_with, c_without, identity = location_conduits
+        resp = api_client.get(self.URL)
+        assert resp.status_code == 200
+        features = {f["properties"]["id"]: f for f in resp.json()["features"]}
+        assert set(features) == {c_with.pk, c_without.pk}
+        # c_with resolves through the location's identity structure...
+        from netbox_pathways.geo import to_leaflet
+
+        expected = to_leaflet(identity.geometry)
+        assert features[c_with.pk]["geometry"]["coordinates"][0] == pytest.approx(expected.x)
+        # ...while c_without falls back to its start structure at the origin.
+        anchor = to_leaflet(c_without.start_structure.geometry)
+        assert features[c_without.pk]["geometry"]["coordinates"][0] == pytest.approx(anchor.x)

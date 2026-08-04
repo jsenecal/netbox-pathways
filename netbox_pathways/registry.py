@@ -61,7 +61,7 @@ class MapLayerRegistration:
 
     # Reference mode
     queryset: Callable[[HttpRequest], QuerySet] | None = None
-    geometry_field: str = ""
+    geometry_field: str | tuple[str, ...] = ""
     feature_fields: list[str] | None = None
 
     # Display
@@ -138,7 +138,12 @@ class MapLayerRegistry:
         if layer.source == "reference":
             if layer.queryset is None:
                 raise ValueError("Reference-mode layers require a 'queryset' callable.")
-            if not layer.geometry_field:
+            gf = layer.geometry_field
+            if isinstance(gf, (tuple, list)):
+                if not gf or not all(isinstance(entry, str) and entry for entry in gf):
+                    raise ValueError(f"geometry_field tuple entries must be non-empty FK field names (got {gf!r}).")
+                layer.geometry_field = tuple(gf)
+            elif not gf:
                 raise ValueError("Reference-mode layers require a 'geometry_field'.")
         if (
             layer.style.color_field
@@ -187,6 +192,7 @@ def register_map_layer(**kwargs: Any) -> MapLayerRegistration:
             source='reference',
             queryset=lambda r: SplicePoint.objects.restrict(r.user, 'view'),
             geometry_field='structure',
+            # or an ordered fallback: geometry_field=('location', 'site')
             style=LayerStyle(color='#2e7d32', icon='mdi-connection'),
         )
     """

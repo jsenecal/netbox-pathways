@@ -13,12 +13,14 @@ from django.contrib.gis.db import models as gis_models
 from django.contrib.gis.db.models.functions import Transform
 from django.contrib.gis.geos import Polygon
 from django.db import models as db_models
+from django.db.models import F
+from django.db.models.functions import Coalesce
 from django.http import Http404, JsonResponse
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from netbox_pathways.api.geo import MAX_GEO_RESULTS
-from netbox_pathways.geo import LEAFLET_SRID
+from netbox_pathways.geo import LEAFLET_SRID, get_srid
 from netbox_pathways.registry import SUPPORTED_GEO_MODELS, registry
 
 logger = logging.getLogger(__name__)
@@ -39,6 +41,21 @@ def _resolve_geo_column(model, geometry_field: str) -> tuple[str, str]:
     raise ValueError(
         f"FK '{geometry_field}' on {model.__name__} points to {target_label}, which is not in SUPPORTED_GEO_MODELS."
     )
+
+
+def resolve_geometry_expression(model, geometry_field):
+    """Resolve a layer's geometry_field into an ORM expression in storage SRID.
+
+    Accepts a single FK field name or an ordered tuple of FK field names.
+    A tuple coalesces to the first non-NULL geometry, so ("location", "site")
+    means "location geometry, else site centroid". Raises ValueError if any
+    entry cannot be resolved through SUPPORTED_GEO_MODELS.
+    """
+    entries = (geometry_field,) if isinstance(geometry_field, str) else tuple(geometry_field)
+    paths = [_resolve_geo_column(model, entry)[0] for entry in entries]
+    if len(paths) == 1:
+        return F(paths[0])
+    return Coalesce(*paths, output_field=gis_models.GeometryField(srid=get_srid()))
 
 
 def _build_properties(obj, feature_fields: list[str] | None, model) -> dict:
@@ -86,14 +103,11 @@ class ExternalLayerGeoView(APIView):
         qs = layer_reg.queryset(request)
         model = qs.model
 
-        fk_geo_path, _target_label = _resolve_geo_column(
-            model,
-            layer_reg.geometry_field,
-        )
+        geo_expr = resolve_geometry_expression(model, layer_reg.geometry_field)
 
         # Annotate with WGS84 geometry
         qs = qs.annotate(
-            _geo_4326=Transform(fk_geo_path, LEAFLET_SRID),
+            _geo_4326=Transform(geo_expr, LEAFLET_SRID),
         ).exclude(_geo_4326__isnull=True)
 
         # Bbox filtering
