@@ -266,6 +266,31 @@ class PathwayGraph:
         cost, pathway_ids = route
         return cost, pathway_ids, path_nodes
 
+    def shortest_path_multi(self, sources, targets):
+        """Cheapest route from any source node to any target node.
+
+        Returns (total_cost, [pathway_ids]) or None. One Dijkstra pass over all
+        sources at once, rather than |sources| x |targets| passes -- and without
+        mutating the graph, which matters because build_topology() caches it
+        across requests.
+        """
+        source_set = {node for node in sources if node in self.graph}
+        target_set = {node for node in targets if node in self.graph}
+        if not source_set or not target_set:
+            return None
+
+        distances, paths = nx.multi_source_dijkstra(self.graph, source_set, weight="weight")
+        reachable = [node for node in target_set if node in distances]
+        if not reachable:
+            return None
+
+        best = min(reachable, key=lambda node: distances[node])
+        path_nodes = paths[best]
+        if len(path_nodes) < 2:
+            # Source and target coincide: nothing to traverse.
+            return None
+        return self._extract_route(path_nodes)
+
     def astar_path(self, start_node, end_node):
         """A* shortest path with haversine heuristic. Returns (total_cost, [pathway_ids]) or None."""
         try:
@@ -380,25 +405,35 @@ class PathwayGraph:
         return 6371000 * 2 * math.asin(math.sqrt(a))
 
 
-def connected_pathways_db(node):
-    """Query pathways connected to a node directly from the database.
+NODE_KINDS = ("structure", "location", "junction")
 
-    Much faster than building the full graph when you only need adjacency
-    for a single node (e.g., "Add Segment" dropdown).
+
+def pathways_connected_to(nodes):
+    """Pathways touching any of the given `(kind, pk)` graph nodes.
+
+    Much faster than building the full graph when you only need adjacency for a
+    handful of nodes, as the Route tab picker does. Unknown kinds are ignored,
+    and a request that names no usable node matches nothing rather than
+    everything.
     """
-    node_type, node_pk = node
-    q = Q()
-    if node_type == "structure":
-        q = Q(start_structure_id=node_pk) | Q(end_structure_id=node_pk)
-    elif node_type == "location":
-        q = Q(start_location_id=node_pk) | Q(end_location_id=node_pk)
-    elif node_type == "junction":
-        q = Q(conduit__start_junction_id=node_pk) | Q(conduit__end_junction_id=node_pk)
-    else:
+    query = Q()
+    usable = False
+    for kind, pk in nodes:
+        if kind == "structure":
+            query |= Q(start_structure_id=pk) | Q(end_structure_id=pk)
+        elif kind == "location":
+            query |= Q(start_location_id=pk) | Q(end_location_id=pk)
+        elif kind == "junction":
+            query |= Q(conduit__start_junction_id=pk) | Q(conduit__end_junction_id=pk)
+        else:
+            continue
+        usable = True
+
+    if not usable:
         return models.Pathway.objects.none()
 
     return (
-        models.Pathway.objects.filter(q)
+        models.Pathway.objects.filter(query)
         .select_related(
             "start_structure",
             "end_structure",

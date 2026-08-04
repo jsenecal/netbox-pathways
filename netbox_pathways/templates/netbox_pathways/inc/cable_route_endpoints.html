@@ -1,0 +1,15 @@
+<div class="mb-3">
+  {% for endpoint in cable_endpoints %}
+  <div class="d-flex gap-2 small">
+    <span class="text-muted" style="min-width: 4rem;">{{ endpoint.end }} end</span>
+    {% if endpoint.labels %}
+    <span>{{ endpoint.labels|join:", " }}</span>
+    {% else %}
+    <span>
+      <span class="text-yellow"><i class="mdi mdi-alert-outline"></i> Not located in the plant</span>
+      <span class="d-block text-muted">{{ endpoint.message }} {{ endpoint.remedy }}</span>
+    </span>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>

@@ -30,12 +30,19 @@
         {% elif gap_count %}
           <span class="badge text-bg-yellow">{{ gap_count }} gap{{ gap_count|pluralize }}</span>
         {% endif %}
+        {% if route_end_flag == "mismatch" %}
+          <span class="badge text-bg-red">Ends do not match cable</span>
+        {% elif route_end_flag == "unverified" %}
+          <span class="badge text-bg-secondary">Ends unverified</span>
+        {% endif %}
         <span class="text-muted">|</span>
         <a href="/plugins/pathways/pull-sheets/{{ cable.pk }}/" class="btn btn-sm btn-outline-secondary">
           <i class="mdi mdi-file-document-outline"></i> Pull Sheet
         </a>
         {% endif %}
       </div>
+
+      {% include "netbox_pathways/inc/cable_route_endpoints.html" %}
 
       <div id="pw-segment-table">
         {% include "netbox_pathways/inc/cable_segment_table.html" %}

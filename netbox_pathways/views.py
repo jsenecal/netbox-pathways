@@ -3,8 +3,8 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.gis.db.models.functions import Length
 from django.db import transaction
-from django.db.models import Count, Exists, F, OuterRef, Q, Sum
-from django.http import HttpResponse, JsonResponse
+from django.db.models import Count, Exists, F, OuterRef, Q, Subquery, Sum
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -29,9 +29,9 @@ from utilities.views import ViewTab, register_model_view
 
 from netbox_pathways.registry import registry as map_layer_registry
 
-from . import filterforms, filtersets, forms, models, tables
+from . import anchors, filterforms, filtersets, forms, models, tables
 from .choices import PlannedRouteStatusChoices
-from .graph import PathwayGraph, _endpoint_nodes, connected_pathways_db
+from .graph import PathwayGraph, _endpoint_nodes
 from .ui import panels
 
 
@@ -1233,11 +1233,11 @@ class RoutePlannerView(LoginRequiredMixin, View):
 
         # Fall back to cable terminations if not explicitly provided
         if cable and not start_structure:
-            start_structure = self._resolve_termination(cable, "A")
+            start_structure = self._prefill_structure(cable, "A")
             if start_structure:
                 initial["start_structure"] = start_structure.pk
         if cable and not end_structure:
-            end_structure = self._resolve_termination(cable, "B")
+            end_structure = self._prefill_structure(cable, "B")
             if end_structure:
                 initial["end_structure"] = end_structure.pk
 
@@ -1285,14 +1285,17 @@ class RoutePlannerView(LoginRequiredMixin, View):
 
         return render(request, "netbox_pathways/route_planner.html", ctx)
 
-    def _resolve_termination(self, cable, end):
-        from dcim.models import CableTermination
+    def _prefill_structure(self, cable, cable_end):
+        """The one unambiguous structure for a cable end, or None.
 
-        term = CableTermination.objects.filter(cable=cable, cable_end=end).first()
-        if not term or not term._site_id:
+        The planner's endpoint fields hold a single Structure, so prefilling one
+        of several candidates would reintroduce the guess this replaced. A blank
+        field the user completes beats a wrong one they do not notice.
+        """
+        structures = anchors.cable_end_nodes(cable, cable_end).structures
+        if len(structures) != 1:
             return None
-        structures = models.Structure.objects.filter(site_id=term._site_id)
-        return structures.first()
+        return models.Structure.objects.filter(pk=structures[0]).first()
 
 
 class RoutePlannerFindView(LoginRequiredMixin, View):
@@ -1908,41 +1911,6 @@ class PullSheetDetailView(LoginRequiredMixin, View):
         )
 
 
-class AdjacencyView(LoginRequiredMixin, View):
-    """Return pathways connected to a given node as JSON."""
-
-    def get(self, request):
-        node_type = request.GET.get("node_type")
-        node_id = request.GET.get("node_id")
-        if not node_type or not node_id:
-            return JsonResponse(
-                {"error": "node_type and node_id are required"},
-                status=400,
-            )
-        try:
-            node_id = int(node_id)
-        except (ValueError, TypeError):
-            return JsonResponse({"error": "node_id must be an integer"}, status=400)
-
-        node = (node_type, node_id)
-        pathways = connected_pathways_db(node)
-
-        results = []
-        for pw in pathways:
-            dest = pw.end_endpoint or pw.start_endpoint
-            results.append(
-                {
-                    "pathway_id": pw.pk,
-                    "label": str(pw),
-                    "destination": str(dest) if dest else "",
-                    "length": pw.length or 0,
-                    "pathway_type": pw.pathway_type,
-                }
-            )
-
-        return JsonResponse(results, safe=False)
-
-
 # --- Cable Routing Tab (on dcim.Cable detail page) ---
 
 
@@ -2066,6 +2034,17 @@ class CableRouteView(generic.ObjectView):
             "route_valid": route["valid"],
             "gap_count": len(route["gaps"]),
             "routable": a_exists and b_exists,
+            "cable_endpoints": [
+                anchors.describe(anchors.cable_end_nodes(instance, "A"), "A"),
+                anchors.describe(anchors.cable_end_nodes(instance, "B"), "B"),
+            ],
+            "route_end_flag": (
+                "mismatch"
+                if "mismatch" in route["ends"].values()
+                else "unverified"
+                if "unverified" in route["ends"].values()
+                else "ok"
+            ),
         }
 
 
@@ -2074,53 +2053,6 @@ class CableRouteView(generic.ObjectView):
 
 class CableRoutingMixin:
     """Shared helpers for routing panel views."""
-
-    def _start_node(self, cable):
-        """Resolve A termination to a graph node."""
-        from dcim.models import CableTermination
-
-        term = (
-            CableTermination.objects.filter(
-                cable=cable,
-                cable_end="A",
-            )
-            .select_related("_site")
-            .first()
-        )
-        if not term or not term._site_id:
-            return None
-        structures = models.Structure.objects.filter(site_id=term._site_id)
-        if structures.count() == 1:
-            return ("structure", structures.first().pk)
-        first = structures.first()
-        return ("structure", first.pk) if first else None
-
-    def _end_node(self, cable):
-        """Resolve B termination to a graph node."""
-        from dcim.models import CableTermination
-
-        term = (
-            CableTermination.objects.filter(
-                cable=cable,
-                cable_end="B",
-            )
-            .select_related("_site")
-            .first()
-        )
-        if not term or not term._site_id:
-            return None
-        structures = models.Structure.objects.filter(site_id=term._site_id)
-        if structures.count() == 1:
-            return ("structure", structures.first().pk)
-        first = structures.first()
-        return ("structure", first.pk) if first else None
-
-    def _far_end_node(self, pathway, coming_from_node=None):
-        """Return the opposite end of a pathway from the entry node."""
-        start, end = _endpoint_nodes(pathway)
-        if coming_from_node and coming_from_node == end:
-            return start
-        return end
 
     def _render_table(self, request, cable):
         segments = list(
@@ -2149,56 +2081,98 @@ class CableRoutingAddSegmentView(CableRoutingMixin, LoginRequiredMixin, Permissi
 
     permission_required = "netbox_pathways.add_cablesegment"
 
+    def _entry_nodes(self, cable, after_sequence):
+        """Where the next segment can start, as `(nodes, at_head_of_route)`.
+
+        Mid-route the nodes are both endpoints of the preceding pathway.
+        Pathways are drawn in whichever direction the surveyor drew them, so
+        which end the cable arrives at cannot be inferred from the model; the
+        two-node superset always contains the true position, and the filter is
+        a starting point rather than a restriction.
+
+        At the head of the route the nodes are the A termination's candidate
+        set, which may be empty when the cable end is not modeled in Pathways.
+        `at_head_of_route` lets the caller hand the picker a single cable-end
+        reference instead of one query param per candidate node -- a site can
+        hold thousands of structures.
+        """
+        # Junction endpoints live on Conduit, and _endpoint_nodes() reads them
+        # from these annotations (same subquery pattern as routing.py).
+        conduit_qs = models.Conduit.objects.filter(pathway_ptr_id=OuterRef("pathway_id"))
+        segments = list(
+            models.CableSegment.objects.filter(cable=cable)
+            .select_related("pathway")
+            .annotate(
+                _start_junction_id=Subquery(conduit_qs.values("start_junction_id")[:1]),
+                _end_junction_id=Subquery(conduit_qs.values("end_junction_id")[:1]),
+            )
+            .order_by("sequence")
+        )
+
+        previous = None
+        if after_sequence is not None:
+            previous = next((s for s in segments if s.sequence == after_sequence), None)
+        elif segments:
+            previous = segments[-1]
+
+        if previous is not None and previous.pathway:
+            previous.pathway._start_junction_id = previous._start_junction_id
+            previous.pathway._end_junction_id = previous._end_junction_id
+            return tuple(node for node in _endpoint_nodes(previous.pathway) if node), False
+
+        return anchors.cable_end_nodes(cable, "A").nodes, True
+
     def get(self, request, cable_pk):
         cable = get_object_or_404(Cable, pk=cable_pk)
         after_sequence = request.GET.get("after_sequence")
-
-        segments = list(models.CableSegment.objects.filter(cable=cable).select_related("pathway").order_by("sequence"))
-
         if after_sequence is not None:
             after_sequence = int(after_sequence)
-            prev_seg = next((s for s in segments if s.sequence == after_sequence), None)
-            if prev_seg and prev_seg.pathway:
-                node = self._far_end_node(prev_seg.pathway)
-            else:
-                node = self._start_node(cable)
-        elif segments:
-            last = segments[-1]
-            if last.pathway:
-                node = self._far_end_node(last.pathway)
-            else:
-                node = self._start_node(cable)
+
+        if request.GET.get("show_all") == "1":
+            nodes, at_head_of_route = (), False
         else:
-            node = self._start_node(cable)
+            nodes, at_head_of_route = self._entry_nodes(cable, after_sequence)
 
-        pathways = connected_pathways_db(node) if node else models.Pathway.objects.none()
+        # The cable end resolves to a whole site's worth of candidates, so it
+        # travels as one param the API resolves itself. Mid-route there are at
+        # most two nodes, and they are not a cable end.
+        cable_end_ref = f"{cable.pk}:A" if nodes and at_head_of_route else None
 
-        choices = []
-        for pw in pathways:
-            dest = pw.end_endpoint or pw.start_endpoint
-            length_str = f"{pw.length:.1f}m" if pw.length else "?"
-            choices.append((pw.pk, f"{pw} \u2192 {dest} ({length_str})"))
+        form = forms.RouteSegmentForm(
+            initial={"after_sequence": after_sequence},
+            connected_to=() if cable_end_ref else nodes,
+            cable_end_ref=cable_end_ref,
+        )
+        return self._render_form(request, cable, form, after_sequence, show_all=not nodes)
 
+    def _render_form(self, request, cable, form, after_sequence, show_all):
         html = render_to_string(
             "netbox_pathways/inc/cable_add_segment_form.html",
             {
                 "cable": cable,
-                "choices": choices,
+                "form": form,
                 "after_sequence": after_sequence,
+                "show_all": show_all,
             },
             request=request,
         )
-        return HttpResponse(html)
+        response = HttpResponse(html)
+        # Exposed for tests: assert on form and flag state rather than parsing HTML.
+        response.context_data = {"form": form, "show_all": show_all}
+        return response
 
     def post(self, request, cable_pk):
         cable = get_object_or_404(Cable, pk=cable_pk)
-        pathway_id = request.POST.get("pathway")
-        after_sequence = request.POST.get("after_sequence")
+        form = forms.RouteSegmentForm(request.POST)
+        if not form.is_valid():
+            after_sequence = request.POST.get("after_sequence") or None
+            return self._render_form(request, cable, form, after_sequence, show_all=True)
 
-        pathway = get_object_or_404(models.Pathway, pk=pathway_id) if pathway_id else None
+        pathway = form.cleaned_data["pathway"]
+        after_sequence = form.cleaned_data.get("after_sequence")
 
         if after_sequence:
-            sequence = int(after_sequence) + 1
+            sequence = after_sequence + 1
             with transaction.atomic():
                 models.CableSegment.objects.filter(
                     cable=cable,
@@ -2230,13 +2204,13 @@ class CableRoutingFindRouteView(CableRoutingMixin, LoginRequiredMixin, View):
 
     def get(self, request, cable_pk):
         cable = get_object_or_404(Cable, pk=cable_pk)
-        start_node = self._start_node(cable)
-        end_node = self._end_node(cable)
+        start = anchors.cable_end_nodes(cable, "A")
+        end = anchors.cable_end_nodes(cable, "B")
 
         routes = []
-        if start_node and end_node:
+        if start.nodes and end.nodes:
             graph = PathwayGraph.build_topology()
-            result = graph.shortest_path(start_node, end_node)
+            result = graph.shortest_path_multi(start.nodes, end.nodes)
             if result:
                 routes = [result]
 
