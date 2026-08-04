@@ -1289,8 +1289,8 @@ class RoutePlannerView(LoginRequiredMixin, View):
         """The one unambiguous structure for a cable end, or None.
 
         The planner's endpoint fields hold a single Structure, so prefilling one
-        of several candidates would repeat the bug in issue #106. A blank field
-        the user completes beats a wrong one they do not notice.
+        of several candidates would reintroduce the guess this replaced. A blank
+        field the user completes beats a wrong one they do not notice.
         """
         structures = anchors.cable_end_nodes(cable, cable_end).structures
         if len(structures) != 1:

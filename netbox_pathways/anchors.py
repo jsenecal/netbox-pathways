@@ -7,9 +7,10 @@ location and its ancestors, structures sitting at those locations, the structure
 that represents the site, and the remaining structures in the site.
 
 The set is flat: a cable end can plausibly be several nodes and we do not guess
-between them, which is what issue #106 was. It is ordered by precision, most
-precise first, which is what the endpoint readout displays and what the route
-planner walks when it needs a single unambiguous structure.
+between them, because guessing one silently offered the wrong pathways. It is
+ordered by precision, most precise first, which is what the endpoint readout
+displays and what the route planner walks when it needs a single unambiguous
+structure.
 """
 
 from dataclasses import dataclass

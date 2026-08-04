@@ -308,7 +308,7 @@ class PathwayFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFi
         the cable end has: a Site modeling an exchange area holds hundreds or
         thousands of structures, and a param per node overruns nginx's header
         buffers and Django's DATA_UPLOAD_MAX_NUMBER_FIELDS -- which TomSelect
-        reports as "no results found", the very symptom of issue #106.
+        reports as "no results found", an empty picker with no explanation.
 
         A cable that does not exist, or an end that cannot be placed in the
         plant, matches nothing: the caller asked for a filter. Deciding not to
