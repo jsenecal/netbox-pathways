@@ -671,3 +671,48 @@ class TestBatchResolveNodes:
         # Sanity: WGS84 lat/lon range
         assert -90 <= lat <= 90
         assert -180 <= lon <= 180
+
+
+@pytest.mark.django_db
+class TestShortestPathMulti:
+    """Find a route between two sets of candidate nodes in one traversal.
+
+    A synthetic super-source would have to mutate the graph, and
+    build_topology() caches it in a class attribute for five minutes, so the
+    graph is shared between requests. multi_source_dijkstra does not mutate.
+    """
+
+    def test_picks_the_cheapest_source_target_pair(self):
+        graph = PathwayGraph()
+        graph.graph.add_edge(("structure", 1), ("structure", 2), weight=100, pathway_id=11)
+        graph.graph.add_edge(("structure", 3), ("structure", 4), weight=5, pathway_id=22)
+
+        result = graph.shortest_path_multi(
+            [("structure", 1), ("structure", 3)],
+            [("structure", 2), ("structure", 4)],
+        )
+        assert result == (5, [22])
+
+    def test_returns_none_when_no_source_is_in_the_graph(self):
+        graph = PathwayGraph()
+        graph.graph.add_edge(("structure", 1), ("structure", 2), weight=1, pathway_id=11)
+        assert graph.shortest_path_multi([("structure", 99)], [("structure", 2)]) is None
+
+    def test_returns_none_when_the_target_is_unreachable(self):
+        graph = PathwayGraph()
+        graph.graph.add_edge(("structure", 1), ("structure", 2), weight=1, pathway_id=11)
+        graph.graph.add_node(("structure", 9))
+        assert graph.shortest_path_multi([("structure", 1)], [("structure", 9)]) is None
+
+    def test_returns_none_when_the_ends_already_coincide(self):
+        """Overlapping candidate sets mean no pathway needs traversing."""
+        graph = PathwayGraph()
+        graph.graph.add_edge(("structure", 1), ("structure", 2), weight=1, pathway_id=11)
+        assert graph.shortest_path_multi([("structure", 1)], [("structure", 1)]) is None
+
+    def test_does_not_mutate_the_graph(self):
+        graph = PathwayGraph()
+        graph.graph.add_edge(("structure", 1), ("structure", 2), weight=1, pathway_id=11)
+        before = graph.node_count
+        graph.shortest_path_multi([("structure", 1)], [("structure", 2)])
+        assert graph.node_count == before

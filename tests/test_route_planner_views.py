@@ -15,7 +15,6 @@ from netbox_pathways.views import (
     RoutePlannerSaveView,
     RoutePlannerView,
 )
-from tests.conftest import build_cable_with_terminations
 from tests.test_map_view import parse_json_script
 
 SRID = get_srid()
@@ -61,53 +60,6 @@ class TestParseIntList:
 
     def test_all_garbage_in_list_returns_none(self):
         assert RoutePlannerFindView._parse_int_list(["abc", "def"]) is None
-
-
-# ---------------------------------------------------------------------------
-# RoutePlannerView._resolve_termination
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def view():
-    return RoutePlannerView()
-
-
-@pytest.mark.django_db
-class TestResolveTermination:
-    @pytest.fixture
-    def srid(self):
-        return get_srid()
-
-    @pytest.fixture
-    def site(self):
-        from dcim.models import Site
-
-        return Site.objects.create(name="RP-site", slug="rp-site")
-
-    @pytest.fixture
-    def structure(self, site, srid):
-        return Structure.objects.create(
-            name="RP-struct",
-            site=site,
-            geometry=Point(0, 0, srid=srid),
-        )
-
-    def test_no_termination_returns_none(self, view):
-        # Cable exists but has no CableTermination rows on either end
-        from dcim.models import Cable
-
-        cable = Cable.objects.create(label="RP-empty")
-        assert view._resolve_termination(cable, "A") is None
-        assert view._resolve_termination(cable, "B") is None
-
-    def test_a_side_resolves_to_structure(self, view, site, structure):
-        cable = build_cable_with_terminations(label="RP-A", site=site, terminate_a=True, terminate_b=False)
-        assert view._resolve_termination(cable, "A") == structure
-
-    def test_b_side_resolves_to_structure(self, view, site, structure):
-        cable = build_cable_with_terminations(label="RP-B", site=site, terminate_a=False, terminate_b=True)
-        assert view._resolve_termination(cable, "B") == structure
 
 
 # ---------------------------------------------------------------------------

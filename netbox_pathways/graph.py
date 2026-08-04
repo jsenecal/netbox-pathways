@@ -266,6 +266,31 @@ class PathwayGraph:
         cost, pathway_ids = route
         return cost, pathway_ids, path_nodes
 
+    def shortest_path_multi(self, sources, targets):
+        """Cheapest route from any source node to any target node.
+
+        Returns (total_cost, [pathway_ids]) or None. One Dijkstra pass over all
+        sources at once, rather than |sources| x |targets| passes -- and without
+        mutating the graph, which matters because build_topology() caches it
+        across requests.
+        """
+        source_set = {node for node in sources if node in self.graph}
+        target_set = {node for node in targets if node in self.graph}
+        if not source_set or not target_set:
+            return None
+
+        distances, paths = nx.multi_source_dijkstra(self.graph, source_set, weight="weight")
+        reachable = [node for node in target_set if node in distances]
+        if not reachable:
+            return None
+
+        best = min(reachable, key=lambda node: distances[node])
+        path_nodes = paths[best]
+        if len(path_nodes) < 2:
+            # Source and target coincide: nothing to traverse.
+            return None
+        return self._extract_route(path_nodes)
+
     def astar_path(self, start_node, end_node):
         """A* shortest path with haversine heuristic. Returns (total_cost, [pathway_ids]) or None."""
         try:

@@ -1233,11 +1233,11 @@ class RoutePlannerView(LoginRequiredMixin, View):
 
         # Fall back to cable terminations if not explicitly provided
         if cable and not start_structure:
-            start_structure = self._resolve_termination(cable, "A")
+            start_structure = self._prefill_structure(cable, "A")
             if start_structure:
                 initial["start_structure"] = start_structure.pk
         if cable and not end_structure:
-            end_structure = self._resolve_termination(cable, "B")
+            end_structure = self._prefill_structure(cable, "B")
             if end_structure:
                 initial["end_structure"] = end_structure.pk
 
@@ -1285,14 +1285,17 @@ class RoutePlannerView(LoginRequiredMixin, View):
 
         return render(request, "netbox_pathways/route_planner.html", ctx)
 
-    def _resolve_termination(self, cable, end):
-        from dcim.models import CableTermination
+    def _prefill_structure(self, cable, cable_end):
+        """The one unambiguous structure for a cable end, or None.
 
-        term = CableTermination.objects.filter(cable=cable, cable_end=end).first()
-        if not term or not term._site_id:
+        The planner's endpoint fields hold a single Structure, so prefilling one
+        of several candidates would repeat the bug in issue #106. A blank field
+        the user completes beats a wrong one they do not notice.
+        """
+        structures = anchors.cable_end_nodes(cable, cable_end).structures
+        if len(structures) != 1:
             return None
-        structures = models.Structure.objects.filter(site_id=term._site_id)
-        return structures.first()
+        return models.Structure.objects.filter(pk=structures[0]).first()
 
 
 class RoutePlannerFindView(LoginRequiredMixin, View):
@@ -2253,13 +2256,13 @@ class CableRoutingFindRouteView(CableRoutingMixin, LoginRequiredMixin, View):
 
     def get(self, request, cable_pk):
         cable = get_object_or_404(Cable, pk=cable_pk)
-        start_node = self._start_node(cable)
-        end_node = self._end_node(cable)
+        start = anchors.cable_end_nodes(cable, "A")
+        end = anchors.cable_end_nodes(cable, "B")
 
         routes = []
-        if start_node and end_node:
+        if start.nodes and end.nodes:
             graph = PathwayGraph.build_topology()
-            result = graph.shortest_path(start_node, end_node)
+            result = graph.shortest_path_multi(start.nodes, end.nodes)
             if result:
                 routes = [result]
 
