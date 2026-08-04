@@ -165,7 +165,7 @@ class TestGeoLengthFilterSet:
         )
 
     def test_filter_gte_emits_st_length_sql(self, structures, srid):
-        from netbox_pathways.filters import PathwayFilterSet
+        from netbox_pathways.filtersets import PathwayFilterSet
 
         self._make_conduit(structures, srid, "short", 100.0)
         self._make_conduit(structures, srid, "long", 5000.0)
@@ -179,7 +179,7 @@ class TestGeoLengthFilterSet:
         )
 
     def test_filter_gte_returns_only_matching_rows(self, structures, srid):
-        from netbox_pathways.filters import PathwayFilterSet
+        from netbox_pathways.filtersets import PathwayFilterSet
 
         self._make_conduit(structures, srid, "short", 100.0)
         long_pw = self._make_conduit(structures, srid, "long", 5000.0)

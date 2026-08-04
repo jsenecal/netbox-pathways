@@ -29,7 +29,7 @@ from utilities.views import ViewTab, register_model_view
 
 from netbox_pathways.registry import registry as map_layer_registry
 
-from . import filterforms, filters, forms, models, tables
+from . import filterforms, filtersets, forms, models, tables
 from .choices import PlannedRouteStatusChoices
 from .graph import PathwayGraph, _endpoint_nodes, connected_pathways_db
 from .ui import panels
@@ -59,7 +59,7 @@ class ViewInMap(ObjectAction):
 class StructureListView(generic.ObjectListView):
     queryset = models.Structure.objects.select_related("site", "tenant")
     table = tables.StructureTable
-    filterset = filters.StructureFilterSet
+    filterset = filtersets.StructureFilterSet
     filterset_form = filterforms.StructureFilterForm
 
 
@@ -119,7 +119,7 @@ class StructureBulkImportView(generic.BulkImportView):
 
 class StructureBulkEditView(generic.BulkEditView):
     queryset = models.Structure.objects.all()
-    filterset = filters.StructureFilterSet
+    filterset = filtersets.StructureFilterSet
     table = tables.StructureTable
     form = forms.StructureBulkEditForm
 
@@ -180,7 +180,7 @@ class StructureConduitBanksView(generic.ObjectChildrenView):
     queryset = models.Structure.objects.all()
     child_model = models.ConduitBank
     table = tables.ConduitBankTable
-    filterset = filters.ConduitBankFilterSet
+    filterset = filtersets.ConduitBankFilterSet
     tab = ViewTab(
         label="Conduit Banks",
         badge=lambda obj: models.ConduitBank.objects.filter(Q(start_structure=obj) | Q(end_structure=obj)).count(),
@@ -197,7 +197,7 @@ class StructureConduitsView(generic.ObjectChildrenView):
     queryset = models.Structure.objects.all()
     child_model = models.Conduit
     table = tables.ConduitTable
-    filterset = filters.ConduitFilterSet
+    filterset = filtersets.ConduitFilterSet
     tab = ViewTab(
         label="Conduits",
         badge=lambda obj: models.Conduit.objects.filter(Q(start_structure=obj) | Q(end_structure=obj)).count(),
@@ -216,7 +216,7 @@ class StructureAerialSpansView(generic.ObjectChildrenView):
     queryset = models.Structure.objects.all()
     child_model = models.AerialSpan
     table = tables.AerialSpanTable
-    filterset = filters.AerialSpanFilterSet
+    filterset = filtersets.AerialSpanFilterSet
     tab = ViewTab(
         label="Aerial Spans",
         badge=lambda obj: models.AerialSpan.objects.filter(Q(start_structure=obj) | Q(end_structure=obj)).count(),
@@ -235,7 +235,7 @@ class StructureDirectBuriedView(generic.ObjectChildrenView):
     queryset = models.Structure.objects.all()
     child_model = models.DirectBuried
     table = tables.DirectBuriedTable
-    filterset = filters.DirectBuriedFilterSet
+    filterset = filtersets.DirectBuriedFilterSet
     tab = ViewTab(
         label="Direct Buried",
         badge=lambda obj: models.DirectBuried.objects.filter(Q(start_structure=obj) | Q(end_structure=obj)).count(),
@@ -265,7 +265,7 @@ class PathwayListView(generic.ObjectListView):
         _geo_length=Length("path"),
     )
     table = tables.PathwayTable
-    filterset = filters.PathwayFilterSet
+    filterset = filtersets.PathwayFilterSet
     filterset_form = filterforms.PathwayFilterForm
     actions = (BulkExport,)
 
@@ -308,7 +308,7 @@ class ConduitListView(generic.ObjectListView):
     )
     table = tables.ConduitTable
     filterset_form = filterforms.ConduitFilterForm
-    filterset = filters.ConduitFilterSet
+    filterset = filtersets.ConduitFilterSet
 
 
 class ConduitView(generic.ObjectView):
@@ -352,7 +352,7 @@ class ConduitBulkImportView(generic.BulkImportView):
 
 class ConduitBulkEditView(generic.BulkEditView):
     queryset = models.Conduit.objects.all()
-    filterset = filters.ConduitFilterSet
+    filterset = filtersets.ConduitFilterSet
     table = tables.ConduitTable
     form = forms.ConduitBulkEditForm
 
@@ -367,7 +367,7 @@ class ConduitInnerductsView(generic.ObjectChildrenView):
     queryset = models.Conduit.objects.all()
     child_model = models.Innerduct
     table = tables.InnerductTable
-    filterset = filters.InnerductFilterSet
+    filterset = filtersets.InnerductFilterSet
     tab = ViewTab(
         label="Innerducts",
         badge=lambda obj: obj.innerducts.count(),
@@ -396,7 +396,7 @@ class AerialSpanListView(generic.ObjectListView):
         in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
     )
     table = tables.AerialSpanTable
-    filterset = filters.AerialSpanFilterSet
+    filterset = filtersets.AerialSpanFilterSet
     filterset_form = filterforms.AerialSpanFilterForm
 
 
@@ -436,7 +436,7 @@ class AerialSpanBulkImportView(generic.BulkImportView):
 
 class AerialSpanBulkEditView(generic.BulkEditView):
     queryset = models.AerialSpan.objects.all()
-    filterset = filters.AerialSpanFilterSet
+    filterset = filtersets.AerialSpanFilterSet
     table = tables.AerialSpanTable
     form = forms.AerialSpanBulkEditForm
 
@@ -462,7 +462,7 @@ class DirectBuriedListView(generic.ObjectListView):
         _geo_length=Length("path"),
     )
     table = tables.DirectBuriedTable
-    filterset = filters.DirectBuriedFilterSet
+    filterset = filtersets.DirectBuriedFilterSet
     filterset_form = filterforms.DirectBuriedFilterForm
     actions = (AddObject, BulkImport, BulkExport, BulkEdit, BulkDelete)
 
@@ -503,7 +503,7 @@ class DirectBuriedBulkImportView(generic.BulkImportView):
 
 class DirectBuriedBulkEditView(generic.BulkEditView):
     queryset = models.DirectBuried.objects.all()
-    filterset = filters.DirectBuriedFilterSet
+    filterset = filtersets.DirectBuriedFilterSet
     table = tables.DirectBuriedTable
     form = forms.DirectBuriedBulkEditForm
 
@@ -523,7 +523,7 @@ class InnerductListView(generic.ObjectListView):
         _geo_length=Length("path"),
     )
     table = tables.InnerductTable
-    filterset = filters.InnerductFilterSet
+    filterset = filtersets.InnerductFilterSet
     filterset_form = filterforms.InnerductFilterForm
     actions = (AddObject, BulkImport, BulkExport, BulkEdit, BulkDelete)
 
@@ -564,7 +564,7 @@ class InnerductBulkImportView(generic.BulkImportView):
 
 class InnerductBulkEditView(generic.BulkEditView):
     queryset = models.Innerduct.objects.all()
-    filterset = filters.InnerductFilterSet
+    filterset = filtersets.InnerductFilterSet
     table = tables.InnerductTable
     form = forms.InnerductBulkEditForm
 
@@ -583,7 +583,7 @@ class ConduitBankListView(generic.ObjectListView):
         _geo_length=Length("path"),
     )
     table = tables.ConduitBankTable
-    filterset = filters.ConduitBankFilterSet
+    filterset = filtersets.ConduitBankFilterSet
     filterset_form = filterforms.ConduitBankFilterForm
 
 
@@ -623,7 +623,7 @@ class ConduitBankBulkImportView(generic.BulkImportView):
 
 class ConduitBankBulkEditView(generic.BulkEditView):
     queryset = models.ConduitBank.objects.annotate(conduit_count=Count("conduits"))
-    filterset = filters.ConduitBankFilterSet
+    filterset = filtersets.ConduitBankFilterSet
     table = tables.ConduitBankTable
     form = forms.ConduitBankBulkEditForm
 
@@ -643,7 +643,7 @@ class ConduitJunctionListView(generic.ObjectListView):
         "towards_structure",
     )
     table = tables.ConduitJunctionTable
-    filterset = filters.ConduitJunctionFilterSet
+    filterset = filtersets.ConduitJunctionFilterSet
     filterset_form = filterforms.ConduitJunctionFilterForm
     actions = (AddObject, BulkImport, BulkExport)
 
@@ -680,7 +680,7 @@ class ConduitJunctionBulkImportView(generic.BulkImportView):
 class CableSegmentListView(generic.ObjectListView):
     queryset = models.CableSegment.objects.select_related("cable", "pathway")
     table = tables.CableSegmentTable
-    filterset = filters.CableSegmentFilterSet
+    filterset = filtersets.CableSegmentFilterSet
     filterset_form = filterforms.CableSegmentFilterForm
 
 
@@ -732,7 +732,7 @@ class CableSegmentBulkImportView(generic.BulkImportView):
 
 class CableSegmentBulkEditView(generic.BulkEditView):
     queryset = models.CableSegment.objects.all()
-    filterset = filters.CableSegmentFilterSet
+    filterset = filtersets.CableSegmentFilterSet
     table = tables.CableSegmentTable
     form = forms.CableSegmentBulkEditForm
 
@@ -748,7 +748,7 @@ class CableSegmentBulkDeleteView(generic.BulkDeleteView):
 class PathwayLocationListView(generic.ObjectListView):
     queryset = models.PathwayLocation.objects.select_related("pathway", "site", "location")
     table = tables.PathwayLocationTable
-    filterset = filters.PathwayLocationFilterSet
+    filterset = filtersets.PathwayLocationFilterSet
     filterset_form = filterforms.PathwayLocationFilterForm
     actions = (AddObject, BulkExport)
 
@@ -780,7 +780,7 @@ class PathwayLocationDeleteView(generic.ObjectDeleteView):
 class SiteGeometryListView(generic.ObjectListView):
     queryset = models.SiteGeometry.objects.select_related("site", "structure")
     table = tables.SiteGeometryTable
-    filterset = filters.SiteGeometryFilterSet
+    filterset = filtersets.SiteGeometryFilterSet
     filterset_form = filterforms.SiteGeometryFilterForm
     actions = (AddObject, BulkImport, BulkExport)
 
@@ -820,7 +820,7 @@ class CircuitGeometryListView(generic.ObjectListView):
         "circuit__provider",
     )
     table = tables.CircuitGeometryTable
-    filterset = filters.CircuitGeometryFilterSet
+    filterset = filtersets.CircuitGeometryFilterSet
     filterset_form = filterforms.CircuitGeometryFilterForm
     actions = (AddObject, BulkImport, BulkExport)
 
@@ -864,7 +864,7 @@ class PlannedRouteListView(generic.ObjectListView):
         "cable",
     )
     table = tables.PlannedRouteTable
-    filterset = filters.PlannedRouteFilterSet
+    filterset = filtersets.PlannedRouteFilterSet
     filterset_form = filterforms.PlannedRouteFilterForm
     actions = (AddObject, BulkImport, BulkExport, BulkEdit, BulkDelete)
 
@@ -1012,7 +1012,7 @@ class PlannedRouteBulkImportView(generic.BulkImportView):
 
 class PlannedRouteBulkEditView(generic.BulkEditView):
     queryset = models.PlannedRoute.objects.all()
-    filterset = filters.PlannedRouteFilterSet
+    filterset = filtersets.PlannedRouteFilterSet
     table = tables.PlannedRouteTable
     form = forms.PlannedRouteBulkEditForm
 

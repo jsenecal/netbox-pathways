@@ -30,6 +30,26 @@ from .choices import (
 )
 from .colors import color_to_hex
 from .coord_parser import ForgivingGeometryField
+
+# NetBox's ObjectSelectorView resolves `<app_label>.forms.<Model>FilterForm`
+# (netbox/views/htmx.py), so every filter form must be importable from this
+# module even though they are defined in filterforms.py. Without this, the
+# object-selector modal 500s for every model. See issue #106.
+from .filterforms import (
+    AerialSpanFilterForm,  # noqa: F401
+    CableSegmentFilterForm,  # noqa: F401
+    CircuitGeometryFilterForm,  # noqa: F401
+    ConduitBankFilterForm,  # noqa: F401
+    ConduitFilterForm,  # noqa: F401
+    ConduitJunctionFilterForm,  # noqa: F401
+    DirectBuriedFilterForm,  # noqa: F401
+    InnerductFilterForm,  # noqa: F401
+    PathwayFilterForm,  # noqa: F401
+    PathwayLocationFilterForm,  # noqa: F401
+    PlannedRouteFilterForm,  # noqa: F401
+    SiteGeometryFilterForm,  # noqa: F401
+    StructureFilterForm,  # noqa: F401
+)
 from .geo import get_srid, to_leaflet
 from .models import (
     AerialSpan,

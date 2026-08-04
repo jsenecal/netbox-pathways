@@ -1,7 +1,7 @@
 """Tests for plugin-owned filterset custom methods.
 
 Covers the custom `filter_*` callbacks and the per-class `search()` overrides
-in `netbox_pathways.filters`. Framework filter behaviour (django-filter,
+in `netbox_pathways.filtersets`. Framework filter behaviour (django-filter,
 ModelMultipleChoiceFilter, etc.) is intentionally not exercised here.
 """
 
@@ -9,7 +9,7 @@ import pytest
 from django.contrib.gis.geos import LineString, Point
 from django.db.models.signals import pre_save
 
-from netbox_pathways.filters import (
+from netbox_pathways.filtersets import (
     AerialSpanFilterSet,
     CableSegmentFilterSet,
     CircuitGeometryFilterSet,
