@@ -122,6 +122,17 @@ class TestCableEndNodes:
         cable = build_cable_with_terminations(label="AN-bend-cable", site=site)
         assert ("structure", structure.pk) in cable_end_nodes(cable, "B").nodes
 
+    def test_site_geometry_structure_precedes_remaining_site_structures(self, site):
+        # Names are deliberately reversed alphabetically so this pins tier
+        # order (SiteGeometry structure before the rest of the site), not
+        # Structure.Meta.ordering.
+        plain = Structure.objects.create(name="AN-aaa-plain", site=site, geometry=Point(0, 0, srid=SRID))
+        sitegeom = Structure.objects.create(name="AN-zzz-sitegeom", site=site, geometry=Point(1, 1, srid=SRID))
+        SiteGeometry.objects.create(site=site, structure=sitegeom)
+        cable = build_cable_with_terminations(label="AN-tier-order", site=site)
+        nodes = cable_end_nodes(cable, "A").nodes
+        assert nodes.index(("structure", sitegeom.pk)) < nodes.index(("structure", plain.pk))
+
 
 @pytest.mark.django_db
 class TestDescribe:
@@ -138,3 +149,19 @@ class TestDescribe:
         assert described["labels"] == []
         assert site.name in described["message"]
         assert described["remedy"] == REASON_MESSAGES["nothing_in_plant"][1]
+
+    def test_termination_not_sited_end_describes_message_and_remedy(self, site):
+        from dcim.models import CableTermination
+
+        cable = build_cable_with_terminations(label="AN-desc-unsited", site=site)
+        CableTermination.objects.filter(cable=cable, cable_end="A").update(_site=None, _location=None)
+        described = describe(cable_end_nodes(cable, "A"), "A")
+        assert described["labels"] == []
+        assert described["remedy"] == REASON_MESSAGES["termination_not_sited"][1]
+        # Neither site nor location is set, so `place` is falsy and `describe`
+        # exercises the `place or "that termination"` fallback when it builds
+        # the format() kwargs -- this reason's template just does not have a
+        # {place} placeholder to show it with, so the rendered text only
+        # reflects `end`.
+        assert described["message"] == REASON_MESSAGES["termination_not_sited"][0].format(end="A")
+        assert "A" in described["message"]
