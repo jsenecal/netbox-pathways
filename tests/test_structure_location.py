@@ -247,6 +247,32 @@ def test_migration_reverse_restores_location_column(migrate_to):
     assert (reverted.location.x, reverted.location.y) == (7.0, 8.0)
 
 
+@pytest.mark.django_db(transaction=True)
+def test_identity_migration_fails_loudly_on_shared_locations(migrate_to):
+    """Converting Structure.location to a one-to-one must abort with a message
+    naming the shared location, not die on the unique constraint (#90)."""
+    pre = "0022_innerduct_color_hex"
+    post = "0023_structure_location_identity"
+
+    executor = migrate_to(pre)
+    state = executor.loader.project_state([("netbox_pathways", pre)]).apps
+    OldStructure = state.get_model("netbox_pathways", "Structure")
+    OldSite = state.get_model("dcim", "Site")
+    OldLocation = state.get_model("dcim", "Location")
+
+    site = OldSite.objects.create(name="Dup-Site", slug="dup-site")
+    # Historical models bypass the MPTT manager, so tree columns are set by hand.
+    loc = OldLocation.objects.create(name="Dup-Loc", slug="dup-loc", site=site, lft=1, rght=2, tree_id=1, level=0)
+    OldStructure.objects.create(name="dup-1", geometry=Point(0, 0, srid=SRID), location_id=loc.pk)
+    OldStructure.objects.create(name="dup-2", geometry=Point(1, 1, srid=SRID), location_id=loc.pk)
+
+    with pytest.raises(RuntimeError, match="shared"):
+        migrate_to(post)
+
+    # Unshare so the autouse _restore_head fixture can migrate back to the leaf.
+    OldStructure.objects.filter(name="dup-2").update(location_id=None)
+
+
 @pytest.mark.django_db
 def test_pathway_snapping_reads_structure_geometry():
     """Pathway._validate_and_snap_endpoint reads the structure geometry; after

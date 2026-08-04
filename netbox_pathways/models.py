@@ -43,13 +43,13 @@ class Structure(NetBoxModel):
         blank=True,
         related_name="pathways_structures",
     )
-    location = models.ForeignKey(
+    location = models.OneToOneField(
         Location,
         on_delete=models.PROTECT,
         null=True,
         blank=True,
-        related_name="pathways_structures",
-        help_text="Location within the site where this structure sits",
+        related_name="pathways_structure",
+        help_text="dcim.Location that this structure physically is (e.g. a handhole modelled as a Location)",
     )
     geometry = models.GeometryField(
         srid=get_srid(),
