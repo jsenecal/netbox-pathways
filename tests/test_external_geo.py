@@ -36,6 +36,14 @@ class TestResolveGeoColumn:
         assert col == "site__pathways_geometry__geometry"
         assert "site" in label.lower()
 
+    def test_location_fk_resolves_via_identity_structure(self):
+        from netbox_pathways.models import Pathway
+
+        # Pathway.start_location is a FK to dcim.Location
+        col, label = _resolve_geo_column(Pathway, "start_location")
+        assert col == "start_location__pathways_structure__geometry"
+        assert "location" in label.lower()
+
     def test_unsupported_fk_raises(self):
         from netbox_pathways.models import Conduit
 
@@ -170,3 +178,79 @@ class TestExternalLayerGeoView:
         resp = api_client.get(f"{self.URL}?bbox=170,80,171,81")
         assert resp.status_code == 200
         assert resp.json()["features"] == []
+
+
+@pytest.mark.django_db
+class TestLocationGeometryResolution:
+    """Location-targeted layers serve the identity structure's geometry (#90)."""
+
+    URL = "/api/plugins/pathways/geo/external/loc_test/"
+
+    @pytest.fixture
+    def api_client(self, admin_user):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=admin_user)
+        return client
+
+    @pytest.fixture
+    def location_conduits(self):
+        from dcim.models import Location, Site
+        from django.contrib.gis.geos import LineString, Point
+
+        from netbox_pathways.geo import get_srid
+        from netbox_pathways.models import Conduit, Structure
+
+        srid = get_srid()
+        site = Site.objects.create(name="Geo-Site", slug="geo-site")
+        loc_with = Location.objects.create(name="Handhole-7", slug="handhole-7", site=site)
+        loc_without = Location.objects.create(name="Room-101", slug="room-101", site=site)
+        anchor = Structure.objects.create(name="LOC-S0", geometry=Point(0, 0, srid=srid))
+        identity = Structure.objects.create(
+            name="LOC-HH7", geometry=Point(10, 20, srid=srid), site=site, location=loc_with
+        )
+        c_with = Conduit.objects.create(
+            label="LOC-C1",
+            start_structure=anchor,
+            end_location=loc_with,
+            path=LineString((0, 0), (10, 20), srid=srid),
+        )
+        c_without = Conduit.objects.create(
+            label="LOC-C2",
+            start_structure=anchor,
+            end_location=loc_without,
+            path=LineString((0, 0), (5, 5), srid=srid),
+        )
+        return c_with, c_without, identity
+
+    @pytest.fixture
+    def loc_layer(self):
+        from netbox_pathways.models import Conduit
+
+        registry.register(
+            MapLayerRegistration(
+                name="loc_test",
+                label="Location Test",
+                geometry_type="Point",
+                source="reference",
+                queryset=lambda request: Conduit.objects.all(),
+                geometry_field="end_location",
+                feature_fields=["label"],
+                style=LayerStyle(color="#000"),
+            )
+        )
+
+    def test_identity_structure_geometry_served(self, api_client, location_conduits, loc_layer):
+        from netbox_pathways.geo import to_leaflet
+
+        c_with, c_without, identity = location_conduits
+        resp = api_client.get(self.URL)
+        assert resp.status_code == 200
+        features = resp.json()["features"]
+        # The location without an identity structure resolves to NULL and is dropped.
+        assert [f["properties"]["id"] for f in features] == [c_with.pk]
+        expected = to_leaflet(identity.geometry)
+        lon, lat = features[0]["geometry"]["coordinates"]
+        assert lon == pytest.approx(expected.x)
+        assert lat == pytest.approx(expected.y)

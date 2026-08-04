@@ -19,6 +19,7 @@ SUPPORTED_GEO_MODELS: dict[str, str] = {
     "netbox_pathways.Structure": "geometry",
     "netbox_pathways.SiteGeometry": "geometry",
     "dcim.Site": "pathways_geometry__geometry",
+    "dcim.Location": "pathways_structure__geometry",
 }
 
 
