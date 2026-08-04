@@ -1,6 +1,6 @@
 """Resolve color names to the hex codes NetBox's core color palette uses.
 
-Innerduct colors were free text until issue #79 and users typed names by
+Innerduct colors were free text originally, and users typed names by
 hand ("blue", "slate"). The field now stores a 6-digit hex code, so the
 0022 data migration and the CSV import form both need to translate those
 names -- and keep accepting them, since operators paste the same

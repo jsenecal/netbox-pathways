@@ -13,8 +13,6 @@ Supported input formats:
     - DMS with N/S/E/W hemispheres (point only)
     - DMS without hemispheres in lat-first order (point only)
     - Bare decimal "lat, lon" pairs in Google Maps order (point only)
-
-See issue #32.
 """
 
 from __future__ import annotations

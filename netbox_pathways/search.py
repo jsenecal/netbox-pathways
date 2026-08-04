@@ -59,8 +59,7 @@ class InnerductIndex(SearchIndex):
         ("position", 300),
         ("comments", 5000),
     )
-    # Color is a hex code since issue #79 -- not worth indexing or displaying
-    # as text.
+    # Color is stored as a hex code -- not worth indexing or displaying as text.
     display_attrs = ("status", "parent_conduit", "size")
 
 

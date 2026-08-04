@@ -1,4 +1,4 @@
-"""Store Innerduct.color as a palette hex code instead of free text (issue #79).
+"""Store Innerduct.color as a palette hex code instead of free text.
 
 The old field accepted any 50-character string, so existing rows hold color
 names. They are translated to the matching hex code before the column is

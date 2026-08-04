@@ -1834,7 +1834,7 @@ class MapView(LoginRequiredMixin, View):
 
         ctx = {
             # Serialized with json_script in the template: locale-independent
-            # (see #93) and escaped against script-tag breakout.
+            # and escaped against script-tag breakout.
             "pathways_config": pathways_config,
             "map_init_config": {
                 "center": center,
