@@ -44,9 +44,11 @@ A cable running from Building A to Building B might have this route:
 The Route tab offers the pathways connected to the point the route has reached.
 For the first segment that is the cable's A termination, resolved to pathways
 infrastructure through the terminating device's location and its parent
-locations, the structure linked to the site in Site Geometry, structures at
-those locations, and the remaining structures in the site. For later segments it
-is the far end of the previous pathway, which is exact.
+locations, structures at those locations, the structure linked to the site in
+Site Geometry, and the remaining structures in the site. For later segments the
+candidates are both endpoints of the previous pathway: a pathway is drawn in
+whichever direction the surveyor drew it, so which end the cable arrives at
+cannot be read off the model, and offering both always includes the right one.
 
 The tab lists what it resolved for both cable ends. When an end cannot be placed
 in the plant the tab says so and the picker falls back to every pathway, so

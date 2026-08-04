@@ -158,10 +158,8 @@ class TestDescribe:
         described = describe(cable_end_nodes(cable, "A"), "A")
         assert described["labels"] == []
         assert described["remedy"] == REASON_MESSAGES["termination_not_sited"][1]
-        # Neither site nor location is set, so `place` is falsy and `describe`
-        # exercises the `place or "that termination"` fallback when it builds
-        # the format() kwargs -- this reason's template just does not have a
-        # {place} placeholder to show it with, so the rendered text only
-        # reflects `end`.
+        # Neither site nor location is set, so `place` is None -- harmless here
+        # because this reason's template has no {place} placeholder and the
+        # rendered text only reflects `end`.
         assert described["message"] == REASON_MESSAGES["termination_not_sited"][0].format(end="A")
         assert "A" in described["message"]

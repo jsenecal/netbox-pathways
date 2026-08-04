@@ -72,10 +72,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Geometry on CSV bulk import** -- `StructureImportForm` (Point) and the LineString import forms (`ConduitImportForm`, `AerialSpanImportForm`, `ConduitBankImportForm`) now expose a `location` / `path` column. Values pass through the same forgiving parser as the interactive map widget, so spreadsheets can carry GeoJSON, WKT, DMS (hemispheres optional), or Google-Maps-style decimal `lat,lon` pairs. The parser produces WGS84 and Django GIS reprojects to the configured storage SRID at save time. New helper `netbox_pathways.coord_parser.parse_geometry_input` plus `ForgivingGeometryField` are also importable by downstream code that wants the same lenient parsing.
 - **Manual coordinate entry on the map widget** -- the geometry widget now has a tabbed UI with a **Map** tab (existing Leaflet/geoman editor) and a **Coordinates** tab containing a free-text editor. The textarea accepts GeoJSON (Geometry, Feature, or FeatureCollection -- first feature wins), WKT (`POINT`/`LINESTRING`/`POLYGON`), DMS (hemisphere letters optional; lat-first when omitted), and decimal `lat,lon` pairs in Google-Maps order. Invalid input is reported inline without clobbering the previous geometry. The Map tab also exposes two helper buttons: **Use my location** (`navigator.geolocation`, requires HTTPS) and **Paste lat/lon...** (an inline mini-form). On Point widgets the helpers set or replace the marker; on LineString widgets they append a vertex (the first invocation stashes a pending vertex shown as a faded marker, and the second materializes a two-vertex line). Refs #32.
 - `ConduitBank.height` and `ConduitBank.width` (PositiveIntegerField, nullable). Captures duct-bank dimensions distinct from `total_conduits`. Surfaced in list tables (toggleable, off by default), forms (single and bulk), detail panel, import form, and REST API serializer. Migration `0017_conduitbank_height_width`.
-- The Route tab states where each cable end sits in the plant, and says so
-  explicitly when an end cannot be placed there.
+- The Route tab states where each cable end sits in the plant, most precise
+  place first, and says so explicitly when an end cannot be placed there --
+  including when only one of the two ends can be.
 - Pathways can be filtered by connected graph node through the REST API:
-  `?connected_to=structure:12&connected_to=location:5`.
+  `?connected_to=structure:12&connected_to=location:5`. A companion
+  `?connected_to_cable_end=41:A` resolves one end of a cable to those nodes
+  server-side, so the Route tab's picker sends a single query parameter no
+  matter how many structures the site holds.
 - Route validation reports whether a route's ends reach the cable's ends,
   alongside the existing gap check.
 
@@ -285,8 +289,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   termination could not be pinned down more precisely -- so the dropdown was
   usually empty and typing in it showed "no results found". The picker is now
   a `DynamicModelChoiceField` filtered by the cable end's real candidate
-  nodes (structures and locations alike, most-precise first), with a "Show
-  all pathways" fallback when the end cannot be placed in the plant. Two
+  nodes, structures and locations alike, with a "Show all pathways" fallback
+  when the end cannot be placed in the plant. Two
   behavior changes: the pathway field is now required (an empty submission
   used to silently create a segment with no pathway), and the picker's
   choice list is no longer capped by what the server chose to pre-render --

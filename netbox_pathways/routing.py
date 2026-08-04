@@ -20,6 +20,10 @@ def validate_cable_route(cable_id):
         valid: bool — True if route is complete (no gaps)
         segment_count: int
         gaps: list of gap dicts
+        ends: {"a": status, "b": status} — whether the route's first and last
+            segments reach the cable's own ends. Each status is "ok",
+            "mismatch", or "unverified" when that cable end cannot be placed
+            in the plant. Advisory only; it does not affect `valid`.
     """
     # Annotate conduit junction endpoints via subquery (same pattern as graph.py)
     conduit_qs = models.Conduit.objects.filter(pathway_ptr_id=OuterRef("pathway_id"))
