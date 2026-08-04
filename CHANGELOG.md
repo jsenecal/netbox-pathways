@@ -73,6 +73,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Manual coordinate entry on the map widget** -- the geometry widget now has a tabbed UI with a **Map** tab (existing Leaflet/geoman editor) and a **Coordinates** tab containing a free-text editor. The textarea accepts GeoJSON (Geometry, Feature, or FeatureCollection -- first feature wins), WKT (`POINT`/`LINESTRING`/`POLYGON`), DMS (hemisphere letters optional; lat-first when omitted), and decimal `lat,lon` pairs in Google-Maps order. Invalid input is reported inline without clobbering the previous geometry. The Map tab also exposes two helper buttons: **Use my location** (`navigator.geolocation`, requires HTTPS) and **Paste lat/lon...** (an inline mini-form). On Point widgets the helpers set or replace the marker; on LineString widgets they append a vertex (the first invocation stashes a pending vertex shown as a faded marker, and the second materializes a two-vertex line). Refs #32.
 - `ConduitBank.height` and `ConduitBank.width` (PositiveIntegerField, nullable). Captures duct-bank dimensions distinct from `total_conduits`. Surfaced in list tables (toggleable, off by default), forms (single and bulk), detail panel, import form, and REST API serializer. Migration `0017_conduitbank_height_width`.
 
+- **Location geometry resolves through structure identity.** `Structure.location`
+  is now a one-to-one identity link ("the dcim.Location this structure IS"),
+  and the map layer registry resolves `dcim.Location` FK targets through it
+  (`pathways_structure__geometry`). Reference-mode layers may declare
+  `geometry_field` as an ordered tuple (e.g. `("location", "site")`) that
+  falls back with SQL COALESCE, shared by the GeoJSON endpoint and the `/info`
+  counts. Pathway location endpoints whose Location has an identity structure
+  are snapped and validated like structure endpoints, and the map edit
+  widget's nearby-structures layer anchors polygon-footprint structures at
+  their centroid instead of skipping them. Refs #90.
+
 ### Changed
 
 - **Innerduct color is now picked from NetBox's color palette** instead of
@@ -157,6 +168,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `start_attachment_height` and `end_attachment_height`. The REST API field
   `attachment_height` becomes read-only and derived; clients writing to it
   must target the per-side fields.
+
+- **`Pathway.start_location` / `end_location` now use `PROTECT`.** Deleting a
+  `dcim.Location` referenced as a pathway endpoint is blocked instead of
+  silently nulling the endpoint. Refs #90.
+
+- **Migration note:** upgrading fails loudly if two structures share one
+  `location`; reassign or clear the duplicates first. Refs #90.
 
 ### Fixed
 
