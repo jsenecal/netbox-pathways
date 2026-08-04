@@ -145,6 +145,8 @@ class MapLayerRegistry:
                 layer.geometry_field = tuple(gf)
             elif not gf:
                 raise ValueError("Reference-mode layers require a 'geometry_field'.")
+            elif not isinstance(gf, str):
+                raise ValueError(f"geometry_field must be a FK field name string or a tuple of them (got {gf!r}).")
         if (
             layer.style.color_field
             and layer.feature_fields is not None

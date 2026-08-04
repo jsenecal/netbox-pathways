@@ -89,6 +89,11 @@ class TestRegistration:
         with pytest.raises(ValueError, match="geometry_field"):
             register_map_layer(**ref_layer_kwargs)
 
+    def test_reference_mode_rejects_non_string_scalar_geometry_field(self, ref_layer_kwargs):
+        ref_layer_kwargs["geometry_field"] = 5
+        with pytest.raises(ValueError, match="geometry_field"):
+            register_map_layer(**ref_layer_kwargs)
+
 
 class TestUnregister:
     def test_unregister(self, url_layer_kwargs):
