@@ -2066,6 +2066,10 @@ class CableRouteView(generic.ObjectView):
             "route_valid": route["valid"],
             "gap_count": len(route["gaps"]),
             "routable": a_exists and b_exists,
+            "cable_endpoints": [
+                anchors.describe(anchors.cable_end_nodes(instance, "A"), "A"),
+                anchors.describe(anchors.cable_end_nodes(instance, "B"), "B"),
+            ],
         }
 
 
