@@ -11,11 +11,8 @@ A **Cable Segment** represents one section of a cable's physical route through a
 | Cable | The NetBox `dcim.Cable` being routed |
 | Pathway | The conduit, aerial span, or other pathway |
 | Sequence | Order in the route (1, 2, 3...) |
-| Enter Point | Geographic coordinate where the cable enters the pathway |
-| Exit Point | Geographic coordinate where the cable exits |
-| Slack Loop Location | Where extra cable is coiled |
-| Slack Length | Extra cable length in meters |
 | Lashed With | Other cable segments mechanically lashed together with this one on the same aerial span. Multi-select; symmetric. See [Aerial Overlashing](#aerial-overlashing) below. |
+| Comments | Free-form notes on the segment |
 
 ### Aerial Overlashing
 
@@ -41,6 +38,26 @@ A cable running from Building A to Building B might have this route:
 | 2 | C-205 | Conduit | MH-001 | MH-002 |
 | 3 | AS-010 | Aerial | MH-002 | Pole-15 |
 | 4 | C-310 | Conduit | Pole-15 | Bldg B Entrance |
+
+### Choosing a pathway on the Route tab
+
+The Route tab offers the pathways connected to the point the route has reached.
+For the first segment that is the cable's A termination, resolved to pathways
+infrastructure through the terminating device's location and its parent
+locations, structures at those locations, the structure linked to the site in
+Site Geometry, and the remaining structures in the site. For later segments the
+candidates are both endpoints of the previous pathway: a pathway is drawn in
+whichever direction the surveyor drew it, so which end the cable arrives at
+cannot be read off the model, and offering both always includes the right one.
+
+The tab lists what it resolved for both cable ends. When an end cannot be placed
+in the plant the tab says so and the picker falls back to every pathway, so
+routing is never blocked -- the usual cause is a site with nothing modeled in
+Pathways yet, fixed by linking the site to a structure in Site Geometry or by
+setting a site or location on your structures.
+
+Use **Show all pathways** to search the full list at any time; the filter is a
+starting point, not a restriction.
 
 ## Conduit Banks
 
@@ -94,7 +111,7 @@ Key attributes:
 2. Click **Add**
 3. Select the **Cable** and **Pathway**
 4. Set the **Sequence** number (determines route order)
-5. Optionally set enter/exit points and slack details
+5. Optionally record **Lashed With** peers and **Comments**
 6. Save and add more segments for the full route
 
 !!! tip

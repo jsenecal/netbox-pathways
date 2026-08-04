@@ -3,8 +3,11 @@ from dcim.models import Cable
 from django.contrib.gis.geos import LineString, Point
 
 from netbox_pathways.geo import get_srid
-from netbox_pathways.models import CableSegment, Conduit, Structure
+from netbox_pathways.models import CableSegment, Conduit, Pathway, Structure
 from netbox_pathways.routing import validate_cable_route
+from tests.conftest import build_cable_with_terminations
+
+SRID = get_srid()
 
 
 @pytest.mark.django_db
@@ -83,3 +86,91 @@ class TestValidateCableRoute:
         result = validate_cable_route(cable.pk)
         assert result["valid"] is False
         assert len(result["gaps"]) == 1
+
+
+@pytest.mark.django_db
+class TestRouteEndChecks:
+    """`valid` means "no gaps"; `ends` says whether the route reaches the cable."""
+
+    def test_ok_when_the_first_segment_touches_the_a_candidates(self, db):
+        from dcim.models import Site
+
+        site = Site.objects.create(name="RE-ok", slug="re-ok")
+        a = Structure.objects.create(name="RE-a", site=site, geometry=Point(0, 0, srid=SRID))
+        b = Structure.objects.create(name="RE-b", site=site, geometry=Point(100, 0, srid=SRID))
+        pathway = Pathway.objects.create(
+            label="RE-P1",
+            pathway_type="conduit",
+            path=LineString((0, 0), (100, 0), srid=SRID),
+            start_structure=a,
+            end_structure=b,
+        )
+        cable = build_cable_with_terminations(label="RE-cable-ok", site=site)
+        CableSegment.objects.create(cable=cable, pathway=pathway, sequence=1)
+
+        result = validate_cable_route(cable.pk)
+        assert result["ends"] == {"a": "ok", "b": "ok"}
+
+    def test_mismatch_when_the_route_starts_somewhere_else(self, db):
+        from dcim.models import Site
+
+        site = Site.objects.create(name="RE-mm", slug="re-mm")
+        Structure.objects.create(name="RE-anchor", site=site, geometry=Point(0, 0, srid=SRID))
+        far_a = Structure.objects.create(name="RE-far-a", geometry=Point(500, 0, srid=SRID))
+        far_b = Structure.objects.create(name="RE-far-b", geometry=Point(600, 0, srid=SRID))
+        pathway = Pathway.objects.create(
+            label="RE-P2",
+            pathway_type="conduit",
+            path=LineString((500, 0), (600, 0), srid=SRID),
+            start_structure=far_a,
+            end_structure=far_b,
+        )
+        cable = build_cable_with_terminations(label="RE-cable-mm", site=site)
+        CableSegment.objects.create(cable=cable, pathway=pathway, sequence=1)
+
+        result = validate_cable_route(cable.pk)
+        assert result["valid"] is True  # no gaps -- unchanged semantics
+        assert result["ends"] == {"a": "mismatch", "b": "mismatch"}
+
+    def test_unverified_when_the_cable_end_is_not_in_the_plant(self, db):
+        from dcim.models import Site
+
+        site = Site.objects.create(name="RE-un", slug="re-un")
+        a = Structure.objects.create(name="RE-un-a", geometry=Point(0, 0, srid=SRID))
+        pathway = Pathway.objects.create(
+            label="RE-P3",
+            pathway_type="conduit",
+            path=LineString((0, 0), (100, 0), srid=SRID),
+            start_structure=a,
+        )
+        cable = build_cable_with_terminations(label="RE-cable-un", site=site)
+        CableSegment.objects.create(cable=cable, pathway=pathway, sequence=1)
+
+        assert validate_cable_route(cable.pk)["ends"] == {"a": "unverified", "b": "unverified"}
+
+    def test_each_end_is_judged_on_its_own(self, db):
+        """A cable can have one end in the plant and one end nowhere near it."""
+        from dcim.models import Site
+
+        site_a = Site.objects.create(name="RE-mix-a", slug="re-mix-a")
+        site_b = Site.objects.create(name="RE-mix-b", slug="re-mix-b")
+        anchor = Structure.objects.create(name="RE-mix-anchor", site=site_a, geometry=Point(0, 0, srid=SRID))
+        pathway = Pathway.objects.create(
+            label="RE-P4",
+            pathway_type="conduit",
+            path=LineString((0, 0), (100, 0), srid=SRID),
+            start_structure=anchor,
+        )
+        cable = build_cable_with_terminations(label="RE-cable-mix", site=site_a, site_b=site_b)
+        CableSegment.objects.create(cable=cable, pathway=pathway, sequence=1)
+
+        # Nothing in site_b is modeled in Pathways, so the B end cannot be
+        # checked either way -- while the A end plainly matches.
+        assert validate_cable_route(cable.pk)["ends"] == {"a": "ok", "b": "unverified"}
+
+    def test_unverified_when_there_are_no_segments(self, db):
+        from dcim.models import Site
+
+        site = Site.objects.create(name="RE-none", slug="re-none")
+        cable = build_cable_with_terminations(label="RE-cable-none", site=site)
+        assert validate_cable_route(cable.pk)["ends"] == {"a": "unverified", "b": "unverified"}

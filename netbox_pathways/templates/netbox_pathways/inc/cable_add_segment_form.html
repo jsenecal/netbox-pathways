@@ -2,22 +2,26 @@
       hx-target="#pw-segment-table"
       hx-swap="innerHTML"
       hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-      class="d-flex align-items-end gap-2 mt-2 mb-2">
-  {% if after_sequence %}
-  <input type="hidden" name="after_sequence" value="{{ after_sequence }}">
-  {% endif %}
-  <div class="flex-grow-1">
-    <label class="form-label">Pathway</label>
-    <select name="pathway" class="form-select form-select-sm" required>
-      <option value="">---------</option>
-      {% for value, label in choices %}
-      <option value="{{ value }}">{{ label }}</option>
-      {% endfor %}
-    </select>
+      class="mt-2 mb-2">
+  <div class="d-flex align-items-end gap-2">
+    <div class="flex-grow-1">
+      {{ form.pathway.label_tag }}
+      {{ form.pathway }}
+      {% if form.pathway.errors %}<div class="invalid-feedback d-block">{{ form.pathway.errors.0 }}</div>{% endif %}
+    </div>
+    {{ form.after_sequence }}
+    <button type="submit" class="btn btn-sm btn-primary">Add</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary"
+            hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/table/"
+            hx-target="#pw-segment-table"
+            hx-swap="innerHTML">Cancel</button>
   </div>
-  <button type="submit" class="btn btn-sm btn-primary">Add</button>
-  <button type="button" class="btn btn-sm btn-outline-secondary"
-          hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/table/"
-          hx-target="#pw-segment-table"
-          hx-swap="innerHTML">Cancel</button>
+  {% if not show_all %}
+  <div class="mt-1">
+    <button type="button" class="btn btn-sm btn-link p-0"
+            hx-get="/plugins/pathways/cable-routing/{{ cable.pk }}/add-segment/?show_all=1{% if after_sequence %}&after_sequence={{ after_sequence }}{% endif %}"
+            hx-target="#pw-segment-table"
+            hx-swap="innerHTML">Show all pathways</button>
+  </div>
+  {% endif %}
 </form>

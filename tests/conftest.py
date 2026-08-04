@@ -13,13 +13,15 @@ def admin_user(db):
     )
 
 
-def build_cable_with_terminations(*, label, site, terminate_a=True, terminate_b=True):
+def build_cable_with_terminations(*, label, site, terminate_a=True, terminate_b=True, location=None, site_b=None):
     """Build a Cable with optional A-/B-side terminations rooted in `site`.
 
     Each side is wired to an Interface on a Device in `site`, which causes
     `CableTermination.cache_related_objects()` to populate `_site` from
-    `termination.device.site` on save. Used by tests that exercise view
-    helpers which resolve cable terminations to graph nodes.
+    `termination.device.site` and `_location` from `termination.device.location`
+    on save. Pass `location` to exercise location-based anchor resolution, and
+    `site_b` to put the B-side device in a different site -- the way to build a
+    cable whose two ends resolve differently. `site_b` defaults to `site`.
     """
     from dcim.models import (
         Cable,
@@ -49,6 +51,7 @@ def build_cable_with_terminations(*, label, site, terminate_a=True, terminate_b=
             device_type=dt,
             role=dr,
             site=site,
+            location=location,
         )
         iface_a = Interface.objects.create(name="eth0", device=dev_a, type="1000base-t")
         CableTermination.objects.create(
@@ -62,7 +65,10 @@ def build_cable_with_terminations(*, label, site, terminate_a=True, terminate_b=
             name=f"{label}-devB",
             device_type=dt,
             role=dr,
-            site=site,
+            site=site_b or site,
+            # A location belongs to one site, so it only applies to the B side
+            # when both sides share a site.
+            location=location if site_b is None else None,
         )
         iface_b = Interface.objects.create(name="eth0", device=dev_b, type="1000base-t")
         CableTermination.objects.create(
