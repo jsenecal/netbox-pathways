@@ -2070,6 +2070,13 @@ class CableRouteView(generic.ObjectView):
                 anchors.describe(anchors.cable_end_nodes(instance, "A"), "A"),
                 anchors.describe(anchors.cable_end_nodes(instance, "B"), "B"),
             ],
+            "route_end_flag": (
+                "mismatch"
+                if "mismatch" in route["ends"].values()
+                else "unverified"
+                if "unverified" in route["ends"].values()
+                else "ok"
+            ),
         }
 
 
