@@ -278,14 +278,14 @@ class Pathway(NetBoxModel):
     )
     start_location = models.ForeignKey(
         Location,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="pathways_out",
     )
     end_location = models.ForeignKey(
         Location,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="pathways_in",
@@ -380,6 +380,12 @@ class Pathway(NetBoxModel):
         from django.contrib.gis.geos import LineString, Point
 
         structure = getattr(self, f"{side}_structure", None)
+        if not structure:
+            location = getattr(self, f"{side}_location", None)
+            # The reverse one-to-one raises an AttributeError-compatible
+            # DoesNotExist, so identity-less locations degrade to None and
+            # stay documentary.
+            structure = getattr(location, "pathways_structure", None) if location else None
         if not structure or not structure.geometry:
             return
 
