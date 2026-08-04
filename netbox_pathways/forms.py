@@ -1293,6 +1293,32 @@ class CableSegmentBulkEditForm(NetBoxModelBulkEditForm):
     nullable_fields = ("pathway",)
 
 
+class RouteSegmentForm(forms.Form):
+    """Inline pathway picker for the cable Route tab.
+
+    A plain Form rather than a ModelForm: the Route tab creates segments
+    through an HTMX partial that assigns `sequence` itself, and the form's job
+    is only to validate the chosen pathway. `connected_to` filters the picker
+    to the pathways reachable from this point in the route; it deliberately
+    does not restrict what POST accepts, because the user may have widened the
+    list with Show all pathways.
+    """
+
+    pathway = DynamicModelChoiceField(
+        queryset=Pathway.objects.all(),
+        label="Pathway",
+    )
+    after_sequence = forms.IntegerField(required=False, widget=forms.HiddenInput)
+
+    def __init__(self, *args, connected_to=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if connected_to:
+            self.fields["pathway"].widget.add_query_param(
+                "connected_to",
+                [f"{kind}:{pk}" for kind, pk in connected_to],
+            )
+
+
 # --- Pathway Location ---
 
 

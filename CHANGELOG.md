@@ -266,6 +266,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   named `filterforms.py` and `filters.py`, so every `selector=True` field
   returned a server error when its selector button was clicked (#106).
 
+- **The Route tab's "Add First Segment" pathway picker offered nothing.**
+  The add-segment view hand-rendered a `<select>` filled from a single
+  guessed structure -- `Structure.objects.first()` when the cable's A
+  termination could not be pinned down more precisely -- so the dropdown was
+  usually empty and typing in it showed "no results found". The picker is now
+  a `DynamicModelChoiceField` filtered by the cable end's real candidate
+  nodes (structures and locations alike, most-precise first), with a "Show
+  all pathways" fallback when the end cannot be placed in the plant. Two
+  behavior changes: the pathway field is now required (an empty submission
+  used to silently create a segment with no pathway), and the picker's
+  choice list is no longer capped by what the server chose to pre-render --
+  it queries the same filtered/unfiltered set the user sees. Fixes #106.
+
 ## [0.2.2] - 2026-06-30
 
 ### Fixed

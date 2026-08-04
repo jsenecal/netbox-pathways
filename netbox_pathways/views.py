@@ -29,7 +29,7 @@ from utilities.views import ViewTab, register_model_view
 
 from netbox_pathways.registry import registry as map_layer_registry
 
-from . import filterforms, filtersets, forms, models, tables
+from . import anchors, filterforms, filtersets, forms, models, tables
 from .choices import PlannedRouteStatusChoices
 from .graph import PathwayGraph, _endpoint_nodes, pathways_connected_to
 from .ui import panels
@@ -2149,56 +2149,68 @@ class CableRoutingAddSegmentView(CableRoutingMixin, LoginRequiredMixin, Permissi
 
     permission_required = "netbox_pathways.add_cablesegment"
 
+    def _entry_nodes(self, cable, after_sequence):
+        """Graph nodes the next segment can start from.
+
+        Mid-route this is exact -- the far end of the preceding pathway. At the
+        head of the route it is the A termination's candidate set, which may be
+        empty when the cable end is not modeled in Pathways.
+        """
+        segments = list(models.CableSegment.objects.filter(cable=cable).select_related("pathway").order_by("sequence"))
+
+        previous = None
+        if after_sequence is not None:
+            previous = next((s for s in segments if s.sequence == after_sequence), None)
+        elif segments:
+            previous = segments[-1]
+
+        if previous is not None and previous.pathway:
+            node = self._far_end_node(previous.pathway)
+            return (node,) if node else ()
+
+        return anchors.cable_end_nodes(cable, "A").nodes
+
     def get(self, request, cable_pk):
         cable = get_object_or_404(Cable, pk=cable_pk)
         after_sequence = request.GET.get("after_sequence")
-
-        segments = list(models.CableSegment.objects.filter(cable=cable).select_related("pathway").order_by("sequence"))
-
         if after_sequence is not None:
             after_sequence = int(after_sequence)
-            prev_seg = next((s for s in segments if s.sequence == after_sequence), None)
-            if prev_seg and prev_seg.pathway:
-                node = self._far_end_node(prev_seg.pathway)
-            else:
-                node = self._start_node(cable)
-        elif segments:
-            last = segments[-1]
-            if last.pathway:
-                node = self._far_end_node(last.pathway)
-            else:
-                node = self._start_node(cable)
-        else:
-            node = self._start_node(cable)
 
-        pathways = pathways_connected_to([node]) if node else models.Pathway.objects.none()
+        nodes = () if request.GET.get("show_all") == "1" else self._entry_nodes(cable, after_sequence)
+        form = forms.RouteSegmentForm(
+            initial={"after_sequence": after_sequence},
+            connected_to=nodes,
+        )
+        return self._render_form(request, cable, form, after_sequence, show_all=not nodes)
 
-        choices = []
-        for pw in pathways:
-            dest = pw.end_endpoint or pw.start_endpoint
-            length_str = f"{pw.length:.1f}m" if pw.length else "?"
-            choices.append((pw.pk, f"{pw} \u2192 {dest} ({length_str})"))
-
+    def _render_form(self, request, cable, form, after_sequence, show_all):
         html = render_to_string(
             "netbox_pathways/inc/cable_add_segment_form.html",
             {
                 "cable": cable,
-                "choices": choices,
+                "form": form,
                 "after_sequence": after_sequence,
+                "show_all": show_all,
             },
             request=request,
         )
-        return HttpResponse(html)
+        response = HttpResponse(html)
+        # Exposed for tests: assert on form and flag state rather than parsing HTML.
+        response.context_data = {"form": form, "show_all": show_all}
+        return response
 
     def post(self, request, cable_pk):
         cable = get_object_or_404(Cable, pk=cable_pk)
-        pathway_id = request.POST.get("pathway")
-        after_sequence = request.POST.get("after_sequence")
+        form = forms.RouteSegmentForm(request.POST)
+        if not form.is_valid():
+            after_sequence = request.POST.get("after_sequence") or None
+            return self._render_form(request, cable, form, after_sequence, show_all=True)
 
-        pathway = get_object_or_404(models.Pathway, pk=pathway_id) if pathway_id else None
+        pathway = form.cleaned_data["pathway"]
+        after_sequence = form.cleaned_data.get("after_sequence")
 
         if after_sequence:
-            sequence = int(after_sequence) + 1
+            sequence = after_sequence + 1
             with transaction.atomic():
                 models.CableSegment.objects.filter(
                     cable=cable,
