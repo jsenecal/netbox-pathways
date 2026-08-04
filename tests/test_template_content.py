@@ -55,9 +55,15 @@ def _by_name(data):
 @pytest.mark.django_db
 class TestLocationGeoData:
     def test_structures_in_location_are_shown_without_any_pathway(self, site, room):
-        """The gap this fixes: a location with structures but no pathways."""
+        """The gap this fixes: a location with structures but no pathways.
+
+        Structure.location is now a one-to-one identity link (#90), so the
+        second structure lives in a child location instead of sharing `room`;
+        the rollup to descendants covers this same case.
+        """
+        child = Location.objects.create(site=site, name="Room A-1", slug="room-a-1", parent=room)
         _structure("MH-1", 0, 0, site=site, location=room)
-        _structure("MH-2", 10, 10, site=site, location=room)
+        _structure("MH-2", 10, 10, site=site, location=child)
 
         data = _extension()._get_geo_data(room)
 
