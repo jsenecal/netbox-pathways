@@ -148,6 +148,26 @@ class TestRouteEndChecks:
 
         assert validate_cable_route(cable.pk)["ends"] == {"a": "unverified", "b": "unverified"}
 
+    def test_each_end_is_judged_on_its_own(self, db):
+        """A cable can have one end in the plant and one end nowhere near it."""
+        from dcim.models import Site
+
+        site_a = Site.objects.create(name="RE-mix-a", slug="re-mix-a")
+        site_b = Site.objects.create(name="RE-mix-b", slug="re-mix-b")
+        anchor = Structure.objects.create(name="RE-mix-anchor", site=site_a, geometry=Point(0, 0, srid=SRID))
+        pathway = Pathway.objects.create(
+            label="RE-P4",
+            pathway_type="conduit",
+            path=LineString((0, 0), (100, 0), srid=SRID),
+            start_structure=anchor,
+        )
+        cable = build_cable_with_terminations(label="RE-cable-mix", site=site_a, site_b=site_b)
+        CableSegment.objects.create(cable=cable, pathway=pathway, sequence=1)
+
+        # Nothing in site_b is modeled in Pathways, so the B end cannot be
+        # checked either way -- while the A end plainly matches.
+        assert validate_cable_route(cable.pk)["ends"] == {"a": "ok", "b": "unverified"}
+
     def test_unverified_when_there_are_no_segments(self, db):
         from dcim.models import Site
 
