@@ -380,25 +380,35 @@ class PathwayGraph:
         return 6371000 * 2 * math.asin(math.sqrt(a))
 
 
-def connected_pathways_db(node):
-    """Query pathways connected to a node directly from the database.
+NODE_KINDS = ("structure", "location", "junction")
 
-    Much faster than building the full graph when you only need adjacency
-    for a single node (e.g., "Add Segment" dropdown).
+
+def pathways_connected_to(nodes):
+    """Pathways touching any of the given `(kind, pk)` graph nodes.
+
+    Much faster than building the full graph when you only need adjacency for a
+    handful of nodes, as the Route tab picker does. Unknown kinds are ignored,
+    and a request that names no usable node matches nothing rather than
+    everything.
     """
-    node_type, node_pk = node
-    q = Q()
-    if node_type == "structure":
-        q = Q(start_structure_id=node_pk) | Q(end_structure_id=node_pk)
-    elif node_type == "location":
-        q = Q(start_location_id=node_pk) | Q(end_location_id=node_pk)
-    elif node_type == "junction":
-        q = Q(conduit__start_junction_id=node_pk) | Q(conduit__end_junction_id=node_pk)
-    else:
+    query = Q()
+    usable = False
+    for kind, pk in nodes:
+        if kind == "structure":
+            query |= Q(start_structure_id=pk) | Q(end_structure_id=pk)
+        elif kind == "location":
+            query |= Q(start_location_id=pk) | Q(end_location_id=pk)
+        elif kind == "junction":
+            query |= Q(conduit__start_junction_id=pk) | Q(conduit__end_junction_id=pk)
+        else:
+            continue
+        usable = True
+
+    if not usable:
         return models.Pathway.objects.none()
 
     return (
-        models.Pathway.objects.filter(q)
+        models.Pathway.objects.filter(query)
         .select_related(
             "start_structure",
             "end_structure",

@@ -31,7 +31,7 @@ from netbox_pathways.registry import registry as map_layer_registry
 
 from . import filterforms, filtersets, forms, models, tables
 from .choices import PlannedRouteStatusChoices
-from .graph import PathwayGraph, _endpoint_nodes, connected_pathways_db
+from .graph import PathwayGraph, _endpoint_nodes, pathways_connected_to
 from .ui import panels
 
 
@@ -1925,7 +1925,7 @@ class AdjacencyView(LoginRequiredMixin, View):
             return JsonResponse({"error": "node_id must be an integer"}, status=400)
 
         node = (node_type, node_id)
-        pathways = connected_pathways_db(node)
+        pathways = pathways_connected_to([node])
 
         results = []
         for pw in pathways:
@@ -2171,7 +2171,7 @@ class CableRoutingAddSegmentView(CableRoutingMixin, LoginRequiredMixin, Permissi
         else:
             node = self._start_node(cable)
 
-        pathways = connected_pathways_db(node) if node else models.Pathway.objects.none()
+        pathways = pathways_connected_to([node]) if node else models.Pathway.objects.none()
 
         choices = []
         for pw in pathways:

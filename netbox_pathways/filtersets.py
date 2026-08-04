@@ -1,6 +1,9 @@
+import re
+
 import django_filters
 from circuits.models import Circuit, Provider
 from dcim.models import Cable, Location, Site
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
 from tenancy.filtersets import TenancyFilterSet
@@ -19,6 +22,7 @@ from .choices import (
     StructureStatusChoices,
     StructureTypeChoices,
 )
+from .graph import NODE_KINDS, pathways_connected_to
 from .models import (
     AerialSpan,
     CableSegment,
@@ -34,6 +38,20 @@ from .models import (
     SiteGeometry,
     Structure,
 )
+
+NODE_REF_RE = re.compile(rf"^(?:{'|'.join(NODE_KINDS)}):[0-9]+$")
+
+
+def validate_node_ref(value):
+    """Validate one `connected_to` value.
+
+    Validation belongs on the field rather than in the filter method: a
+    ValidationError raised inside a `method=` callable surfaces as a 500,
+    whereas a field error becomes filterset form errors, which DRF renders as
+    a 400.
+    """
+    if value and value != "null" and not NODE_REF_RE.match(value):
+        raise ValidationError(f"Enter a node reference as '<kind>:<pk>', where kind is one of {', '.join(NODE_KINDS)}.")
 
 
 class GeoLengthFilterMixin(django_filters.FilterSet):
@@ -231,6 +249,11 @@ class PathwayFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFi
         method="filter_occupied",
         label="Occupied (has routed cables)",
     )
+    connected_to = MultiValueCharFilter(
+        method="filter_connected_to",
+        validators=[validate_node_ref],
+        label="Connected to graph node (kind:pk)",
+    )
 
     class Meta:
         model = Pathway
@@ -241,6 +264,23 @@ class PathwayFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFi
         if value:
             return queryset.filter(pk__in=occupied_pws)
         return queryset.exclude(pk__in=occupied_pws)
+
+    def filter_connected_to(self, queryset, name, value):
+        """Restrict to pathways touching any of the given graph nodes.
+
+        Values are `kind:pk`, repeated for several nodes. `null` is skipped so
+        an unset param from NetBox's APISelect is a no-op instead of matching
+        nothing.
+        """
+        nodes = []
+        for raw in value:
+            if not raw or raw == "null":
+                continue
+            kind, _, pk = raw.partition(":")
+            nodes.append((kind, int(pk)))
+        if not nodes:
+            return queryset
+        return queryset.filter(pk__in=pathways_connected_to(nodes).values("pk"))
 
     def filter_structure(self, queryset, name, value):
         """Filter to pathways connected to a structure at either end.

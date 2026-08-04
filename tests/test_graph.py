@@ -5,9 +5,9 @@ from netbox_pathways.geo import get_srid
 from netbox_pathways.graph import (
     PathwayGraph,
     batch_resolve_nodes,
-    connected_pathways_db,
     node_to_geo,
     node_to_label,
+    pathways_connected_to,
     trace_cable,
 )
 from netbox_pathways.models import (
@@ -448,13 +448,13 @@ class TestBuildTopology:
 
 
 @pytest.mark.django_db
-class TestConnectedPathwaysDb:
+class TestPathwaysConnectedTo:
     @pytest.fixture
     def srid(self):
         return get_srid()
 
     def test_structure_node(self, srid):
-        """connected_pathways_db filters by structure on either end (line 392)."""
+        """pathways_connected_to filters by structure on either end."""
         s1 = Structure.objects.create(name="cpd-s1", geometry=Point(0, 0, srid=srid))
         s2 = Structure.objects.create(name="cpd-s2", geometry=Point(0.01, 0.01, srid=srid))
         s3 = Structure.objects.create(name="cpd-s3", geometry=Point(0.02, 0.02, srid=srid))
@@ -472,13 +472,13 @@ class TestConnectedPathwaysDb:
             start_structure=s2,
             end_structure=s3,
         )
-        result = list(connected_pathways_db(("structure", s2.pk)))
+        result = list(pathways_connected_to([("structure", s2.pk)]))
         pks = {p.pk for p in result}
         assert pw_in.pk in pks
         assert pw_out.pk in pks
 
     def test_location_node(self, srid):
-        """connected_pathways_db handles location nodes (line 394)."""
+        """pathways_connected_to handles location nodes."""
         from dcim.models import Location, Site
 
         site = Site.objects.create(name="cpd-site", slug="cpd-site")
@@ -491,11 +491,11 @@ class TestConnectedPathwaysDb:
             start_structure=s,
             end_location=loc,
         )
-        result = list(connected_pathways_db(("location", loc.pk)))
+        result = list(pathways_connected_to([("location", loc.pk)]))
         assert pw in result
 
     def test_junction_node(self, srid):
-        """connected_pathways_db handles junction nodes (line 396)."""
+        """pathways_connected_to handles junction nodes."""
         s0 = Structure.objects.create(name="cpd-j0", geometry=Point(0, 0, srid=srid))
         s1 = Structure.objects.create(name="cpd-j1", geometry=Point(0.02, 0.02, srid=srid))
         s2 = Structure.objects.create(name="cpd-j2", geometry=Point(0.03, 0.01, srid=srid))
@@ -527,14 +527,16 @@ class TestConnectedPathwaysDb:
             path=LineString((0.01, 0.01), (0.03, 0.01), srid=srid),
             length=20,
         )
-        result = list(connected_pathways_db(("junction", junction.pk)))
+        result = list(pathways_connected_to([("junction", junction.pk)]))
         # Branch attaches to the junction directly
         assert any(p.pk == branch.pathway_ptr_id for p in result)
 
-    def test_unknown_node_type_returns_empty(self):
-        """Unknown node kind returns an empty queryset (line 398)."""
-        result = connected_pathways_db(("bogus", 1))
-        assert list(result) == []
+    def test_unknown_kind_matches_nothing(self, db):
+        """An unrecognized node kind is ignored, so nothing matches -- never everything."""
+        assert list(pathways_connected_to([("bogus", 1)])) == []
+
+    def test_empty_node_list_matches_nothing(self, db):
+        assert list(pathways_connected_to([])) == []
 
 
 @pytest.mark.django_db
