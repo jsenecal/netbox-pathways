@@ -99,7 +99,7 @@ def describe(anchor, end_label):
     return {
         "end": end_label,
         "labels": [],
-        "message": message.format(end=end_label, place=place or "that termination"),
+        "message": message.format(end=end_label, place=place),
         "remedy": remedy,
     }
 

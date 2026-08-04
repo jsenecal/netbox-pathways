@@ -4,7 +4,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMix
 from django.contrib.gis.db.models.functions import Length
 from django.db import transaction
 from django.db.models import Count, Exists, F, OuterRef, Q, Sum
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -31,7 +31,7 @@ from netbox_pathways.registry import registry as map_layer_registry
 
 from . import anchors, filterforms, filtersets, forms, models, tables
 from .choices import PlannedRouteStatusChoices
-from .graph import PathwayGraph, _endpoint_nodes, pathways_connected_to
+from .graph import PathwayGraph, _endpoint_nodes
 from .ui import panels
 
 
@@ -1911,41 +1911,6 @@ class PullSheetDetailView(LoginRequiredMixin, View):
         )
 
 
-class AdjacencyView(LoginRequiredMixin, View):
-    """Return pathways connected to a given node as JSON."""
-
-    def get(self, request):
-        node_type = request.GET.get("node_type")
-        node_id = request.GET.get("node_id")
-        if not node_type or not node_id:
-            return JsonResponse(
-                {"error": "node_type and node_id are required"},
-                status=400,
-            )
-        try:
-            node_id = int(node_id)
-        except (ValueError, TypeError):
-            return JsonResponse({"error": "node_id must be an integer"}, status=400)
-
-        node = (node_type, node_id)
-        pathways = pathways_connected_to([node])
-
-        results = []
-        for pw in pathways:
-            dest = pw.end_endpoint or pw.start_endpoint
-            results.append(
-                {
-                    "pathway_id": pw.pk,
-                    "label": str(pw),
-                    "destination": str(dest) if dest else "",
-                    "length": pw.length or 0,
-                    "pathway_type": pw.pathway_type,
-                }
-            )
-
-        return JsonResponse(results, safe=False)
-
-
 # --- Cable Routing Tab (on dcim.Cable detail page) ---
 
 
@@ -2088,46 +2053,6 @@ class CableRouteView(generic.ObjectView):
 
 class CableRoutingMixin:
     """Shared helpers for routing panel views."""
-
-    def _start_node(self, cable):
-        """Resolve A termination to a graph node."""
-        from dcim.models import CableTermination
-
-        term = (
-            CableTermination.objects.filter(
-                cable=cable,
-                cable_end="A",
-            )
-            .select_related("_site")
-            .first()
-        )
-        if not term or not term._site_id:
-            return None
-        structures = models.Structure.objects.filter(site_id=term._site_id)
-        if structures.count() == 1:
-            return ("structure", structures.first().pk)
-        first = structures.first()
-        return ("structure", first.pk) if first else None
-
-    def _end_node(self, cable):
-        """Resolve B termination to a graph node."""
-        from dcim.models import CableTermination
-
-        term = (
-            CableTermination.objects.filter(
-                cable=cable,
-                cable_end="B",
-            )
-            .select_related("_site")
-            .first()
-        )
-        if not term or not term._site_id:
-            return None
-        structures = models.Structure.objects.filter(site_id=term._site_id)
-        if structures.count() == 1:
-            return ("structure", structures.first().pk)
-        first = structures.first()
-        return ("structure", first.pk) if first else None
 
     def _far_end_node(self, pathway, coming_from_node=None):
         """Return the opposite end of a pathway from the entry node."""

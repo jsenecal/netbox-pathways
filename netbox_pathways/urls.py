@@ -228,8 +228,6 @@ urlpatterns = [
     path("pull-sheets/<int:cable_pk>/", views.PullSheetDetailView.as_view(), name="pullsheet_detail"),
     # Map
     path("map/", views.MapView.as_view(), name="map"),
-    # Adjacency API for pathway filtering
-    path("adjacency/", views.AdjacencyView.as_view(), name="adjacency"),
     # Cable routing panel HTMX endpoints
     path(
         "cable-routing/<int:cable_pk>/add-segment/",

@@ -18,6 +18,13 @@ Navigate to **Plugins > Pathways > Route Planner** or visit
 The planner page shows a map and a sidebar. Pick endpoints either by
 clicking features on the map or by selecting from the dropdowns.
 
+The **Plan Route** button on a cable's Route tab opens the planner with
+`?cable=<pk>` (and, for a gap between two segments, `start=<structure_pk>` and
+`end=<structure_pk>`). When the planner is opened for a cable, each endpoint
+is prefilled only when the cable end resolves to exactly one structure. If a
+site holds several structures, the field is left blank rather than guessing
+one.
+
 ## Endpoints
 
 | Endpoint side | Allowed types                         |

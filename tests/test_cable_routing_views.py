@@ -7,7 +7,6 @@ from django.test import RequestFactory
 from netbox_pathways.geo import get_srid
 from netbox_pathways.models import CableSegment, Pathway, Structure
 from netbox_pathways.views import CableRoutingMixin, _annotate_segments
-from tests.conftest import build_cable_with_terminations
 
 SRID = get_srid()
 
@@ -177,87 +176,6 @@ class TestAnnotateSegments:
         assert orphan.start_name is None
         assert orphan.end_name is None
         assert orphan.ordinal == 1
-
-
-# ---------------------------------------------------------------------------
-# _start_node / _end_node
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def site(db):
-    from dcim.models import Site
-
-    return Site.objects.create(name="CR-site", slug="cr-site")
-
-
-@pytest.fixture
-def site_structure(site):
-    return Structure.objects.create(
-        name="CR-struct",
-        site=site,
-        geometry=Point(0, 0, srid=SRID),
-    )
-
-
-@pytest.mark.django_db
-class TestStartEndNode:
-    def test_returns_none_when_no_termination(self):
-        from dcim.models import Cable
-
-        mixin = CableRoutingMixin()
-        cable = Cable.objects.create(label="no-term")
-        assert mixin._start_node(cable) is None
-        assert mixin._end_node(cable) is None
-
-    def test_start_node_resolves_single_structure(self, site, site_structure):
-        mixin = CableRoutingMixin()
-        cable = build_cable_with_terminations(
-            label="CR-A",
-            site=site,
-            terminate_a=True,
-            terminate_b=False,
-        )
-        assert mixin._start_node(cable) == ("structure", site_structure.pk)
-        # B side has no termination -> None
-        assert mixin._end_node(cable) is None
-
-    def test_end_node_resolves_single_structure(self, site, site_structure):
-        mixin = CableRoutingMixin()
-        cable = build_cable_with_terminations(
-            label="CR-B",
-            site=site,
-            terminate_a=False,
-            terminate_b=True,
-        )
-        assert mixin._end_node(cable) == ("structure", site_structure.pk)
-        assert mixin._start_node(cable) is None
-
-    def test_start_node_picks_first_when_multiple_structures(self, site):
-        # Two structures in the same site: the mixin falls back to first()
-        s1 = Structure.objects.create(
-            name="CR-multi-1",
-            site=site,
-            geometry=Point(0, 0, srid=SRID),
-        )
-        s2 = Structure.objects.create(
-            name="CR-multi-2",
-            site=site,
-            geometry=Point(10, 10, srid=SRID),
-        )
-        mixin = CableRoutingMixin()
-        cable = build_cable_with_terminations(
-            label="CR-multi",
-            site=site,
-            terminate_a=True,
-            terminate_b=False,
-        )
-        result = mixin._start_node(cable)
-        # Either structure can win first(); pin to one of the two known PKs.
-        assert result is not None
-        kind, pk = result
-        assert kind == "structure"
-        assert pk in {s1.pk, s2.pk}
 
 
 # ---------------------------------------------------------------------------
