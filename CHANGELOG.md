@@ -169,6 +169,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   must target the per-side fields.
 - The route planner prefills a cable endpoint only when it resolves to exactly
   one structure.
+- **`netbox_pathways.filters` is now `netbox_pathways.filtersets`.** NetBox
+  resolves plugin filtersets at `<app>.filtersets`, which the old module name
+  broke. Code importing `from netbox_pathways.filters import ...` must update
+  the path; the filterset classes themselves are unchanged.
 
 ### Removed
 
@@ -295,6 +299,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   used to silently create a segment with no pathway), and the picker's
   choice list is no longer capped by what the server chose to pre-render --
   it queries the same filtered/unfiltered set the user sees. Fixes #106.
+
+- **Mid-route pathway suggestions could be wrong, and were empty at a branch
+  tap.** Adding a segment after an existing one derived the entry point from
+  the previous pathway's end endpoint regardless of which way the cable
+  travels, so it could offer the pathways behind the cable rather than ahead
+  of it -- and for a conduit whose far end is a ConduitJunction it resolved
+  nothing and silently listed every pathway instead. The picker now offers
+  both endpoints of the previous pathway, and junction endpoints resolve.
 
 ## [0.2.2] - 2026-06-30
 
