@@ -6,7 +6,7 @@ get_srid() is read from PLUGINS_CONFIG at form/serializer save time. If
 the two ever drift apart -- either because a migration shipped with a
 hardcoded SRID, or because an operator edited PLUGINS_CONFIG after
 applying migrations -- inserts fail with a SRID mismatch and crash the
-end user back to the home page (see issue #5).
+end user back to the home page.
 
 This module introspects geometry_columns and emits a checks.Error for
 every column whose stored SRID does not match get_srid(), with a hint

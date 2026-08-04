@@ -148,7 +148,7 @@ class PathwaysMapWidget(BaseGeometryWidget):
         # Django 6.0 stopped exposing id/name/geom_type at the top level of the
         # widget context (they now live under ``widget``); our template reads
         # them at the top level, so re-expose them here. setdefault keeps this
-        # backwards compatible with Django <= 5.2, which still sets them. (#52)
+        # backwards compatible with Django <= 5.2, which still sets them.
         widget = context["widget"]
         context.setdefault("id", widget["attrs"].get("id", ""))
         context.setdefault("name", widget["name"])
@@ -1005,9 +1005,9 @@ class InnerductImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
     )
 
     def clean_color(self):
-        # Colors were free text before issue #79, so imports that still name
-        # them keep working; anything unrecognized is an error rather than a
-        # silently blank field.
+        # Colors used to be free text, so imports that still name them keep
+        # working; anything unrecognized is an error rather than a silently
+        # blank field.
         color = self.cleaned_data.get("color")
         hex_code = color_to_hex(color)
         if hex_code is None:
