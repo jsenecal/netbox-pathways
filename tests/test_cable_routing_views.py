@@ -57,34 +57,6 @@ def linear_topology(db):
 
 
 # ---------------------------------------------------------------------------
-# _far_end_node
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestFarEndNode:
-    def test_returns_end_when_entering_from_start(self, linear_topology):
-        mixin = CableRoutingMixin()
-        p1 = linear_topology["p1"]
-        a = linear_topology["a"]
-        result = mixin._far_end_node(p1, coming_from_node=("structure", a.pk))
-        assert result == ("structure", linear_topology["b"].pk)
-
-    def test_returns_start_when_entering_from_end(self, linear_topology):
-        mixin = CableRoutingMixin()
-        p1 = linear_topology["p1"]
-        b = linear_topology["b"]
-        result = mixin._far_end_node(p1, coming_from_node=("structure", b.pk))
-        assert result == ("structure", linear_topology["a"].pk)
-
-    def test_no_coming_from_returns_end(self, linear_topology):
-        # Default case: when coming_from is None, return the canonical end node.
-        mixin = CableRoutingMixin()
-        result = mixin._far_end_node(linear_topology["p1"])
-        assert result == ("structure", linear_topology["b"].pk)
-
-
-# ---------------------------------------------------------------------------
 # _annotate_segments
 # ---------------------------------------------------------------------------
 

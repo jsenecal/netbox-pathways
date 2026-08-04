@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.gis.db.models.functions import Length
 from django.db import transaction
-from django.db.models import Count, Exists, F, OuterRef, Q, Sum
+from django.db.models import Count, Exists, F, OuterRef, Q, Subquery, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -2054,13 +2054,6 @@ class CableRouteView(generic.ObjectView):
 class CableRoutingMixin:
     """Shared helpers for routing panel views."""
 
-    def _far_end_node(self, pathway, coming_from_node=None):
-        """Return the opposite end of a pathway from the entry node."""
-        start, end = _endpoint_nodes(pathway)
-        if coming_from_node and coming_from_node == end:
-            return start
-        return end
-
     def _render_table(self, request, cable):
         segments = list(
             models.CableSegment.objects.filter(cable=cable)
@@ -2089,13 +2082,32 @@ class CableRoutingAddSegmentView(CableRoutingMixin, LoginRequiredMixin, Permissi
     permission_required = "netbox_pathways.add_cablesegment"
 
     def _entry_nodes(self, cable, after_sequence):
-        """Graph nodes the next segment can start from.
+        """Where the next segment can start, as `(nodes, at_head_of_route)`.
 
-        Mid-route this is exact -- the far end of the preceding pathway. At the
-        head of the route it is the A termination's candidate set, which may be
-        empty when the cable end is not modeled in Pathways.
+        Mid-route the nodes are both endpoints of the preceding pathway.
+        Pathways are drawn in whichever direction the surveyor drew them, so
+        which end the cable arrives at cannot be inferred from the model; the
+        two-node superset always contains the true position, and the filter is
+        a starting point rather than a restriction.
+
+        At the head of the route the nodes are the A termination's candidate
+        set, which may be empty when the cable end is not modeled in Pathways.
+        `at_head_of_route` lets the caller hand the picker a single cable-end
+        reference instead of one query param per candidate node -- a site can
+        hold thousands of structures.
         """
-        segments = list(models.CableSegment.objects.filter(cable=cable).select_related("pathway").order_by("sequence"))
+        # Junction endpoints live on Conduit, and _endpoint_nodes() reads them
+        # from these annotations (same subquery pattern as routing.py).
+        conduit_qs = models.Conduit.objects.filter(pathway_ptr_id=OuterRef("pathway_id"))
+        segments = list(
+            models.CableSegment.objects.filter(cable=cable)
+            .select_related("pathway")
+            .annotate(
+                _start_junction_id=Subquery(conduit_qs.values("start_junction_id")[:1]),
+                _end_junction_id=Subquery(conduit_qs.values("end_junction_id")[:1]),
+            )
+            .order_by("sequence")
+        )
 
         previous = None
         if after_sequence is not None:
@@ -2104,10 +2116,11 @@ class CableRoutingAddSegmentView(CableRoutingMixin, LoginRequiredMixin, Permissi
             previous = segments[-1]
 
         if previous is not None and previous.pathway:
-            node = self._far_end_node(previous.pathway)
-            return (node,) if node else ()
+            previous.pathway._start_junction_id = previous._start_junction_id
+            previous.pathway._end_junction_id = previous._end_junction_id
+            return tuple(node for node in _endpoint_nodes(previous.pathway) if node), False
 
-        return anchors.cable_end_nodes(cable, "A").nodes
+        return anchors.cable_end_nodes(cable, "A").nodes, True
 
     def get(self, request, cable_pk):
         cable = get_object_or_404(Cable, pk=cable_pk)
@@ -2115,10 +2128,20 @@ class CableRoutingAddSegmentView(CableRoutingMixin, LoginRequiredMixin, Permissi
         if after_sequence is not None:
             after_sequence = int(after_sequence)
 
-        nodes = () if request.GET.get("show_all") == "1" else self._entry_nodes(cable, after_sequence)
+        if request.GET.get("show_all") == "1":
+            nodes, at_head_of_route = (), False
+        else:
+            nodes, at_head_of_route = self._entry_nodes(cable, after_sequence)
+
+        # The cable end resolves to a whole site's worth of candidates, so it
+        # travels as one param the API resolves itself. Mid-route there are at
+        # most two nodes, and they are not a cable end.
+        cable_end_ref = f"{cable.pk}:A" if nodes and at_head_of_route else None
+
         form = forms.RouteSegmentForm(
             initial={"after_sequence": after_sequence},
-            connected_to=nodes,
+            connected_to=() if cable_end_ref else nodes,
+            cable_end_ref=cable_end_ref,
         )
         return self._render_form(request, cable, form, after_sequence, show_all=not nodes)
 
