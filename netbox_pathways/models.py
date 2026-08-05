@@ -622,15 +622,15 @@ class Conduit(Pathway):
             self._validate_and_snap_junction("end")
 
     def _validate_and_snap_junction(self, side):
-        """Validate and snap one endpoint to the attached junction's location."""
+        """Validate and snap one endpoint to the attached junction's derived point."""
         junction = getattr(self, f"{side}_junction", None)
         if not junction:
             return
-        junc_loc = junction.location
-        if junc_loc is None:
+        junc_geom = junction.derived_geometry
+        if junc_geom is None:
             return
 
-        self._snap_path_end(side, junc_loc, "junction")
+        self._snap_path_end(side, junc_geom, "junction")
 
     def save(self, *args, **kwargs):
         self.pathway_type = "conduit"
@@ -811,7 +811,12 @@ class ConduitJunction(NetBoxModel):
                 )
 
     @property
-    def location(self):
+    def derived_geometry(self):
+        """Point on the trunk conduit's path at position_on_trunk.
+
+        Derived, not stored: a junction carries no geometry column and no
+        dcim.Location relation.
+        """
         if self.trunk_conduit and self.trunk_conduit.path:
             return self.trunk_conduit.path.interpolate_normalized(self.position_on_trunk)
         return None

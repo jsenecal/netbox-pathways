@@ -207,12 +207,12 @@ class PluginModelMapExtension(PluginTemplateExtension):
                 if line:
                     data["lines"].append(line)
             # Show the computed junction point
-            loc = obj.location
-            if loc:
+            point = obj.derived_geometry
+            if point:
                 data["points"].append(
                     {
-                        "lat": loc.y,
-                        "lon": loc.x,
+                        "lat": point.y,
+                        "lon": point.x,
                         "name": str(obj),
                         "color": "red",
                     }
