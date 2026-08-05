@@ -53,6 +53,7 @@ import {
 import type { MapInfo, RenderingDecision } from './data-layers';
 import { chooseLoadStrategy, decisionsDiffer } from './load-strategy';
 import { StatusPrefs } from './status-prefs';
+import { OccupancyPrefs } from './occupancy-prefs';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -338,6 +339,22 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         });
     }
     _buildStatusControls();
+
+    // --- Occupancy visibility (hide unoccupied) ---
+
+    function _buildOccupancyControls(): void {
+        const hideBtn = document.getElementById('pw-hide-unoccupied');
+        if (!hideBtn) return;
+
+        hideBtn.classList.toggle('pw-layer-active', OccupancyPrefs.isHideUnoccupied());
+        hideBtn.addEventListener('click', function () {
+            const hide = !OccupancyPrefs.isHideUnoccupied();
+            OccupancyPrefs.setHideUnoccupied(hide);
+            hideBtn.classList.toggle('pw-layer-active', hide);
+            _loadData();
+        });
+    }
+    _buildOccupancyControls();
 
     // --- Data loading ---
 
