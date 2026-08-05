@@ -13,15 +13,8 @@ SRID = get_srid()
 @pytest.mark.django_db
 class TestValidateCableRoute:
     @pytest.fixture(autouse=True)
-    def _disable_routability_signal(self):
-        """Disable routability signal for route validation tests (no terminations needed)."""
-        from django.db.models.signals import pre_save
-
-        from netbox_pathways.signals import enforce_cable_routability
-
-        pre_save.disconnect(enforce_cable_routability, sender=CableSegment)
-        yield
-        pre_save.connect(enforce_cable_routability, sender=CableSegment)
+    def _bypass_routability(self, _disable_routability_signal):
+        """Route validation tests build orphan segments (no terminations needed)."""
 
     @pytest.fixture
     def srid(self):

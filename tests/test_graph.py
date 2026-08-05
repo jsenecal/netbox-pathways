@@ -546,14 +546,8 @@ class TestTraceCable:
         return get_srid()
 
     @pytest.fixture(autouse=True)
-    def _disable_routability_signal(self):
-        from django.db.models.signals import pre_save
-
-        from netbox_pathways.signals import enforce_cable_routability
-
-        pre_save.disconnect(enforce_cable_routability, sender=CableSegment)
-        yield
-        pre_save.connect(enforce_cable_routability, sender=CableSegment)
+    def _bypass_routability(self, _disable_routability_signal):
+        """Trace tests build orphan segments (no terminations needed)."""
 
     def test_returns_segments_in_sequence(self, srid):
         """trace_cable orders segments by sequence and exposes pathway metadata."""

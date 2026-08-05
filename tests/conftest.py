@@ -5,6 +5,25 @@ from netbox_pathways.registry import LayerDetail, LayerStyle, registry
 
 
 @pytest.fixture
+def _disable_routability_signal():
+    """Disconnect the pre_save routability check so tests can build orphan segments.
+
+    The CableSegment routability signal requires both A and B cable
+    terminations before saving; tests that exercise other logic should not
+    have to wire full Cable + CableTermination + Device fixtures for every
+    segment.
+    """
+    from django.db.models.signals import pre_save
+
+    from netbox_pathways.models import CableSegment
+    from netbox_pathways.signals import enforce_cable_routability
+
+    pre_save.disconnect(enforce_cable_routability, sender=CableSegment)
+    yield
+    pre_save.connect(enforce_cable_routability, sender=CableSegment)
+
+
+@pytest.fixture
 def admin_user(db):
     user_model = get_user_model()
     return user_model.objects.create_superuser(

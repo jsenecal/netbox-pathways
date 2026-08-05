@@ -117,6 +117,23 @@ def _exclude_status(qs, statuses):
     return qs.exclude(status__in=statuses)
 
 
+def _parse_occupied(request):
+    """Tri-state ``?occupied=`` param: True, False, or None (absent/unrecognized).
+
+    Mirrors the truthy/falsy spellings django-filter's BooleanFilter accepts so
+    /info counts and the layer endpoints interpret the same request the same way.
+    """
+    raw = request.query_params.get("occupied")
+    if raw is None:
+        return None
+    value = raw.strip().lower()
+    if value in ("true", "1", "yes"):
+        return True
+    if value in ("false", "0", "no"):
+        return False
+    return None
+
+
 # --- GeoJSON Serializers ---
 # geo_field points to an annotated field (already WGS84), declared explicitly
 # so DRF doesn't try to introspect the model for it.
@@ -282,7 +299,7 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
             if request.META.get("HTTP_IF_NONE_MATCH") == etag:
                 return Response(status=304)
             if qs.count() > MAX_GEO_RESULTS:
-                return self._clustered_response(zoom, etag)
+                return self._clustered_response(qs, zoom, etag)
             serializer = self.get_serializer(qs[:MAX_GEO_RESULTS], many=True)
             response = Response(serializer.data)
             response["ETag"] = etag
@@ -295,12 +312,11 @@ class StructureGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
         except (KeyError, ValueError, TypeError):
             return None
 
-    def _clustered_response(self, zoom, etag=None):
-        # Get bbox-filtered queryset WITHOUT the result cap (aggregation reduces rows)
-        qs = models.Structure.objects.only("id", "geometry").order_by()
-        qs = _exclude_status(qs, _parse_exclude_status(self.request))
-        qs = self._apply_bbox(qs)
-
+    def _clustered_response(self, qs, zoom, etag=None):
+        # ``qs`` is the same filtered queryset the plain branch serializes
+        # (bbox, status exclusion, and filterset params such as ``occupied``
+        # all applied), so cluster counts always agree with the points the
+        # client gets after zooming in. Aggregation ignores the result cap.
         grid_size = _grid_size_for_zoom(zoom)
         geo_expr = Transform("geometry", LEAFLET_SRID)
         clusters = (
@@ -527,6 +543,7 @@ class MapInfoView(APIView):
     def get(self, request):
         bbox_poly, bbox_list = _parse_bbox(request.query_params.get("bbox"))
         excluded_statuses = _parse_exclude_status(request)
+        occupied = _parse_occupied(request)
 
         counts = {}
         thresholds = _resolved_thresholds()
@@ -551,6 +568,7 @@ class MapInfoView(APIView):
             if extra_filter:
                 qs = qs.filter(**extra_filter)
             qs = _exclude_status(qs, excluded_statuses)
+            qs = filtersets.apply_occupied(qs, occupied)
             counts[key] = _count(qs, F(geo_field))
 
         from .external_geo import resolve_geometry_expression
@@ -572,7 +590,7 @@ class MapInfoView(APIView):
             thresholds["external"] = external_thresholds
 
         etag = hashlib.md5(
-            f"{max_updated}:{total}:{bbox_list}:{excluded_statuses}".encode(),
+            f"{max_updated}:{total}:{bbox_list}:{excluded_statuses}:{occupied}".encode(),
             usedforsecurity=False,
         ).hexdigest()
         if request.META.get("HTTP_IF_NONE_MATCH") == etag:

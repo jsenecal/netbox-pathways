@@ -16,18 +16,6 @@ SRID = get_srid()
 
 
 @pytest.fixture
-def disable_routability_signal():
-    """The routability signal requires both A/B terminations; bypass for these tests."""
-    from django.db.models.signals import pre_save
-
-    from netbox_pathways.signals import enforce_cable_routability
-
-    pre_save.disconnect(enforce_cable_routability, sender=CableSegment)
-    yield
-    pre_save.connect(enforce_cable_routability, sender=CableSegment)
-
-
-@pytest.fixture
 def aerial_route(db):
     s1 = Structure.objects.create(name="LASH-S1", geometry=Point(0, 0, srid=SRID))
     s2 = Structure.objects.create(name="LASH-S2", geometry=Point(100, 0, srid=SRID))
@@ -43,7 +31,7 @@ def aerial_route(db):
 
 @pytest.mark.django_db
 class TestLashedWith:
-    def test_lashed_cables_property(self, aerial_route, disable_routability_signal):
+    def test_lashed_cables_property(self, aerial_route, _disable_routability_signal):
         """The `lashed_cables` property returns the dcim.Cable instances of every peer segment."""
         cable_a = Cable.objects.create()
         cable_b = Cable.objects.create()

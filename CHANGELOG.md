@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Hide unoccupied toggle on the interactive map.** A new sidebar button
+  under Hide inactive filters every layer down to plant that carries cable:
+  pathways with at least one routed segment and the structures terminating
+  them. Filtering is server-side, so viewport counts, cluster totals, and
+  drawn features always agree, and the preference persists per browser.
+  The `occupied` filter now also exists on the Conduit, Aerial Span, Direct
+  Buried, Innerduct, and Conduit Bank filter sets (list views and REST API
+  included) and is containment-aware: a conduit hosting an occupied
+  innerduct, and a bank holding an occupied member conduit, count as
+  occupied. Refs #112.
+
 - **Full-screen toggle on the geometry edit widget.** A new button in the
   map's top-right corner grows it to fill the browser window, so tracing a
   route with many intermediate vertices no longer means repeatedly zooming
@@ -198,6 +209,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `location`; reassign or clear the duplicates first. Refs #90.
 
 ### Fixed
+
+- **Server-side structure clusters ignored filter parameters.** The
+  clustered response at low zoom rebuilt its queryset from scratch, so any
+  filterset parameter on the request (`occupied`, `structure_type`, `q`,
+  ...) applied to the plain features but not to the cluster counts.
+  Clusters now aggregate the same filtered queryset the plain branch
+  serializes. Refs #112.
 
 - **The nearby-structures layer drew the structure you were editing.** A
   Structure edit form fetches the surrounding structures for context, and the

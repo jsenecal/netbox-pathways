@@ -7,7 +7,6 @@ ModelMultipleChoiceFilter, etc.) is intentionally not exercised here.
 
 import pytest
 from django.contrib.gis.geos import LineString, Point
-from django.db.models.signals import pre_save
 
 from netbox_pathways.filtersets import (
     AerialSpanFilterSet,
@@ -42,16 +41,6 @@ from netbox_pathways.models import (
 )
 
 SRID = get_srid()
-
-
-@pytest.fixture
-def _disable_routability_signal():
-    """Disconnect the pre_save routability check so we can build orphan segments."""
-    from netbox_pathways.signals import enforce_cable_routability
-
-    pre_save.disconnect(enforce_cable_routability, sender=CableSegment)
-    yield
-    pre_save.connect(enforce_cable_routability, sender=CableSegment)
 
 
 @pytest.fixture
@@ -198,6 +187,70 @@ def topology(db, _disable_routability_signal):
     }
 
 
+@pytest.fixture
+def occupancy(db, _disable_routability_signal):
+    """Containment topology for occupied-filter tests.
+
+    One cable routed through: an aerial span (direct), an innerduct (making
+    its parent conduit occupied by containment), and a bank-member conduit
+    (making the bank occupied by containment). The host conduit sits inside
+    a second bank to exercise the two-level innerduct -> conduit -> bank arm.
+    Empty siblings of each class prove the negative side.
+    """
+    from dcim.models import Cable
+
+    s_a = Structure.objects.create(name="occ-a", geometry=Point(0, 0, srid=SRID))
+    s_b = Structure.objects.create(name="occ-b", geometry=Point(100, 0, srid=SRID))
+    line = LineString((0, 0), (100, 0), srid=SRID)
+
+    aerial = AerialSpan.objects.create(label="occ-aerial", path=line, start_structure=s_a, end_structure=s_b)
+    aerial_empty = AerialSpan.objects.create(
+        label="occ-aerial-empty", path=line, start_structure=s_a, end_structure=s_b
+    )
+
+    inner_bank = ConduitBank.objects.create(label="occ-inner-bank", path=line, start_structure=s_a, end_structure=s_b)
+    conduit_host = Conduit.objects.create(
+        label="occ-host",
+        path=line,
+        start_structure=s_a,
+        end_structure=s_b,
+        conduit_bank=inner_bank,
+    )
+    innerduct = Innerduct.objects.create(label="occ-inner", path=line, parent_conduit=conduit_host, size="32mm")
+    innerduct_empty = Innerduct.objects.create(
+        label="occ-inner-empty", path=line, parent_conduit=conduit_host, size="32mm"
+    )
+
+    bank = ConduitBank.objects.create(label="occ-bank", path=line, start_structure=s_a, end_structure=s_b)
+    conduit_in_bank = Conduit.objects.create(
+        label="occ-banked",
+        path=line,
+        start_structure=s_a,
+        end_structure=s_b,
+        conduit_bank=bank,
+    )
+    conduit_empty = Conduit.objects.create(label="occ-empty", path=line, start_structure=s_a, end_structure=s_b)
+    bank_empty = ConduitBank.objects.create(label="occ-bank-empty", path=line, start_structure=s_a, end_structure=s_b)
+
+    cable = Cable.objects.create(label="occ-cable")
+    CableSegment.objects.create(cable=cable, pathway=aerial, sequence=1)
+    CableSegment.objects.create(cable=cable, pathway=innerduct, sequence=2)
+    CableSegment.objects.create(cable=cable, pathway=conduit_in_bank, sequence=3)
+
+    return {
+        "aerial": aerial,
+        "aerial_empty": aerial_empty,
+        "inner_bank": inner_bank,
+        "conduit_host": conduit_host,
+        "innerduct": innerduct,
+        "innerduct_empty": innerduct_empty,
+        "bank": bank,
+        "conduit_in_bank": conduit_in_bank,
+        "conduit_empty": conduit_empty,
+        "bank_empty": bank_empty,
+    }
+
+
 # ---------------------------------------------------------------------------
 # StructureFilterSet
 # ---------------------------------------------------------------------------
@@ -278,6 +331,95 @@ class TestPathwayFilterOccupied:
         pks = set(fs.qs.values_list("pk", flat=True))
         assert topology["pw"].pk not in pks
         assert topology["conduit"].pk in pks
+
+
+@pytest.mark.django_db
+class TestPathwayFilterOccupiedContainment:
+    def test_true_includes_container_rows_occupied_via_members(self, occupancy):
+        fs = PathwayFilterSet({"occupied": True}, queryset=Pathway.objects.all())
+        pks = set(fs.qs.values_list("pk", flat=True))
+        assert occupancy["conduit_host"].pk in pks
+        assert occupancy["bank"].pk in pks
+        assert occupancy["inner_bank"].pk in pks
+        assert occupancy["conduit_empty"].pk not in pks
+
+
+@pytest.mark.django_db
+class TestConduitFilterOccupied:
+    def test_true_includes_conduit_with_direct_segment(self, occupancy):
+        fs = ConduitFilterSet({"occupied": True}, queryset=Conduit.objects.all())
+        pks = set(fs.qs.values_list("pk", flat=True))
+        assert occupancy["conduit_in_bank"].pk in pks
+        assert occupancy["conduit_empty"].pk not in pks
+
+    def test_true_includes_conduit_occupied_via_innerduct(self, occupancy):
+        fs = ConduitFilterSet({"occupied": True}, queryset=Conduit.objects.all())
+        pks = set(fs.qs.values_list("pk", flat=True))
+        assert occupancy["conduit_host"].pk in pks
+        assert occupancy["conduit_empty"].pk not in pks
+
+    def test_false_excludes_occupied_conduits(self, occupancy):
+        fs = ConduitFilterSet({"occupied": False}, queryset=Conduit.objects.all())
+        pks = set(fs.qs.values_list("pk", flat=True))
+        assert occupancy["conduit_empty"].pk in pks
+        assert occupancy["conduit_host"].pk not in pks
+        assert occupancy["conduit_in_bank"].pk not in pks
+
+
+@pytest.mark.django_db
+class TestInnerductFilterOccupied:
+    def test_true_returns_only_innerducts_with_segments(self, occupancy):
+        fs = InnerductFilterSet({"occupied": True}, queryset=Innerduct.objects.all())
+        pks = set(fs.qs.values_list("pk", flat=True))
+        assert occupancy["innerduct"].pk in pks
+        assert occupancy["innerduct_empty"].pk not in pks
+
+
+@pytest.mark.django_db
+class TestAerialSpanFilterOccupied:
+    def test_true_returns_only_spans_with_segments(self, occupancy):
+        fs = AerialSpanFilterSet({"occupied": True}, queryset=AerialSpan.objects.all())
+        pks = set(fs.qs.values_list("pk", flat=True))
+        assert occupancy["aerial"].pk in pks
+        assert occupancy["aerial_empty"].pk not in pks
+
+
+@pytest.mark.django_db
+class TestConduitBankFilterOccupied:
+    def test_true_includes_bank_with_occupied_member_conduit(self, occupancy):
+        fs = ConduitBankFilterSet({"occupied": True}, queryset=ConduitBank.objects.all())
+        pks = set(fs.qs.values_list("pk", flat=True))
+        assert occupancy["bank"].pk in pks
+        assert occupancy["bank_empty"].pk not in pks
+
+    def test_true_includes_bank_with_occupied_innerduct_two_levels_down(self, occupancy):
+        fs = ConduitBankFilterSet({"occupied": True}, queryset=ConduitBank.objects.all())
+        pks = set(fs.qs.values_list("pk", flat=True))
+        assert occupancy["inner_bank"].pk in pks
+        assert occupancy["bank_empty"].pk not in pks
+
+    def test_false_excludes_occupied_banks(self, occupancy):
+        fs = ConduitBankFilterSet({"occupied": False}, queryset=ConduitBank.objects.all())
+        pks = set(fs.qs.values_list("pk", flat=True))
+        assert occupancy["bank_empty"].pk in pks
+        assert occupancy["bank"].pk not in pks
+
+
+@pytest.mark.django_db
+class TestOccupiedFilterAvailability:
+    @pytest.mark.parametrize(
+        "filterset_class",
+        [
+            PathwayFilterSet,
+            ConduitFilterSet,
+            AerialSpanFilterSet,
+            DirectBuriedFilterSet,
+            InnerductFilterSet,
+            ConduitBankFilterSet,
+        ],
+    )
+    def test_pathway_family_filtersets_expose_occupied(self, filterset_class):
+        assert "occupied" in filterset_class.get_filters()
 
 
 @pytest.mark.django_db

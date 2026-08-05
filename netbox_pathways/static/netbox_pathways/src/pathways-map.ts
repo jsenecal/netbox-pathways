@@ -53,6 +53,7 @@ import {
 import type { MapInfo, RenderingDecision } from './data-layers';
 import { chooseLoadStrategy, decisionsDiffer } from './load-strategy';
 import { StatusPrefs } from './status-prefs';
+import { OccupancyPrefs } from './occupancy-prefs';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -266,19 +267,24 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
     // --- Status visibility (hide inactive) ---
 
+    /** Wire a sidebar hide-toggle button to a boolean pref; flipping reloads data. */
+    function _wireHideToggle(btn: HTMLElement, isOn: () => boolean, setOn: (on: boolean) => void): void {
+        btn.classList.toggle('pw-layer-active', isOn());
+        btn.addEventListener('click', function () {
+            const hide = !isOn();
+            setOn(hide);
+            btn.classList.toggle('pw-layer-active', hide);
+            _loadData();
+        });
+    }
+
     function _buildStatusControls(): void {
         const hideBtn = document.getElementById('pw-hide-inactive');
         const gearBtn = document.getElementById('pw-inactive-gear');
         const configPanel = document.getElementById('pw-inactive-config');
         if (!hideBtn || !gearBtn || !configPanel) return;
 
-        hideBtn.classList.toggle('pw-layer-active', StatusPrefs.isHideInactive());
-        hideBtn.addEventListener('click', function () {
-            const hide = !StatusPrefs.isHideInactive();
-            StatusPrefs.setHideInactive(hide);
-            hideBtn.classList.toggle('pw-layer-active', hide);
-            _loadData();
-        });
+        _wireHideToggle(hideBtn, StatusPrefs.isHideInactive, StatusPrefs.setHideInactive);
 
         function _rebuildConfigPanel(): void {
             configPanel!.textContent = '';
@@ -338,6 +344,15 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         });
     }
     _buildStatusControls();
+
+    // --- Occupancy visibility (hide unoccupied) ---
+
+    function _buildOccupancyControls(): void {
+        const hideBtn = document.getElementById('pw-hide-unoccupied');
+        if (!hideBtn) return;
+        _wireHideToggle(hideBtn, OccupancyPrefs.isHideUnoccupied, OccupancyPrefs.setHideUnoccupied);
+    }
+    _buildOccupancyControls();
 
     // --- Data loading ---
 
