@@ -83,6 +83,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Route validation reports whether a route's ends reach the cable's ends,
   alongside the existing gap check.
 
+- **Location geometry resolves through structure identity.** `Structure.location`
+  is now a one-to-one identity link ("the dcim.Location this structure IS"),
+  and the map layer registry resolves `dcim.Location` FK targets through it
+  (`pathways_structure__geometry`). Reference-mode layers may declare
+  `geometry_field` as an ordered tuple (e.g. `("location", "site")`) that
+  falls back with SQL COALESCE, shared by the GeoJSON endpoint and the `/info`
+  counts. Pathway location endpoints whose Location has an identity structure
+  are snapped and validated like structure endpoints, and the map edit
+  widget's nearby-structures layer anchors polygon-footprint structures at
+  their centroid instead of skipping them. Refs #90.
+
 ### Changed
 
 - **Innerduct color is now picked from NetBox's color palette** instead of
@@ -178,6 +189,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The undocumented `/plugins/pathways/adjacency/` endpoint, superseded by the
   `connected_to` filter on the pathways REST API.
+
+- **`Pathway.start_location` / `end_location` now use `PROTECT`.** Deleting a
+  `dcim.Location` referenced as a pathway endpoint is blocked instead of
+  silently nulling the endpoint. Refs #90.
+
+- **Migration note:** upgrading fails loudly if two structures share one
+  `location`; reassign or clear the duplicates first. Refs #90.
 
 ### Fixed
 

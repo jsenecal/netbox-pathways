@@ -242,6 +242,61 @@ class TestWidgetEndpointRendering:
 
 
 @pytest.mark.django_db
+class TestLocationEndpointValidation:
+    """Location endpoints resolve to their identity structure's geometry (#90)."""
+
+    @pytest.fixture
+    def identity_location(self):
+        from dcim.models import Location, Site
+
+        site = Site.objects.create(name="Snap-Site", slug="snap-site")
+        loc = Location.objects.create(name="Snap-HH", slug="snap-hh", site=site)
+        Structure.objects.create(name="SNAP-HH", geometry=Point(100, 200, srid=SRID), site=site, location=loc)
+        return loc
+
+    def test_location_with_identity_structure_snaps(self, identity_location):
+        path = LineString((100.5, 200.5), (500, 500), srid=SRID)
+        pw = _make_pathway(path, start_location=identity_location)
+        pw.clean()
+        assert pw.path.coords[0] == (100.0, 200.0)
+
+    def test_location_with_identity_structure_beyond_tolerance_raises(self, identity_location):
+        path = LineString((110, 210), (500, 500), srid=SRID)
+        pw = _make_pathway(path, start_location=identity_location)
+        with pytest.raises(ValidationError, match="start"):
+            pw.clean()
+
+    def test_end_location_identity_structure_validated(self, identity_location):
+        path = LineString((500, 500), (100.5, 200.5), srid=SRID)
+        pw = _make_pathway(path, end_location=identity_location)
+        pw.clean()
+        assert pw.path.coords[-1] == (100.0, 200.0)
+
+    def test_location_without_identity_structure_stays_documentary(self):
+        from dcim.models import Location, Site
+
+        site = Site.objects.create(name="Doc-Site", slug="doc-site")
+        loc = Location.objects.create(name="Doc-Room", slug="doc-room", site=site)
+        path = LineString((0, 0), (500, 500), srid=SRID)
+        pw = _make_pathway(path, start_location=loc)
+        pw.clean()
+        assert pw.path.coords[0] == (0.0, 0.0)
+
+    def test_deleting_endpoint_location_is_protected(self):
+        """start/end_location used SET_NULL, silently orphaning endpoints once
+        locations participate in geometry resolution (#90)."""
+        from dcim.models import Location, Site
+        from django.db.models import ProtectedError
+
+        site = Site.objects.create(name="Del-Site", slug="del-site")
+        loc = Location.objects.create(name="Del-Room", slug="del-room", site=site)
+        pw = _make_pathway(LineString((0, 0), (1, 1), srid=SRID), start_location=loc)
+        pw.save()
+        with pytest.raises(ProtectedError):
+            loc.delete()
+
+
+@pytest.mark.django_db
 class TestEndToEndFormSave:
     def test_conduit_bank_form_generates_and_snaps(self):
         s1 = _make_structure("E2E1", Point(100, 200, srid=SRID))

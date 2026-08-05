@@ -87,10 +87,50 @@ Reference mode resolves geometry through foreign keys to these models:
 | `netbox_pathways.Structure` | `geometry` | Point/Polygon |
 | `netbox_pathways.SiteGeometry` | `geometry` | Point/Polygon |
 | `dcim.Site` | `pathways_geometry__geometry` | Point/Polygon |
+| `dcim.Location` | `pathways_structure__geometry` | Point/Polygon |
 
 The `geometry_field` parameter names the FK field on your model that points to one of these targets.
 
 The `dcim.Site` entry uses a two-hop ORM lookup: it traverses the reverse OneToOne from `Site` to `SiteGeometry`, then accesses the `geometry` field. This means any model with a `site` FK can be registered as a map layer — as long as a `SiteGeometry` record exists for that site.
+
+The `dcim.Location` entry resolves through the identity link on
+`Structure.location`: a structure that physically *is* a Location (a handhole
+or vault modelled as a `dcim.Location` so devices can be placed in it) carries
+the geometry. A Location with no identity structure resolves to NULL, and the
+feature is dropped from the layer -- declare a fallback (below) to degrade to
+the site centroid instead.
+
+## Ordered Geometry Fallbacks
+
+`geometry_field` accepts a tuple of FK field names, tried in order via SQL
+`COALESCE`:
+
+```python
+register_map_layer(
+    ...,
+    geometry_field=("location", "site"),
+)
+```
+
+An object whose `location` has an identity structure renders at that
+structure's geometry; one whose location is a plain room degrades to the site
+centroid instead of vanishing. Both the GeoJSON endpoint and the `/info`
+feature counts resolve the tuple identically.
+
+Malformed tuples (empty, or containing non-string entries) fail at
+registration time with `ValueError`. Entries are resolved against the layer's
+queryset model at request time, since the queryset is a request-bound
+callable. Older netbox-pathways releases accept a tuple at registration and
+fail at request time; feature-detect with:
+
+```python
+from netbox_pathways.registry import SUPPORTED_GEO_MODELS
+
+if "dcim.Location" in SUPPORTED_GEO_MODELS:
+    geometry_field = ("location", "site")
+else:
+    geometry_field = "site"
+```
 
 ## Registration API
 
@@ -106,7 +146,7 @@ Register a layer on the Pathways map.
 | `source` | `str` | Yes | `'url'` or `'reference'` |
 | `url` | `str` | URL mode | GeoJSON endpoint URL |
 | `queryset` | `Callable` | Reference mode | `(request) -> QuerySet` |
-| `geometry_field` | `str` | Reference mode | FK field name to geo model |
+| `geometry_field` | `str` or `tuple[str, ...]` | Reference mode | FK field name to a geo model, or an ordered fallback tuple resolved to the first non-NULL geometry |
 | `feature_fields` | `list[str]` | No | Fields to include in GeoJSON properties |
 | `style` | `LayerStyle` | No | Visual styling configuration |
 | `detail` | `LayerDetail` | No | Sidebar detail panel configuration |

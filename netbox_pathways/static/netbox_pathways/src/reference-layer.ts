@@ -8,7 +8,7 @@
  * clicks meant for the draw tools and nothing snaps to them. See issue #83.
  */
 
-import { esc, structureIcon } from './map-utils';
+import { esc, featureAnchor, structureIcon } from './map-utils';
 
 export const MIN_REF_ZOOM = 13;
 export const LABEL_ZOOM = 17;
@@ -137,13 +137,14 @@ export function renderReferenceStructures(
     const excludeIds = opts.exclude?.ids || [];
     let count = 0;
     for (const feature of data.features || []) {
-        if (!feature.geometry || feature.geometry.type !== 'Point') continue;
+        if (!feature.geometry) continue;
         const props = (feature.properties || {}) as Record<string, unknown>;
         // Server-side cluster blobs are not useful reference context.
         if (props.cluster) continue;
         const id = featureId(feature, props);
         if (id !== null && excludeIds.includes(id)) continue;
-        const coords = (feature.geometry as GeoJSON.Point).coordinates;
+        const coords = featureAnchor(feature.geometry);
+        if (!coords) continue;
         if (isExcludedPoint(coords, excludePoints)) continue;
 
         const marker = L.marker([coords[1], coords[0]], {

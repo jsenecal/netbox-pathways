@@ -269,10 +269,14 @@ describe('collapseAreasToPoints', () => {
         };
     }
 
-    it('replaces area geometry with its center below the footprint zoom', () => {
+    it('replaces area geometry with its centroid below the footprint zoom', () => {
         const out = collapseAreasToPoints(collection(), 14, 18);
 
-        expect(out.features[0].geometry).toEqual({ type: 'Point', coordinates: [1, 1] });
+        // polygonFeature() is a triangle (0,0)-(0,2)-(2,2); true centroid, not
+        // bbox center -- see featureAnchor in map-utils.ts.
+        const coords = (out.features[0].geometry as GeoJSON.Point).coordinates;
+        expect(coords[0]).toBeCloseTo(2 / 3);
+        expect(coords[1]).toBeCloseTo(4 / 3);
         expect((out.features[0].properties as any).name).toBe('Vault 7');
     });
 

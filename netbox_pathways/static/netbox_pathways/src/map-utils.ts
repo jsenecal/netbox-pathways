@@ -275,6 +275,46 @@ export function debounce(fn: () => void, delay: number): () => void {
     };
 }
 
+function ringCentroid(ring: GeoJSON.Position[] | undefined): GeoJSON.Position | null {
+    if (!ring || ring.length < 4) return null;
+    let area = 0, cx = 0, cy = 0;
+    for (let i = 0; i < ring.length - 1; i++) {
+        const [x0, y0] = ring[i];
+        const [x1, y1] = ring[i + 1];
+        const cross = x0 * y1 - x1 * y0;
+        area += cross;
+        cx += (x0 + x1) * cross;
+        cy += (y0 + y1) * cross;
+    }
+    if (area === 0) {
+        // Degenerate ring (zero area): fall back to the vertex average.
+        const n = ring.length - 1;
+        let sx = 0, sy = 0;
+        for (let i = 0; i < n; i++) { sx += ring[i][0]; sy += ring[i][1]; }
+        return [sx / n, sy / n];
+    }
+    return [cx / (3 * area), cy / (3 * area)];
+}
+
+/**
+ * Map anchor for a feature geometry: the point itself, or the centroid of a
+ * polygon footprint. Shared by every map view that must place a single
+ * marker for a feature that may carry an area geometry -- the reference
+ * layer's read-only structure markers and the main data layer's collapsed
+ * footprints alike. Null means "cannot anchor, skip".
+ */
+export function featureAnchor(geometry: GeoJSON.Geometry): GeoJSON.Position | null {
+    if (geometry.type === 'Point') return (geometry as GeoJSON.Point).coordinates;
+    if (geometry.type === 'Polygon') {
+        return ringCentroid((geometry as GeoJSON.Polygon).coordinates[0]);
+    }
+    if (geometry.type === 'MultiPolygon') {
+        const first = (geometry as GeoJSON.MultiPolygon).coordinates[0];
+        return first ? ringCentroid(first[0]) : null;
+    }
+    return null;
+}
+
 export function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
     const R = 6371000;
     const p1 = lat1 * Math.PI / 180;

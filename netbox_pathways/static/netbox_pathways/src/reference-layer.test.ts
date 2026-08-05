@@ -236,6 +236,33 @@ describe('renderReferenceStructures', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Anchor point for non-Point geometry (issue #90) -- featureAnchor itself is
+// tested in map-utils.test.ts; this covers rendering it into a marker.
+// ---------------------------------------------------------------------------
+
+describe('renderReferenceStructures polygon footprints', () => {
+    it('draws a marker at the polygon centroid instead of skipping it', () => {
+        const group = createMockLayerGroup();
+        const data: GeoJSON.FeatureCollection = {
+            type: 'FeatureCollection',
+            features: [{
+                type: 'Feature',
+                id: 9,
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [[[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]]],
+                },
+                properties: { name: 'Vault', structure_type: 'vault' },
+            }],
+        };
+        const count = renderReferenceStructures(group as unknown as L.LayerGroup, data, { zoom: 15 });
+        expect(count).toBe(1);
+        const coords = (L.marker as ReturnType<typeof vi.fn>).mock.calls[0][0];
+        expect(coords).toEqual([2, 2]);
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Exclusions read off the widget container
 // ---------------------------------------------------------------------------
 

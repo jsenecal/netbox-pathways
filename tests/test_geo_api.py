@@ -507,6 +507,50 @@ class TestMapInfoAPI:
         assert data["counts"]["external"]["ext_ref"] == len(conduits)
         assert data["thresholds"]["external"]["ext_ref"] == {"hide": 42}
 
+    def test_external_tuple_geometry_field_counted_with_bbox(self, api_client):
+        """MapInfoView._count must resolve tuple geometry_fields the same way
+        the GeoJSON endpoint does, or a layer renders while its count is
+        missing and the client's gating breaks (#90)."""
+        from dcim.models import Location, Site
+        from django.contrib.gis.geos import LineString, Point
+
+        from netbox_pathways.geo import get_srid, to_leaflet
+        from netbox_pathways.models import Conduit, Structure
+        from netbox_pathways.registry import LayerStyle, MapLayerRegistration, registry
+
+        srid = get_srid()
+        site = Site.objects.create(name="Info-Site", slug="info-site")
+        loc = Location.objects.create(name="Info-HH", slug="info-hh", site=site)
+        anchor = Structure.objects.create(name="INFO-S0", geometry=Point(0, 0, srid=srid))
+        identity = Structure.objects.create(name="INFO-HH", geometry=Point(10, 20, srid=srid), site=site, location=loc)
+        Conduit.objects.create(
+            label="INFO-C1",
+            start_structure=anchor,
+            end_location=loc,
+            path=LineString((0, 0), (10, 20), srid=srid),
+        )
+
+        registry.register(
+            MapLayerRegistration(
+                name="ext_tuple",
+                label="External Tuple",
+                geometry_type="Point",
+                source="reference",
+                queryset=lambda r: Conduit.objects.filter(label="INFO-C1"),
+                geometry_field=("end_location", "start_structure"),
+                style=LayerStyle(color="#000"),
+            )
+        )
+        try:
+            # bbox tightly around the identity structure, away from the anchor
+            pt = to_leaflet(identity.geometry)
+            bbox = f"{pt.x - 0.001},{pt.y - 0.001},{pt.x + 0.001},{pt.y + 0.001}"
+            resp = api_client.get(self.URL, {"bbox": bbox}, format="json")
+        finally:
+            registry.unregister("ext_tuple")
+
+        assert resp.json()["counts"]["external"]["ext_tuple"] == 1
+
     def test_url_mode_external_layer_omitted(self, api_client, structures):
         from netbox_pathways.registry import LayerStyle, MapLayerRegistration, registry
 

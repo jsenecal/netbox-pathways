@@ -24,6 +24,7 @@ from .choices import (
     StructureTypeChoices,
 )
 from .geo import get_srid
+from .registry import LOCATION_IDENTITY_ACCESSOR
 
 ENDPOINT_TOLERANCE = 1.0
 
@@ -43,13 +44,13 @@ class Structure(NetBoxModel):
         blank=True,
         related_name="pathways_structures",
     )
-    location = models.ForeignKey(
+    location = models.OneToOneField(
         Location,
         on_delete=models.PROTECT,
         null=True,
         blank=True,
-        related_name="pathways_structures",
-        help_text="Location within the site where this structure sits",
+        related_name="pathways_structure",
+        help_text="dcim.Location that this structure physically is (e.g. a handhole modelled as a Location)",
     )
     geometry = models.GeometryField(
         srid=get_srid(),
@@ -278,14 +279,14 @@ class Pathway(NetBoxModel):
     )
     start_location = models.ForeignKey(
         Location,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="pathways_out",
     )
     end_location = models.ForeignKey(
         Location,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="pathways_in",
@@ -376,10 +377,17 @@ class Pathway(NetBoxModel):
         self._validate_and_snap_endpoint("end")
 
     def _validate_and_snap_endpoint(self, side):
-        """Validate and snap one endpoint of self.path to the attached structure."""
+        """Validate and snap one endpoint of self.path to the attached structure, or to the
+        endpoint location's identity structure when no structure is set."""
         from django.contrib.gis.geos import LineString, Point
 
         structure = getattr(self, f"{side}_structure", None)
+        if not structure:
+            location = getattr(self, f"{side}_location", None)
+            # The reverse one-to-one raises an AttributeError-compatible
+            # DoesNotExist, so identity-less locations degrade to None and
+            # stay documentary.
+            structure = getattr(location, LOCATION_IDENTITY_ACCESSOR, None) if location else None
         if not structure or not structure.geometry:
             return
 
