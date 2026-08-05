@@ -20,7 +20,6 @@ import {
     renderReferenceStructures,
     refreshReferenceLayer,
     addToggleControl,
-    featureAnchor,
 } from './reference-layer';
 
 // ---------------------------------------------------------------------------
@@ -237,45 +236,9 @@ describe('renderReferenceStructures', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Anchor point for non-Point geometry (issue #90)
+// Anchor point for non-Point geometry (issue #90) -- featureAnchor itself is
+// tested in map-utils.test.ts; this covers rendering it into a marker.
 // ---------------------------------------------------------------------------
-
-describe('featureAnchor', () => {
-    it('returns point coordinates as-is', () => {
-        expect(featureAnchor({ type: 'Point', coordinates: [1, 2] })).toEqual([1, 2]);
-    });
-
-    it('returns the centroid of a polygon outer ring', () => {
-        const square: GeoJSON.Polygon = {
-            type: 'Polygon',
-            coordinates: [[[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]]],
-        };
-        expect(featureAnchor(square)).toEqual([2, 2]);
-    });
-
-    it('uses the first polygon of a MultiPolygon', () => {
-        const mp: GeoJSON.MultiPolygon = {
-            type: 'MultiPolygon',
-            coordinates: [
-                [[[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]],
-                [[[10, 10], [12, 10], [12, 12], [10, 12], [10, 10]]],
-            ],
-        };
-        expect(featureAnchor(mp)).toEqual([1, 1]);
-    });
-
-    it('averages vertices when the ring is degenerate', () => {
-        const line: GeoJSON.Polygon = {
-            type: 'Polygon',
-            coordinates: [[[0, 0], [2, 0], [4, 0], [0, 0]]],
-        };
-        expect(featureAnchor(line)).toEqual([2, 0]);
-    });
-
-    it('returns null for unsupported geometry', () => {
-        expect(featureAnchor({ type: 'LineString', coordinates: [[0, 0], [1, 1]] })).toBeNull();
-    });
-});
 
 describe('renderReferenceStructures polygon footprints', () => {
     it('draws a marker at the polygon centroid instead of skipping it', () => {

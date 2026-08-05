@@ -8,7 +8,7 @@
  * clicks meant for the draw tools and nothing snaps to them. See issue #83.
  */
 
-import { esc, structureIcon } from './map-utils';
+import { esc, featureAnchor, structureIcon } from './map-utils';
 
 export const MIN_REF_ZOOM = 13;
 export const LABEL_ZOOM = 17;
@@ -127,44 +127,6 @@ function featureId(feature: GeoJSON.Feature, props: Record<string, unknown>): st
 export interface RenderOptions {
     zoom: number;
     exclude?: RefExclusions;
-}
-
-function ringCentroid(ring: GeoJSON.Position[] | undefined): GeoJSON.Position | null {
-    if (!ring || ring.length < 4) return null;
-    let area = 0, cx = 0, cy = 0;
-    for (let i = 0; i < ring.length - 1; i++) {
-        const [x0, y0] = ring[i];
-        const [x1, y1] = ring[i + 1];
-        const cross = x0 * y1 - x1 * y0;
-        area += cross;
-        cx += (x0 + x1) * cross;
-        cy += (y0 + y1) * cross;
-    }
-    if (area === 0) {
-        // Degenerate ring (zero area): fall back to the vertex average.
-        const n = ring.length - 1;
-        let sx = 0, sy = 0;
-        for (let i = 0; i < n; i++) { sx += ring[i][0]; sy += ring[i][1]; }
-        return [sx / n, sy / n];
-    }
-    return [cx / (3 * area), cy / (3 * area)];
-}
-
-/**
- * Map anchor for a reference feature: the point itself, or the centroid of a
- * polygon footprint. The widget draws markers, not outlines -- footprint
- * rendering belongs to the main map. Null means "cannot anchor, skip".
- */
-export function featureAnchor(geometry: GeoJSON.Geometry): GeoJSON.Position | null {
-    if (geometry.type === 'Point') return (geometry as GeoJSON.Point).coordinates;
-    if (geometry.type === 'Polygon') {
-        return ringCentroid((geometry as GeoJSON.Polygon).coordinates[0]);
-    }
-    if (geometry.type === 'MultiPolygon') {
-        const first = (geometry as GeoJSON.MultiPolygon).coordinates[0];
-        return first ? ringCentroid(first[0]) : null;
-    }
-    return null;
 }
 
 export function renderReferenceStructures(

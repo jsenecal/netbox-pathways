@@ -13,6 +13,7 @@ import {
     structureIcon as _structureIcon,
     clusterIcon as _clusterIcon,
     esc as _esc,
+    featureAnchor as _featureAnchor,
     getCookie as _getCookie,
     haversine as _haversine,
     layerCenter as _layerCenter,
@@ -619,21 +620,6 @@ export interface LoadCallbacks {
  */
 export const STRUCTURE_POLYGON_ZOOM: number = CFG.structurePolygonZoom ?? 18;
 
-/** Bounding-box center of a polygon's exterior ring, as [lon, lat]. */
-function _polygonCenter(geometry: GeoJSON.Geometry): [number, number] | null {
-    if (geometry.type !== 'Polygon') return null;
-    const ring = (geometry as GeoJSON.Polygon).coordinates[0];
-    if (!ring || !ring.length) return null;
-    let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
-    ring.forEach(function (c: GeoJSON.Position) {
-        if (c[0] < west) west = c[0];
-        if (c[0] > east) east = c[0];
-        if (c[1] < south) south = c[1];
-        if (c[1] > north) north = c[1];
-    });
-    return [(west + east) / 2, (south + north) / 2];
-}
-
 /**
  * Below ``threshold``, swap every footprint polygon for its center point so
  * the structures layer stays a field of readable icons.
@@ -652,7 +638,9 @@ export function collapseAreasToPoints(
     return {
         type: 'FeatureCollection',
         features: data.features.map(function (f: GeoJSON.Feature) {
-            const center = f.geometry ? _polygonCenter(f.geometry) : null;
+            // featureAnchor already returns [lng, lat], the same order a
+            // GeoJSON Point geometry expects -- no coordinate swap needed.
+            const center = f.geometry ? _featureAnchor(f.geometry) : null;
             if (!center) return f;
             return { ...f, geometry: { type: 'Point', coordinates: center } as GeoJSON.Point };
         }),

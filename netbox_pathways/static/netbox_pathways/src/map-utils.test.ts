@@ -22,6 +22,7 @@ import {
     haversine,
     layerCenter,
     setLayerDimmed,
+    featureAnchor,
 } from './map-utils';
 
 // ---------------------------------------------------------------------------
@@ -585,6 +586,47 @@ describe('layerCenter', () => {
 
     it('falls back to the bounds center for path layers', () => {
         expect(layerCenter(pathStub() as any)).toEqual({ lat: 1, lng: 2 });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// featureAnchor -- shared polygon-anchor helper for all map views (issue #90)
+// ---------------------------------------------------------------------------
+
+describe('featureAnchor', () => {
+    it('returns point coordinates as-is', () => {
+        expect(featureAnchor({ type: 'Point', coordinates: [1, 2] })).toEqual([1, 2]);
+    });
+
+    it('returns the centroid of a polygon outer ring', () => {
+        const square: GeoJSON.Polygon = {
+            type: 'Polygon',
+            coordinates: [[[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]]],
+        };
+        expect(featureAnchor(square)).toEqual([2, 2]);
+    });
+
+    it('uses the first polygon of a MultiPolygon', () => {
+        const mp: GeoJSON.MultiPolygon = {
+            type: 'MultiPolygon',
+            coordinates: [
+                [[[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]],
+                [[[10, 10], [12, 10], [12, 12], [10, 12], [10, 10]]],
+            ],
+        };
+        expect(featureAnchor(mp)).toEqual([1, 1]);
+    });
+
+    it('averages vertices when the ring is degenerate', () => {
+        const line: GeoJSON.Polygon = {
+            type: 'Polygon',
+            coordinates: [[[0, 0], [2, 0], [4, 0], [0, 0]]],
+        };
+        expect(featureAnchor(line)).toEqual([2, 0]);
+    });
+
+    it('returns null for unsupported geometry', () => {
+        expect(featureAnchor({ type: 'LineString', coordinates: [[0, 0], [1, 1]] })).toBeNull();
     });
 });
 
