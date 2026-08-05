@@ -379,8 +379,6 @@ class Pathway(NetBoxModel):
     def _validate_and_snap_endpoint(self, side):
         """Validate and snap one endpoint of self.path to the attached structure, or to the
         endpoint location's identity structure when no structure is set."""
-        from django.contrib.gis.geos import LineString, Point
-
         structure = getattr(self, f"{side}_structure", None)
         if not structure:
             location = getattr(self, f"{side}_location", None)
@@ -391,10 +389,20 @@ class Pathway(NetBoxModel):
         if not structure or not structure.geometry:
             return
 
+        self._snap_path_end(side, structure.geometry, "structure")
+
+    def _snap_path_end(self, side, geom, kind):
+        """Snap the path's <side> end to geom; raise if beyond tolerance.
+
+        geom may be a Point or an area geometry (snapped to its boundary).
+        kind names the endpoint type ("structure" or "junction") in the
+        validation message.
+        """
+        from django.contrib.gis.geos import LineString, Point
+
         coords = list(self.path.coords)
         idx = 0 if side == "start" else -1
         endpoint = Point(coords[idx][0], coords[idx][1], srid=self.path.srid)
-        geom = structure.geometry
 
         if geom.geom_type == "Point":
             if endpoint.distance(geom) <= ENDPOINT_TOLERANCE:
@@ -402,7 +410,7 @@ class Pathway(NetBoxModel):
             else:
                 raise ValidationError(
                     {
-                        "path": f"Path {side} point is too far from the {side} structure "
+                        "path": f"Path {side} point is too far from the {side} {kind} "
                         f"(must be within {ENDPOINT_TOLERANCE}m)."
                     }
                 )
@@ -415,7 +423,7 @@ class Pathway(NetBoxModel):
             else:
                 raise ValidationError(
                     {
-                        "path": f"Path {side} point is too far from the {side} structure "
+                        "path": f"Path {side} point is too far from the {side} {kind} "
                         f"(must be within {ENDPOINT_TOLERANCE}m of the boundary)."
                     }
                 )
@@ -615,8 +623,6 @@ class Conduit(Pathway):
 
     def _validate_and_snap_junction(self, side):
         """Validate and snap one endpoint to the attached junction's location."""
-        from django.contrib.gis.geos import LineString, Point
-
         junction = getattr(self, f"{side}_junction", None)
         if not junction:
             return
@@ -624,20 +630,7 @@ class Conduit(Pathway):
         if junc_loc is None:
             return
 
-        coords = list(self.path.coords)
-        idx = 0 if side == "start" else -1
-        endpoint = Point(coords[idx][0], coords[idx][1], srid=self.path.srid)
-
-        if endpoint.distance(junc_loc) <= ENDPOINT_TOLERANCE:
-            coords[idx] = (junc_loc.x, junc_loc.y)
-            self.path = LineString(coords, srid=self.path.srid)
-        else:
-            raise ValidationError(
-                {
-                    "path": f"Path {side} point is too far from the {side} junction "
-                    f"(must be within {ENDPOINT_TOLERANCE}m)."
-                }
-            )
+        self._snap_path_end(side, junc_loc, "junction")
 
     def save(self, *args, **kwargs):
         self.pathway_type = "conduit"
