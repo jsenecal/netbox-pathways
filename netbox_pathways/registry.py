@@ -13,13 +13,18 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Reverse accessor of Structure.location, the one-to-one identity link
+# ("this structure IS this dcim.Location"). models.py resolves snapping
+# through the same accessor; keep the two in sync via this constant.
+LOCATION_IDENTITY_ACCESSOR = "pathways_structure"
+
 # Maps FK target model label → geometry column (or ORM lookup path) on that model.
 # Multi-hop paths (e.g. 'pathways_geometry__geometry') are valid Django ORM lookups.
 SUPPORTED_GEO_MODELS: dict[str, str] = {
     "netbox_pathways.Structure": "geometry",
     "netbox_pathways.SiteGeometry": "geometry",
     "dcim.Site": "pathways_geometry__geometry",
-    "dcim.Location": "pathways_structure__geometry",
+    "dcim.Location": f"{LOCATION_IDENTITY_ACCESSOR}__geometry",
 }
 
 

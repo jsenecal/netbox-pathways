@@ -24,6 +24,7 @@ from .choices import (
     StructureTypeChoices,
 )
 from .geo import get_srid
+from .registry import LOCATION_IDENTITY_ACCESSOR
 
 ENDPOINT_TOLERANCE = 1.0
 
@@ -386,7 +387,7 @@ class Pathway(NetBoxModel):
             # The reverse one-to-one raises an AttributeError-compatible
             # DoesNotExist, so identity-less locations degrade to None and
             # stay documentary.
-            structure = getattr(location, "pathways_structure", None) if location else None
+            structure = getattr(location, LOCATION_IDENTITY_ACCESSOR, None) if location else None
         if not structure or not structure.geometry:
             return
 

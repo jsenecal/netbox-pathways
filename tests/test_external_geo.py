@@ -56,6 +56,16 @@ class TestResolveGeoColumn:
             _resolve_geo_column(Conduit, "conduit_bank")
 
 
+def test_location_identity_accessor_matches_model():
+    """The registry constant must track Structure.location's related_name;
+    if they drift, endpoint snapping degrades silently (#90 follow-up)."""
+    from netbox_pathways.models import Structure
+    from netbox_pathways.registry import LOCATION_IDENTITY_ACCESSOR
+
+    accessor = Structure._meta.get_field("location").remote_field.get_accessor_name()
+    assert accessor == LOCATION_IDENTITY_ACCESSOR
+
+
 class TestResolveGeometryExpression:
     def test_single_entry_returns_column_reference(self):
         from django.db.models import F
