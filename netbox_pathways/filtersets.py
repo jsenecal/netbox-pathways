@@ -4,7 +4,7 @@ import django_filters
 from circuits.models import Circuit, Provider
 from dcim.models import Cable, Location, Site
 from django.core.exceptions import ValidationError
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from netbox.filtersets import NetBoxModelFilterSet
 from tenancy.filtersets import TenancyFilterSet
 from tenancy.models import Tenant
@@ -101,6 +101,51 @@ class PathwayStatusFilterMixin(django_filters.FilterSet):
     )
 
 
+def occupied_pathways_q():
+    """Q matching pathway rows that carry a cable, directly or by containment.
+
+    A row is occupied when a CableSegment routes through it, through an
+    innerduct it hosts (conduits), or through a member conduit or that
+    conduit's innerducts (banks). Subtypes share the base Pathway pk, so the
+    non-applicable arms simply never match and one expression serves the base
+    queryset and every subclass.
+    """
+    segments = CableSegment.objects
+    return (
+        Q(Exists(segments.filter(pathway_id=OuterRef("pk"))))
+        | Q(Exists(segments.filter(pathway__innerduct__parent_conduit_id=OuterRef("pk"))))
+        | Q(Exists(segments.filter(pathway__conduit__conduit_bank_id=OuterRef("pk"))))
+        | Q(Exists(segments.filter(pathway__innerduct__parent_conduit__conduit_bank_id=OuterRef("pk"))))
+    )
+
+
+def occupied_structures_q():
+    """Q matching structures that terminate a pathway carrying a cable.
+
+    Containment needs no arms of its own here: innerducts inherit their
+    parent conduit's endpoints on save, so the segment-bearing pathway always
+    references the physical structures directly.
+    """
+    routed = CableSegment.objects.filter(
+        Q(pathway__start_structure_id=OuterRef("pk")) | Q(pathway__end_structure_id=OuterRef("pk"))
+    )
+    return Q(Exists(routed))
+
+
+class OccupiedFilterMixin(django_filters.FilterSet):
+    """Adds the `occupied` filter shared by Pathway and all its subclasses."""
+
+    occupied = django_filters.BooleanFilter(
+        method="filter_occupied",
+        label="Occupied (has routed cables)",
+    )
+
+    def filter_occupied(self, queryset, name, value):
+        if value:
+            return queryset.filter(occupied_pathways_q())
+        return queryset.exclude(occupied_pathways_q())
+
+
 class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
     name = MultiValueCharFilter()
     status = django_filters.MultipleChoiceFilter(
@@ -163,18 +208,9 @@ class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
         fields = ["id", "installation_date", "commissioned_date"]
 
     def filter_occupied(self, queryset, name, value):
-        occupied_pws = CableSegment.objects.values_list("pathway_id", flat=True)
-        occupied_struct_pks = set()
-        for start_pk, end_pk in Pathway.objects.filter(pk__in=occupied_pws).values_list(
-            "start_structure_id", "end_structure_id"
-        ):
-            if start_pk:
-                occupied_struct_pks.add(start_pk)
-            if end_pk:
-                occupied_struct_pks.add(end_pk)
         if value:
-            return queryset.filter(pk__in=occupied_struct_pks)
-        return queryset.exclude(pk__in=occupied_struct_pks)
+            return queryset.filter(occupied_structures_q())
+        return queryset.exclude(occupied_structures_q())
 
     def filter_has_pathways(self, queryset, name, value):
         connected = Pathway.objects.values_list(
@@ -199,7 +235,9 @@ class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
         )
 
 
-class PathwayFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet):
+class PathwayFilterSet(
+    OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet
+):
     label = MultiValueCharFilter()
     pathway_type = django_filters.MultipleChoiceFilter(
         choices=PathwayTypeChoices,
@@ -257,10 +295,6 @@ class PathwayFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFi
         distinct=False,
         label="Installed by (ID)",
     )
-    occupied = django_filters.BooleanFilter(
-        method="filter_occupied",
-        label="Occupied (has routed cables)",
-    )
     connected_to = MultiValueCharFilter(
         method="filter_connected_to",
         validators=[validate_node_ref],
@@ -275,12 +309,6 @@ class PathwayFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFi
     class Meta:
         model = Pathway
         fields = ["id", "installation_date", "commissioned_date"]
-
-    def filter_occupied(self, queryset, name, value):
-        occupied_pws = CableSegment.objects.values_list("pathway_id", flat=True)
-        if value:
-            return queryset.filter(pk__in=occupied_pws)
-        return queryset.exclude(pk__in=occupied_pws)
 
     def filter_connected_to(self, queryset, name, value):
         """Restrict to pathways touching any of the given graph nodes.
@@ -353,7 +381,7 @@ class PathwayFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFi
         return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
-class ConduitFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, NetBoxModelFilterSet):
+class ConduitFilterSet(OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     material = django_filters.MultipleChoiceFilter(
         choices=ConduitMaterialChoices,
@@ -405,7 +433,7 @@ class ConduitFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, NetBoxMod
         return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
-class AerialSpanFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, NetBoxModelFilterSet):
+class AerialSpanFilterSet(OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     aerial_type = django_filters.MultipleChoiceFilter(
         choices=AerialTypeChoices,
@@ -454,7 +482,7 @@ class AerialSpanFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, NetBox
         return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
-class DirectBuriedFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, NetBoxModelFilterSet):
+class DirectBuriedFilterSet(OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     start_structure_id = django_filters.ModelMultipleChoiceFilter(
         field_name="start_structure",
@@ -496,7 +524,7 @@ class DirectBuriedFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, NetB
         return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
-class InnerductFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, NetBoxModelFilterSet):
+class InnerductFilterSet(OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     parent_conduit_id = django_filters.ModelMultipleChoiceFilter(
         field_name="parent_conduit",
@@ -518,7 +546,9 @@ class InnerductFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, NetBoxM
         return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
-class ConduitBankFilterSet(PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet):
+class ConduitBankFilterSet(
+    OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet
+):
     label = MultiValueCharFilter()
     start_structure_id = django_filters.ModelMultipleChoiceFilter(
         field_name="start_structure",
