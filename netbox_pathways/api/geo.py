@@ -17,7 +17,7 @@ from django.contrib.gis.db.models import Collect
 from django.contrib.gis.db.models.functions import Centroid, Length, SnapToGrid, Transform
 from django.contrib.gis.geos import Polygon
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models import Count, Max
+from django.db.models import Count, F, Max
 from rest_framework import serializers as drf_serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -530,10 +530,7 @@ class MapInfoView(APIView):
         def _count(qs, geo):
             nonlocal max_updated, total
             if bbox_poly is not None:
-                if isinstance(geo, str):
-                    qs = qs.filter(**{f"{geo}__intersects": bbox_poly})
-                else:
-                    qs = qs.annotate(_pw_geo=geo).filter(_pw_geo__intersects=bbox_poly)
+                qs = qs.annotate(_pw_geo=geo).filter(_pw_geo__intersects=bbox_poly)
             t, c = _etag_components(qs)
             total += c
             if t and (max_updated is None or t > max_updated):
@@ -545,7 +542,7 @@ class MapInfoView(APIView):
             if extra_filter:
                 qs = qs.filter(**extra_filter)
             qs = _exclude_status(qs, excluded_statuses)
-            counts[key] = _count(qs, geo_field)
+            counts[key] = _count(qs, F(geo_field))
 
         from .external_geo import resolve_geometry_expression
 
