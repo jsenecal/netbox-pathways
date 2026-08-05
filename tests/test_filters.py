@@ -7,7 +7,6 @@ ModelMultipleChoiceFilter, etc.) is intentionally not exercised here.
 
 import pytest
 from django.contrib.gis.geos import LineString, Point
-from django.db.models.signals import pre_save
 
 from netbox_pathways.filtersets import (
     AerialSpanFilterSet,
@@ -42,16 +41,6 @@ from netbox_pathways.models import (
 )
 
 SRID = get_srid()
-
-
-@pytest.fixture
-def _disable_routability_signal():
-    """Disconnect the pre_save routability check so we can build orphan segments."""
-    from netbox_pathways.signals import enforce_cable_routability
-
-    pre_save.disconnect(enforce_cable_routability, sender=CableSegment)
-    yield
-    pre_save.connect(enforce_cable_routability, sender=CableSegment)
 
 
 @pytest.fixture

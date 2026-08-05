@@ -154,19 +154,12 @@ def conduit_bank(structures, srid):
 
 
 @pytest.fixture
-def occupied_conduit(conduits):
+def occupied_conduit(conduits, _disable_routability_signal):
     """Route a cable through conduits[0], making it and its endpoints occupied."""
     from dcim.models import Cable
-    from django.db.models.signals import pre_save
 
-    from netbox_pathways.signals import enforce_cable_routability
-
-    pre_save.disconnect(enforce_cable_routability, sender=CableSegment)
-    try:
-        cable = Cable.objects.create(label="geo-occ-cable")
-        CableSegment.objects.create(cable=cable, pathway=conduits[0], sequence=1)
-    finally:
-        pre_save.connect(enforce_cable_routability, sender=CableSegment)
+    cable = Cable.objects.create(label="geo-occ-cable")
+    CableSegment.objects.create(cable=cable, pathway=conduits[0], sequence=1)
     return conduits[0]
 
 

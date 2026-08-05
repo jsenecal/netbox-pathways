@@ -10,15 +10,8 @@ from netbox_pathways.models import CableSegment, Conduit, Structure
 @pytest.mark.django_db
 class TestCableSegmentSequence:
     @pytest.fixture(autouse=True)
-    def _disable_routability_signal(self):
-        """Disable routability signal for sequence tests (no terminations needed)."""
-        from django.db.models.signals import pre_save
-
-        from netbox_pathways.signals import enforce_cable_routability
-
-        pre_save.disconnect(enforce_cable_routability, sender=CableSegment)
-        yield
-        pre_save.connect(enforce_cable_routability, sender=CableSegment)
+    def _bypass_routability(self, _disable_routability_signal):
+        """Sequence tests build orphan segments (no terminations needed)."""
 
     @pytest.fixture
     def structures(self):

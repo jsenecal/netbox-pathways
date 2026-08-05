@@ -3,7 +3,6 @@
 import pytest
 from dcim.models import Cable
 from django.contrib.gis.geos import LineString, Point
-from django.db.models.signals import pre_save
 from rest_framework.test import APIClient
 
 from netbox_pathways.geo import get_srid
@@ -19,15 +18,6 @@ def api_client(admin_user):
     client = APIClient()
     client.force_authenticate(user=admin_user)
     return client
-
-
-@pytest.fixture
-def _disable_routability_signal():
-    from netbox_pathways.signals import enforce_cable_routability
-
-    pre_save.disconnect(enforce_cable_routability, sender=CableSegment)
-    yield
-    pre_save.connect(enforce_cable_routability, sender=CableSegment)
 
 
 @pytest.mark.django_db
