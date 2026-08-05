@@ -146,6 +146,19 @@ import { StatusPrefs } from './status-prefs';
 import { OccupancyPrefs } from './occupancy-prefs';
 import { STRUCTURE_COLORS } from './map-utils';
 
+/** Stub global fetch to record request URLs and answer 200 with `body`. */
+function stubFetchCollecting(urls: string[], body?: unknown): void {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        urls.push(url);
+        return {
+            ok: true,
+            status: 200,
+            headers: { get: () => '' },
+            json: async () => body ?? { type: 'FeatureCollection', features: [] },
+        };
+    }));
+}
+
 describe('exclude_status request param', () => {
     let requestedUrls: string[];
 
@@ -153,15 +166,7 @@ describe('exclude_status request param', () => {
         localStorage.clear();
         _resetInfoCache();
         requestedUrls = [];
-        vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-            requestedUrls.push(url);
-            return {
-                ok: true,
-                status: 200,
-                headers: { get: () => '' },
-                json: async () => ({ type: 'FeatureCollection', features: [] }),
-            };
-        }));
+        stubFetchCollecting(requestedUrls);
     });
 
     it('fetchGeoJSON omits exclude_status while hiding is off', async () => {
@@ -178,20 +183,12 @@ describe('exclude_status request param', () => {
     it('fetchMapInfo carries the inactive set and stores available statuses', async () => {
         StatusPrefs.setHideInactive(true);
         StatusPrefs.setInactiveSet(['decommissioning']);
-        vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-            requestedUrls.push(url);
-            return {
-                ok: true,
-                status: 200,
-                headers: { get: () => '' },
-                json: async () => ({
-                    bbox: null,
-                    counts: {},
-                    thresholds: {},
-                    statuses: [{ value: 'active', label: 'Active', color: 'green' }],
-                }),
-            };
-        }));
+        stubFetchCollecting(requestedUrls, {
+            bbox: null,
+            counts: {},
+            thresholds: {},
+            statuses: [{ value: 'active', label: 'Active', color: 'green' }],
+        });
         await fetchMapInfo('0,0,1,1', () => {});
         expect(requestedUrls[0]).toContain('exclude_status=decommissioning');
         expect(StatusPrefs.colorFor('active')).toBe('green');
@@ -209,15 +206,7 @@ describe('occupied request param', () => {
         localStorage.clear();
         _resetInfoCache();
         requestedUrls = [];
-        vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-            requestedUrls.push(url);
-            return {
-                ok: true,
-                status: 200,
-                headers: { get: () => '' },
-                json: async () => ({ type: 'FeatureCollection', features: [] }),
-            };
-        }));
+        stubFetchCollecting(requestedUrls);
     });
 
     it('fetchGeoJSON omits occupied while hiding is off', async () => {
