@@ -35,12 +35,10 @@ logger = logging.getLogger(__name__)
 MAX_GEO_RESULTS = 2000
 
 
-def _parse_bbox(value):
+def _parse_bbox_wgs84(value):
     """Parse a ``west,south,east,north`` string into a WGS84 Polygon.
 
     Returns ``(polygon, [w, s, e, n])`` or ``(None, None)`` on invalid input.
-    The polygon is already reprojected to the configured storage SRID, ready
-    to use in an ``__intersects`` lookup.
     """
     if not value:
         return None, None
@@ -50,9 +48,20 @@ def _parse_bbox(value):
         return None, None
     poly = Polygon.from_bbox((west, south, east, north))
     poly.srid = LEAFLET_SRID
-    if get_srid() != LEAFLET_SRID:
-        poly.transform(get_srid())
     return poly, [west, south, east, north]
+
+
+def _parse_bbox(value):
+    """Parse a ``west,south,east,north`` string into a WGS84 Polygon.
+
+    Returns ``(polygon, [w, s, e, n])`` or ``(None, None)`` on invalid input.
+    The polygon is already reprojected to the configured storage SRID, ready
+    to use in an ``__intersects`` lookup.
+    """
+    poly, bounds = _parse_bbox_wgs84(value)
+    if poly is not None and get_srid() != LEAFLET_SRID:
+        poly.transform(get_srid())
+    return poly, bounds
 
 
 def _etag_components(queryset):

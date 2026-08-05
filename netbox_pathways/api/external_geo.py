@@ -11,7 +11,6 @@ import logging
 
 from django.contrib.gis.db import models as gis_models
 from django.contrib.gis.db.models.functions import Transform
-from django.contrib.gis.geos import Polygon
 from django.db import models as db_models
 from django.db.models import F
 from django.db.models.functions import Coalesce
@@ -19,7 +18,7 @@ from django.http import Http404, JsonResponse
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from netbox_pathways.api.geo import MAX_GEO_RESULTS
+from netbox_pathways.api.geo import MAX_GEO_RESULTS, _parse_bbox_wgs84
 from netbox_pathways.geo import LEAFLET_SRID, get_srid
 from netbox_pathways.registry import SUPPORTED_GEO_MODELS, registry
 
@@ -111,15 +110,9 @@ class ExternalLayerGeoView(APIView):
         ).exclude(_geo_4326__isnull=True)
 
         # Bbox filtering
-        bbox_str = request.query_params.get("bbox", "")
-        if bbox_str:
-            try:
-                w, s, e, n = (float(x) for x in bbox_str.split(","))
-                bbox_poly = Polygon.from_bbox((w, s, e, n))
-                bbox_poly.srid = LEAFLET_SRID
-                qs = qs.filter(_geo_4326__intersects=bbox_poly)
-            except (ValueError, TypeError):
-                pass  # ignore malformed bbox
+        bbox_poly, _ = _parse_bbox_wgs84(request.query_params.get("bbox"))
+        if bbox_poly is not None:
+            qs = qs.filter(_geo_4326__intersects=bbox_poly)
 
         qs = qs[:MAX_GEO_RESULTS]
 
