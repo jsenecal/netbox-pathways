@@ -132,8 +132,27 @@ def occupied_structures_q():
     return Q(Exists(routed))
 
 
+def apply_occupied(queryset, occupied):
+    """Filter ``queryset`` to occupied (True) or unoccupied (False) rows.
+
+    Single place that maps a model to its occupancy condition, shared by the
+    filtersets and the geo endpoints so every consumer of ``occupied``
+    interprets it identically. Models with no occupancy notion (and a None
+    value) pass through unchanged.
+    """
+    if occupied is None:
+        return queryset
+    if queryset.model is Structure:
+        condition = occupied_structures_q()
+    elif issubclass(queryset.model, Pathway):
+        condition = occupied_pathways_q()
+    else:
+        return queryset
+    return queryset.filter(condition) if occupied else queryset.exclude(condition)
+
+
 class OccupiedFilterMixin(django_filters.FilterSet):
-    """Adds the `occupied` filter shared by Pathway and all its subclasses."""
+    """Adds the `occupied` filter shared by Structure, Pathway, and its subclasses."""
 
     occupied = django_filters.BooleanFilter(
         method="filter_occupied",
@@ -141,12 +160,10 @@ class OccupiedFilterMixin(django_filters.FilterSet):
     )
 
     def filter_occupied(self, queryset, name, value):
-        if value:
-            return queryset.filter(occupied_pathways_q())
-        return queryset.exclude(occupied_pathways_q())
+        return apply_occupied(queryset, value)
 
 
-class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
+class StructureFilterSet(OccupiedFilterMixin, TenancyFilterSet, NetBoxModelFilterSet):
     name = MultiValueCharFilter()
     status = django_filters.MultipleChoiceFilter(
         choices=StructureStatusChoices,
@@ -194,10 +211,6 @@ class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
     length = MultiValueNumberFilter()
     depth = MultiValueNumberFilter()
     elevation = MultiValueNumberFilter()
-    occupied = django_filters.BooleanFilter(
-        method="filter_occupied",
-        label="Occupied (has routed cables)",
-    )
     has_pathways = django_filters.BooleanFilter(
         method="filter_has_pathways",
         label="Has connected pathways",
@@ -206,11 +219,6 @@ class StructureFilterSet(TenancyFilterSet, NetBoxModelFilterSet):
     class Meta:
         model = Structure
         fields = ["id", "installation_date", "commissioned_date"]
-
-    def filter_occupied(self, queryset, name, value):
-        if value:
-            return queryset.filter(occupied_structures_q())
-        return queryset.exclude(occupied_structures_q())
 
     def filter_has_pathways(self, queryset, name, value):
         connected = Pathway.objects.values_list(

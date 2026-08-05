@@ -134,19 +134,6 @@ def _parse_occupied(request):
     return None
 
 
-def _filter_occupied(qs, occupied):
-    """Apply the occupied condition to models that define one; no-op otherwise."""
-    if occupied is None:
-        return qs
-    if qs.model is models.Structure:
-        condition = filtersets.occupied_structures_q()
-    elif issubclass(qs.model, models.Pathway):
-        condition = filtersets.occupied_pathways_q()
-    else:
-        return qs
-    return qs.filter(condition) if occupied else qs.exclude(condition)
-
-
 # --- GeoJSON Serializers ---
 # geo_field points to an annotated field (already WGS84), declared explicitly
 # so DRF doesn't try to introspect the model for it.
@@ -581,7 +568,7 @@ class MapInfoView(APIView):
             if extra_filter:
                 qs = qs.filter(**extra_filter)
             qs = _exclude_status(qs, excluded_statuses)
-            qs = _filter_occupied(qs, occupied)
+            qs = filtersets.apply_occupied(qs, occupied)
             counts[key] = _count(qs, F(geo_field))
 
         from .external_geo import resolve_geometry_expression
