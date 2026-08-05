@@ -214,16 +214,12 @@ def occupancy(db, _disable_routability_signal):
     s_b = Structure.objects.create(name="occ-b", geometry=Point(100, 0, srid=SRID))
     line = LineString((0, 0), (100, 0), srid=SRID)
 
-    aerial = AerialSpan.objects.create(
-        label="occ-aerial", path=line, start_structure=s_a, end_structure=s_b
-    )
+    aerial = AerialSpan.objects.create(label="occ-aerial", path=line, start_structure=s_a, end_structure=s_b)
     aerial_empty = AerialSpan.objects.create(
         label="occ-aerial-empty", path=line, start_structure=s_a, end_structure=s_b
     )
 
-    inner_bank = ConduitBank.objects.create(
-        label="occ-inner-bank", path=line, start_structure=s_a, end_structure=s_b
-    )
+    inner_bank = ConduitBank.objects.create(label="occ-inner-bank", path=line, start_structure=s_a, end_structure=s_b)
     conduit_host = Conduit.objects.create(
         label="occ-host",
         path=line,
@@ -231,16 +227,12 @@ def occupancy(db, _disable_routability_signal):
         end_structure=s_b,
         conduit_bank=inner_bank,
     )
-    innerduct = Innerduct.objects.create(
-        label="occ-inner", path=line, parent_conduit=conduit_host, size="32mm"
-    )
+    innerduct = Innerduct.objects.create(label="occ-inner", path=line, parent_conduit=conduit_host, size="32mm")
     innerduct_empty = Innerduct.objects.create(
         label="occ-inner-empty", path=line, parent_conduit=conduit_host, size="32mm"
     )
 
-    bank = ConduitBank.objects.create(
-        label="occ-bank", path=line, start_structure=s_a, end_structure=s_b
-    )
+    bank = ConduitBank.objects.create(label="occ-bank", path=line, start_structure=s_a, end_structure=s_b)
     conduit_in_bank = Conduit.objects.create(
         label="occ-banked",
         path=line,
@@ -248,12 +240,8 @@ def occupancy(db, _disable_routability_signal):
         end_structure=s_b,
         conduit_bank=bank,
     )
-    conduit_empty = Conduit.objects.create(
-        label="occ-empty", path=line, start_structure=s_a, end_structure=s_b
-    )
-    bank_empty = ConduitBank.objects.create(
-        label="occ-bank-empty", path=line, start_structure=s_a, end_structure=s_b
-    )
+    conduit_empty = Conduit.objects.create(label="occ-empty", path=line, start_structure=s_a, end_structure=s_b)
+    bank_empty = ConduitBank.objects.create(label="occ-bank-empty", path=line, start_structure=s_a, end_structure=s_b)
 
     cable = Cable.objects.create(label="occ-cable")
     CableSegment.objects.create(cable=cable, pathway=aerial, sequence=1)
