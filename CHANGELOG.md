@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Add-child buttons that inherit the parent's attributes.** The Conduits
+  panel on a conduit bank and the Innerducts panel on a conduit now carry
+  an "Add" button that opens the create form pre-filled from the parent:
+  endpoints and faces for bank conduits (plus installed-by and dates),
+  endpoints for innerducts. Blank endpoints on a bank conduit now inherit
+  from the bank at save time, matching the existing innerduct behavior,
+  and contained pathways (bank conduits, innerducts) no longer require or
+  synthesize their own path geometry -- the parent owns the route. Tenant
+  columns on the conduit and innerduct tables fall back to the parent
+  chain's tenant, marked with `*` in the NetBox style.
+  Requested by @marcusyuri. Refs #77.
+
 - **Hide unoccupied toggle on the interactive map.** A new sidebar button
   under Hide inactive filters every layer down to plant that carries cable:
   pathways with at least one routed segment and the structures terminating
