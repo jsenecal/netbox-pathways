@@ -507,6 +507,8 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
         quick_add=True,
         help_text="Leave blank to inherit from the conduit bank, if one is set",
     )
+    start_face = forms.ChoiceField(choices=BankFaceChoices, required=False)
+    end_face = forms.ChoiceField(choices=BankFaceChoices, required=False)
     conduit_bank = DynamicModelChoiceField(
         queryset=ConduitBank.objects.all(),
         required=False,
@@ -557,7 +559,15 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
     fieldsets = (
         FieldSet("label", "status", "material", "length", name="Conduit"),
         FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
-        FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
+        FieldSet(
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+            "start_face",
+            "end_face",
+            name="Endpoints",
+        ),
         FieldSet("start_junction", "end_junction", name="Junctions"),
         FieldSet("inner_diameter", "outer_diameter", "depth", name="Dimensions"),
         FieldSet("conduit_bank", "bank_position", name="Conduit Bank"),
@@ -576,6 +586,8 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "end_structure",
             "start_location",
             "end_location",
+            "start_face",
+            "end_face",
             "start_junction",
             "end_junction",
             "inner_diameter",

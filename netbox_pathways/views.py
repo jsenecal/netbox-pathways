@@ -301,6 +301,7 @@ class ConduitListView(generic.ObjectListView):
         "start_location",
         "end_location",
         "conduit_bank",
+        "conduit_bank__tenant",
         "tenant",
     ).annotate(
         cables_routed=Count("cable_segments"),
@@ -524,7 +525,12 @@ class DirectBuriedBulkDeleteView(generic.BulkDeleteView):
 
 
 class InnerductListView(generic.ObjectListView):
-    queryset = models.Innerduct.objects.select_related("parent_conduit").annotate(
+    queryset = models.Innerduct.objects.select_related(
+        "parent_conduit",
+        "tenant",
+        "parent_conduit__tenant",
+        "parent_conduit__conduit_bank__tenant",
+    ).annotate(
         cables_routed=Count("cable_segments"),
         in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
         _geo_length=Length("path"),

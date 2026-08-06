@@ -43,6 +43,8 @@ def bank(db):
 class TestConduitFormPrefill:
     def test_prefills_from_bank_pk(self, bank):
         form = ConduitForm(initial={"conduit_bank": str(bank.pk)})
+        assert "start_face" in form.fields
+        assert "end_face" in form.fields
         assert form.initial["start_structure"] == bank.start_structure.pk
         assert form.initial["end_structure"] == bank.end_structure.pk
         assert form.initial["start_face"] == "north"
@@ -72,7 +74,8 @@ class TestConduitFormPrefill:
         conduit = Conduit(label="PF-C1", conduit_bank=bank)
         conduit.save()
         form = ConduitForm(instance=conduit, initial={"conduit_bank": str(bank.pk)})
-        assert "start_face" not in form.initial
+        assert form.initial["start_face"] != bank.start_face
+        assert form.initial["end_face"] != bank.end_face
 
 
 @pytest.mark.django_db
