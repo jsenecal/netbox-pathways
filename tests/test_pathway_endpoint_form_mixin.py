@@ -5,7 +5,7 @@ from django.contrib.gis.geos import LineString, Point, Polygon
 
 from netbox_pathways.forms import ConduitForm, InnerductForm
 from netbox_pathways.geo import get_srid, to_leaflet
-from netbox_pathways.models import Conduit, Structure
+from netbox_pathways.models import Conduit, ConduitBank, Structure
 
 SRID = get_srid()
 
@@ -69,9 +69,10 @@ class TestPathwayEndpointFormMixinClean:
         # centroid of the square (0,0)-(10,10) is (5, 5)
         assert start_pt == (5.0, 5.0)
 
-    def test_innerduct_inherits_parent_conduit_structures(self):
-        """Innerduct fallback: when structures are omitted, inherit from
-        parent_conduit's start/end."""
+    def test_innerduct_gets_no_synthetic_path(self):
+        """Contained pathways own no geometry: an innerduct with a blank path
+        stays pathless instead of receiving a straight line between the
+        parent's structures. Behavior change for issue #77."""
         s1 = _make_structure("S1", Point(0, 0, srid=SRID))
         s2 = _make_structure("S2", Point(100, 100, srid=SRID))
         parent = Conduit(
@@ -91,7 +92,29 @@ class TestPathwayEndpointFormMixinClean:
             }
         )
         assert form.is_valid(), form.errors
-        assert form.cleaned_data["path"] is not None
+        assert form.cleaned_data["path"] is None
+
+    def test_bank_conduit_gets_no_synthetic_path(self):
+        """A conduit created inside a bank stays pathless: the bank owns the
+        route geometry. Behavior change for issue #77."""
+        s1 = _make_structure("S1", Point(0, 0, srid=SRID))
+        s2 = _make_structure("S2", Point(100, 100, srid=SRID))
+        bank = ConduitBank(
+            label="BANK-1",
+            path=LineString((0, 0), (100, 100), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+        bank.save()
+        form = ConduitForm(
+            data={
+                "status": "active",
+                "conduit_bank": bank.pk,
+                "tags": [],
+            }
+        )
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data["path"] is None
 
     def test_no_path_no_structures_raises_validation_error(self):
         """Without a path and without structures, the mixin must reject."""

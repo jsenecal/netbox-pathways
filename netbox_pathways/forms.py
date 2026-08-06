@@ -165,7 +165,8 @@ class PathwayPathFallbackMixin:
     Shared by the interactive pathway forms and the CSV import forms so both
     have the same semantics: structure-to-structure entries get a straight
     LineString between the structures, location-to-location (indoor) entries
-    need no geographic path at all.
+    need no geographic path at all. Contained pathways (conduits in banks,
+    innerducts) follow the parent's route and need no path.
     """
 
     def clean(self):
@@ -175,20 +176,15 @@ class PathwayPathFallbackMixin:
         if path:
             return cleaned
 
+        # Contained pathways (a conduit in a bank, an innerduct) follow the
+        # parent's route; never synthesize a standalone path for them.
+        if cleaned.get("conduit_bank") or cleaned.get("parent_conduit"):
+            return cleaned
+
         start_struct = cleaned.get("start_structure")
         end_struct = cleaned.get("end_structure")
         start_loc = cleaned.get("start_location")
         end_loc = cleaned.get("end_location")
-
-        # Innerduct fallback: use parent conduit's endpoints, per side
-        parent = cleaned.get("parent_conduit")
-        if parent:
-            if not start_struct and not start_loc:
-                start_struct = parent.start_structure
-                start_loc = parent.start_location
-            if not end_struct and not end_loc:
-                end_struct = parent.end_structure
-                end_loc = parent.end_location
 
         # Indoor pathway (both endpoints are locations): no geographic path exists
         if start_loc and end_loc and not start_struct and not end_struct:
