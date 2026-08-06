@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 
 from netbox_pathways.forms import ConduitBankForm, PathwayForm, PathwaysMapWidget
 from netbox_pathways.geo import get_srid, to_leaflet
-from netbox_pathways.models import Conduit, ConduitJunction, Pathway, Structure
+from netbox_pathways.models import Conduit, ConduitBank, ConduitJunction, Innerduct, Pathway, Structure
 
 SRID = get_srid()
 
@@ -335,3 +335,52 @@ class TestEndToEndFormSave:
         assert obj.path.coords[0] == (100.0, 200.0)
         assert obj.path.coords[-1] == (500.0, 600.0)
         assert len(obj.path.coords) == 3
+
+
+@pytest.mark.django_db
+class TestContainedPathRequirement:
+    """Contained pathways follow their parent's geometry and need no path.
+
+    Regression tests for issue #77.
+    """
+
+    def _bank(self):
+        s1 = _make_structure("BK-S1", Point(0, 0, srid=SRID))
+        s2 = _make_structure("BK-S2", Point(100, 100, srid=SRID))
+        bank = ConduitBank(
+            label="BANK-1",
+            path=LineString((0, 0), (100, 100), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+        bank.save()
+        return bank, s1, s2
+
+    def test_bank_conduit_without_path_is_valid(self):
+        bank, s1, s2 = self._bank()
+        conduit = Conduit(
+            label="C-1",
+            conduit_bank=bank,
+            start_structure=s1,
+            end_structure=s2,
+        )
+        conduit.clean()  # must not raise
+
+    def test_standalone_conduit_without_path_raises(self):
+        s1 = _make_structure("SA-S1", Point(0, 0, srid=SRID))
+        s2 = _make_structure("SA-S2", Point(100, 100, srid=SRID))
+        conduit = Conduit(label="C-2", start_structure=s1, end_structure=s2)
+        with pytest.raises(ValidationError, match="[Pp]ath"):
+            conduit.clean()
+
+    def test_innerduct_without_path_is_valid(self):
+        bank, s1, s2 = self._bank()
+        parent = Conduit(
+            label="C-3",
+            path=LineString((0, 0), (100, 100), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+        parent.save()
+        duct = Innerduct(label="ID-1", parent_conduit=parent, size="32mm")
+        duct.clean()  # inherits endpoints from parent; must not raise

@@ -365,10 +365,20 @@ class Pathway(NetBoxModel):
         value = Pathway.objects.with_geo_length().values_list("_geo_length", flat=True).get(pk=self.pk)
         return _distance_to_m(value)
 
+    @property
+    def requires_path(self):
+        """Whether clean() demands a geometry path.
+
+        Indoor pathways (both endpoints are locations) carry no geographic
+        path. Subclasses contained in a parent pathway override this: the
+        parent owns the route geometry.
+        """
+        return not self.is_indoor
+
     def clean(self):
         super().clean()
         if not self.path:
-            if not self.is_indoor:
+            if self.requires_path:
                 raise ValidationError(
                     {"path": "Path is required unless both endpoints are locations (indoor pathway)."}
                 )
@@ -584,6 +594,13 @@ class Conduit(Pathway):
         return self.conduit_bank_id is None
 
     @property
+    def requires_path(self):
+        """A conduit inside a bank follows the bank's route; no own path needed."""
+        if self.conduit_bank_id:
+            return False
+        return super().requires_path
+
+    @property
     def is_indoor(self):
         """Junction endpoints are geographic, so they also preclude indoor status."""
         return super().is_indoor and not self.start_junction_id and not self.end_junction_id
@@ -710,6 +727,11 @@ class Innerduct(Pathway):
 
     @property
     def map_visible(self):
+        return False
+
+    @property
+    def requires_path(self):
+        """An innerduct follows its parent conduit's geometry."""
         return False
 
     size = models.CharField(max_length=50, help_text='Innerduct size (e.g., 1.25", 32mm)')
