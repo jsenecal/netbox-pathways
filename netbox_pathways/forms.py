@@ -487,28 +487,24 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
         required=False,
         selector=True,
         quick_add=True,
-        help_text="Leave blank to inherit from the conduit bank, if one is set",
     )
     end_structure = DynamicModelChoiceField(
         queryset=Structure.objects.all(),
         required=False,
         selector=True,
         quick_add=True,
-        help_text="Leave blank to inherit from the conduit bank, if one is set",
     )
     start_location = DynamicModelChoiceField(
         queryset=Location.objects.all(),
         required=False,
         selector=True,
         quick_add=True,
-        help_text="Leave blank to inherit from the conduit bank, if one is set",
     )
     end_location = DynamicModelChoiceField(
         queryset=Location.objects.all(),
         required=False,
         selector=True,
         quick_add=True,
-        help_text="Leave blank to inherit from the conduit bank, if one is set",
     )
     start_face = forms.ChoiceField(choices=BankFaceChoices, required=False)
     end_face = forms.ChoiceField(choices=BankFaceChoices, required=False)
@@ -980,28 +976,24 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
         required=False,
         selector=True,
         quick_add=True,
-        help_text="Leave blank to inherit from parent conduit",
     )
     end_structure = DynamicModelChoiceField(
         queryset=Structure.objects.all(),
         required=False,
         selector=True,
         quick_add=True,
-        help_text="Leave blank to inherit from parent conduit",
     )
     start_location = DynamicModelChoiceField(
         queryset=Location.objects.all(),
         required=False,
         selector=True,
         quick_add=True,
-        help_text="Leave blank to inherit from parent conduit",
     )
     end_location = DynamicModelChoiceField(
         queryset=Location.objects.all(),
         required=False,
         selector=True,
         quick_add=True,
-        help_text="Leave blank to inherit from parent conduit",
     )
 
     installed_by = DynamicModelChoiceField(
