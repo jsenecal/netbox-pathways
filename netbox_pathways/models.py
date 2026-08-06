@@ -594,6 +594,19 @@ class Conduit(Pathway):
         return self.conduit_bank_id is None
 
     @property
+    def effective_tenant(self):
+        """Own tenant, or the conduit bank's when not set.
+
+        Display-layer fallback in the NetBox VRF/prefix style: the stored
+        field stays authoritative for filtering and the API.
+        """
+        if self.tenant_id:
+            return self.tenant
+        if self.conduit_bank_id:
+            return self.conduit_bank.tenant
+        return None
+
+    @property
     def requires_path(self):
         """A conduit inside a bank follows the bank's route; no own path needed."""
         if self.conduit_bank_id:
@@ -743,6 +756,15 @@ class Innerduct(Pathway):
     @property
     def map_visible(self):
         return False
+
+    @property
+    def effective_tenant(self):
+        """Own tenant, or the parent chain's (conduit, then bank) when not set."""
+        if self.tenant_id:
+            return self.tenant
+        if self.parent_conduit_id:
+            return self.parent_conduit.effective_tenant
+        return None
 
     @property
     def requires_path(self):
