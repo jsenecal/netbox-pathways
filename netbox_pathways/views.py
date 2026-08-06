@@ -22,6 +22,7 @@ from netbox.object_actions import (
     EditObject,
     ObjectAction,
 )
+from netbox.ui import actions as ui_actions
 from netbox.ui import layout
 from netbox.ui.panels import CommentsPanel, ObjectsTablePanel, TemplatePanel
 from netbox.views import generic
@@ -326,6 +327,12 @@ class ConduitView(generic.ObjectView):
                 model="netbox_pathways.Innerduct",
                 title="Innerducts",
                 filters={"parent_conduit_id": lambda ctx: ctx["object"].pk},
+                actions=[
+                    ui_actions.AddObject(
+                        "netbox_pathways.Innerduct",
+                        url_params={"parent_conduit": lambda ctx: ctx["object"].pk},
+                    ),
+                ],
             ),
             ObjectsTablePanel(
                 model="netbox_pathways.CableSegment",
@@ -602,6 +609,12 @@ class ConduitBankView(generic.ObjectView):
                 model="netbox_pathways.Conduit",
                 title="Conduits",
                 filters={"conduit_bank_id": lambda ctx: ctx["object"].pk},
+                actions=[
+                    ui_actions.AddObject(
+                        "netbox_pathways.Conduit",
+                        url_params={"conduit_bank": lambda ctx: ctx["object"].pk},
+                    ),
+                ],
             ),
         ],
     )
