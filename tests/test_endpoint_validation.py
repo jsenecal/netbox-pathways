@@ -384,3 +384,73 @@ class TestContainedPathRequirement:
         parent.save()
         duct = Innerduct(label="ID-1", parent_conduit=parent, size="32mm")
         duct.clean()  # inherits endpoints from parent; must not raise
+
+
+@pytest.mark.django_db
+class TestConduitBankEndpointInheritance:
+    """Blank conduit endpoints inherit from the bank, like innerducts do
+    from their parent conduit. Regression tests for issue #77."""
+
+    def _bank(self):
+        s1 = _make_structure("BI-S1", Point(0, 0, srid=SRID))
+        s2 = _make_structure("BI-S2", Point(100, 100, srid=SRID))
+        bank = ConduitBank(
+            label="BANK-2",
+            path=LineString((0, 0), (100, 100), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+        bank.save()
+        return bank, s1, s2
+
+    def test_blank_endpoints_inherit_from_bank_on_clean(self):
+        bank, s1, s2 = self._bank()
+        conduit = Conduit(label="C-10", conduit_bank=bank)
+        conduit.clean()
+        assert conduit.start_structure == s1
+        assert conduit.end_structure == s2
+
+    def test_save_persists_inherited_endpoints(self):
+        bank, s1, s2 = self._bank()
+        conduit = Conduit(label="C-11", conduit_bank=bank)
+        conduit.save()
+        conduit.refresh_from_db()
+        assert conduit.start_structure == s1
+        assert conduit.end_structure == s2
+
+    def test_explicit_endpoint_side_is_not_overridden(self):
+        bank, s1, s2 = self._bank()
+        other = _make_structure("BI-S3", Point(0, 0.5, srid=SRID))
+        conduit = Conduit(label="C-12", conduit_bank=bank, start_structure=other)
+        conduit.clean()
+        assert conduit.start_structure == other
+        assert conduit.end_structure == s2
+
+    def test_junction_side_is_not_touched(self):
+        bank, s1, s2 = self._bank()
+        trunk = Conduit(
+            label="TRUNK",
+            path=LineString((0, 0), (100, 100), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+        trunk.save()
+        branch = Conduit(label="BRANCH", conduit_bank=bank)
+        branch.save()
+        junction = ConduitJunction.objects.create(
+            trunk_conduit=trunk,
+            branch_conduit=branch,
+            towards_structure=s2,
+            position_on_trunk=0.5,
+        )
+        conduit = Conduit(label="C-13", conduit_bank=bank, start_junction=junction)
+        conduit.clean()
+        assert conduit.start_structure is None
+        assert conduit.start_location is None
+        assert conduit.end_structure == s2
+
+    def test_bankless_blank_endpoints_still_invalid(self):
+        path = LineString((0, 0), (100, 100), srid=SRID)
+        conduit = Conduit(label="C-14", path=path)
+        with pytest.raises(ValidationError, match="start point"):
+            conduit.clean()

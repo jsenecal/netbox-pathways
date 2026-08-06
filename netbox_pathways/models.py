@@ -619,7 +619,21 @@ class Conduit(Pathway):
             ),
         ]
 
+    def _inherit_bank_endpoints(self):
+        """Inherit endpoints from the conduit bank, per side, if not explicitly set."""
+        if not self.conduit_bank_id:
+            return
+        if not any([self.start_structure_id, self.start_location_id, self.start_junction_id]):
+            self.start_structure = self.conduit_bank.start_structure
+            self.start_location = self.conduit_bank.start_location
+        if not any([self.end_structure_id, self.end_location_id, self.end_junction_id]):
+            self.end_structure = self.conduit_bank.end_structure
+            self.end_location = self.conduit_bank.end_location
+
     def clean(self):
+        # Inherit before validation so the exactly-one-endpoint-per-side
+        # check and path snapping see the effective endpoints.
+        self._inherit_bank_endpoints()
         super().clean()  # Pathway.clean() handles structure endpoints
         start_options = sum(bool(x) for x in [self.start_structure, self.start_location, self.start_junction])
         end_options = sum(bool(x) for x in [self.end_structure, self.end_location, self.end_junction])
@@ -651,6 +665,7 @@ class Conduit(Pathway):
 
     def save(self, *args, **kwargs):
         self.pathway_type = "conduit"
+        self._inherit_bank_endpoints()
         super().save(*args, **kwargs)
 
 
