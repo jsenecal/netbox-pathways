@@ -238,6 +238,38 @@ class PathwayEndpointFormMixin(PathwayPathFallbackMixin):
         widget.endpoint_geojson = endpoint_data if endpoint_data else None
 
 
+def _resolve_initial_parent(form, field_name, queryset):
+    """Resolve a parent object from a pk passed in form initial data.
+
+    Returns None when editing an existing object, when the initial is
+    absent, or when the pk does not resolve to a row.
+    """
+    if form.instance.pk:
+        return None
+    raw = form.initial.get(field_name)
+    if not raw:
+        return None
+    try:
+        return queryset.get(pk=raw)
+    except (queryset.model.DoesNotExist, ValueError, TypeError):
+        return None
+
+
+def _prefill_initial_from_parent(form, parent, field_names):
+    """Copy parent attribute values into form initial for absent keys.
+
+    Values already present in initial (explicit GET params) always win.
+    FK values are stored as pks so dynamic choice fields render them.
+    """
+    for name in field_names:
+        if form.initial.get(name) not in (None, ""):
+            continue
+        value = getattr(parent, name, None)
+        if value in (None, ""):
+            continue
+        form.initial[name] = value.pk if hasattr(value, "pk") else value
+
+
 # --- Structure ---
 
 
@@ -452,24 +484,28 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
         required=False,
         selector=True,
         quick_add=True,
+        help_text="Leave blank to inherit from the conduit bank, if one is set",
     )
     end_structure = DynamicModelChoiceField(
         queryset=Structure.objects.all(),
         required=False,
         selector=True,
         quick_add=True,
+        help_text="Leave blank to inherit from the conduit bank, if one is set",
     )
     start_location = DynamicModelChoiceField(
         queryset=Location.objects.all(),
         required=False,
         selector=True,
         quick_add=True,
+        help_text="Leave blank to inherit from the conduit bank, if one is set",
     )
     end_location = DynamicModelChoiceField(
         queryset=Location.objects.all(),
         required=False,
         selector=True,
         quick_add=True,
+        help_text="Leave blank to inherit from the conduit bank, if one is set",
     )
     conduit_bank = DynamicModelChoiceField(
         queryset=ConduitBank.objects.all(),
@@ -497,6 +533,26 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
         quick_add=True,
         label="Installed by",
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        bank = _resolve_initial_parent(self, "conduit_bank", ConduitBank.objects.all())
+        if bank:
+            _prefill_initial_from_parent(
+                self,
+                bank,
+                [
+                    "start_structure",
+                    "end_structure",
+                    "start_location",
+                    "end_location",
+                    "start_face",
+                    "end_face",
+                    "installed_by",
+                    "installation_date",
+                    "commissioned_date",
+                ],
+            )
 
     fieldsets = (
         FieldSet("label", "status", "material", "length", name="Conduit"),
@@ -940,6 +996,16 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
         quick_add=True,
         label="Installed by",
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        parent = _resolve_initial_parent(self, "parent_conduit", Conduit.objects.all())
+        if parent:
+            _prefill_initial_from_parent(
+                self,
+                parent,
+                ["start_structure", "end_structure", "start_location", "end_location"],
+            )
 
     fieldsets = (
         FieldSet("label", "status", "parent_conduit", "size", "color", "position", name="Innerduct"),
