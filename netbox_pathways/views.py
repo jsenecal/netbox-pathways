@@ -602,6 +602,8 @@ class ConduitBankView(generic.ObjectView):
                 model="netbox_pathways.Conduit",
                 title="Conduits",
                 filters={"conduit_bank_id": lambda ctx: ctx["object"].pk},
+                include_columns=["bank_position"],
+                exclude_columns=["conduit_bank"],
             ),
         ],
     )
