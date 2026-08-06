@@ -238,9 +238,11 @@ class PathwayEndpointFormMixin(PathwayPathFallbackMixin):
         widget.endpoint_geojson = endpoint_data if endpoint_data else None
 
 
-def _resolve_initial_parent(form, field_name, queryset):
+def _resolve_initial_parent(form, field_name):
     """Resolve a parent object from a pk passed in form initial data.
 
+    Reads the queryset from the form field itself (`form.fields[field_name].queryset`)
+    rather than taking one as an argument, since the field already declares it.
     Returns None when editing an existing object, when the initial is
     absent, or when the pk does not resolve to a row.
     """
@@ -249,6 +251,7 @@ def _resolve_initial_parent(form, field_name, queryset):
     raw = form.initial.get(field_name)
     if not raw:
         return None
+    queryset = form.fields[field_name].queryset
     try:
         return queryset.get(pk=raw)
     except (queryset.model.DoesNotExist, ValueError, TypeError):
@@ -538,7 +541,7 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        bank = _resolve_initial_parent(self, "conduit_bank", ConduitBank.objects.all())
+        bank = _resolve_initial_parent(self, "conduit_bank")
         if bank:
             _prefill_initial_from_parent(
                 self,
@@ -1011,7 +1014,7 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        parent = _resolve_initial_parent(self, "parent_conduit", Conduit.objects.all())
+        parent = _resolve_initial_parent(self, "parent_conduit")
         if parent:
             _prefill_initial_from_parent(
                 self,

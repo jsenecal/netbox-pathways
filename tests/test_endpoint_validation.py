@@ -24,6 +24,19 @@ def _make_pathway(path, start_structure=None, end_structure=None, **kwargs):
     return pw
 
 
+def _make_bank(prefix):
+    s1 = _make_structure(f"{prefix}-S1", Point(0, 0, srid=SRID))
+    s2 = _make_structure(f"{prefix}-S2", Point(100, 100, srid=SRID))
+    bank = ConduitBank(
+        label=f"BANK-{prefix}",
+        path=LineString((0, 0), (100, 100), srid=SRID),
+        start_structure=s1,
+        end_structure=s2,
+    )
+    bank.save()
+    return bank, s1, s2
+
+
 @pytest.mark.django_db
 class TestPathwayEndpointValidation:
     def test_point_structure_within_tolerance_snaps(self):
@@ -345,16 +358,7 @@ class TestContainedPathRequirement:
     """
 
     def _bank(self):
-        s1 = _make_structure("BK-S1", Point(0, 0, srid=SRID))
-        s2 = _make_structure("BK-S2", Point(100, 100, srid=SRID))
-        bank = ConduitBank(
-            label="BANK-1",
-            path=LineString((0, 0), (100, 100), srid=SRID),
-            start_structure=s1,
-            end_structure=s2,
-        )
-        bank.save()
-        return bank, s1, s2
+        return _make_bank("BK")
 
     def test_bank_conduit_without_path_is_valid(self):
         bank, s1, s2 = self._bank()
@@ -392,16 +396,7 @@ class TestConduitBankEndpointInheritance:
     from their parent conduit. Regression tests for issue #77."""
 
     def _bank(self):
-        s1 = _make_structure("BI-S1", Point(0, 0, srid=SRID))
-        s2 = _make_structure("BI-S2", Point(100, 100, srid=SRID))
-        bank = ConduitBank(
-            label="BANK-2",
-            path=LineString((0, 0), (100, 100), srid=SRID),
-            start_structure=s1,
-            end_structure=s2,
-        )
-        bank.save()
-        return bank, s1, s2
+        return _make_bank("BI")
 
     def test_blank_endpoints_inherit_from_bank_on_clean(self):
         bank, s1, s2 = self._bank()

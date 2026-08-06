@@ -457,6 +457,19 @@ class Pathway(NetBoxModel):
         """
         return True
 
+    def _inherit_endpoints_from(self, parent, occupied_suffixes=("structure_id", "location_id")):
+        """Inherit endpoints from a parent pathway, per side, if not explicitly set.
+
+        A side counts as occupied when any of the given FK suffixes is set on it.
+        """
+        if parent is None:
+            return
+        for side in ("start", "end"):
+            if any(getattr(self, f"{side}_{sfx}") for sfx in occupied_suffixes):
+                continue
+            setattr(self, f"{side}_structure", getattr(parent, f"{side}_structure"))
+            setattr(self, f"{side}_location", getattr(parent, f"{side}_location"))
+
     @classmethod
     def map_queryset(cls, queryset=None):
         """Return a queryset filtered to only map-visible pathways.
@@ -634,14 +647,10 @@ class Conduit(Pathway):
 
     def _inherit_bank_endpoints(self):
         """Inherit endpoints from the conduit bank, per side, if not explicitly set."""
-        if not self.conduit_bank_id:
-            return
-        if not any([self.start_structure_id, self.start_location_id, self.start_junction_id]):
-            self.start_structure = self.conduit_bank.start_structure
-            self.start_location = self.conduit_bank.start_location
-        if not any([self.end_structure_id, self.end_location_id, self.end_junction_id]):
-            self.end_structure = self.conduit_bank.end_structure
-            self.end_location = self.conduit_bank.end_location
+        self._inherit_endpoints_from(
+            self.conduit_bank if self.conduit_bank_id else None,
+            ("structure_id", "location_id", "junction_id"),
+        )
 
     def clean(self):
         # Inherit before validation so the exactly-one-endpoint-per-side
@@ -781,14 +790,7 @@ class Innerduct(Pathway):
 
     def _inherit_parent_endpoints(self):
         """Inherit endpoints from the parent conduit, per side, if not explicitly set."""
-        if not self.parent_conduit_id:
-            return
-        if not any([self.start_structure_id, self.start_location_id]):
-            self.start_structure = self.parent_conduit.start_structure
-            self.start_location = self.parent_conduit.start_location
-        if not any([self.end_structure_id, self.end_location_id]):
-            self.end_structure = self.parent_conduit.end_structure
-            self.end_location = self.parent_conduit.end_location
+        self._inherit_endpoints_from(self.parent_conduit if self.parent_conduit_id else None)
 
     def clean(self):
         # Inherit before validation so the path-required check sees the
