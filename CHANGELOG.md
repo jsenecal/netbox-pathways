@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   carries over status, endpoints, tenant, installer, dates, and
   type-specific attributes. Identity and geometry fields (name, label,
   path, geometry, bank position, innerduct position, a structure's
-  location link) are deliberately never cloned. Refs #120.
+  elevation and location link) are deliberately never cloned. Refs #120.
 
 - **Add-child buttons that inherit the parent's attributes.** The Conduits
   panel on a conduit bank and the Innerducts panel on a conduit now carry
