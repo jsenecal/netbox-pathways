@@ -555,6 +555,16 @@ class ConduitBank(Pathway):
     )
     encasement_type = models.CharField(max_length=50, choices=EncasementTypeChoices, blank=True)
 
+    clone_fields = Pathway.clone_fields + (
+        "start_face",
+        "end_face",
+        "configuration",
+        "total_conduits",
+        "height",
+        "width",
+        "encasement_type",
+    )
+
     class Meta:
         verbose_name = "Conduit Bank"
         verbose_name_plural = "Conduit Banks"
@@ -642,6 +652,18 @@ class Conduit(Pathway):
     def is_indoor(self):
         """Junction endpoints are geographic, so they also preclude indoor status."""
         return super().is_indoor and not self.start_junction_id and not self.end_junction_id
+
+    clone_fields = Pathway.clone_fields + (
+        "start_face",
+        "end_face",
+        "material",
+        "inner_diameter",
+        "outer_diameter",
+        "depth",
+        "conduit_bank",
+        "start_junction",
+        "end_junction",
+    )
 
     class Meta:
         verbose_name = "Conduit"
@@ -812,6 +834,12 @@ class Innerduct(Pathway):
     size = models.CharField(max_length=50, help_text='Innerduct size (e.g., 1.25", 32mm)')
     color = ColorField(blank=True, help_text="Innerduct color for identification")
     position = models.CharField(max_length=50, blank=True, help_text="Position within parent conduit")
+
+    clone_fields = Pathway.clone_fields + (
+        "parent_conduit",
+        "size",
+        "color",
+    )
 
     class Meta:
         verbose_name = "Innerduct"
