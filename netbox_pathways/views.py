@@ -598,10 +598,18 @@ class ConduitBankView(generic.ObjectView):
             CommentsPanel(),
         ],
         bottom_panels=[
+            # The column overrides ride along as URL params instead of the
+            # panel's include_columns/exclude_columns kwargs, which NetBox
+            # 4.5 does not accept; ConduitTable.configure() applies them on
+            # NetBox versions whose core does not.
             ObjectsTablePanel(
                 model="netbox_pathways.Conduit",
                 title="Conduits",
-                filters={"conduit_bank_id": lambda ctx: ctx["object"].pk},
+                filters={
+                    "conduit_bank_id": lambda ctx: ctx["object"].pk,
+                    "include_columns": "bank_position",
+                    "exclude_columns": "conduit_bank",
+                },
             ),
         ],
     )
