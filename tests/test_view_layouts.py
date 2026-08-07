@@ -11,16 +11,18 @@ from netbox_pathways.tables import ConduitTable
 
 
 def _iter_panels(layout):
-    for row in layout:
-        for column in row:
-            yield from column
+    # Walk the plain attributes rather than iterating the objects: the
+    # Layout/Row/Column __iter__ methods and the panel's model_label
+    # attribute only exist on NetBox 4.6, while `model` resolves to the
+    # model class on both 4.5 and 4.6.
+    for row in layout.rows:
+        for column in row.columns:
+            yield from column.panels
 
 
 def _conduits_panel():
     return next(
-        p
-        for p in _iter_panels(views.ConduitBankView.layout)
-        if isinstance(p, ObjectsTablePanel) and p.model_label == "netbox_pathways.Conduit"
+        p for p in _iter_panels(views.ConduitBankView.layout) if isinstance(p, ObjectsTablePanel) and p.model is Conduit
     )
 
 
