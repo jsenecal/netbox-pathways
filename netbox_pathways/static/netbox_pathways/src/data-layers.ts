@@ -20,6 +20,7 @@ import {
     STRUCTURE_COLORS,
 } from './map-utils';
 import { StatusPrefs, type StatusChoice } from './status-prefs';
+import { OccupancyPrefs } from './occupancy-prefs';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -195,6 +196,8 @@ export async function fetchMapInfo(
     let url = API_BASE + 'info/?bbox=' + bbox;
     const exclude = StatusPrefs.excludeParam();
     if (exclude) url += '&exclude_status=' + encodeURIComponent(exclude);
+    const occupied = OccupancyPrefs.occupiedParam();
+    if (occupied) url += '&occupied=' + occupied;
     const headers: Record<string, string> = { 'Accept': 'application/json' };
     const csrfToken = _getCookie('csrftoken');
     if (csrfToken) headers['X-CSRFToken'] = csrfToken;
@@ -250,6 +253,8 @@ export async function fetchGeoJSON(
     }
     const excludeStatus = StatusPrefs.excludeParam();
     if (excludeStatus) url += '&exclude_status=' + encodeURIComponent(excludeStatus);
+    const occupiedParam = OccupancyPrefs.occupiedParam();
+    if (occupiedParam) url += '&occupied=' + occupiedParam;
 
     const controller = new AbortController();
     _inflightControllers[endpoint] = controller;
@@ -469,9 +474,11 @@ interface GeoCacheEntry {
 
 const _geoCache: Record<string, GeoCacheEntry[]> = {};
 
-/** Cache key fragment for extra params + the active status exclusion. */
+/** Cache key fragment for extra params + the active status/occupancy filters. */
 function _extraKeyFor(extraParams?: Record<string, string | number>): string {
-    return (extraParams ? JSON.stringify(extraParams) : '') + '|' + (StatusPrefs.excludeParam() || '');
+    return (extraParams ? JSON.stringify(extraParams) : '')
+        + '|' + (StatusPrefs.excludeParam() || '')
+        + '|' + (OccupancyPrefs.occupiedParam() || '');
 }
 
 /** Find a cache entry that covers a given viewport at a given zoom. */

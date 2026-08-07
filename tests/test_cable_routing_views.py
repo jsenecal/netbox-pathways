@@ -17,23 +17,6 @@ def factory():
 
 
 @pytest.fixture
-def _disable_routability_signal():
-    """Disconnect the pre_save routability check so we can build orphan segments.
-
-    The CableSegment routability signal requires both A and B cable terminations
-    before saving. These tests focus on view helpers and shouldn't have to wire
-    full Cable + CableTermination + Device fixtures for every segment.
-    """
-    from django.db.models.signals import pre_save
-
-    from netbox_pathways.signals import enforce_cable_routability
-
-    pre_save.disconnect(enforce_cable_routability, sender=CableSegment)
-    yield
-    pre_save.connect(enforce_cable_routability, sender=CableSegment)
-
-
-@pytest.fixture
 def linear_topology(db):
     """Three structures linked by two pathways: A -- P1 -- B -- P2 -- C."""
     a = Structure.objects.create(name="A", geometry=Point(0, 0, srid=SRID))

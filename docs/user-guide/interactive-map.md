@@ -54,6 +54,17 @@ endpoint both receive the exclusion, so viewport counts, clustering
 thresholds, and what is actually drawn always agree. Circuit routes are not
 affected -- circuits carry NetBox core statuses, not plugin pathway statuses.
 
+### Hiding Unoccupied Infrastructure
+
+The **Hide unoccupied** button below it filters the map down to plant that
+actually carries cable: pathways with at least one routed cable segment and
+the structures that terminate them. Occupancy is containment-aware -- a
+conduit whose innerduct carries a cable and a conduit bank with an occupied
+member conduit both stay visible. The toggle persists per browser, filters
+server-side like the status exclusion (so counts and clusters agree with
+what is drawn), and composes with **Hide inactive**. Circuit routes and
+junctions are unaffected.
+
 ### Layer Density Gating
 
 The map keeps the display readable by checking how many features each enabled layer would draw inside the current viewport. Every pan or zoom hits a lightweight `/api/plugins/pathways/geo/info/` endpoint that returns counts and thresholds; the frontend then decides per layer whether to draw it directly, draw it with client-side clustering, or hide it entirely. Hidden layer toggles dim to roughly half-opacity and show the in-view count beside the label so it is obvious why the layer is not on screen -- usually zooming in is enough to bring it back.

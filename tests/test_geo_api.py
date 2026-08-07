@@ -13,7 +13,7 @@ from netbox_pathways.geo import (
     point_to_lonlat,
     to_leaflet,
 )
-from netbox_pathways.models import AerialSpan, Conduit, ConduitBank, DirectBuried, Structure
+from netbox_pathways.models import AerialSpan, CableSegment, Conduit, ConduitBank, DirectBuried, Structure
 
 # ---------------------------------------------------------------------------
 # geo.py utility functions
@@ -151,6 +151,16 @@ def conduit_bank(structures, srid):
         path=LineString((100, 100), (300, 300), srid=srid),
         length=200,
     )
+
+
+@pytest.fixture
+def occupied_conduit(conduits, _disable_routability_signal):
+    """Route a cable through conduits[0], making it and its endpoints occupied."""
+    from dcim.models import Cable
+
+    cable = Cable.objects.create(label="geo-occ-cable")
+    CableSegment.objects.create(cable=cable, pathway=conduits[0], sequence=1)
+    return conduits[0]
 
 
 @pytest.fixture
@@ -372,6 +382,39 @@ class TestExcludeStatus:
         assert "retired" in values
         for s in statuses:
             assert set(s) == {"value", "label", "color"}
+
+
+# ---------------------------------------------------------------------------
+# GeoJSON API — ?occupied= (Hide unoccupied map toggle)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestOccupiedParam:
+    def test_cluster_counts_respect_occupied(self, api_client, structures, occupied_conduit, monkeypatch):
+        """The clustered branch must aggregate the same filtered queryset the
+        plain branch serializes, or cluster counts disagree with the points
+        rendered after zooming in. Regression scope: issue #112."""
+        from netbox_pathways.api import geo as geo_module
+
+        monkeypatch.setattr(geo_module, "MAX_GEO_RESULTS", 1)
+        resp = api_client.get("/api/plugins/pathways/geo/structures/?zoom=8&occupied=true", format="json")
+        assert resp.status_code == 200
+        data = resp.json()
+        # occupied_conduit runs structures[0] -> structures[1]; structures[2] is empty
+        assert data["total_count"] == 2
+        assert sum(f["properties"]["point_count"] for f in data["features"]) == 2
+
+    def test_info_counts_respect_occupied(self, api_client, structures, conduits, occupied_conduit):
+        resp = api_client.get("/api/plugins/pathways/geo/info/?occupied=true", format="json")
+        counts = resp.json()["counts"]
+        assert counts["conduits"] == 1
+        assert counts["structures"] == 2
+
+    def test_info_etag_varies_with_occupied(self, api_client, structures, conduits, occupied_conduit):
+        plain = api_client.get("/api/plugins/pathways/geo/info/", format="json")
+        occupied = api_client.get("/api/plugins/pathways/geo/info/?occupied=true", format="json")
+        assert plain["ETag"] != occupied["ETag"]
 
 
 # ---------------------------------------------------------------------------
