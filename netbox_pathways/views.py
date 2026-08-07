@@ -22,6 +22,7 @@ from netbox.object_actions import (
     EditObject,
     ObjectAction,
 )
+from netbox.ui import actions as ui_actions
 from netbox.ui import layout
 from netbox.ui.panels import CommentsPanel, ObjectsTablePanel, TemplatePanel
 from netbox.views import generic
@@ -300,6 +301,7 @@ class ConduitListView(generic.ObjectListView):
         "start_location",
         "end_location",
         "conduit_bank",
+        "conduit_bank__tenant",
         "tenant",
     ).annotate(
         cables_routed=Count("cable_segments"),
@@ -326,6 +328,12 @@ class ConduitView(generic.ObjectView):
                 model="netbox_pathways.Innerduct",
                 title="Innerducts",
                 filters={"parent_conduit_id": lambda ctx: ctx["object"].pk},
+                actions=[
+                    ui_actions.AddObject(
+                        "netbox_pathways.Innerduct",
+                        url_params={"parent_conduit": lambda ctx: ctx["object"].pk},
+                    ),
+                ],
             ),
             ObjectsTablePanel(
                 model="netbox_pathways.CableSegment",
@@ -517,7 +525,12 @@ class DirectBuriedBulkDeleteView(generic.BulkDeleteView):
 
 
 class InnerductListView(generic.ObjectListView):
-    queryset = models.Innerduct.objects.select_related("parent_conduit").annotate(
+    queryset = models.Innerduct.objects.select_related(
+        "parent_conduit",
+        "tenant",
+        "parent_conduit__tenant",
+        "parent_conduit__conduit_bank__tenant",
+    ).annotate(
         cables_routed=Count("cable_segments"),
         in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
         _geo_length=Length("path"),
@@ -610,6 +623,12 @@ class ConduitBankView(generic.ObjectView):
                     "include_columns": "bank_position",
                     "exclude_columns": "conduit_bank",
                 },
+                actions=[
+                    ui_actions.AddObject(
+                        "netbox_pathways.Conduit",
+                        url_params={"conduit_bank": lambda ctx: ctx["object"].pk},
+                    ),
+                ],
             ),
         ],
     )

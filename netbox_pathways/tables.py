@@ -27,6 +27,16 @@ _MAP_BUTTON = (
     '<i class="mdi mdi-map-marker-radius"></i></a>'
 )
 
+_TENANT_COLUMN = """
+{% if record.tenant %}
+    <a href="{{ record.tenant.get_absolute_url }}" title="{{ record.tenant.description }}">{{ record.tenant }}</a>
+{% elif record.effective_tenant %}
+    <a href="{{ record.effective_tenant.get_absolute_url }}" title="Inherited from the parent pathway">{{ record.effective_tenant }}</a>*
+{% else %}
+    &mdash;
+{% endif %}
+"""
+
 
 class StructureTable(NetBoxTable):
     name = tables.Column(linkify=True)
@@ -128,6 +138,11 @@ class ConduitTable(NetBoxTable):
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
     conduit_bank = tables.Column(linkify=True)
+    tenant = tables.TemplateColumn(
+        template_code=_TENANT_COLUMN,
+        verbose_name="Tenant",
+        order_by="tenant",
+    )
     installed_by = tables.Column(linkify=True, verbose_name="Installed by")
     geo_length = tables.Column(verbose_name="Geo length (m)", order_by="_geo_length")
     cables_routed = tables.Column(verbose_name="Cables", orderable=True)
@@ -148,6 +163,7 @@ class ConduitTable(NetBoxTable):
             "start_location",
             "end_location",
             "conduit_bank",
+            "tenant",
             "bank_position",
             "length",
             "geo_length",
@@ -299,6 +315,11 @@ class InnerductTable(NetBoxTable):
     )
     status = columns.ChoiceFieldColumn()
     parent_conduit = tables.Column(linkify=True)
+    tenant = tables.TemplateColumn(
+        template_code=_TENANT_COLUMN,
+        verbose_name="Tenant",
+        order_by="tenant",
+    )
     color = columns.ColorColumn()
     installed_by = tables.Column(linkify=True, verbose_name="Installed by")
     cables_routed = tables.Column(verbose_name="Cables", orderable=True)
@@ -314,6 +335,7 @@ class InnerductTable(NetBoxTable):
             "label",
             "status",
             "parent_conduit",
+            "tenant",
             "size",
             "color",
             "position",

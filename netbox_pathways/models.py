@@ -365,10 +365,20 @@ class Pathway(NetBoxModel):
         value = Pathway.objects.with_geo_length().values_list("_geo_length", flat=True).get(pk=self.pk)
         return _distance_to_m(value)
 
+    @property
+    def requires_path(self):
+        """Whether clean() demands a geometry path.
+
+        Indoor pathways (both endpoints are locations) carry no geographic
+        path. Subclasses contained in a parent pathway override this: the
+        parent owns the route geometry.
+        """
+        return not self.is_indoor
+
     def clean(self):
         super().clean()
         if not self.path:
-            if not self.is_indoor:
+            if self.requires_path:
                 raise ValidationError(
                     {"path": "Path is required unless both endpoints are locations (indoor pathway)."}
                 )
@@ -446,6 +456,19 @@ class Pathway(NetBoxModel):
         detail-level records shown in the sidebar / detail view.
         """
         return True
+
+    def _inherit_endpoints_from(self, parent, occupied_suffixes=("structure_id", "location_id")):
+        """Inherit endpoints from a parent pathway, per side, if not explicitly set.
+
+        A side counts as occupied when any of the given FK suffixes is set on it.
+        """
+        if parent is None:
+            return
+        for side in ("start", "end"):
+            if any(getattr(self, f"{side}_{sfx}") for sfx in occupied_suffixes):
+                continue
+            setattr(self, f"{side}_structure", getattr(parent, f"{side}_structure"))
+            setattr(self, f"{side}_location", getattr(parent, f"{side}_location"))
 
     @classmethod
     def map_queryset(cls, queryset=None):
@@ -584,6 +607,26 @@ class Conduit(Pathway):
         return self.conduit_bank_id is None
 
     @property
+    def effective_tenant(self):
+        """Own tenant, or the conduit bank's when not set.
+
+        Display-layer fallback in the NetBox VRF/prefix style: the stored
+        field stays authoritative for filtering and the API.
+        """
+        if self.tenant_id:
+            return self.tenant
+        if self.conduit_bank_id:
+            return self.conduit_bank.tenant
+        return None
+
+    @property
+    def requires_path(self):
+        """A conduit inside a bank follows the bank's route; no own path needed."""
+        if self.conduit_bank_id:
+            return False
+        return super().requires_path
+
+    @property
     def is_indoor(self):
         """Junction endpoints are geographic, so they also preclude indoor status."""
         return super().is_indoor and not self.start_junction_id and not self.end_junction_id
@@ -602,7 +645,17 @@ class Conduit(Pathway):
             ),
         ]
 
+    def _inherit_bank_endpoints(self):
+        """Inherit endpoints from the conduit bank, per side, if not explicitly set."""
+        self._inherit_endpoints_from(
+            self.conduit_bank if self.conduit_bank_id else None,
+            ("structure_id", "location_id", "junction_id"),
+        )
+
     def clean(self):
+        # Inherit before validation so the exactly-one-endpoint-per-side
+        # check and path snapping see the effective endpoints.
+        self._inherit_bank_endpoints()
         super().clean()  # Pathway.clean() handles structure endpoints
         start_options = sum(bool(x) for x in [self.start_structure, self.start_location, self.start_junction])
         end_options = sum(bool(x) for x in [self.end_structure, self.end_location, self.end_junction])
@@ -634,6 +687,7 @@ class Conduit(Pathway):
 
     def save(self, *args, **kwargs):
         self.pathway_type = "conduit"
+        self._inherit_bank_endpoints()
         super().save(*args, **kwargs)
 
 
@@ -712,6 +766,20 @@ class Innerduct(Pathway):
     def map_visible(self):
         return False
 
+    @property
+    def effective_tenant(self):
+        """Own tenant, or the parent chain's (conduit, then bank) when not set."""
+        if self.tenant_id:
+            return self.tenant
+        if self.parent_conduit_id:
+            return self.parent_conduit.effective_tenant
+        return None
+
+    @property
+    def requires_path(self):
+        """An innerduct follows its parent conduit's geometry."""
+        return False
+
     size = models.CharField(max_length=50, help_text='Innerduct size (e.g., 1.25", 32mm)')
     color = ColorField(blank=True, help_text="Innerduct color for identification")
     position = models.CharField(max_length=50, blank=True, help_text="Position within parent conduit")
@@ -722,14 +790,7 @@ class Innerduct(Pathway):
 
     def _inherit_parent_endpoints(self):
         """Inherit endpoints from the parent conduit, per side, if not explicitly set."""
-        if not self.parent_conduit_id:
-            return
-        if not any([self.start_structure_id, self.start_location_id]):
-            self.start_structure = self.parent_conduit.start_structure
-            self.start_location = self.parent_conduit.start_location
-        if not any([self.end_structure_id, self.end_location_id]):
-            self.end_structure = self.parent_conduit.end_structure
-            self.end_location = self.parent_conduit.end_location
+        self._inherit_endpoints_from(self.parent_conduit if self.parent_conduit_id else None)
 
     def clean(self):
         # Inherit before validation so the path-required check sees the

@@ -90,6 +90,23 @@ GeoJSON endpoints).
 To inspect the conduits inside a bank, open the bank detail page in NetBox
 and use the conduits panel.
 
+## Adding conduits to a bank
+
+The Conduits panel on a conduit bank's detail page has an Add button that
+opens the conduit create form pre-filled from the bank: start/end
+structures or locations, faces, installer, and dates. Adjust anything
+before saving; every value is a plain form field.
+
+Endpoints may also be left blank: a conduit that belongs to a bank
+inherits the bank's endpoints when it is saved, the same way an innerduct
+inherits from its parent conduit. Conduits inside a bank never need their
+own path geometry -- the bank owns the route -- and the bank is the
+feature drawn on the map.
+
+If a conduit has no tenant of its own, tables show the bank's tenant
+marked with `*`, following the NetBox convention for inherited tenancy.
+Assign a tenant on the conduit itself to override it.
+
 ## Validation
 
 Bank endpoints follow the same rules as any pathway:

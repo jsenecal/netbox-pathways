@@ -63,6 +63,14 @@ map onto the nearest palette entries.
 
 Innerducts inherit start and end endpoints (structures or locations) from their parent conduit if not explicitly set.
 
+The Innerducts panel on a conduit's detail page has an Add button that
+opens the innerduct create form with the parent conduit and its endpoints
+pre-filled. Innerducts never need their own path geometry -- the parent
+conduit owns the route. Lifecycle fields (installer, dates) are not
+inherited: innerducts are usually installed separately. An innerduct
+without a tenant shows the parent chain's tenant marked with `*` in
+tables.
+
 ## Endpoints
 
 Every pathway has a start endpoint and an end endpoint. These can be:
