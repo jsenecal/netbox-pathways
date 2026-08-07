@@ -315,6 +315,18 @@ class Pathway(NetBoxModel):
     )
     comments = models.TextField(blank=True)
 
+    clone_fields = (
+        "status",
+        "start_structure",
+        "end_structure",
+        "start_location",
+        "end_location",
+        "tenant",
+        "installed_by",
+        "installation_date",
+        "commissioned_date",
+    )
+
     class Meta:
         ordering = ["pk"]
         indexes = [
@@ -711,6 +723,16 @@ class AerialSpan(Pathway):
     wind_loading = models.CharField(max_length=50, blank=True, help_text="Wind loading zone/rating")
     ice_loading = models.CharField(max_length=50, blank=True, help_text="Ice loading zone/rating")
 
+    clone_fields = Pathway.clone_fields + (
+        "aerial_type",
+        "start_attachment_height",
+        "end_attachment_height",
+        "sag",
+        "messenger_size",
+        "wind_loading",
+        "ice_loading",
+    )
+
     class Meta:
         verbose_name = "Aerial Span"
         verbose_name_plural = "Aerial Spans"
@@ -744,6 +766,13 @@ class DirectBuried(Pathway):
     warning_tape = models.BooleanField(default=False, help_text="Warning tape installed above cable")
     tracer_wire = models.BooleanField(default=False, help_text="Tracer wire installed with cable")
     armor_type = models.CharField(max_length=100, blank=True, help_text="Cable armor type if applicable")
+
+    clone_fields = Pathway.clone_fields + (
+        "burial_depth",
+        "warning_tape",
+        "tracer_wire",
+        "armor_type",
+    )
 
     class Meta:
         verbose_name = "Direct Buried"
