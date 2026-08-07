@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Clone pre-fills the create form.** All seven clonable models
+  (Structure, Pathway, Conduit Bank, Conduit, Aerial Span, Direct
+  Buried, Innerduct) now declare `clone_fields`, so the Clone button
+  carries over status, endpoints, tenant, installer, dates, and
+  type-specific attributes. Identity and geometry fields (name, label,
+  path, geometry, bank position, innerduct position, a structure's
+  location link) are deliberately never cloned. Refs #120.
+
 - **Add-child buttons that inherit the parent's attributes.** The Conduits
   panel on a conduit bank and the Innerducts panel on a conduit now carry
   an "Add" button that opens the create form pre-filled from the parent:
