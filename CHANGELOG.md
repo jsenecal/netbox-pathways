@@ -119,6 +119,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Conduits table on a conduit bank's detail page now shows the Bank
+  Position column instead of the redundant Conduit Bank column, which only
+  linked back to the page being viewed. The standalone Conduits list view
+  is unchanged. Requested by @marcusyuri. Refs #76.
+
 - **Innerduct color is now picked from NetBox's color palette** instead of
   typed as free text. The edit, bulk-edit and list-filter forms use the core
   color widget, and innerduct tables -- including the one on a conduit's

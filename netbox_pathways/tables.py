@@ -185,6 +185,22 @@ class ConduitTable(NetBoxTable):
             "cables_routed",
         )
 
+    def configure(self, request):
+        super().configure(request)
+        # NetBox 4.5 ignores the include_columns/exclude_columns URL params
+        # that 4.6's NetBoxTable.configure() applies natively; backport that
+        # handling so the conduit bank detail page can swap the redundant
+        # conduit_bank column for bank_position. Idempotent on 4.6 -- remove
+        # once the minimum supported NetBox is 4.6.
+        if include_columns := request.GET.get("include_columns"):
+            for column_name in include_columns.split(","):
+                if column_name in self.columns.names():
+                    self.columns.show(column_name)
+        if exclude_columns := request.GET.get("exclude_columns"):
+            for column_name in exclude_columns.split(","):
+                if column_name in self.columns.names() and column_name not in self.exempt_columns:
+                    self.columns.hide(column_name)
+
 
 class AerialSpanTable(NetBoxTable):
     aerial_span = tables.TemplateColumn(
