@@ -85,6 +85,20 @@ class Structure(NetBoxModel):
     access_notes = models.TextField(blank=True, help_text="Access restrictions or requirements")
     comments = models.TextField(blank=True)
 
+    clone_fields = (
+        "status",
+        "structure_type",
+        "site",
+        "tenant",
+        "installed_by",
+        "installation_date",
+        "commissioned_date",
+        "height",
+        "width",
+        "length",
+        "depth",
+    )
+
     class Meta:
         ordering = ["name"]
         indexes = [

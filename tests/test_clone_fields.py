@@ -17,6 +17,7 @@ from netbox_pathways.models import (
     ConduitBank,
     DirectBuried,
     Innerduct,
+    Pathway,
     Structure,
 )
 
@@ -212,3 +213,68 @@ class TestInnerductClone:
         assert attrs["color"] == "ff9800"
         assert "position" not in attrs
         assert "label" not in attrs
+
+
+@pytest.mark.django_db
+class TestStructureClone:
+    def test_clone_carries_descriptive_fields(self, tenant, installer):
+        structure = Structure.objects.create(
+            name="CF-S10",
+            status="active",
+            structure_type="handhole",
+            geometry=Point(10, 10, srid=SRID),
+            elevation=120.0,
+            height=0.6,
+            width=0.6,
+            length=1.2,
+            depth=0.9,
+            tenant=tenant,
+            installed_by=installer,
+            installation_date=datetime.date(2025, 5, 1),
+            commissioned_date=datetime.date(2025, 5, 15),
+        )
+        attrs = structure.clone()
+        assert attrs["status"] == "active"
+        assert attrs["structure_type"] == "handhole"
+        assert attrs["tenant"] == tenant.pk
+        assert attrs["installed_by"] == installer.pk
+        assert attrs["installation_date"] == datetime.date(2025, 5, 1)
+        assert attrs["commissioned_date"] == datetime.date(2025, 5, 15)
+        assert attrs["height"] == 0.6
+        assert attrs["width"] == 0.6
+        assert attrs["length"] == 1.2
+        assert attrs["depth"] == 0.9
+        assert "name" not in attrs
+        assert "geometry" not in attrs
+        assert "elevation" not in attrs
+        assert "location" not in attrs
+
+
+ALL_CLONABLE_MODELS = [
+    Structure,
+    Pathway,
+    ConduitBank,
+    Conduit,
+    AerialSpan,
+    DirectBuried,
+    Innerduct,
+]
+
+NEVER_CLONED = {"path", "geometry", "location", "name", "label", "bank_position", "position"}
+
+
+@pytest.mark.parametrize("model", ALL_CLONABLE_MODELS)
+def test_identity_and_geometry_fields_never_cloned(model):
+    assert NEVER_CLONED.isdisjoint(model.clone_fields)
+
+
+@pytest.mark.parametrize("model", ALL_CLONABLE_MODELS)
+def test_clone_field_names_resolve(model):
+    for name in model.clone_fields:
+        model._meta.get_field(name)
+
+
+def test_pathway_subclasses_inherit_base_clone_fields():
+    base = set(Pathway.clone_fields)
+    for model in (ConduitBank, Conduit, AerialSpan, DirectBuried, Innerduct):
+        assert base <= set(model.clone_fields)
