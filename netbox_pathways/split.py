@@ -65,8 +65,12 @@ def _cut_line(line, cuts):
     according to its position along the line. Every cut vertex is written as
     the given point (the structure's own point), so endpoint snapping in
     Pathway.clean() is a no-op. A chainage coinciding with an existing
-    vertex replaces that vertex rather than duplicating it.
+    vertex replaces that vertex rather than duplicating it. Cuts must be
+    strictly interior: a chainage within CUT_EPSILON of either line end
+    raises ValueError -- callers filter those out before cutting.
     """
+    if cuts and (cuts[0][0] <= CUT_EPSILON or cuts[-1][0] >= line.length - CUT_EPSILON):
+        raise ValueError("cuts must be strictly interior to the line (callers filter endpoint chainages)")
     coords = [(p[0], p[1]) for p in line.coords]
     remaining = list(cuts)
     pieces = []

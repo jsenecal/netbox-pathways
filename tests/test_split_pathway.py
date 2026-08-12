@@ -95,3 +95,13 @@ class TestCutLine:
         line = LineString((0, 0), (300, 0), srid=SRID)
         pieces = _cut_line(line, [(150.0, Point(150, 0, srid=SRID))])
         assert all(p.srid == SRID for p in pieces)
+
+    def test_cut_at_line_start_raises(self):
+        line = LineString((0, 0), (100, 0), srid=SRID)
+        with pytest.raises(ValueError, match="interior"):
+            _cut_line(line, [(0.0, Point(0, 0, srid=SRID))])
+
+    def test_cut_at_line_end_raises(self):
+        line = LineString((0, 0), (100, 0), srid=SRID)
+        with pytest.raises(ValueError, match="interior"):
+            _cut_line(line, [(100.0, Point(100, 0, srid=SRID))])
