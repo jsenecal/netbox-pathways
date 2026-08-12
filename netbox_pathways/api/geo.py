@@ -246,7 +246,10 @@ class BboxFilterMixin:
         return qs
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        # Enforce NetBox object-level permissions: without this, any user
+        # holding a constrained view permission on the model would receive
+        # every row, leaking other tenants' plant data through the map.
+        qs = super().get_queryset().restrict(self.request.user, "view")
         qs = _exclude_status(qs, _parse_exclude_status(self.request))
         return self._apply_bbox(qs)
 
@@ -564,7 +567,9 @@ class MapInfoView(APIView):
             return c
 
         for key, model, geo_field, extra_filter in _INFO_LAYERS:
-            qs = model.objects.all()
+            # Same object-permission restriction the layer endpoints apply,
+            # so counts never disclose rows the user cannot see.
+            qs = model.objects.restrict(request.user, "view")
             if extra_filter:
                 qs = qs.filter(**extra_filter)
             qs = _exclude_status(qs, excluded_statuses)
