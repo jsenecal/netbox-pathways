@@ -278,6 +278,9 @@ def _create_children(original, cuts, pieces, parents=None, parent_field=None):
         child = cls()
         for attname in shared:
             setattr(child, attname, getattr(original, attname))
+        # Subclass save() overwrites this; base-typed pathways (e.g.
+        # submarine) have no subclass to do it, so copy explicitly.
+        child.pathway_type = original.pathway_type
         child.path = pieces[i] if pieces else None
         if original.label:
             child.label = f"{original.label} ({i + 1}/{total})"

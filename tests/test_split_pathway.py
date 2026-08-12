@@ -336,6 +336,25 @@ class TestExecuteSplit:
         assert Pathway.objects.filter(pk=span.pk).exists()
         assert AerialSpan.objects.count() == 1
 
+    def test_base_typed_pathway_children_keep_pathway_type(self):
+        """Regression test: children of a base-typed pathway (no MTI subclass,
+        e.g. submarine) must inherit pathway_type; Pathway.save() only
+        auto-fills it for subclasses."""
+        start = _structure("EX6-A", 0, 0)
+        end = _structure("EX6-B", 300, 0)
+        span = Pathway(
+            path=LineString((0, 0), (300, 0), srid=SRID),
+            start_structure=start,
+            end_structure=end,
+        )
+        span.pathway_type = "submarine"
+        span.save()
+        mid = _structure("EX6-mid", 150, 0)
+
+        result = execute_split(plan_split(span, [mid], tolerance=1.0))
+
+        assert [c.pathway_type for c in result.children] == ["submarine", "submarine"]
+
 
 @pytest.mark.django_db
 class TestCascade:
