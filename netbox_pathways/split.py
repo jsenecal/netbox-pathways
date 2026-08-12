@@ -299,6 +299,24 @@ def _create_children(original, cuts, pieces, parents=None, parent_field=None):
     return children
 
 
+def _cascade(original, children, cuts, out):
+    """Create per-hop copies of every contained pathway, recursively.
+
+    Bank conduits attach to the per-hop bank; innerducts attach to the
+    per-hop conduit. Contained copies carry no own path (the parent owns
+    the route).
+    """
+    if isinstance(original, ConduitBank):
+        for conduit in Conduit.objects.filter(conduit_bank=original):
+            copies = _create_children(conduit, cuts, None, parents=children, parent_field="conduit_bank")
+            out.append((conduit, copies))
+            _cascade(conduit, copies, cuts, out)
+    elif isinstance(original, Conduit):
+        for innerduct in Innerduct.objects.filter(parent_conduit=original):
+            copies = _create_children(innerduct, cuts, None, parents=children, parent_field="parent_conduit")
+            out.append((innerduct, copies))
+
+
 def _delete_originals(original):
     """Delete the split pathway and any contained pathways it carried.
 
@@ -317,5 +335,7 @@ def execute_split(plan):
     pieces = _cut_line(original.path, [(c.chainage, c.structure.centroid) for c in plan.cuts])
     with transaction.atomic():
         children = _create_children(original, plan.cuts, pieces)
+        cascaded = []
+        _cascade(original, children, plan.cuts, cascaded)
         _delete_originals(original)
-    return SplitResult(children=children, warnings=list(plan.warnings))
+    return SplitResult(children=children, cascaded=cascaded, warnings=list(plan.warnings))

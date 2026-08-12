@@ -331,3 +331,67 @@ class TestExecuteSplit:
             execute_split(plan)
         assert Pathway.objects.filter(pk=span.pk).exists()
         assert AerialSpan.objects.count() == 1
+
+
+@pytest.mark.django_db
+class TestCascade:
+    def test_bank_split_cascades_to_conduits_and_innerducts(self):
+        s1 = _structure("CA1-A", 0, 0)
+        s2 = _structure("CA1-B", 300, 0)
+        bank = ConduitBank.objects.create(
+            path=LineString((0, 0), (300, 0), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+        conduit_a = Conduit.objects.create(conduit_bank=bank, bank_position="A1", material="hdpe")
+        conduit_b = Conduit.objects.create(conduit_bank=bank, bank_position="B1")
+        duct = Innerduct.objects.create(parent_conduit=conduit_a, size="32mm", position="1")
+        mid = _structure("CA1-mid", 150, 0)
+
+        result = execute_split(plan_split(bank, [mid], tolerance=1.0))
+
+        # Bank children own the geometry.
+        bank_children = result.children
+        assert len(bank_children) == 2
+        assert all(isinstance(c, ConduitBank) for c in bank_children)
+
+        # Every contained conduit got one copy per hop, attached to the
+        # per-hop bank, keeping its bank_position and attributes.
+        new_conduits = Conduit.objects.filter(conduit_bank__in=bank_children).order_by("pk")
+        assert new_conduits.count() == 4
+        a_copies = [c for c in new_conduits if c.bank_position == "A1"]
+        assert len(a_copies) == 2
+        assert {c.conduit_bank_id for c in a_copies} == {b.pk for b in bank_children}
+        assert all(c.material == "hdpe" for c in a_copies)
+        assert all(c.path is None for c in new_conduits)
+
+        # Innerducts cascade one level further, onto the per-hop conduits.
+        new_ducts = Innerduct.objects.filter(parent_conduit__in=a_copies)
+        assert new_ducts.count() == 2
+        assert all(d.size == "32mm" and d.position == "1" for d in new_ducts)
+
+        # Originals are gone.
+        for pk in (bank.pk, conduit_a.pk, conduit_b.pk, duct.pk):
+            assert not Pathway.objects.filter(pk=pk).exists()
+
+        # The result reports the cascade.
+        cascaded_originals = {orig.pk for orig, _ in result.cascaded}
+        assert cascaded_originals == {conduit_a.pk, conduit_b.pk, duct.pk}
+
+    def test_conduit_split_cascades_to_innerducts(self):
+        s1 = _structure("CA2-A", 0, 0)
+        s2 = _structure("CA2-B", 300, 0)
+        conduit = Conduit.objects.create(
+            path=LineString((0, 0), (300, 0), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
+        duct = Innerduct.objects.create(parent_conduit=conduit, size="32mm")
+        mid = _structure("CA2-mid", 150, 0)
+
+        result = execute_split(plan_split(conduit, [mid], tolerance=1.0))
+
+        assert len(result.children) == 2
+        new_ducts = Innerduct.objects.filter(parent_conduit__in=result.children)
+        assert new_ducts.count() == 2
+        assert not Pathway.objects.filter(pk=duct.pk).exists()
