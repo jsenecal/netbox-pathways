@@ -8,11 +8,19 @@ those points, and replaces the pathway with consecutive per-hop pathways.
 """
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from django.contrib.gis.geos import LineString
 
-from .models import Structure
+from .models import (
+    AerialSpan,
+    Conduit,
+    ConduitBank,
+    DirectBuried,
+    Innerduct,
+    PlannedRoute,
+    Structure,
+)
 
 # A pathway endpoint or a neighbouring cut closer than this (in SRID units)
 # collapses into one cut instead of producing a zero-length hop.
@@ -91,3 +99,112 @@ def _cut_line(line, cuts):
         walked = seg_end_chainage
     pieces.append(current)
     return [LineString(piece, srid=line.srid) for piece in pieces]
+
+
+_TYPE_TO_MODEL = {
+    "conduit_bank": ConduitBank,
+    "conduit": Conduit,
+    "aerial": AerialSpan,
+    "direct_buried": DirectBuried,
+    "innerduct": Innerduct,
+}
+
+
+@dataclass
+class SplitPlan:
+    """A validated split: concrete pathway, ordered cuts, prospective warnings."""
+
+    pathway: object
+    cuts: list
+    warnings: list = field(default_factory=list)
+
+
+def _concrete(pathway):
+    """Resolve a base Pathway row to its MTI subclass instance."""
+    cls = _TYPE_TO_MODEL.get(pathway.pathway_type)
+    if cls is None or isinstance(pathway, cls):
+        return pathway
+    return cls.objects.get(pk=pathway.pk)
+
+
+def _contained(original):
+    """Dependent pathways that follow `original`'s route and cascade with it."""
+    contained = []
+    if isinstance(original, ConduitBank):
+        for conduit in Conduit.objects.filter(conduit_bank=original):
+            contained.append(conduit)
+            contained.extend(Innerduct.objects.filter(parent_conduit=conduit))
+    elif isinstance(original, Conduit):
+        contained.extend(Innerduct.objects.filter(parent_conduit=original))
+    return contained
+
+
+def _check_splittable(original):
+    if isinstance(original, Innerduct):
+        raise SplitError("Innerducts follow their parent conduit; split the conduit instead.")
+    if isinstance(original, Conduit) and original.conduit_bank_id:
+        raise SplitError("This conduit is contained in a bank; split the conduit bank instead.")
+    if original.path is None:
+        raise SplitError("Pathway has no geometry path; only pathways with a drawn path can be split.")
+    involved = [original, *_contained(original)]
+    for pathway in involved:
+        if not isinstance(pathway, Conduit):
+            continue
+        has_junctions = (
+            pathway.start_junction_id
+            or pathway.end_junction_id
+            or pathway.junctions_on_trunk.exists()
+            or pathway.junction_as_branch.exists()
+        )
+        if has_junctions:
+            raise SplitError(
+                f"Conduit {pathway} has junctions; splitting would invalidate their positions on the trunk."
+            )
+
+
+def _resolve_cuts(original, structures, tolerance, warnings):
+    """Project structures onto the path; validate, order, and collapse them."""
+    line = original.path
+    entries = []
+    for structure in structures:
+        offset = structure.geometry.distance(line)
+        if offset > tolerance:
+            raise SplitError(f"Structure {structure} is {offset:.2f} SRID units from the path (tolerance {tolerance}).")
+        chainage = line.project(structure.centroid)
+        if chainage <= CUT_EPSILON or chainage >= line.length - CUT_EPSILON:
+            warnings.append(f"Structure {structure} projects onto a path end; skipped.")
+            continue
+        entries.append(Candidate(structure=structure, chainage=chainage, offset=offset))
+    entries.sort(key=lambda c: c.chainage)
+    cuts = []
+    for candidate in entries:
+        if cuts and candidate.chainage - cuts[-1].chainage <= CUT_EPSILON:
+            warnings.append(
+                f"Structure {candidate.structure} coincides with {cuts[-1].structure}; collapsed into one cut."
+            )
+            continue
+        cuts.append(candidate)
+    return cuts
+
+
+def plan_split(pathway, structures, tolerance=DEFAULT_TOLERANCE):
+    """Validate a split and return the ordered cuts and prospective warnings.
+
+    Shared by the dry-run preview and the apply path so both see exactly the
+    same refusals and warnings.
+    """
+    original = _concrete(pathway)
+    _check_splittable(original)
+    warnings = []
+    cuts = _resolve_cuts(original, structures, tolerance, warnings)
+    if not cuts:
+        raise SplitError("No usable split structures resolved.")
+    for involved in [original, *_contained(original)]:
+        waypoint_count = involved.waypoints.count()
+        if waypoint_count:
+            warnings.append(f"{waypoint_count} waypoint(s) on {involved} cannot be repositioned and will be deleted.")
+        for route in PlannedRoute.objects.filter(pathway_ids__contains=[involved.pk]):
+            warnings.append(
+                f"Planned route #{route.pk} '{route.name}' references {involved}; re-plan it after the split."
+            )
+    return SplitPlan(pathway=original, cuts=cuts, warnings=warnings)
