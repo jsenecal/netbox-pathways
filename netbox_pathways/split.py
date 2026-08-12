@@ -15,6 +15,7 @@ from django.db import transaction
 
 from .models import (
     AerialSpan,
+    CableSegment,
     Conduit,
     ConduitBank,
     DirectBuried,
@@ -329,6 +330,60 @@ def _delete_originals(original):
     original.delete()
 
 
+def _reroute_segments(pairs):
+    """Replace cable segments on split pathways with per-hop segments.
+
+    `pairs` is [(original, children), ...] across the whole split so that
+    lashing between two re-routed segments (e.g. two cables in the same
+    split conduit) can be restored hop-by-hop. Returns
+    [(cable, new_segments), ...].
+    """
+    replaced = {}
+    rerouted = []
+    for original, children in pairs:
+        for segment in CableSegment.objects.filter(pathway=original).select_related("cable"):
+            # A cable that transits the same pathway twice gets renumbered by
+            # its own earlier replacement; re-read so `sequence` is current.
+            segment.refresh_from_db(fields=["sequence"])
+            old_pk = segment.pk
+            cable = segment.cable
+            sequence = segment.sequence
+            comments = segment.comments
+            peer_pks = list(segment.lashed_with.values_list("pk", flat=True))
+            segment.delete()
+            shift = len(children) - 1
+            if shift:
+                later = CableSegment.objects.filter(cable=cable, sequence__gt=sequence).order_by("-sequence")
+                for later_segment in later:
+                    later_segment.sequence += shift
+                    later_segment.save()
+            new_segments = [
+                CableSegment.objects.create(
+                    cable=cable,
+                    pathway=child,
+                    sequence=sequence + i,
+                    comments=comments,
+                )
+                for i, child in enumerate(children)
+            ]
+            replaced[old_pk] = (peer_pks, new_segments)
+            rerouted.append((cable, new_segments))
+    # Restore lashing once every replacement exists. A peer that was itself
+    # replaced is lashed hop-by-hop; a surviving peer is lashed to every
+    # replacement of the old segment.
+    for peer_pks, new_segments in replaced.values():
+        for peer_pk in peer_pks:
+            if peer_pk in replaced:
+                for hop_segment, peer_hop_segment in zip(new_segments, replaced[peer_pk][1], strict=True):
+                    hop_segment.lashed_with.add(peer_hop_segment)
+            else:
+                peer = CableSegment.objects.filter(pk=peer_pk).first()
+                if peer:
+                    for new_segment in new_segments:
+                        new_segment.lashed_with.add(peer)
+    return rerouted
+
+
 def execute_split(plan):
     """Replace the planned pathway with per-hop children, atomically."""
     original = plan.pathway
@@ -337,5 +392,6 @@ def execute_split(plan):
         children = _create_children(original, plan.cuts, pieces)
         cascaded = []
         _cascade(original, children, plan.cuts, cascaded)
+        rerouted = _reroute_segments([(original, children), *cascaded])
         _delete_originals(original)
-    return SplitResult(children=children, cascaded=cascaded, warnings=list(plan.warnings))
+    return SplitResult(children=children, cascaded=cascaded, rerouted=rerouted, warnings=list(plan.warnings))

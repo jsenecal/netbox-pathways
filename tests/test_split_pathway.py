@@ -5,12 +5,13 @@ per-hop pathways between the structures it passes.
 """
 
 import pytest
-from dcim.models import Site
+from dcim.models import Cable, Site
 from django.contrib.gis.geos import LineString, Point
 
 from netbox_pathways.geo import get_srid
 from netbox_pathways.models import (
     AerialSpan,
+    CableSegment,
     Conduit,
     ConduitBank,
     ConduitJunction,
@@ -395,3 +396,77 @@ class TestCascade:
         new_ducts = Innerduct.objects.filter(parent_conduit__in=result.children)
         assert new_ducts.count() == 2
         assert not Pathway.objects.filter(pk=duct.pk).exists()
+
+
+@pytest.mark.django_db
+class TestSegmentRerouting:
+    def _span_with_cable(self, prefix):
+        start = _structure(f"{prefix}-A", 0, 0)
+        end = _structure(f"{prefix}-B", 300, 0)
+        span = _span(start, end, LineString((0, 0), (300, 0), srid=SRID))
+        other = _span(
+            _structure(f"{prefix}-C", 300, 0.5),
+            _structure(f"{prefix}-D", 600, 0),
+            LineString((300, 0.5), (600, 0), srid=SRID),
+        )
+        return span, other
+
+    def test_segment_replaced_per_hop_and_later_sequences_renumbered(self, _disable_routability_signal):
+        span, other = self._span_with_cable("SR1")
+        cable = Cable.objects.create(label="SR1-cable")
+        seg_on_span = CableSegment.objects.create(cable=cable, pathway=span, sequence=1)
+        seg_after = CableSegment.objects.create(cable=cable, pathway=other, sequence=2)
+        mid = _structure("SR1-mid", 150, 0)
+
+        result = execute_split(plan_split(span, [mid], tolerance=1.0))
+
+        segments = list(CableSegment.objects.filter(cable=cable).order_by("sequence"))
+        assert len(segments) == 3
+        assert [s.pathway_id for s in segments[:2]] == [c.pk for c in result.children]
+        assert segments[2].pk == seg_after.pk
+        assert [s.sequence for s in segments] == [1, 2, 3]
+        assert not CableSegment.objects.filter(pk=seg_on_span.pk).exists()
+        assert result.rerouted and result.rerouted[0][0] == cable
+
+    def test_lashed_peer_on_unaffected_pathway_is_lashed_to_every_replacement(self, _disable_routability_signal):
+        span, other = self._span_with_cable("SR2")
+        cable = Cable.objects.create(label="SR2-cable")
+        peer_cable = Cable.objects.create(label="SR2-peer")
+        seg = CableSegment.objects.create(cable=cable, pathway=span, sequence=1)
+        peer = CableSegment.objects.create(cable=peer_cable, pathway=other, sequence=1)
+        seg.lashed_with.add(peer)
+        mid = _structure("SR2-mid", 150, 0)
+
+        execute_split(plan_split(span, [mid], tolerance=1.0))
+
+        new_segments = CableSegment.objects.filter(cable=cable)
+        assert new_segments.count() == 2
+        for new_seg in new_segments:
+            assert list(new_seg.lashed_with.all()) == [peer]
+
+    def test_two_rerouted_cables_lashed_together_stay_lashed_per_hop(self, _disable_routability_signal):
+        span, _ = self._span_with_cable("SR3")
+        cable_a = Cable.objects.create(label="SR3-a")
+        cable_b = Cable.objects.create(label="SR3-b")
+        seg_a = CableSegment.objects.create(cable=cable_a, pathway=span, sequence=1)
+        seg_b = CableSegment.objects.create(cable=cable_b, pathway=span, sequence=1)
+        seg_a.lashed_with.add(seg_b)
+        mid = _structure("SR3-mid", 150, 0)
+
+        result = execute_split(plan_split(span, [mid], tolerance=1.0))
+
+        for child in result.children:
+            hop_segments = list(CableSegment.objects.filter(pathway=child))
+            assert len(hop_segments) == 2
+            first, second = hop_segments
+            assert list(first.lashed_with.all()) == [second]
+
+    def test_comments_copied_to_replacements(self, _disable_routability_signal):
+        span, _ = self._span_with_cable("SR4")
+        cable = Cable.objects.create(label="SR4-cable")
+        CableSegment.objects.create(cable=cable, pathway=span, sequence=1, comments="pull note")
+        mid = _structure("SR4-mid", 150, 0)
+
+        execute_split(plan_split(span, [mid], tolerance=1.0))
+
+        assert all(s.comments == "pull note" for s in CableSegment.objects.filter(cable=cable))
