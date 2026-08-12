@@ -467,6 +467,10 @@ class TestSegmentRerouting:
         CableSegment.objects.create(cable=cable, pathway=span, sequence=1, comments="pull note")
         mid = _structure("SR4-mid", 150, 0)
 
-        execute_split(plan_split(span, [mid], tolerance=1.0))
+        result = execute_split(plan_split(span, [mid], tolerance=1.0))
 
-        assert all(s.comments == "pull note" for s in CableSegment.objects.filter(cable=cable))
+        segments = CableSegment.objects.filter(cable=cable)
+        assert segments.count() == 2
+        child_pks = {c.pk for c in result.children}
+        assert all(s.pathway_id in child_pks for s in segments)
+        assert all(s.comments == "pull note" for s in segments)
