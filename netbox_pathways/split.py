@@ -11,6 +11,7 @@ import math
 from dataclasses import dataclass, field
 
 from django.contrib.gis.geos import LineString
+from django.db import transaction
 
 from .models import (
     AerialSpan,
@@ -208,3 +209,113 @@ def plan_split(pathway, structures, tolerance=DEFAULT_TOLERANCE):
                 f"Planned route #{route.pk} '{route.name}' references {involved}; re-plan it after the split."
             )
     return SplitPlan(pathway=original, cuts=cuts, warnings=warnings)
+
+
+# Fields never copied onto children: identity and audit columns, the
+# geometry and endpoints (set per hop), the manual as-built length (not
+# divisible across hops), the label (re-suffixed), and containment FKs
+# (set by the cascade).
+_SKIP_FIELDS = {
+    "id",
+    "created",
+    "last_updated",
+    "path",
+    "length",
+    "label",
+    "pathway_type",
+    "conduit_bank",
+    "parent_conduit",
+}
+
+
+@dataclass
+class SplitResult:
+    """What a split produced: per-hop children, cascaded copies, re-routed segments."""
+
+    children: list
+    cascaded: list = field(default_factory=list)
+    rerouted: list = field(default_factory=list)
+    warnings: list = field(default_factory=list)
+
+
+def _copyable_fields(cls):
+    """Concrete fields to copy onto children, split by sidedness.
+
+    Fields named start_*/end_* are per-side: the start value belongs to the
+    first child only and the end value to the last child only (this covers
+    the endpoint FKs, faces, and attachment heights uniformly).
+    """
+    shared, start_side, end_side = [], [], []
+    for f in cls._meta.concrete_fields:
+        if f.primary_key or f.name in _SKIP_FIELDS:
+            continue
+        if f.remote_field and getattr(f.remote_field, "parent_link", False):
+            continue
+        if f.name.startswith("start_"):
+            start_side.append(f.attname)
+        elif f.name.startswith("end_"):
+            end_side.append(f.attname)
+        else:
+            shared.append(f.attname)
+    return shared, start_side, end_side
+
+
+def _create_children(original, cuts, pieces, parents=None, parent_field=None):
+    """Create the per-hop copies of `original`, one per hop, in path order.
+
+    `pieces` is the list of cut LineStrings for the pathway that owns the
+    geometry, or None for contained children (bank conduits, innerducts)
+    whose route is owned by their parent. `parents`/`parent_field` attach
+    each contained copy to the corresponding per-hop parent.
+    """
+    cls = type(original)
+    shared, start_side, end_side = _copyable_fields(cls)
+    total = len(cuts) + 1
+    tags = list(original.tags.all())
+    children = []
+    for i in range(total):
+        child = cls()
+        for attname in shared:
+            setattr(child, attname, getattr(original, attname))
+        child.path = pieces[i] if pieces else None
+        if original.label:
+            child.label = f"{original.label} ({i + 1}/{total})"
+        if i == 0:
+            for attname in start_side:
+                setattr(child, attname, getattr(original, attname))
+        else:
+            child.start_structure = cuts[i - 1].structure
+        if i == total - 1:
+            for attname in end_side:
+                setattr(child, attname, getattr(original, attname))
+        else:
+            child.end_structure = cuts[i].structure
+        if parents is not None:
+            setattr(child, parent_field, parents[i])
+        child.full_clean()
+        child.save()
+        child.tags.set(tags)
+        children.append(child)
+    return children
+
+
+def _delete_originals(original):
+    """Delete the split pathway and any contained pathways it carried.
+
+    Conduit.conduit_bank is SET_NULL, so a bank's conduits must be deleted
+    explicitly (their innerducts cascade); a conduit's innerducts cascade
+    on their own.
+    """
+    if isinstance(original, ConduitBank):
+        Conduit.objects.filter(conduit_bank=original).delete()
+    original.delete()
+
+
+def execute_split(plan):
+    """Replace the planned pathway with per-hop children, atomically."""
+    original = plan.pathway
+    pieces = _cut_line(original.path, [(c.chainage, c.structure.centroid) for c in plan.cuts])
+    with transaction.atomic():
+        children = _create_children(original, plan.cuts, pieces)
+        _delete_originals(original)
+    return SplitResult(children=children, warnings=list(plan.warnings))

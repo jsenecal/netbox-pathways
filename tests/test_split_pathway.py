@@ -20,7 +20,7 @@ from netbox_pathways.models import (
     PlannedRoute,
     Structure,
 )
-from netbox_pathways.split import SplitError, _cut_line, find_candidates, plan_split
+from netbox_pathways.split import SplitError, _cut_line, execute_split, find_candidates, plan_split
 
 SRID = get_srid()
 
@@ -236,3 +236,98 @@ class TestPlanSplit:
         plan = plan_split(span, [mid], tolerance=1.0)
         assert any("waypoint" in w for w in plan.warnings)
         assert any(route.name in w for w in plan.warnings)
+
+
+@pytest.mark.django_db
+class TestExecuteSplit:
+    def _split_span(self, prefix, **span_kwargs):
+        start = _structure(f"{prefix}-A", 0, 0)
+        end = _structure(f"{prefix}-B", 300, 0)
+        span = _span(start, end, LineString((0, 0), (150, 10), (300, 0), srid=SRID), **span_kwargs)
+        mid = _structure(f"{prefix}-mid", 150, 10)
+        plan = plan_split(span, [mid], tolerance=1.0)
+        return execute_split(plan), span, start, mid, end
+
+    def test_children_replace_original_with_correct_endpoints(self):
+        result, span, start, mid, end = self._split_span("EX1")
+
+        assert not Pathway.objects.filter(pk=span.pk).exists()
+        assert len(result.children) == 2
+        first, second = result.children
+        assert isinstance(first, AerialSpan) and isinstance(second, AerialSpan)
+        assert (first.start_structure, first.end_structure) == (start, mid)
+        assert (second.start_structure, second.end_structure) == (mid, end)
+        assert tuple(first.path.coords) == ((0.0, 0.0), (150.0, 10.0))
+        assert tuple(second.path.coords) == ((150.0, 10.0), (300.0, 0.0))
+
+    def test_shared_fields_tags_and_labels_copied(self):
+        start = _structure("EX2-A", 0, 0)
+        end = _structure("EX2-B", 300, 0)
+        span = _span(
+            start,
+            end,
+            LineString((0, 0), (300, 0), srid=SRID),
+            label="POLE-RUN",
+            status="planned",
+            aerial_type="messenger",
+            comments="imported from kmz",
+            length=299.5,
+        )
+        span.tags.add("import-batch-7")
+        mid = _structure("EX2-mid", 100, 0)
+        result = execute_split(plan_split(span, [mid], tolerance=1.0))
+
+        first, second = result.children
+        assert first.label == "POLE-RUN (1/2)"
+        assert second.label == "POLE-RUN (2/2)"
+        for child in result.children:
+            assert child.status == "planned"
+            assert child.aerial_type == "messenger"
+            assert child.comments == "imported from kmz"
+            assert child.length is None  # as-built length is not divisible
+            assert [t.name for t in child.tags.all()] == ["import-batch-7"]
+
+    def test_per_side_fields_go_to_first_and_last_child_only(self):
+        start = _structure("EX3-A", 0, 0)
+        end = _structure("EX3-B", 300, 0)
+        span = _span(
+            start,
+            end,
+            LineString((0, 0), (300, 0), srid=SRID),
+            start_attachment_height=6.5,
+            end_attachment_height=7.0,
+        )
+        m1 = _structure("EX3-m1", 100, 0)
+        m2 = _structure("EX3-m2", 200, 0)
+        result = execute_split(plan_split(span, [m1, m2], tolerance=1.0))
+
+        first, middle, last = result.children
+        assert first.start_attachment_height == 6.5
+        assert first.end_attachment_height is None
+        assert middle.start_attachment_height is None
+        assert middle.end_attachment_height is None
+        assert last.start_attachment_height is None
+        assert last.end_attachment_height == 7.0
+
+    def test_blank_label_stays_blank(self):
+        result, *_ = self._split_span("EX4")
+        assert all(child.label == "" for child in result.children)
+
+    def test_atomic_on_child_validation_failure(self, monkeypatch):
+        """If any child fails validation the original must survive untouched."""
+        start = _structure("EX5-A", 0, 0)
+        end = _structure("EX5-B", 300, 0)
+        span = _span(start, end, LineString((0, 0), (300, 0), srid=SRID))
+        mid = _structure("EX5-mid", 150, 0)
+        plan = plan_split(span, [mid], tolerance=1.0)
+
+        from django.core.exceptions import ValidationError
+
+        def boom(self):
+            raise ValidationError("forced failure")
+
+        monkeypatch.setattr(AerialSpan, "full_clean", boom)
+        with pytest.raises(ValidationError):
+            execute_split(plan)
+        assert Pathway.objects.filter(pk=span.pk).exists()
+        assert AerialSpan.objects.count() == 1
