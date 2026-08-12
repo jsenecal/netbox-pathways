@@ -4,9 +4,12 @@ Regression suite for issue #87: split one long imported polyline into
 per-hop pathways between the structures it passes.
 """
 
+from io import StringIO
+
 import pytest
 from dcim.models import Cable, Site
 from django.contrib.gis.geos import LineString, Point
+from django.core.management import call_command
 
 from netbox_pathways.geo import get_srid
 from netbox_pathways.models import (
@@ -474,3 +477,23 @@ class TestSegmentRerouting:
         child_pks = {c.pk for c in result.children}
         assert all(s.pathway_id in child_pks for s in segments)
         assert all(s.comments == "pull note" for s in segments)
+
+
+@pytest.mark.django_db
+class TestCommandGating:
+    def test_dry_run_previews_and_apply_executes(self):
+        start = _structure("CMD-A", 0, 0)
+        end = _structure("CMD-B", 300, 0)
+        span = _span(start, end, LineString((0, 0), (300, 0), srid=SRID))
+        mid = _structure("CMD-mid", 150, 0.3)
+
+        out = StringIO()
+        call_command("split_pathway", span.pk, stdout=out)
+        assert str(mid.pk) in out.getvalue()
+        assert "Dry run" in out.getvalue()
+        assert Pathway.objects.filter(pk=span.pk).exists()  # nothing written
+
+        out = StringIO()
+        call_command("split_pathway", span.pk, "--apply", stdout=out)
+        assert not Pathway.objects.filter(pk=span.pk).exists()
+        assert AerialSpan.objects.count() == 2
