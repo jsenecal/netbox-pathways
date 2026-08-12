@@ -114,8 +114,6 @@ class TestDirectBuriedClone:
         assert attrs["warning_tape"] is True
         assert attrs["armor_type"] == "interlocked steel"
         assert attrs["start_structure"] == s1.pk
-        assert "label" not in attrs
-        assert "path" not in attrs
 
 
 @pytest.mark.django_db
@@ -145,8 +143,6 @@ class TestConduitBankClone:
         assert attrs["width"] == 900
         assert attrs["encasement_type"] == "concrete"
         assert attrs["start_structure"] == s1.pk
-        assert "label" not in attrs
-        assert "path" not in attrs
 
 
 @pytest.mark.django_db
@@ -180,8 +176,6 @@ class TestConduitClone:
         assert attrs["inner_diameter"] == 94.0
         assert attrs["outer_diameter"] == 110.0
         assert attrs["depth"] == 1.1
-        assert "bank_position" not in attrs
-        assert "label" not in attrs
 
     def test_junction_endpoints_are_clonable(self):
         assert "start_junction" in Conduit.clone_fields
@@ -211,8 +205,6 @@ class TestInnerductClone:
         assert attrs["parent_conduit"] == parent.pk
         assert attrs["size"] == "32mm"
         assert attrs["color"] == "ff9800"
-        assert "position" not in attrs
-        assert "label" not in attrs
 
 
 @pytest.mark.django_db
@@ -244,10 +236,6 @@ class TestStructureClone:
         assert attrs["width"] == 0.6
         assert attrs["length"] == 1.2
         assert attrs["depth"] == 0.9
-        assert "name" not in attrs
-        assert "geometry" not in attrs
-        assert "elevation" not in attrs
-        assert "location" not in attrs
 
 
 ALL_CLONABLE_MODELS = [
@@ -260,7 +248,16 @@ ALL_CLONABLE_MODELS = [
     Innerduct,
 ]
 
-NEVER_CLONED = {"path", "geometry", "location", "name", "label", "bank_position", "position"}
+NEVER_CLONED = {
+    "path",
+    "geometry",
+    "location",
+    "name",
+    "label",
+    "bank_position",
+    "position",
+    "elevation",
+}
 
 
 @pytest.mark.parametrize("model", ALL_CLONABLE_MODELS)
