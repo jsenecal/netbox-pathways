@@ -7,7 +7,10 @@ module detects the structures the polyline passes, cuts the geometry at
 those points, and replaces the pathway with consecutive per-hop pathways.
 """
 
+import math
 from dataclasses import dataclass
+
+from django.contrib.gis.geos import LineString
 
 from .models import Structure
 
@@ -53,3 +56,34 @@ def find_candidates(pathway, tolerance=DEFAULT_TOLERANCE):
     ]
     candidates.sort(key=lambda c: c.chainage)
     return candidates
+
+
+def _cut_line(line, cuts):
+    """Cut a LineString at ordered (chainage, point) pairs into len(cuts)+1 pieces.
+
+    Original vertices are preserved: each lands in exactly one piece
+    according to its position along the line. Every cut vertex is written as
+    the given point (the structure's own point), so endpoint snapping in
+    Pathway.clean() is a no-op. A chainage coinciding with an existing
+    vertex replaces that vertex rather than duplicating it.
+    """
+    coords = [(p[0], p[1]) for p in line.coords]
+    remaining = list(cuts)
+    pieces = []
+    current = [coords[0]]
+    walked = 0.0
+    for seg_start, seg_end in zip(coords, coords[1:], strict=False):
+        seg_end_chainage = walked + math.dist(seg_start, seg_end)
+        replaces_vertex = False
+        while remaining and remaining[0][0] <= seg_end_chainage + CUT_EPSILON:
+            chainage, point = remaining.pop(0)
+            cut_xy = (point.x, point.y)
+            current.append(cut_xy)
+            pieces.append(current)
+            current = [cut_xy]
+            replaces_vertex = abs(chainage - seg_end_chainage) <= CUT_EPSILON
+        if not replaces_vertex:
+            current.append(seg_end)
+        walked = seg_end_chainage
+    pieces.append(current)
+    return [LineString(piece, srid=line.srid) for piece in pieces]
