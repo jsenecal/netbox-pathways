@@ -6,6 +6,7 @@ chainage, together with the resulting hop layout and any warnings.
 Re-run with --apply to execute the split atomically.
 """
 
+from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 
 from netbox_pathways.models import Pathway, Structure
@@ -68,10 +69,15 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("Dry run -- re-run with --apply to execute."))
             return
 
-        result = execute_split(plan)
+        try:
+            result = execute_split(plan)
+        except ValidationError as exc:
+            raise CommandError(f"Split failed validation: {exc}") from None
         self._print_result(result)
 
     def _resolve_structures(self, pathway, options, tolerance):
+        if options["structures"] and options["exclude"]:
+            raise CommandError("--exclude only applies to detected candidates; do not combine it with --structures.")
         if options["structures"]:
             structures = list(Structure.objects.filter(pk__in=options["structures"]))
             missing = set(options["structures"]) - {s.pk for s in structures}

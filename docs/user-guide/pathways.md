@@ -209,3 +209,8 @@ bank-contained conduits (split the container instead), and conduits with
 junctions (their positions along the trunk would be invalidated). Planned
 routes referencing the pathway are reported so they can be re-planned;
 waypoints cannot be repositioned and are deleted with the original.
+
+Like the plugin's other management commands, `split_pathway` operates
+outside NetBox's request pipeline: the deletion and creations do not
+produce change-log entries, webhooks, or event-rule triggers. Use the
+dry-run preview to review the operation before applying it.
