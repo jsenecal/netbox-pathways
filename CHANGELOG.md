@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`split_pathway` management command.** Splits a pathway at the structures
+  it passes into per-hop pathways, with PostGIS candidate detection,
+  dry-run preview, containment cascade (conduit banks and innerducts), and
+  cable segment re-routing. Refs #87.
+
 - **Add-child buttons that inherit the parent's attributes.** The Conduits
   panel on a conduit bank and the Innerducts panel on a conduit now carry
   an "Add" button that opens the create form pre-filled from the parent:
