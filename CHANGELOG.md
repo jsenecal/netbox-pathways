@@ -369,6 +369,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing and silently listed every pathway instead. The picker now offers
   both endpoints of the previous pathway, and junction endpoints resolve.
 
+### Security
+
+- **The `geo/*` API endpoints ignored object-level permissions.** The
+  GeoJSON viewsets that feed the map and GIS clients served every row of a
+  model to any user holding a view permission on it, disregarding
+  `ObjectPermission` constraints -- on a multi-tenant install, a user
+  restricted to one tenant could see every other tenant's structures,
+  conduit routes, and circuit geometries, in the UI map and the API alike.
+  All seven layer endpoints and the `/info` layer counts now restrict their
+  querysets to the requesting user's permitted objects, exactly as the
+  regular REST endpoints always have. Reported by @Lesnikovsok. Fixes #123.
+
 ## [0.2.2] - 2026-06-30
 
 ### Fixed
