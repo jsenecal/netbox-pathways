@@ -210,7 +210,10 @@ junctions (their positions along the trunk would be invalidated). Planned
 routes referencing the pathway are reported so they can be re-planned;
 waypoints cannot be repositioned and are deleted with the original.
 
-Like the plugin's other management commands, `split_pathway` operates
-outside NetBox's request pipeline: the deletion and creations do not
-produce change-log entries, webhooks, or event-rule triggers. Use the
-dry-run preview to review the operation before applying it.
+By default `split_pathway` operates outside NetBox's request pipeline:
+the deletion and creations do not produce change-log entries, webhooks,
+or event-rule triggers, and the dry-run preview is the review step. Pass
+`--user <username>` to run the apply inside the event pipeline instead --
+the change log then records the split attributed to that user (grouped
+under a single request id), and webhooks and event rules fire as they
+would for a UI edit.

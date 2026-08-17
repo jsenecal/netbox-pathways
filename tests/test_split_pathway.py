@@ -7,9 +7,12 @@ per-hop pathways between the structures it passes.
 from io import StringIO
 
 import pytest
+from core.models import ObjectChange
 from dcim.models import Cable, Site
+from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import LineString, Point
 from django.core.management import call_command
+from django.core.management.base import CommandError
 
 from netbox_pathways.geo import get_srid
 from netbox_pathways.models import (
@@ -516,3 +519,32 @@ class TestCommandGating:
         call_command("split_pathway", span.pk, "--apply", stdout=out)
         assert not Pathway.objects.filter(pk=span.pk).exists()
         assert AerialSpan.objects.count() == 2
+
+    def test_user_option_writes_changelog_entries(self):
+        """--user runs the apply inside event_tracking, so the deletion and
+        creations land in the change log attributed to that user, grouped
+        under one request id."""
+        start = _structure("CMD2-A", 0, 0)
+        end = _structure("CMD2-B", 300, 0)
+        span = _span(start, end, LineString((0, 0), (300, 0), srid=SRID))
+        _structure("CMD2-mid", 150, 0)
+        user = get_user_model().objects.create_user(username="splitter")
+
+        call_command("split_pathway", span.pk, "--apply", "--user", "splitter", stdout=StringIO())
+
+        changes = ObjectChange.objects.filter(user=user)
+        assert changes.filter(action="create").count() == 2
+        # Deleting an MTI subclass instance cascades to its base Pathway row,
+        # and NetBox logs each content type separately -- assert on the
+        # subclass row and tolerate the base-row companion entry.
+        deletes = changes.filter(action="delete")
+        assert deletes.filter(changed_object_type__model="aerialspan").count() == 1
+        assert len(set(changes.values_list("request_id", flat=True))) == 1
+
+    def test_user_option_rejects_unknown_username(self):
+        start = _structure("CMD3-A", 0, 0)
+        end = _structure("CMD3-B", 300, 0)
+        span = _span(start, end, LineString((0, 0), (300, 0), srid=SRID))
+
+        with pytest.raises(CommandError, match="does not exist"):
+            call_command("split_pathway", span.pk, "--user", "ghost")

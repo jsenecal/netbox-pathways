@@ -11,8 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`split_pathway` management command.** Splits a pathway at the structures
   it passes into per-hop pathways, with PostGIS candidate detection,
-  dry-run preview, containment cascade (conduit banks and innerducts), and
-  cable segment re-routing. Refs #87.
+  dry-run preview, containment cascade (conduit banks and innerducts),
+  cable segment re-routing, and optional change logging via --user.
+  Refs #87.
 
 - **Add-child buttons that inherit the parent's attributes.** The Conduits
   panel on a conduit bank and the Innerducts panel on a conduit now carry
