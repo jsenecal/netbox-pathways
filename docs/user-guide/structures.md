@@ -106,3 +106,10 @@ The structure list view supports bulk editing and deletion. Select multiple stru
 - Change structure type
 - Assign a tenant
 - Delete selected structures
+
+## Cloning
+
+The Clone button on a structure pre-fills a new create form with the
+source structure's status, type, site, tenant, installer, dates, and
+dimensions. The name, geometry, elevation, and linked NetBox location
+are never copied, since those identify the original structure.

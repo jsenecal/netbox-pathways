@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cable segment re-routing, and optional change logging via --user.
   Refs #87.
 
+- **Clone pre-fills the create form.** All seven clonable models
+  (Structure, Pathway, Conduit Bank, Conduit, Aerial Span, Direct
+  Buried, Innerduct) now declare `clone_fields`, so the Clone button
+  carries over status, endpoints, installer, dates, and type-specific
+  attributes. Identity and geometry fields (name, label, path, geometry,
+  bank position, innerduct position, a structure's elevation and location
+  link) are deliberately never cloned. Refs #120.
+
 - **Add-child buttons that inherit the parent's attributes.** The Conduits
   panel on a conduit bank and the Innerducts panel on a conduit now carry
   an "Add" button that opens the create form pre-filled from the parent:
@@ -366,6 +374,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of it -- and for a conduit whose far end is a ConduitJunction it resolved
   nothing and silently listed every pathway instead. The picker now offers
   both endpoints of the previous pathway, and junction endpoints resolve.
+
+### Security
+
+- **The `geo/*` API endpoints ignored object-level permissions.** The
+  GeoJSON viewsets that feed the map and GIS clients served every row of a
+  model to any user holding a view permission on it, disregarding
+  `ObjectPermission` constraints -- on a multi-tenant install, a user
+  restricted to one tenant could see every other tenant's structures,
+  conduit routes, and circuit geometries, in the UI map and the API alike.
+  All seven layer endpoints and the `/info` layer counts now restrict their
+  querysets to the requesting user's permitted objects, exactly as the
+  regular REST endpoints always have. Reported by @Lesnikovsok. Fixes #123.
 
 ## [0.2.2] - 2026-06-30
 

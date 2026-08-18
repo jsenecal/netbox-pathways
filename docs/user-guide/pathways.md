@@ -163,6 +163,16 @@ Pathway lists support filtering by:
 
 Pathways can pass through intermediate locations (sites or rooms) along their route. Use **Pathway Locations** to record these waypoints with sequence numbers for ordering. This is useful for documenting that a conduit passes through multiple manholes along its route.
 
+## Cloning
+
+Every pathway detail view has a Clone button. Cloning pre-fills the
+create form with the source object's status, endpoints, installer,
+dates, and type-specific attributes (faces and bank for conduits, span
+attributes for aerial spans, burial attributes for direct-buried runs,
+parent conduit, size, and color for innerducts). The route geometry,
+label, and per-parent positions are never copied, so you can document
+parallel runs quickly and then draw each path.
+
 ## Splitting an imported pathway at structures
 
 Geometry imported from KMZ files or other OSP tools often arrives as one

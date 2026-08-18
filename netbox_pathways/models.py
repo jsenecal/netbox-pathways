@@ -85,6 +85,20 @@ class Structure(NetBoxModel):
     access_notes = models.TextField(blank=True, help_text="Access restrictions or requirements")
     comments = models.TextField(blank=True)
 
+    clone_fields = (
+        "status",
+        "structure_type",
+        "site",
+        "tenant",
+        "installed_by",
+        "installation_date",
+        "commissioned_date",
+        "height",
+        "width",
+        "length",
+        "depth",
+    )
+
     class Meta:
         ordering = ["name"]
         indexes = [
@@ -315,6 +329,18 @@ class Pathway(NetBoxModel):
     )
     comments = models.TextField(blank=True)
 
+    clone_fields = (
+        "status",
+        "start_structure",
+        "end_structure",
+        "start_location",
+        "end_location",
+        "tenant",
+        "installed_by",
+        "installation_date",
+        "commissioned_date",
+    )
+
     class Meta:
         ordering = ["pk"]
         indexes = [
@@ -543,6 +569,16 @@ class ConduitBank(Pathway):
     )
     encasement_type = models.CharField(max_length=50, choices=EncasementTypeChoices, blank=True)
 
+    clone_fields = Pathway.clone_fields + (
+        "start_face",
+        "end_face",
+        "configuration",
+        "total_conduits",
+        "height",
+        "width",
+        "encasement_type",
+    )
+
     class Meta:
         verbose_name = "Conduit Bank"
         verbose_name_plural = "Conduit Banks"
@@ -631,6 +667,18 @@ class Conduit(Pathway):
         """Junction endpoints are geographic, so they also preclude indoor status."""
         return super().is_indoor and not self.start_junction_id and not self.end_junction_id
 
+    clone_fields = Pathway.clone_fields + (
+        "start_face",
+        "end_face",
+        "material",
+        "inner_diameter",
+        "outer_diameter",
+        "depth",
+        "conduit_bank",
+        "start_junction",
+        "end_junction",
+    )
+
     class Meta:
         verbose_name = "Conduit"
         verbose_name_plural = "Conduits"
@@ -711,6 +759,16 @@ class AerialSpan(Pathway):
     wind_loading = models.CharField(max_length=50, blank=True, help_text="Wind loading zone/rating")
     ice_loading = models.CharField(max_length=50, blank=True, help_text="Ice loading zone/rating")
 
+    clone_fields = Pathway.clone_fields + (
+        "aerial_type",
+        "start_attachment_height",
+        "end_attachment_height",
+        "sag",
+        "messenger_size",
+        "wind_loading",
+        "ice_loading",
+    )
+
     class Meta:
         verbose_name = "Aerial Span"
         verbose_name_plural = "Aerial Spans"
@@ -744,6 +802,13 @@ class DirectBuried(Pathway):
     warning_tape = models.BooleanField(default=False, help_text="Warning tape installed above cable")
     tracer_wire = models.BooleanField(default=False, help_text="Tracer wire installed with cable")
     armor_type = models.CharField(max_length=100, blank=True, help_text="Cable armor type if applicable")
+
+    clone_fields = Pathway.clone_fields + (
+        "burial_depth",
+        "warning_tape",
+        "tracer_wire",
+        "armor_type",
+    )
 
     class Meta:
         verbose_name = "Direct Buried"
@@ -783,6 +848,12 @@ class Innerduct(Pathway):
     size = models.CharField(max_length=50, help_text='Innerduct size (e.g., 1.25", 32mm)')
     color = ColorField(blank=True, help_text="Innerduct color for identification")
     position = models.CharField(max_length=50, blank=True, help_text="Position within parent conduit")
+
+    clone_fields = Pathway.clone_fields + (
+        "parent_conduit",
+        "size",
+        "color",
+    )
 
     class Meta:
         verbose_name = "Innerduct"

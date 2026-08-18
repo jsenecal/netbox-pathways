@@ -730,3 +730,76 @@ class TestMapViewSelect:
         with patch.object(view, "_data_extent", return_value=None):
             response = view.get(request)
         assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# GeoJSON API -- object permission enforcement
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def tenant_structures(srid, site):
+    """Two structures in different tenants, for constraint tests."""
+    from tenancy.models import Tenant
+
+    tenant_a = Tenant.objects.create(name="Geo Tenant A", slug="geo-tenant-a")
+    tenant_b = Tenant.objects.create(name="Geo Tenant B", slug="geo-tenant-b")
+    a = Structure.objects.create(
+        name="Geo-Perm-A",
+        structure_type="manhole",
+        tenant=tenant_a,
+        geometry=Point(100, 100, srid=srid),
+        site=site,
+    )
+    b = Structure.objects.create(
+        name="Geo-Perm-B",
+        structure_type="manhole",
+        tenant=tenant_b,
+        geometry=Point(200, 200, srid=srid),
+        site=site,
+    )
+    return a, b
+
+
+@pytest.fixture
+def constrained_client(tenant_structures):
+    """API client for a user whose Structure view permission is constrained to tenant A."""
+    from django.contrib.auth import get_user_model
+    from django.contrib.contenttypes.models import ContentType
+    from users.models import ObjectPermission
+
+    user_model = get_user_model()
+    user = user_model.objects.create_user(username="geo-constrained", password="x")  # noqa: S106
+    perm = ObjectPermission.objects.create(
+        name="geo-perm-test",
+        enabled=True,
+        actions=["view"],
+        constraints={"tenant__slug": "geo-tenant-a"},
+    )
+    perm.object_types.set([ContentType.objects.get_for_model(Structure)])
+    perm.users.add(user)
+    client = APIClient()
+    # Re-fetch so no stale permission cache rides along on the user instance
+    client.force_authenticate(user=user_model.objects.get(pk=user.pk))
+    return client
+
+
+@pytest.mark.django_db
+class TestGeoObjectPermissions:
+    """Regression tests for issue #123: geo endpoints leaked objects across
+    ObjectPermission constraints (multi-tenant isolation bypass)."""
+
+    def test_structures_endpoint_honours_constraints(self, constrained_client, tenant_structures):
+        resp = constrained_client.get("/api/plugins/pathways/geo/structures/", format="json")
+        assert resp.status_code == 200
+        names = {f["properties"]["name"] for f in resp.json()["features"]}
+        assert names == {"Geo-Perm-A"}
+
+    def test_info_counts_honour_constraints(self, constrained_client, tenant_structures):
+        resp = constrained_client.get("/api/plugins/pathways/geo/info/", format="json")
+        assert resp.status_code == 200
+        # Only the tenant-A structure may be counted; the user holds no
+        # permission at all on the other layer models, so those count 0.
+        counts = resp.json()["counts"]
+        assert counts["structures"] == 1
+        assert counts["conduits"] == 0
