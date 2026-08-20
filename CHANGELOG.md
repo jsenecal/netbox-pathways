@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`split_pathway` management command.** Splits a pathway at the structures
+  it passes into per-hop pathways, with PostGIS candidate detection,
+  dry-run preview, containment cascade (conduit banks and innerducts),
+  cable segment re-routing, and optional change logging via --user.
+  Refs #87.
+
 - **Clone pre-fills the create form.** All seven clonable models
   (Structure, Pathway, Conduit Bank, Conduit, Aerial Span, Direct
   Buried, Innerduct) now declare `clone_fields`, so the Clone button

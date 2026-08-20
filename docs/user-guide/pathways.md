@@ -172,3 +172,58 @@ attributes for aerial spans, burial attributes for direct-buried runs,
 parent conduit, size, and color for innerducts). The route geometry,
 label, and per-parent positions are never copied, so you can document
 parallel runs quickly and then draw each path.
+
+## Splitting an imported pathway at structures
+
+Geometry imported from KMZ files or other OSP tools often arrives as one
+long polyline that physically passes many structures (a pole line, for
+example) but is stored as a single pathway. In the pathways data model a
+span is the hop between two structures, so the mid-span structures are not
+connected to the pathway at all: nothing can branch or be routed at them,
+and per-hop attributes cannot be recorded.
+
+The `split_pathway` management command replaces such a pathway with
+consecutive per-hop pathways of the same type:
+
+```
+python manage.py split_pathway 42                     # preview candidates
+python manage.py split_pathway 42 --exclude 17 --apply
+```
+
+The default run is a dry-run preview: it detects structures within
+`--tolerance` (SRID units, default 1.0) of the pathway's line, excluding
+its endpoints, and prints them ordered by chainage together with each
+structure's offset from the line and the resulting hop layout. Nothing is
+written until you re-run with `--apply`.
+
+- `--exclude ID ...` drops false positives from the detected candidates
+  (a parallel pole line caught by the tolerance, for example).
+- `--structures ID ...` bypasses detection and splits at exactly the given
+  structures.
+
+On apply, in one transaction:
+
+- The pathway is replaced by one child per hop, with vertices preserved and
+  the cut vertices snapped onto the structure points. Shared attributes,
+  tags, and custom fields are copied; per-side attributes (faces,
+  attachment heights) stay on the first and last child; labels get an
+  `(i/total)` suffix.
+- A conduit bank's conduits and their innerducts are cascaded into per-hop
+  copies attached to the corresponding hop.
+- Cable segments routed through the pathway are replaced by per-hop
+  segments in path order, preserving sequence order and lashing.
+- The original pathway is deleted.
+
+The command refuses indoor pathways (no geometry), innerducts and
+bank-contained conduits (split the container instead), and conduits with
+junctions (their positions along the trunk would be invalidated). Planned
+routes referencing the pathway are reported so they can be re-planned;
+waypoints cannot be repositioned and are deleted with the original.
+
+By default `split_pathway` operates outside NetBox's request pipeline:
+the deletion and creations do not produce change-log entries, webhooks,
+or event-rule triggers, and the dry-run preview is the review step. Pass
+`--user <username>` to run the apply inside the event pipeline instead --
+the change log then records the split attributed to that user (grouped
+under a single request id), and webhooks and event rules fire as they
+would for a UI edit.
