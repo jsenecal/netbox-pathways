@@ -131,6 +131,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   widget's nearby-structures layer anchors polygon-footprint structures at
   their centroid instead of skipping them. Refs #90.
 
+- **NetBox 4.7 support.** The test matrix now covers NetBox 4.7.0
+  (Django 6.1) alongside 4.5.10 and 4.6.10, and coverage is reported from
+  the 4.7 lane. No runtime change was needed: the only fix was in the
+  migration tests, which seeded a `dcim.Location` through a frozen
+  historical model still declaring the MPTT tree columns that 4.7 replaces
+  with ltree paths. Refs #134.
+
 ### Changed
 
 - The Conduits table on a conduit bank's detail page now shows the Bank

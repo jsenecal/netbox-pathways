@@ -257,12 +257,15 @@ def test_identity_migration_fails_loudly_on_shared_locations(migrate_to):
     executor = migrate_to(pre)
     state = executor.loader.project_state([("netbox_pathways", pre)]).apps
     OldStructure = state.get_model("netbox_pathways", "Structure")
-    OldSite = state.get_model("dcim", "Site")
-    OldLocation = state.get_model("dcim", "Location")
 
-    site = OldSite.objects.create(name="Dup-Site", slug="dup-site")
-    # Historical models bypass the MPTT manager, so tree columns are set by hand.
-    loc = OldLocation.objects.create(name="Dup-Loc", slug="dup-loc", site=site, lft=1, rght=2, tree_id=1, level=0)
+    # Only netbox_pathways is rewound here: dcim's tables stay at head while its
+    # historical model state is frozen at whatever this migration depends on. That
+    # frozen dcim.Location still declares the MPTT tree columns (lft/rght/tree_id/
+    # level) that NetBox 4.7 replaced with ltree paths, so inserting through it
+    # writes columns the table no longer has. The concrete models always match the
+    # live schema, on every supported NetBox release.
+    site = Site.objects.create(name="Dup-Site", slug="dup-site")
+    loc = Location.objects.create(name="Dup-Loc", slug="dup-loc", site=site)
     OldStructure.objects.create(name="dup-1", geometry=Point(0, 0, srid=SRID), location_id=loc.pk)
     OldStructure.objects.create(name="dup-2", geometry=Point(1, 1, srid=SRID), location_id=loc.pk)
 
