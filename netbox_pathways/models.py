@@ -5,6 +5,7 @@ from django.contrib.gis.db import models
 from django.contrib.gis.db.models.functions import Length
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import transaction
 from django.urls import reverse
 from netbox.models import NetBoxModel
 from tenancy.models import Tenant
@@ -131,6 +132,20 @@ class Structure(NetBoxModel):
             # keeps the site-centroid map fallback working.
             if not self.site_id:
                 self.site = self.location.site
+
+    def save(self, *args, **kwargs):
+        # Read the stored geometry rather than tracking it on the instance:
+        # immune to in-place GEOS mutation, and free when structures are
+        # loaded in bulk for the map.
+        old_geom = None
+        if self.pk:
+            old_geom = Structure.objects.filter(pk=self.pk).values_list("geometry", flat=True).first()
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            if old_geom is not None and self.geometry is not None and not old_geom.equals_exact(self.geometry):
+                from .reanchor import reanchor_structure
+
+                reanchor_structure(self, old_geom)
 
     def __str__(self):
         if self.structure_type:
@@ -356,6 +371,13 @@ class Pathway(NetBoxModel):
 
     def get_status_color(self):
         return PathwayStatusChoices.colors.get(self.status)
+
+    def as_concrete(self):
+        """This pathway as its multi-table subclass instance."""
+        cls = PATHWAY_TYPE_MODELS.get(self.pathway_type)
+        if cls is None or isinstance(self, cls):
+            return self
+        return cls.objects.get(pk=self.pk)
 
     @property
     def start_endpoint(self):
@@ -920,6 +942,15 @@ class Innerduct(Pathway):
         self.pathway_type = "innerduct"
         self._inherit_parent_endpoints()
         super().save(*args, **kwargs)
+
+
+PATHWAY_TYPE_MODELS = {
+    "conduit_bank": ConduitBank,
+    "conduit": Conduit,
+    "aerial": AerialSpan,
+    "direct_buried": DirectBuried,
+    "innerduct": Innerduct,
+}
 
 
 class ConduitJunction(NetBoxModel):
