@@ -1,9 +1,10 @@
 """Tests for PathwayEndpointFormMixin.clean -- form-side auto-path generation."""
 
 import pytest
+from dcim.models import Location, Site
 from django.contrib.gis.geos import LineString, Point, Polygon
 
-from netbox_pathways.forms import ConduitForm, InnerductForm
+from netbox_pathways.forms import AerialSpanForm, ConduitForm, InnerductForm
 from netbox_pathways.geo import get_srid, to_leaflet
 from netbox_pathways.models import Conduit, ConduitBank, Structure
 
@@ -149,3 +150,19 @@ class TestInjectEndpointGeometry:
     def test_no_endpoints_injects_nothing(self):
         form = ConduitForm()
         assert form.fields["path"].widget.endpoint_geojson is None
+
+    def test_aerial_span_form_requests_straight_mode(self):
+        form = AerialSpanForm()
+        assert form.fields["path"].widget.endpoint_geojson == {"straight": True}
+
+    def test_location_identity_structure_is_injected(self):
+        site = Site.objects.create(name="Inj-Site", slug="inj-site")
+        loc = Location.objects.create(name="Inj-Loc", slug="inj-loc", site=site)
+        Structure.objects.create(name="Vault-9", geometry=Point(0, 0, srid=SRID), location=loc)
+        conduit = Conduit(start_location=loc, path=LineString((0, 0), (10, 0), srid=SRID))
+
+        form = ConduitForm(instance=conduit)
+
+        data = form.fields["path"].widget.endpoint_geojson
+        assert data["start_name"] == "Vault-9"
+        assert "end" not in data

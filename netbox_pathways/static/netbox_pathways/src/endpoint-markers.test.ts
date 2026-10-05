@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { addLockedGeometry } from './endpoint-markers';
+import { addLockedGeometry, fitPath } from './endpoint-markers';
 
 function createMockLayer(type: string) {
     const layer: any = { _type: type };
@@ -63,5 +63,29 @@ describe('addLockedGeometry labels', () => {
         addLockedGeometry(mockMap, POINT);
         const layer = (L.circleMarker as ReturnType<typeof vi.fn>).mock.results[0].value;
         expect(layer.bindTooltip).not.toHaveBeenCalled();
+    });
+});
+
+describe('fitPath', () => {
+    const POLE: GeoJSON.Geometry = { type: 'Point', coordinates: [10, 0] };
+    // Square building spanning lng 0..1, lat 0..1.
+    const BUILDING: GeoJSON.Geometry = {
+        type: 'Polygon',
+        coordinates: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
+    };
+
+    it('snaps the ends and keeps interior vertices when not straight', () => {
+        const fitted = fitPath([[0.5, 2], [3, 5], [0.2, 9.5]], { start: BUILDING, end: POLE }, false);
+        expect(fitted).toEqual([[0.5, 1], [3, 5], [0, 10]]);
+    });
+
+    it('collapses to the two landings when straight', () => {
+        const fitted = fitPath([[0.5, 2], [3, 5], [4, 6], [0.2, 9.5]], { start: BUILDING, end: POLE }, true);
+        expect(fitted).toEqual([[0.5, 1], [0, 10]]);
+    });
+
+    it('keeps an unanchored end where it was drawn', () => {
+        const fitted = fitPath([[0.5, 2], [3, 5], [7, 7]], { start: BUILDING }, true);
+        expect(fitted).toEqual([[0.5, 1], [7, 7]]);
     });
 });

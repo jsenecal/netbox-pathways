@@ -4,6 +4,11 @@
  * Reads structure geometry from a <script type="application/json"> element
  * injected by PathwaysMapWidget, draws non-editable markers on the map,
  * and snaps drawn path endpoints to structure geometry.
+ *
+ * In straight mode (aerial spans) the line is always the two landings: no
+ * vertices can be added or removed, a point structure pins its end, and an
+ * end on a polygon structure slides along the boundary. The server applies
+ * the same rules; this only keeps the editor honest.
  */
 
 import { esc } from './map-utils';
@@ -13,7 +18,10 @@ interface EndpointData {
   end?: GeoJSON.Geometry;
   start_name?: string;
   end_name?: string;
+  straight?: boolean;
 }
+
+type LatLngTuple = [number, number];
 
 interface FieldReadyDetail {
   map: L.Map;
@@ -95,9 +103,7 @@ function nearestPointOnRing(
   return bestPoint;
 }
 
-function getSnapTarget(
-  geojson: GeoJSON.Geometry, latlng: L.LatLng,
-): [number, number] | null {
+function getSnapTarget(geojson: GeoJSON.Geometry, latlng: LatLngTuple): LatLngTuple | null {
   if (geojson.type === 'Point') {
     const [lng, lat] = geojson.coordinates as [number, number];
     return [lat, lng];
@@ -106,9 +112,18 @@ function getSnapTarget(
     const ring = (geojson.coordinates as number[][][])[0].map(
       (c) => [c[1], c[0]] as [number, number],
     );
-    return nearestPointOnRing(ring, [latlng.lat, latlng.lng]);
+    return nearestPointOnRing(ring, latlng);
   }
   return null;
+}
+
+/** Snap a drawn line's ends to its endpoint structures; collapse it when straight. */
+export function fitPath(coords: LatLngTuple[], data: EndpointData, straight: boolean): LatLngTuple[] {
+  const first = coords[0];
+  const last = coords[coords.length - 1];
+  const start = (data.start && getSnapTarget(data.start, first)) || first;
+  const end = (data.end && getSnapTarget(data.end, last)) || last;
+  return straight ? [start, end] : [start, ...coords.slice(1, -1), end];
 }
 
 function snapPath(drawnItems: L.FeatureGroup, data: EndpointData, fieldId: string): void {
@@ -118,25 +133,13 @@ function snapPath(drawnItems: L.FeatureGroup, data: EndpointData, fieldId: strin
   if (!polyline.getLatLngs) return;
   const latLngs = polyline.getLatLngs() as L.LatLng[];
   if (latLngs.length < 2) return;
-  let changed = false;
 
-  if (data.start) {
-    const target = getSnapTarget(data.start, latLngs[0]);
-    if (target) { latLngs[0] = L.latLng(target[0], target[1]); changed = true; }
-  }
-  if (data.end) {
-    const last = latLngs.length - 1;
-    const target = getSnapTarget(data.end, latLngs[last]);
-    if (target) { latLngs[last] = L.latLng(target[0], target[1]); changed = true; }
-  }
-  if (changed) {
-    polyline.setLatLngs(latLngs);
-    // Update the hidden input
-    const input = document.getElementById(fieldId) as HTMLInputElement;
-    if (input) {
-      const geojson = (polyline as any).toGeoJSON();
-      input.value = JSON.stringify(geojson.geometry);
-    }
+  const fitted = fitPath(latLngs.map((ll) => [ll.lat, ll.lng] as LatLngTuple), data, !!data.straight);
+  polyline.setLatLngs(fitted.map(([lat, lng]) => L.latLng(lat, lng)));
+  const input = document.getElementById(fieldId) as HTMLInputElement;
+  if (input) {
+    const geojson = (polyline as any).toGeoJSON();
+    input.value = JSON.stringify(geojson.geometry);
   }
 }
 
@@ -168,8 +171,14 @@ document.addEventListener('pathways:field-ready', function (e: Event) {
   // Snap on new draws
   map.on('pm:create', () => snapPath(drawnItems, data, fieldId));
 
-  // Snap on edits (listen on individual layers as they're added)
-  drawnItems.on('layeradd', (evt: any) => {
-    evt.layer.on('pm:edit', () => snapPath(drawnItems, data, fieldId));
-  });
+  // Snap on edits, for the loaded geometry and for layers added later
+  const arm = (layer: any): void => {
+    if (data.straight) {
+      // Hide the midpoint handles (no new vertices) and block vertex removal.
+      layer.pm?.setOptions({ hideMiddleMarkers: true, preventMarkerRemoval: true });
+    }
+    layer.on('pm:edit', () => snapPath(drawnItems, data, fieldId));
+  };
+  drawnItems.eachLayer(arm);
+  drawnItems.on('layeradd', (evt: any) => arm(evt.layer));
 });
