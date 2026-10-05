@@ -114,6 +114,17 @@ def _pathway_fk_fields():
     }
 
 
+class PathwayAnchorsMixin(drf_serializers.Serializer):
+    """Read-only: the structure each end attaches to.
+
+    The stored anchors -- the end's structure, or the structure enclosing the
+    location it names (docs/user-guide/attachment.md).
+    """
+
+    start_anchor = StructureSerializer(nested=True, read_only=True)
+    end_anchor = StructureSerializer(nested=True, read_only=True)
+
+
 class ConduitBankSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_pathways-api:conduitbank-detail",
@@ -162,7 +173,7 @@ class ConduitBankSerializer(NetBoxModelSerializer):
         brief_fields = ("id", "url", "display_url", "display", "label")
 
 
-class PathwaySerializer(NetBoxModelSerializer):
+class PathwaySerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_pathways-api:pathway-detail",
     )
@@ -192,6 +203,8 @@ class PathwaySerializer(NetBoxModelSerializer):
             "end_structure",
             "start_location",
             "end_location",
+            "start_anchor",
+            "end_anchor",
             "tenant",
             "installed_by",
             "length",
@@ -207,7 +220,7 @@ class PathwaySerializer(NetBoxModelSerializer):
         brief_fields = ("id", "url", "display_url", "display", "label", "pathway_type")
 
 
-class ConduitSerializer(NetBoxModelSerializer):
+class ConduitSerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_pathways-api:conduit-detail",
     )
@@ -238,6 +251,8 @@ class ConduitSerializer(NetBoxModelSerializer):
             "end_structure",
             "start_location",
             "end_location",
+            "start_anchor",
+            "end_anchor",
             "material",
             "inner_diameter",
             "outer_diameter",
@@ -261,7 +276,7 @@ class ConduitSerializer(NetBoxModelSerializer):
         brief_fields = ("id", "url", "display_url", "display", "label", "material")
 
 
-class AerialSpanSerializer(NetBoxModelSerializer):
+class AerialSpanSerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_pathways-api:aerialspan-detail",
     )
@@ -292,6 +307,8 @@ class AerialSpanSerializer(NetBoxModelSerializer):
             "end_structure",
             "start_location",
             "end_location",
+            "start_anchor",
+            "end_anchor",
             "aerial_type",
             "start_attachment_height",
             "end_attachment_height",
@@ -315,7 +332,7 @@ class AerialSpanSerializer(NetBoxModelSerializer):
         brief_fields = ("id", "url", "display_url", "display", "label", "aerial_type")
 
 
-class DirectBuriedSerializer(NetBoxModelSerializer):
+class DirectBuriedSerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_pathways-api:directburied-detail",
     )
@@ -344,6 +361,8 @@ class DirectBuriedSerializer(NetBoxModelSerializer):
             "end_structure",
             "start_location",
             "end_location",
+            "start_anchor",
+            "end_anchor",
             "burial_depth",
             "warning_tape",
             "tracer_wire",
@@ -363,7 +382,7 @@ class DirectBuriedSerializer(NetBoxModelSerializer):
         brief_fields = ("id", "url", "display_url", "display", "label")
 
 
-class InnerductSerializer(NetBoxModelSerializer):
+class InnerductSerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_pathways-api:innerduct-detail",
     )
@@ -392,6 +411,8 @@ class InnerductSerializer(NetBoxModelSerializer):
             "end_structure",
             "start_location",
             "end_location",
+            "start_anchor",
+            "end_anchor",
             "parent_conduit",
             "size",
             "color",

@@ -165,7 +165,7 @@ class PathwayGeoSerializer(GeoFeatureModelSerializer):
     class Meta:
         model = models.Pathway
         geo_field = "geo_4326"
-        fields = ["id", "label", "pathway_type", "geo_length"]
+        fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor"]
 
 
 class ConduitBankGeoSerializer(GeoFeatureModelSerializer):
@@ -186,7 +186,7 @@ class ConduitGeoSerializer(GeoFeatureModelSerializer):
     class Meta:
         model = models.Conduit
         geo_field = "geo_4326"
-        fields = ["id", "label", "pathway_type", "geo_length"]
+        fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor"]
 
 
 class AerialSpanGeoSerializer(GeoFeatureModelSerializer):
@@ -196,7 +196,7 @@ class AerialSpanGeoSerializer(GeoFeatureModelSerializer):
     class Meta:
         model = models.AerialSpan
         geo_field = "geo_4326"
-        fields = ["id", "label", "pathway_type", "geo_length"]
+        fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor"]
 
 
 class DirectBuriedGeoSerializer(GeoFeatureModelSerializer):
@@ -206,7 +206,7 @@ class DirectBuriedGeoSerializer(GeoFeatureModelSerializer):
     class Meta:
         model = models.DirectBuried
         geo_field = "geo_4326"
-        fields = ["id", "label", "pathway_type", "geo_length"]
+        fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor"]
 
 
 class CircuitGeoSerializer(GeoFeatureModelSerializer):
