@@ -24,6 +24,7 @@ from .choices import (
     StructureTypeChoices,
 )
 from .geo import get_srid
+from .landing import landing_on, reference_point
 from .registry import LOCATION_IDENTITY_ACCESSOR
 
 ENDPOINT_TOLERANCE = 1.0
@@ -412,16 +413,23 @@ class Pathway(NetBoxModel):
         self._validate_and_snap_endpoint("start")
         self._validate_and_snap_endpoint("end")
 
-    def _validate_and_snap_endpoint(self, side):
-        """Validate and snap one endpoint of self.path to the attached structure, or to the
-        endpoint location's identity structure when no structure is set."""
+    def anchor_structure(self, side):
+        """The structure one end is attached to.
+
+        The direct <side>_structure, else the identity structure of
+        <side>_location. The reverse one-to-one raises an
+        AttributeError-compatible DoesNotExist, so identity-less locations
+        degrade to None and stay documentary.
+        """
         structure = getattr(self, f"{side}_structure", None)
-        if not structure:
+        if structure is None:
             location = getattr(self, f"{side}_location", None)
-            # The reverse one-to-one raises an AttributeError-compatible
-            # DoesNotExist, so identity-less locations degrade to None and
-            # stay documentary.
             structure = getattr(location, LOCATION_IDENTITY_ACCESSOR, None) if location else None
+        return structure
+
+    def _validate_and_snap_endpoint(self, side):
+        """Validate and snap one endpoint of self.path to its anchor structure."""
+        structure = self.anchor_structure(side)
         if not structure or not structure.geometry:
             return
 
@@ -769,12 +777,51 @@ class AerialSpan(Pathway):
         "ice_loading",
     )
 
+    # An aerial span is a straight line between two supports: its path is
+    # derived from the endpoints in clean(), so forms must not synthesize one.
+    derives_path = True
+
     class Meta:
         verbose_name = "Aerial Span"
         verbose_name_plural = "Aerial Spans"
         indexes = [
             models.Index(fields=["aerial_type"]),
         ]
+
+    def clean(self):
+        self.straighten()
+        super().clean()
+
+    def straighten(self):
+        """Rebuild path as the straight line between the two landings.
+
+        Both ends must hang from a structure with geometry -- a span cannot
+        float. A point structure pins its end; an area structure (building)
+        lands the end on its boundary nearest the submitted end, or nearest
+        the other support when no path was submitted.
+        """
+        from django.contrib.gis.geos import LineString, Point
+
+        anchors = {side: self.anchor_structure(side) for side in ("start", "end")}
+        detached = {
+            f"{side}_structure": "Aerial spans must attach to a structure with geometry at both ends."
+            for side, structure in anchors.items()
+            if structure is None or structure.geometry is None
+        }
+        if detached:
+            raise ValidationError(detached)
+
+        start_geom = anchors["start"].geometry
+        end_geom = anchors["end"].geometry
+        if self.path:
+            srid = self.path.srid
+            first, last = self.path.coords[0], self.path.coords[-1]
+            start = landing_on(start_geom, Point(first[0], first[1], srid=srid))
+            end = landing_on(end_geom, Point(last[0], last[1], srid=srid))
+        else:
+            start = landing_on(start_geom, reference_point(end_geom))
+            end = landing_on(end_geom, start)
+        self.path = LineString((start.x, start.y), (end.x, end.y), srid=start_geom.srid)
 
     def save(self, *args, **kwargs):
         self.pathway_type = "aerial"

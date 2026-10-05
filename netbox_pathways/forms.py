@@ -180,6 +180,10 @@ class PathwayPathFallbackMixin:
         # parent's route; never synthesize a standalone path for them.
         if cleaned.get("conduit_bank") or cleaned.get("parent_conduit"):
             return cleaned
+        # Models that derive their own path from the endpoints (aerial spans)
+        # build it in clean(); a synthesized centroid line would be wrong.
+        if getattr(self._meta.model, "derives_path", False):
+            return cleaned
 
         start_struct = cleaned.get("start_structure")
         end_struct = cleaned.get("end_structure")
