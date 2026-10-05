@@ -45,14 +45,15 @@ class Candidate:
 def find_candidates(pathway, tolerance=DEFAULT_TOLERANCE):
     """Structures within `tolerance` of the pathway's line, ordered by chainage.
 
-    The pathway's own endpoint structures are excluded. Chainage is the
+    The structures the pathway's ends attach to are excluded. Chainage is the
     distance along the line of the structure's projection (centroid for
     polygon footprints); offset is the structure's distance from the line.
     """
     if pathway.path is None:
         raise SplitError("Pathway has no geometry path; only pathways with a drawn path can be split.")
     line = pathway.path
-    exclude_pks = [pk for pk in (pathway.start_structure_id, pathway.end_structure_id) if pk]
+    anchors = (pathway.anchor_structure("start"), pathway.anchor_structure("end"))
+    exclude_pks = [anchor.pk for anchor in anchors if anchor is not None]
     queryset = Structure.objects.filter(geometry__dwithin=(line, tolerance)).exclude(pk__in=exclude_pks)
     candidates = [
         Candidate(

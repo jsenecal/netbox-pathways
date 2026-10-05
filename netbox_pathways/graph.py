@@ -420,7 +420,7 @@ def pathways_connected_to(nodes):
     usable = False
     for kind, pk in nodes:
         if kind == "structure":
-            query |= models.touching_q(pk)
+            query |= models.touching_q(pk, direct=True)
         elif kind == "location":
             query |= Q(start_location_id=pk) | Q(end_location_id=pk)
         elif kind == "junction":

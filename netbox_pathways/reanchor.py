@@ -48,7 +48,7 @@ def pathways_anchored_to(structure):
     """Pathways with a path whose start or end resolves to `structure`."""
     from .models import Pathway
 
-    return Pathway.objects.touching(structure, via_location=True).filter(path__isnull=False)
+    return Pathway.objects.touching(structure).filter(path__isnull=False)
 
 
 def concrete_pathways(pathways):

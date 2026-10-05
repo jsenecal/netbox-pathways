@@ -38,6 +38,7 @@ from .models import (
     PlannedRoute,
     SiteGeometry,
     Structure,
+    touching_q,
 )
 
 NODE_REF_RE = re.compile(rf"^(?:{'|'.join(NODE_KINDS)}):[0-9]+$")
@@ -126,9 +127,7 @@ def occupied_structures_q():
     parent conduit's endpoints on save, so the segment-bearing pathway always
     references the physical structures directly.
     """
-    routed = CableSegment.objects.filter(
-        Q(pathway__start_structure_id=OuterRef("pk")) | Q(pathway__end_structure_id=OuterRef("pk"))
-    )
+    routed = CableSegment.objects.filter(touching_q(OuterRef("pk"), prefix="pathway__"))
     return Q(Exists(routed))
 
 
@@ -221,19 +220,8 @@ class StructureFilterSet(OccupiedFilterMixin, TenancyFilterSet, NetBoxModelFilte
         fields = ["id", "installation_date", "commissioned_date"]
 
     def filter_has_pathways(self, queryset, name, value):
-        connected = Pathway.objects.values_list(
-            "start_structure_id",
-            "end_structure_id",
-        )
-        pks = set()
-        for start_pk, end_pk in connected:
-            if start_pk:
-                pks.add(start_pk)
-            if end_pk:
-                pks.add(end_pk)
-        if value:
-            return queryset.filter(pk__in=pks)
-        return queryset.exclude(pk__in=pks)
+        connected = Exists(Pathway.objects.touching(OuterRef("pk")))
+        return queryset.filter(connected if value else ~connected)
 
     def search(self, queryset, name, value):
         if not value.strip():
@@ -377,8 +365,6 @@ class PathwayFilterSet(
         """
         if not value:
             return queryset
-        from .models import Pathway, touching_q
-
         return Pathway.map_queryset(queryset).filter(touching_q(value, lookup="__in"))
 
     def search(self, queryset, name, value):

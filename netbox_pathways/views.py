@@ -83,14 +83,11 @@ class StructureView(generic.ObjectView):
     )
 
     def get_extra_context(self, request, instance):
-        # Find all structures directly connected via any pathway
+        # Structures at the far end of this structure's pathways, by anchor:
+        # an end naming a location counts as the structure enclosing it.
         connected_ids = set()
-        pathways = models.Pathway.objects.touching(instance).select_related("start_structure", "end_structure")
-        for p in pathways:
-            if p.start_structure_id and p.start_structure_id != instance.pk:
-                connected_ids.add(p.start_structure_id)
-            if p.end_structure_id and p.end_structure_id != instance.pk:
-                connected_ids.add(p.end_structure_id)
+        for start_pk, end_pk in models.Pathway.objects.touching(instance).values_list("start_anchor", "end_anchor"):
+            connected_ids.update(pk for pk in (start_pk, end_pk) if pk and pk != instance.pk)
 
         connected_qs = models.Structure.objects.filter(pk__in=connected_ids).select_related("site", "tenant")
         table = tables.StructureTable(connected_qs, orderable=False)

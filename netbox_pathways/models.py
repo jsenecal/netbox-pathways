@@ -28,7 +28,6 @@ from .choices import (
 )
 from .geo import get_srid
 from .landing import attaches, end_point, is_area, landing_on, reference_point, with_end
-from .registry import LOCATION_IDENTITY_ACCESSOR
 
 ENDPOINT_TOLERANCE = 1.0
 
@@ -290,33 +289,27 @@ def _distance_to_m(value):
     return round(metres, decimals)
 
 
-def touching_q(structure, via_location=False, lookup=""):
+def touching_q(structure, direct=False, lookup="", prefix=""):
     """Q for pathways with an end attached to `structure`.
 
     `structure` is anything a structure FK lookup accepts (an instance, a pk,
-    an OuterRef); with lookup="__in", a collection of them. Directly attached
-    means start/end_structure. With `via_location`, an end whose
-    start/end_location is the structure's identity location also counts, as
-    long as no structure is set on that side -- the same rule
-    Pathway.anchor_structure() applies.
+    an OuterRef); with lookup="__in", a collection of them. `prefix` reaches
+    the pathway through a relation (e.g. "pathway__" from a cable segment).
+
+    By default the stored anchors decide: an end naming a location inside
+    the structure's site or location tree counts (attachment.resolve_anchor,
+    docs/user-guide/attachment.md). With direct=True only the
+    start/end_structure fields count -- the route graph's notion, which
+    keeps locations as places of their own.
     """
-    query = Q()
-    for side in ("start", "end"):
-        query |= Q(**{f"{side}_structure{lookup}": structure})
-        if via_location:
-            query |= Q(
-                **{
-                    f"{side}_structure__isnull": True,
-                    f"{side}_location__{LOCATION_IDENTITY_ACCESSOR}{lookup}": structure,
-                }
-            )
-    return query
+    field = "structure" if direct else "anchor"
+    return Q(**{f"{prefix}start_{field}{lookup}": structure}) | Q(**{f"{prefix}end_{field}{lookup}": structure})
 
 
 class PathwayQuerySet(RestrictedQuerySet):
-    def touching(self, structure, via_location=False):
+    def touching(self, structure, direct=False):
         """Pathways with an end attached to `structure`; see touching_q()."""
-        return self.filter(touching_q(structure, via_location))
+        return self.filter(touching_q(structure, direct=direct))
 
     def with_geo_length(self):
         """Annotate each pathway with `_geo_length`: PostGIS `ST_Length(path)`."""
