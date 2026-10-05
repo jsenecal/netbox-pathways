@@ -101,6 +101,12 @@ class TestReanchorPathwaysCommand:
 
         assert "All pathway ends sit on their anchors." in _run()
 
+    def test_unknown_structure_pk_is_rejected(self):
+        from django.core.management.base import CommandError
+
+        with pytest.raises(CommandError, match=r"Structure PK\(s\) not found: \[999999\]"):
+            _run("--structure", "999999")
+
     def test_structure_filter_limits_the_scan(self):
         a1, a2 = _pole("A1", 0, 0), _pole("A2", 100, 0)
         b1, b2 = _pole("B1", 0, 500), _pole("B2", 100, 500)

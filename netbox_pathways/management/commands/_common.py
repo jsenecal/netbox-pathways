@@ -1,8 +1,8 @@
-"""Attribute a management command's writes to a NetBox user.
+"""Arguments and helpers shared by the plugin's data-rewriting commands.
 
-Writes made inside NetBox's event pipeline get change-log entries and fire
-webhooks/event rules; outside it they bypass both. Commands that rewrite
-plugin data offer `--user` to opt in.
+Those commands preview by default and write only with `--apply`. Writes made
+inside NetBox's event pipeline get change-log entries and fire webhooks/event
+rules; outside it they bypass both, so the commands offer `--user` to opt in.
 """
 
 import uuid
@@ -12,6 +12,21 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import CommandError
 from netbox.context_managers import event_tracking
 from utilities.request import NetBoxFakeRequest
+
+
+def add_apply_argument(parser, help_text):
+    parser.add_argument("--apply", action="store_true", help=help_text)
+
+
+def resolve_structures(pks):
+    """The structures with these PKs; a CommandError names any that do not exist."""
+    from netbox_pathways.models import Structure
+
+    structures = list(Structure.objects.filter(pk__in=pks))
+    missing = set(pks) - {structure.pk for structure in structures}
+    if missing:
+        raise CommandError(f"Structure PK(s) not found: {sorted(missing)}")
+    return structures
 
 
 def add_user_argument(parser, action):

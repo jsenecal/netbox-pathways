@@ -9,12 +9,18 @@ Detached aerial spans are reported but cannot be repaired: there is no
 structure to land on.
 """
 
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from netbox_pathways.choices import PathwayTypeChoices
-from netbox_pathways.management.commands._tracking import add_user_argument, resolve_user, tracked
-from netbox_pathways.models import Pathway, Structure
+from netbox_pathways.management.commands._common import (
+    add_apply_argument,
+    add_user_argument,
+    resolve_structures,
+    resolve_user,
+    tracked,
+)
+from netbox_pathways.models import Pathway
 from netbox_pathways.reanchor import find_drift, pathways_anchored_to, repair
 
 
@@ -37,11 +43,7 @@ class Command(BaseCommand):
             default=[],
             help="Only check pathways of these types",
         )
-        parser.add_argument(
-            "--apply",
-            action="store_true",
-            help="Repair what was found (without this flag the command only reports)",
-        )
+        add_apply_argument(parser, "Repair what was found (without this flag the command only reports)")
         add_user_argument(parser, "repair")
 
     def handle(self, *args, **options):
@@ -74,12 +76,8 @@ class Command(BaseCommand):
         if options["type"]:
             pathways = pathways.filter(pathway_type__in=options["type"])
         if options["structure"]:
-            structures = list(Structure.objects.filter(pk__in=options["structure"]))
-            missing = set(options["structure"]) - {s.pk for s in structures}
-            if missing:
-                raise CommandError(f"Structure PK(s) not found: {sorted(missing)}")
             pks = set()
-            for structure in structures:
+            for structure in resolve_structures(options["structure"]):
                 pks.update(pathways_anchored_to(structure).values_list("pk", flat=True))
             pathways = pathways.filter(pk__in=pks)
         return pathways

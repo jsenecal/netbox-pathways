@@ -9,8 +9,14 @@ Re-run with --apply to execute the split atomically.
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 
-from netbox_pathways.management.commands._tracking import add_user_argument, resolve_user, tracked
-from netbox_pathways.models import Pathway, Structure
+from netbox_pathways.management.commands._common import (
+    add_apply_argument,
+    add_user_argument,
+    resolve_structures,
+    resolve_user,
+    tracked,
+)
+from netbox_pathways.models import Pathway
 from netbox_pathways.split import (
     DEFAULT_TOLERANCE,
     SplitError,
@@ -46,11 +52,7 @@ class Command(BaseCommand):
             default=[],
             help="Structure PKs to drop from the detected candidates",
         )
-        parser.add_argument(
-            "--apply",
-            action="store_true",
-            help="Execute the split (without this flag the command only previews)",
-        )
+        add_apply_argument(parser, "Execute the split (without this flag the command only previews)")
         add_user_argument(parser, "split")
 
     def handle(self, *args, **options):
@@ -88,11 +90,7 @@ class Command(BaseCommand):
         if options["structures"] and options["exclude"]:
             raise CommandError("--exclude only applies to detected candidates; do not combine it with --structures.")
         if options["structures"]:
-            structures = list(Structure.objects.filter(pk__in=options["structures"]))
-            missing = set(options["structures"]) - {s.pk for s in structures}
-            if missing:
-                raise CommandError(f"Structure PK(s) not found: {sorted(missing)}")
-            return structures
+            return resolve_structures(options["structures"])
         candidates = find_candidates(pathway, tolerance)
         excluded = set(options["exclude"])
         return [c.structure for c in candidates if c.structure.pk not in excluded]
