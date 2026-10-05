@@ -15,21 +15,14 @@ the changelog like any other edit.
 
 from dataclasses import dataclass, field
 
-from django.contrib.gis.geos import LineString, Point
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
 
-from .landing import landing_on, relocate
+from .landing import attaches, end_point, landing_on, relocate, with_end
 from .registry import LOCATION_IDENTITY_ACCESSOR
 
 SIDES = ("start", "end")
-
-
-def end_point(pathway, side):
-    """The first or last vertex of the pathway's path as a Point."""
-    x, y = pathway.path.coords[0 if side == "start" else -1][:2]
-    return Point(x, y, srid=pathway.path.srid)
 
 
 def _rewrite(pathway, placements):
@@ -41,10 +34,8 @@ def _rewrite(pathway, placements):
     from .models import AerialSpan
 
     pathway.snapshot()
-    coords = list(pathway.path.coords)
     for side, point in placements.items():
-        coords[0 if side == "start" else -1] = (point.x, point.y)
-    pathway.path = LineString(coords, srid=pathway.path.srid)
+        pathway.path = with_end(pathway.path, side, point)
     if isinstance(pathway, AerialSpan):
         try:
             pathway.straighten()
@@ -97,7 +88,7 @@ def reanchor_structure(structure, old_geom):
         moved = []
         for pathway in concrete_pathways(pathways_anchored_to(structure)):
             placements = {
-                side: relocate(old_geom, structure.geometry, end_point(pathway, side))
+                side: relocate(old_geom, structure.geometry, end_point(pathway.path, side))
                 for side in SIDES
                 if getattr(pathway.anchor_structure(side), "pk", None) == structure.pk
             }
@@ -143,15 +134,6 @@ class Drift:
     repairable: bool = True
 
 
-def anchor_geometry(pathway, side):
-    """Geometry one end must land on: its anchor structure, else its junction."""
-    structure = pathway.anchor_structure(side)
-    if structure is not None and structure.geometry is not None:
-        return structure.geometry
-    junction = getattr(pathway, f"{side}_junction", None)
-    return junction.derived_geometry if junction is not None else None
-
-
 def find_drift(pathways):
     """Drift for each pathway in `pathways` that has a problem, in order."""
     from .models import ENDPOINT_TOLERANCE, AerialSpan
@@ -162,15 +144,15 @@ def find_drift(pathways):
         problems = []
         repairable = True
         for side in SIDES:
-            geom = anchor_geometry(pathway, side)
+            geom, _kind = pathway.anchor_geometry(side)
             if geom is None:
                 if is_aerial:
                     problems.append(f"{side} vertex is not attached to a structure")
                     repairable = False
                 continue
-            end = end_point(pathway, side)
-            distance = landing_on(geom, end).distance(end)
-            if distance > ENDPOINT_TOLERANCE:
+            end = end_point(pathway.path, side)
+            if not attaches(geom, end, ENDPOINT_TOLERANCE):
+                distance = landing_on(geom, end).distance(end)
                 problems.append(f"{side} vertex is {distance:.2f} from its anchor")
         vertices = len(pathway.path.coords)
         if is_aerial and vertices > 2:
@@ -189,8 +171,8 @@ def repair(pathway):
     """
     placements = {}
     for side in SIDES:
-        geom = anchor_geometry(pathway, side)
+        geom, _kind = pathway.anchor_geometry(side)
         if geom is not None:
-            placements[side] = landing_on(geom, end_point(pathway, side))
+            placements[side] = landing_on(geom, end_point(pathway.path, side))
     _rewrite(pathway, placements)
     _cascade_junctions([pathway])

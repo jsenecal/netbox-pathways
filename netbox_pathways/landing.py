@@ -9,6 +9,25 @@ structure moved.
 Pure GEOS: nothing here touches the database.
 """
 
+from django.contrib.gis.geos import LineString, Point
+
+
+def _index(side):
+    return 0 if side == "start" else -1
+
+
+def end_point(path, side):
+    """The first ("start") or last ("end") vertex of a LineString as a Point."""
+    x, y = path.coords[_index(side)][:2]
+    return Point(x, y, srid=path.srid)
+
+
+def with_end(path, side, point):
+    """A copy of `path` with its first or last vertex moved to `point`."""
+    coords = list(path.coords)
+    coords[_index(side)] = (point.x, point.y)
+    return LineString(coords, srid=path.srid)
+
 
 def is_area(geom):
     return geom.geom_type != "Point"
@@ -29,6 +48,17 @@ def landing_on(geom, near):
         return geom
     boundary = geom.boundary
     return boundary.interpolate(boundary.project(near))
+
+
+def attaches(geom, pt, tolerance):
+    """Whether an end at `pt` counts as attached to `geom`.
+
+    Within `tolerance` of a point; inside an area, or within `tolerance` of
+    its boundary. Attached ends are then landed with landing_on().
+    """
+    if not is_area(geom):
+        return pt.distance(geom) <= tolerance
+    return geom.contains(pt) or geom.boundary.distance(pt) <= tolerance
 
 
 def relocate(old_geom, new_geom, pt):

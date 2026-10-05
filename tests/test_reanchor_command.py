@@ -3,7 +3,7 @@
 from io import StringIO
 
 import pytest
-from django.contrib.gis.geos import LineString, Point
+from django.contrib.gis.geos import LineString, Point, Polygon
 from django.core.management import call_command
 
 from netbox_pathways.geo import get_srid
@@ -89,6 +89,17 @@ class TestReanchorPathwaysCommand:
 
         with django_assert_max_num_queries(20):
             _run()
+
+    def test_end_inside_a_footprint_counts_as_attached(self):
+        """Drift uses the same attachment rule as clean(): inside a footprint is attached."""
+        building = Structure.objects.create(
+            name="B1", geometry=Polygon(((0, 0), (10, 0), (10, 10), (0, 10), (0, 0)), srid=SRID)
+        )
+        pole = _pole("P1", 60, 5)
+        _conduit(building, pole, [(10, 5), (60, 5)])
+        Pathway.objects.update(path=LineString((5, 5), (60, 5), srid=SRID))
+
+        assert "All pathway ends sit on their anchors." in _run()
 
     def test_structure_filter_limits_the_scan(self):
         a1, a2 = _pole("A1", 0, 0), _pole("A2", 100, 0)

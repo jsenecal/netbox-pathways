@@ -25,7 +25,7 @@ from .choices import (
     StructureTypeChoices,
 )
 from .geo import get_srid
-from .landing import landing_on, reference_point
+from .landing import attaches, end_point, is_area, landing_on, reference_point, with_end
 from .registry import LOCATION_IDENTITY_ACCESSOR
 
 ENDPOINT_TOLERANCE = 1.0
@@ -439,8 +439,10 @@ class Pathway(NetBoxModel):
                     {"path": "Path is required unless both endpoints are locations (indoor pathway)."}
                 )
             return
-        self._validate_and_snap_endpoint("start")
-        self._validate_and_snap_endpoint("end")
+        for side in ("start", "end"):
+            geom, kind = self.anchor_geometry(side)
+            if geom is not None:
+                self._snap_path_end(side, geom, kind)
 
     def anchor_structure(self, side):
         """The structure one end is attached to.
@@ -456,52 +458,30 @@ class Pathway(NetBoxModel):
             structure = getattr(location, LOCATION_IDENTITY_ACCESSOR, None) if location else None
         return structure
 
-    def _validate_and_snap_endpoint(self, side):
-        """Validate and snap one endpoint of self.path to its anchor structure."""
+    def anchor_geometry(self, side):
+        """Geometry one end must land on, and what it is: (geom, "structure") or (None, None)."""
         structure = self.anchor_structure(side)
-        if not structure or not structure.geometry:
-            return
-
-        self._snap_path_end(side, structure.geometry, "structure")
+        if structure is not None and structure.geometry is not None:
+            return structure.geometry, "structure"
+        return None, None
 
     def _snap_path_end(self, side, geom, kind):
-        """Snap the path's <side> end to geom; raise if beyond tolerance.
+        """Snap the path's <side> end to geom; raise if it is not attached.
 
         geom may be a Point or an area geometry (snapped to its boundary).
         kind names the endpoint type ("structure" or "junction") in the
         validation message.
         """
-        from django.contrib.gis.geos import LineString, Point
-
-        coords = list(self.path.coords)
-        idx = 0 if side == "start" else -1
-        endpoint = Point(coords[idx][0], coords[idx][1], srid=self.path.srid)
-
-        if geom.geom_type == "Point":
-            if endpoint.distance(geom) <= ENDPOINT_TOLERANCE:
-                coords[idx] = (geom.x, geom.y)
-            else:
-                raise ValidationError(
-                    {
-                        "path": f"Path {side} point is too far from the {side} {kind} "
-                        f"(must be within {ENDPOINT_TOLERANCE}m)."
-                    }
-                )
-        else:
-            # Polygon or other area geometry
-            if geom.contains(endpoint) or geom.boundary.distance(endpoint) <= ENDPOINT_TOLERANCE:
-                boundary = geom.boundary
-                snap_point = boundary.interpolate(boundary.project(endpoint))
-                coords[idx] = (snap_point.x, snap_point.y)
-            else:
-                raise ValidationError(
-                    {
-                        "path": f"Path {side} point is too far from the {side} {kind} "
-                        f"(must be within {ENDPOINT_TOLERANCE}m of the boundary)."
-                    }
-                )
-
-        self.path = LineString(coords, srid=self.path.srid)
+        endpoint = end_point(self.path, side)
+        if not attaches(geom, endpoint, ENDPOINT_TOLERANCE):
+            of_boundary = " of the boundary" if is_area(geom) else ""
+            raise ValidationError(
+                {
+                    "path": f"Path {side} point is too far from the {side} {kind} "
+                    f"(must be within {ENDPOINT_TOLERANCE}m{of_boundary})."
+                }
+            )
+        self.path = with_end(self.path, side, landing_on(geom, endpoint))
 
     def __str__(self):
         return self.label or f"#{self.pk or self._pk}"
@@ -741,7 +721,7 @@ class Conduit(Pathway):
         # Inherit before validation so the exactly-one-endpoint-per-side
         # check and path snapping see the effective endpoints.
         self._inherit_bank_endpoints()
-        super().clean()  # Pathway.clean() handles structure endpoints
+        super().clean()  # Pathway.clean() snaps structure and junction endpoints
         start_options = sum(bool(x) for x in [self.start_structure, self.start_location, self.start_junction])
         end_options = sum(bool(x) for x in [self.end_structure, self.end_location, self.end_junction])
 
@@ -754,21 +734,15 @@ class Conduit(Pathway):
         if end_options > 1:
             raise ValidationError("Conduit end must be exactly one of: structure, location, or junction")
 
-        # Validate/snap junction endpoints (structure endpoints handled by Pathway.clean)
-        if self.path:
-            self._validate_and_snap_junction("start")
-            self._validate_and_snap_junction("end")
-
-    def _validate_and_snap_junction(self, side):
-        """Validate and snap one endpoint to the attached junction's derived point."""
-        junction = getattr(self, f"{side}_junction", None)
-        if not junction:
-            return
-        junc_geom = junction.derived_geometry
-        if junc_geom is None:
-            return
-
-        self._snap_path_end(side, junc_geom, "junction")
+    def anchor_geometry(self, side):
+        """A conduit end may also hang from a junction on a trunk conduit."""
+        geom, kind = super().anchor_geometry(side)
+        if geom is None:
+            junction = getattr(self, f"{side}_junction", None)
+            junction_geom = junction.derived_geometry if junction is not None else None
+            if junction_geom is not None:
+                return junction_geom, "junction"
+        return geom, kind
 
     def save(self, *args, **kwargs):
         self.pathway_type = "conduit"
@@ -829,7 +803,7 @@ class AerialSpan(Pathway):
         lands the end on its boundary nearest the submitted end, or nearest
         the other support when no path was submitted.
         """
-        from django.contrib.gis.geos import LineString, Point
+        from django.contrib.gis.geos import LineString
 
         anchors = {side: self.anchor_structure(side) for side in ("start", "end")}
         detached = {
@@ -845,10 +819,8 @@ class AerialSpan(Pathway):
         if self.path and self.path.srid != start_geom.srid:
             self.path = self.path.transform(start_geom.srid, clone=True)
         if self.path:
-            srid = self.path.srid
-            first, last = self.path.coords[0], self.path.coords[-1]
-            start = landing_on(start_geom, Point(first[0], first[1], srid=srid))
-            end = landing_on(end_geom, Point(last[0], last[1], srid=srid))
+            start = landing_on(start_geom, end_point(self.path, "start"))
+            end = landing_on(end_geom, end_point(self.path, "end"))
         else:
             start = landing_on(start_geom, reference_point(end_geom))
             end = landing_on(end_geom, start)
