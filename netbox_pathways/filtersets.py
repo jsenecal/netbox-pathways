@@ -377,11 +377,9 @@ class PathwayFilterSet(
         """
         if not value:
             return queryset
-        from .models import Pathway
+        from .models import Pathway, touching_q
 
-        return Pathway.map_queryset(queryset).filter(
-            Q(start_structure__in=value) | Q(end_structure__in=value),
-        )
+        return Pathway.map_queryset(queryset).filter(touching_q(value, lookup="__in"))
 
     def search(self, queryset, name, value):
         if not value.strip():

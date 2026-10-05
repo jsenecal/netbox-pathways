@@ -48,11 +48,7 @@ def pathways_anchored_to(structure):
     """Pathways with a path whose start or end resolves to `structure`."""
     from .models import Pathway
 
-    query = Q(start_structure=structure) | Q(end_structure=structure)
-    if structure.location_id:
-        query |= Q(start_structure__isnull=True, start_location_id=structure.location_id)
-        query |= Q(end_structure__isnull=True, end_location_id=structure.location_id)
-    return Pathway.objects.filter(query, path__isnull=False)
+    return Pathway.objects.touching(structure, via_location=True).filter(path__isnull=False)
 
 
 def concrete_pathways(pathways):

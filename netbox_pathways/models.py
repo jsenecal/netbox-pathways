@@ -6,6 +6,7 @@ from django.contrib.gis.db.models.functions import Length
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import transaction
+from django.db.models import Q
 from django.urls import reverse
 from netbox.models import NetBoxModel
 from tenancy.models import Tenant
@@ -276,7 +277,34 @@ def _distance_to_m(value):
     return round(metres, decimals)
 
 
+def touching_q(structure, via_location=False, lookup=""):
+    """Q for pathways with an end attached to `structure`.
+
+    `structure` is anything a structure FK lookup accepts (an instance, a pk,
+    an OuterRef); with lookup="__in", a collection of them. Directly attached
+    means start/end_structure. With `via_location`, an end whose
+    start/end_location is the structure's identity location also counts, as
+    long as no structure is set on that side -- the same rule
+    Pathway.anchor_structure() applies.
+    """
+    query = Q()
+    for side in ("start", "end"):
+        query |= Q(**{f"{side}_structure{lookup}": structure})
+        if via_location:
+            query |= Q(
+                **{
+                    f"{side}_structure__isnull": True,
+                    f"{side}_location__{LOCATION_IDENTITY_ACCESSOR}{lookup}": structure,
+                }
+            )
+    return query
+
+
 class PathwayQuerySet(RestrictedQuerySet):
+    def touching(self, structure, via_location=False):
+        """Pathways with an end attached to `structure`; see touching_q()."""
+        return self.filter(touching_q(structure, via_location))
+
     def with_geo_length(self):
         """Annotate each pathway with `_geo_length`: PostGIS `ST_Length(path)`."""
         return self.annotate(_geo_length=Length("path"))

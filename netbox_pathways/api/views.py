@@ -1,4 +1,4 @@
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Count, Exists, OuterRef
 from netbox.api.viewsets import NetBoxModelViewSet
 
 from .. import filtersets, models
@@ -7,9 +7,7 @@ from . import serializers
 
 class StructureViewSet(NetBoxModelViewSet):
     queryset = models.Structure.objects.select_related("site", "tenant").annotate(
-        _has_pathways=Exists(
-            models.Pathway.objects.filter(Q(start_structure=OuterRef("pk")) | Q(end_structure=OuterRef("pk")))
-        ),
+        _has_pathways=Exists(models.Pathway.objects.touching(OuterRef("pk"))),
     )
     serializer_class = serializers.StructureSerializer
     filterset_class = filtersets.StructureFilterSet
