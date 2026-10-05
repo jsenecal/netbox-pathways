@@ -217,3 +217,24 @@ class TestAerialSpanStraightLine:
         span.clean()
         assert span.path.srid == SRID
         assert coords(span)[-1] == pytest.approx((3.0, 0.0), abs=1e-3)
+
+    def test_room_end_lands_on_the_outline_of_the_building_site(self):
+        """Room 101 has no structure; its site is represented by the building."""
+        from dcim.models import Location, Site
+
+        from netbox_pathways.models import SiteGeometry
+
+        site = Site.objects.create(name="Bldg", slug="bldg")
+        SiteGeometry.objects.create(site=site, structure=make_building("B1", 0, 0))
+        room = Location.objects.create(name="Room 101", slug="room-101", site=site)
+        span = AerialSpan(start_location=room, end_structure=make_pole("P1", 60, 5))
+        span.clean()
+        assert coords(span) == [(10.0, 5.0), (60.0, 5.0)]
+
+    def test_both_ends_on_the_same_support_is_rejected(self):
+        from django.core.exceptions import ValidationError
+
+        pole = make_pole("P1", 0, 0)
+        span = AerialSpan(start_structure=pole, end_structure=pole)
+        with pytest.raises(ValidationError, match="two different supports"):
+            span.clean()

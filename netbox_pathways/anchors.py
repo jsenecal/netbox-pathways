@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from dcim.models import CableTermination, Location, Site
 
 from . import models
+from .attachment import location_chain
 
 # Message and remedy per unresolved reason, kept here rather than in a template
 # so the wording is testable. `message` is formatted with `end` and `place`.
@@ -65,7 +66,7 @@ def cable_end_nodes(cable, cable_end):
     if termination is None or (termination._site_id is None and termination._location_id is None):
         return AnchorSet(unresolved_reason="termination_not_sited")
 
-    locations = _location_chain(termination._location)
+    locations = location_chain(termination._location)
     nodes = [("location", location.pk) for location in locations]
     labels = [str(location) for location in locations]
 
@@ -103,13 +104,6 @@ def describe(anchor, end_label):
         "message": message.format(end=end_label, place=place),
         "remedy": remedy,
     }
-
-
-def _location_chain(location):
-    """The location and its ancestors, deepest first. Empty when unset."""
-    if location is None:
-        return []
-    return [location, *location.get_ancestors(ascending=True)]
 
 
 def _candidate_structures(site_id, location_pks):

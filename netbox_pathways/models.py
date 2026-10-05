@@ -13,6 +13,7 @@ from tenancy.models import Tenant
 from utilities.fields import ColorField
 from utilities.querysets import RestrictedQuerySet
 
+from .attachment import resolve_anchor
 from .choices import (
     AerialTypeChoices,
     BankFaceChoices,
@@ -473,18 +474,13 @@ class Pathway(NetBoxModel):
                 self._snap_path_end(side, geom, kind)
 
     def anchor_structure(self, side):
-        """The structure one end is attached to.
+        """The structure one end is attached to, resolved live.
 
-        The direct <side>_structure, else the identity structure of
-        <side>_location. The reverse one-to-one raises an
-        AttributeError-compatible DoesNotExist, so identity-less locations
-        degrade to None and stay documentary.
+        The <side>_structure, else the nearest structure enclosing
+        <side>_location -- see attachment.resolve_anchor() and
+        docs/user-guide/attachment.md.
         """
-        structure = getattr(self, f"{side}_structure", None)
-        if structure is None:
-            location = getattr(self, f"{side}_location", None)
-            structure = getattr(location, LOCATION_IDENTITY_ACCESSOR, None) if location else None
-        return structure
+        return resolve_anchor(getattr(self, f"{side}_structure", None), getattr(self, f"{side}_location", None))
 
     def anchor_geometry(self, side):
         """Geometry one end must land on, and what it is: (geom, "structure") or (None, None)."""
@@ -841,6 +837,8 @@ class AerialSpan(Pathway):
         }
         if detached:
             raise ValidationError(detached)
+        if anchors["start"].pk == anchors["end"].pk:
+            raise ValidationError({"end_structure": "An aerial span connects two different supports."})
 
         start_geom = anchors["start"].geometry
         end_geom = anchors["end"].geometry
