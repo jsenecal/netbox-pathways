@@ -163,6 +163,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Upgrade step: run `reanchor_pathways` after migrating.** Pathway ends
+  that name a location now belong to the structure enclosing it, so their
+  drawn ends must sit on that structure. An existing end that sits more
+  than the endpoint tolerance away (for example, a conduit ending at a
+  room in a site represented by a hut drawn elsewhere) makes the next edit
+  of that pathway fail with "too far from the start structure". Run
+  `python manage.py reanchor_pathways` to list them and
+  `reanchor_pathways --apply` to land them on their structures.
+
 - **A structure's pathways include ends attached through a location.**
   Structure tabs and badges, the connected-structures panel, the
   structure API's `no_pathways`, the `has_pathways` and `occupied`

@@ -76,3 +76,25 @@ def test_reparenting_a_location_switches_its_subtree_anchor(plant):
     plant["floor"].save()
 
     assert _start_anchor(plant["C"]) == vault
+
+
+def test_redrawing_the_site_boundary_does_not_recompute_anchors(plant):
+    """Only linking or unlinking the site's structure changes what its locations attach to."""
+    Pathway.objects.filter(pk=plant["C"].pk).update(start_anchor=None)
+    site_geometry = plant["site_geometry"]
+    site_geometry.geometry = make_building("Scratch", 0, 0, size=60).geometry
+    site_geometry.save()
+
+    assert _start_anchor(plant["C"]) is None
+
+
+def test_refresh_resolves_each_location_once(plant, django_assert_max_num_queries):
+    from netbox_pathways.attachment import refresh_for_site
+
+    far = Pathway.objects.get(pk=plant["C"].pk).end_structure
+    for index in range(10):
+        make_conduit([(50, 25), (200, 25)], start_location=plant["room"], end_structure=far, label=f"Q{index}")
+    Pathway.objects.update(start_anchor=None)
+
+    with django_assert_max_num_queries(20):
+        refresh_for_site(plant["site"].pk)

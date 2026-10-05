@@ -13,7 +13,7 @@ from tenancy.models import Tenant
 from utilities.fields import ColorField
 from utilities.querysets import RestrictedQuerySet
 
-from .attachment import refresh_for_locations, resolve_anchor
+from .attachment import refresh_for_locations, refresh_for_site, resolve_anchor
 from .choices import (
     AerialTypeChoices,
     BankFaceChoices,
@@ -230,7 +230,16 @@ class SiteGeometry(NetBoxModel):
     def save(self, *args, **kwargs):
         if self.structure_id and not self.geometry:
             self.geometry = self.structure.geometry
-        super().save(*args, **kwargs)
+        old_structure_id = None
+        if self.pk:
+            old_structure_id = SiteGeometry.objects.filter(pk=self.pk).values_list("structure_id", flat=True).first()
+        created = self.pk is None
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            # Only the linked structure decides what the site's locations
+            # attach to; a redrawn boundary changes nothing.
+            if created or old_structure_id != self.structure_id:
+                refresh_for_site(self.site_id)
 
 
 class CircuitGeometry(NetBoxModel):
@@ -524,6 +533,23 @@ class Pathway(NetBoxModel):
         """
         return resolve_anchor(getattr(self, f"{side}_structure", None), getattr(self, f"{side}_location", None))
 
+    def resolved_anchor_ids(self, memo=None):
+        """(start, end) pks of the structures the ends attach to, resolved live.
+
+        `memo` (location pk -> structure pk) lets a batch resolve each named
+        location once instead of once per pathway end.
+        """
+        ids = []
+        for side in ("start", "end"):
+            location_id = getattr(self, f"{side}_location_id", None)
+            if memo is None or location_id is None or getattr(self, f"{side}_structure_id", None):
+                ids.append(getattr(self.anchor_structure(side), "pk", None))
+                continue
+            if location_id not in memo:
+                memo[location_id] = getattr(self.anchor_structure(side), "pk", None)
+            ids.append(memo[location_id])
+        return tuple(ids)
+
     def anchor_geometry(self, side):
         """Geometry one end must land on, and what it is: (geom, "structure") or (None, None)."""
         structure = self.anchor_structure(side)
@@ -596,8 +622,7 @@ class Pathway(NetBoxModel):
         )
 
     def save(self, *args, **kwargs):
-        self.start_anchor = self.anchor_structure("start")
-        self.end_anchor = self.anchor_structure("end")
+        self.start_anchor_id, self.end_anchor_id = self.resolved_anchor_ids()
         if not self.pathway_type:
             if isinstance(self, ConduitBank):
                 self.pathway_type = "conduit_bank"

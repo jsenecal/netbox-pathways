@@ -148,8 +148,7 @@ def find_drift(pathways):
             # Which end is meant is a human decision: report, never rewrite.
             problems.extend(message for messages in exc.message_dict.values() for message in messages)
             repairable = False
-        live = tuple(getattr(pathway.anchor_structure(side), "pk", None) for side in SIDES)
-        if live != (pathway.start_anchor_id, pathway.end_anchor_id):
+        if pathway.resolved_anchor_ids() != (pathway.start_anchor_id, pathway.end_anchor_id):
             problems.append("stored anchors are stale")
         if pathway.path is None:
             if problems:

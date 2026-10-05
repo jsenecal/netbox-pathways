@@ -135,3 +135,24 @@ class TestReanchorPathwaysCommand:
 
         assert "The start names a structure and a location; set only one." in output
         assert "1 need(s) attention" in output
+
+    def test_apply_lands_ends_newly_anchored_far_from_their_structure(self):
+        """Upgrade path: an end at a room in a site whose structure is a point far away.
+
+        Such rows predate site-level anchoring; clean() now rejects any edit to
+        them, and --apply is the documented remedy.
+        """
+        from dcim.models import Location, Site
+
+        from netbox_pathways.models import SiteGeometry
+
+        site = Site.objects.create(name="UP-Site", slug="up-site")
+        hut = make_pole("UP-Hut", 0, 0)
+        SiteGeometry.objects.create(site=site, structure=hut)
+        room = Location.objects.create(name="UP-Room", slug="up-room", site=site)
+        far = make_pole("UP-P9", 200, 0)
+        conduit = make_conduit([(30, 40), (200, 0)], start_location=room, end_structure=far)
+
+        _run("--apply")
+
+        assert coords(conduit, refresh=True)[0] == (0.0, 0.0)

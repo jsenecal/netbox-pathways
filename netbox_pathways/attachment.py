@@ -55,10 +55,10 @@ def refresh_anchors(pathways):
     from .models import Pathway
 
     updated = 0
+    memo = {}
     rows = pathways.select_related("start_structure", "end_structure", "start_location", "end_location")
     for pathway in rows:
-        start, end = pathway.anchor_structure("start"), pathway.anchor_structure("end")
-        anchors = (getattr(start, "pk", None), getattr(end, "pk", None))
+        anchors = pathway.resolved_anchor_ids(memo)
         if anchors != (pathway.start_anchor_id, pathway.end_anchor_id):
             Pathway.objects.filter(pk=pathway.pk).update(start_anchor_id=anchors[0], end_anchor_id=anchors[1])
             updated += 1

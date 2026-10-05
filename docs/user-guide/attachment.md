@@ -108,3 +108,17 @@ restored database dump -- can leave the stored answer stale.
 longer sit on their structure, and sides naming two endpoint kinds;
 `--apply` repairs everything except the sides naming two kinds, which need a
 person to choose.
+
+## After upgrading
+
+Before this rule existed, an end naming a location without a structure of its
+own was not attached to anything, and its drawn end could be anywhere. It now
+belongs to the structure enclosing the location -- often the structure that
+represents the site -- and must sit on it. If it is more than the endpoint
+tolerance away, the next edit of that pathway is rejected with "Path start
+point is too far from the start structure". Run once after upgrading:
+
+```
+python manage.py reanchor_pathways           # list affected pathways
+python manage.py reanchor_pathways --apply   # land their ends on their structures
+```

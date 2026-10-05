@@ -38,10 +38,13 @@ def refresh_anchors_on_location_save(sender, instance, **kwargs):
     refresh_for_locations([instance])
 
 
-@receiver(post_save, sender=SiteGeometry)
 @receiver(post_delete, sender=SiteGeometry)
-def refresh_anchors_on_site_geometry_change(sender, instance, **kwargs):
-    """Linking or unlinking a site's structure changes what its locations attach to."""
+def refresh_anchors_on_site_geometry_delete(sender, instance, **kwargs):
+    """Unlinking a site's structure changes what its locations attach to.
+
+    Linking and relinking are handled in SiteGeometry.save(), which knows the
+    old structure and skips boundary-only edits.
+    """
     refresh_for_site(instance.site_id)
 
 
