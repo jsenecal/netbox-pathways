@@ -59,8 +59,15 @@ is rejected, because it would be ambiguous where the pathway ends.
 **Geometry.**
 
 - The drawn line's end is snapped onto the structure: onto a point
-  structure exactly, onto the outline of a footprint. An end inside a
-  footprint counts as attached and is moved onto the outline.
+  structure exactly, onto the outline of a footprint. An end naming the
+  footprint structure itself and drawn inside it is moved onto the outline
+  (the building entry).
+- **Indoor ends stay where drawn.** An end that belongs to a footprint
+  through a location -- *Room 101* belonging to building B -- and is drawn
+  inside the footprint is an indoor position. It is not snapped, moving B
+  shifts it along with B instead of onto the outline, and
+  `reanchor_pathways` leaves it alone. Drawn outside the footprint, the same
+  end snaps onto the outline like any other.
 - [Aerial spans](pathways.md#geometry-of-an-aerial-span) must attach to two
   *different* structures. An aerial span to *Room 101* hangs from building
   B and lands on its outline.

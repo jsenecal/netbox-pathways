@@ -20,7 +20,7 @@ from django.db import transaction
 from django.db.models import Q
 
 from .attachment import refresh_anchors
-from .landing import attaches, end_point, landing_on, relocate, with_end
+from .landing import attaches, end_point, landing_on, relocate, translate, with_end
 from .registry import LOCATION_IDENTITY_ACCESSOR
 
 SIDES = ("start", "end")
@@ -86,11 +86,13 @@ def reanchor_structure(structure, old_geom):
     with transaction.atomic():
         moved = []
         for pathway in concrete_pathways(pathways_anchored_to(structure)):
-            placements = {
-                side: relocate(old_geom, structure.geometry, end_point(pathway.path, side))
-                for side in SIDES
-                if getattr(pathway.anchor_structure(side), "pk", None) == structure.pk
-            }
+            placements = {}
+            for side in SIDES:
+                if getattr(pathway.anchor_structure(side), "pk", None) != structure.pk:
+                    continue
+                # Indoor ends keep their place in the footprint; others follow the outline.
+                move = translate if pathway.is_indoor_end(side, old_geom) else relocate
+                placements[side] = move(old_geom, structure.geometry, end_point(pathway.path, side))
             _rewrite(pathway, placements)
             moved.append(pathway)
         _cascade_junctions(moved)
@@ -188,7 +190,7 @@ def repair(pathway):
     placements = {}
     for side in SIDES:
         geom, _kind = pathway.anchor_geometry(side)
-        if geom is not None:
+        if geom is not None and not pathway.is_indoor_end(side, geom):
             placements[side] = landing_on(geom, end_point(pathway.path, side))
     # save() inside _rewrite() also stores fresh anchors.
     _rewrite(pathway, placements)

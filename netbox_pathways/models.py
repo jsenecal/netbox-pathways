@@ -507,7 +507,7 @@ class Pathway(NetBoxModel):
             return
         for side in ("start", "end"):
             geom, kind = self.anchor_geometry(side)
-            if geom is not None:
+            if geom is not None and not self.is_indoor_end(side, geom):
                 self._snap_path_end(side, geom, kind)
 
     def check_one_endpoint_kind(self):
@@ -532,6 +532,23 @@ class Pathway(NetBoxModel):
         docs/user-guide/attachment.md.
         """
         return resolve_anchor(getattr(self, f"{side}_structure", None), getattr(self, f"{side}_location", None))
+
+    def is_indoor_end(self, side, geom):
+        """Whether this end is an indoor position inside its area structure.
+
+        True when the end names a location (not the structure itself), the
+        structure it belongs to is an area (a building footprint), and the
+        drawn end lies inside it: a room, not a building entry. Snapping,
+        moving the structure and repair keep such an end's place inside the
+        footprint; see docs/user-guide/attachment.md.
+        """
+        return (
+            self.path is not None
+            and getattr(self, f"{side}_structure_id", None) is None
+            and getattr(self, f"{side}_location_id", None) is not None
+            and is_area(geom)
+            and geom.contains(end_point(self.path, side))
+        )
 
     def resolved_anchor_ids(self, memo=None):
         """(start, end) pks of the structures the ends attach to, resolved live.

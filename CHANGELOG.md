@@ -17,7 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it. Pathways store the result as read-only `start_anchor` / `end_anchor`,
   exposed in the REST and GeoJSON APIs, kept current when locations,
   structures or site geometries change; `reanchor_pathways` reports and
-  refreshes stale ones. Documented in "How Pathway Ends Attach".
+  refreshes stale ones. Ends that belong to a building through a room and
+  are drawn inside its footprint are indoor positions: they stay where
+  drawn and move with the building. Documented in "How Pathway Ends
+  Attach".
 
 - **Pathway ends follow their structures.** Editing a structure's geometry
   moves every pathway end attached to it, directly or through an endpoint
