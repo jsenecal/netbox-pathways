@@ -44,3 +44,64 @@ def resolve_anchor(structure, location):
         .first()
     )
     return site_geometry.structure if site_geometry else None
+
+
+def refresh_anchors(pathways):
+    """Recompute stored anchors for `pathways`; write only rows that changed.
+
+    Anchors are derived data, so rows are updated in place without save()
+    or a change-log entry. Returns the number of rows updated.
+    """
+    from .models import Pathway
+
+    updated = 0
+    rows = pathways.select_related("start_structure", "end_structure", "start_location", "end_location")
+    for pathway in rows:
+        start, end = pathway.anchor_structure("start"), pathway.anchor_structure("end")
+        anchors = (getattr(start, "pk", None), getattr(end, "pk", None))
+        if anchors != (pathway.start_anchor_id, pathway.end_anchor_id):
+            Pathway.objects.filter(pk=pathway.pk).update(start_anchor_id=anchors[0], end_anchor_id=anchors[1])
+            updated += 1
+    return updated
+
+
+def _refresh_matching(query):
+    """Refresh anchors of pathways matching `query`, if there are any.
+
+    Selecting pks first keeps the anchor columns out of the query when nothing
+    matches, which is what lets hierarchy saves run during migration tests
+    against a pre-anchor schema.
+    """
+    from .models import Pathway
+
+    pks = list(Pathway.objects.filter(query).values_list("pk", flat=True))
+    if pks:
+        refresh_anchors(Pathway.objects.filter(pk__in=pks))
+
+
+def refresh_for_locations(locations):
+    """Refresh anchors of pathways naming any of `locations` or their descendants.
+
+    Each location is re-read from the database: NetBox maintains the tree
+    columns in the database and may update them after post_save fires, so the
+    in-memory instance can still describe the old position.
+    """
+    from dcim.models import Location
+    from django.db.models import Q
+
+    pks = set()
+    for location in locations:
+        if location is None:
+            continue
+        fresh = Location.objects.filter(pk=location.pk).first()
+        if fresh is not None:
+            pks.update(fresh.get_descendants(include_self=True).values_list("pk", flat=True))
+    if pks:
+        _refresh_matching(Q(start_location_id__in=pks) | Q(end_location_id__in=pks))
+
+
+def refresh_for_site(site_id):
+    """Refresh anchors of pathways naming any location in the site."""
+    from django.db.models import Q
+
+    _refresh_matching(Q(start_location__site_id=site_id) | Q(end_location__site_id=site_id))

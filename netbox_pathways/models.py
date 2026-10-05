@@ -13,7 +13,7 @@ from tenancy.models import Tenant
 from utilities.fields import ColorField
 from utilities.querysets import RestrictedQuerySet
 
-from .attachment import resolve_anchor
+from .attachment import refresh_for_locations, resolve_anchor
 from .choices import (
     AerialTypeChoices,
     BankFaceChoices,
@@ -146,12 +146,24 @@ class Structure(NetBoxModel):
             self.geometry = self.geometry.transform(srid, clone=True)
         update_fields = kwargs.get("update_fields")
         geometry_saved = update_fields is None or "geometry" in update_fields
-        old_geom = None
-        if self.pk and geometry_saved:
-            old_geom = Structure.objects.filter(pk=self.pk).values_list("geometry", flat=True).first()
+        location_saved = update_fields is None or "location" in update_fields
+        old_geom = old_location_id = None
+        if self.pk:
+            old_geom, old_location_id = Structure.objects.filter(pk=self.pk).values_list(
+                "geometry", "location_id"
+            ).first() or (None, None)
         with transaction.atomic():
             super().save(*args, **kwargs)
-            if old_geom is not None and self.geometry is not None and not old_geom.equals_exact(self.geometry):
+            if location_saved and old_location_id != self.location_id:
+                # Pathway ends under the old and new location now attach elsewhere.
+                old_location = Location.objects.filter(pk=old_location_id).first() if old_location_id else None
+                refresh_for_locations([old_location, self.location])
+            if (
+                geometry_saved
+                and old_geom is not None
+                and self.geometry is not None
+                and not old_geom.equals_exact(self.geometry)
+            ):
                 from .reanchor import reanchor_structure
 
                 reanchor_structure(self, old_geom)
