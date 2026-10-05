@@ -491,8 +491,12 @@ class Pathway(NetBoxModel):
         """
         return not self.is_indoor
 
+    # What one pathway side may name; exactly one of them per side.
+    endpoint_kinds = ("structure", "location")
+
     def clean(self):
         super().clean()
+        self.check_one_endpoint_kind()
         if not self.path:
             if self.requires_path:
                 raise ValidationError(
@@ -503,6 +507,20 @@ class Pathway(NetBoxModel):
             geom, kind = self.anchor_geometry(side)
             if geom is not None:
                 self._snap_path_end(side, geom, kind)
+
+    def check_one_endpoint_kind(self):
+        """Reject a side naming more than one of endpoint_kinds.
+
+        A side naming both a structure and a location would be ambiguous
+        about where the pathway ends; see docs/user-guide/attachment.md.
+        """
+        errors = {}
+        for side in ("start", "end"):
+            named = [kind for kind in self.endpoint_kinds if getattr(self, f"{side}_{kind}_id", None)]
+            if len(named) > 1:
+                errors[f"{side}_{named[-1]}"] = f"The {side} names a {' and a '.join(named)}; set only one."
+        if errors:
+            raise ValidationError(errors)
 
     def anchor_structure(self, side):
         """The structure one end is attached to, resolved live.
@@ -779,17 +797,13 @@ class Conduit(Pathway):
         # check and path snapping see the effective endpoints.
         self._inherit_bank_endpoints()
         super().clean()  # Pathway.clean() snaps structure and junction endpoints
-        start_options = sum(bool(x) for x in [self.start_structure, self.start_location, self.start_junction])
-        end_options = sum(bool(x) for x in [self.end_structure, self.end_location, self.end_junction])
-
-        if start_options == 0:
+        # Pathway.clean() already rejected a side naming more than one kind.
+        if not any(getattr(self, f"start_{kind}_id") for kind in self.endpoint_kinds):
             raise ValidationError("Conduit must have a start point (structure, location, or junction)")
-        if start_options > 1:
-            raise ValidationError("Conduit start must be exactly one of: structure, location, or junction")
-        if end_options == 0:
+        if not any(getattr(self, f"end_{kind}_id") for kind in self.endpoint_kinds):
             raise ValidationError("Conduit must have an end point (structure, location, or junction)")
-        if end_options > 1:
-            raise ValidationError("Conduit end must be exactly one of: structure, location, or junction")
+
+    endpoint_kinds = ("structure", "location", "junction")
 
     def anchor_geometry(self, side):
         """A conduit end may also hang from a junction on a trunk conduit."""
@@ -849,6 +863,8 @@ class AerialSpan(Pathway):
         ]
 
     def clean(self):
+        # Ambiguous sides first: straighten() would silently prefer the structure.
+        self.check_one_endpoint_kind()
         self.straighten()
         super().clean()
 
