@@ -357,6 +357,25 @@ class Pathway(NetBoxModel):
         blank=True,
         related_name="pathways_in",
     )
+    # Derived, never edited: the structure each end attaches to under
+    # attachment.resolve_anchor(). Stored so pages, filters and the API can
+    # ask "which pathways are this structure's?" in SQL.
+    start_anchor = models.ForeignKey(
+        Structure,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="pathways_anchored_start",
+    )
+    end_anchor = models.ForeignKey(
+        Structure,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="pathways_anchored_end",
+    )
     tenant = models.ForeignKey(
         Tenant,
         on_delete=models.SET_NULL,
@@ -554,6 +573,8 @@ class Pathway(NetBoxModel):
         )
 
     def save(self, *args, **kwargs):
+        self.start_anchor = self.anchor_structure("start")
+        self.end_anchor = self.anchor_structure("end")
         if not self.pathway_type:
             if isinstance(self, ConduitBank):
                 self.pathway_type = "conduit_bank"

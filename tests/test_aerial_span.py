@@ -43,19 +43,6 @@ from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 
 
-@pytest.fixture
-def migrate_to():
-    """Migrate the netbox_pathways app to a specific migration target."""
-
-    def _do(target_name):
-        executor = MigrationExecutor(connection)
-        executor.loader.build_graph()
-        executor.migrate([("netbox_pathways", target_name)])
-        return MigrationExecutor(connection)
-
-    return _do
-
-
 @pytest.mark.django_db(transaction=True)
 def test_forward_migration_copies_attachment_height_to_both_sides(migrate_to):
     pre = "0017_conduitbank_height_width"
@@ -116,20 +103,6 @@ def test_reverse_migration_copies_start_attachment_height_back(migrate_to):
     )
     c = PreAerialSpan.objects.get(label="span-c")
     assert c.attachment_height == 7.0
-
-
-@pytest.fixture(autouse=True)
-def _restore_head(request):
-    """Re-migrate to the latest migration after any test in this module that touched migrations."""
-    yield
-    if request.node.get_closest_marker("django_db") and request.node.get_closest_marker("django_db").kwargs.get(
-        "transaction"
-    ):
-        executor = MigrationExecutor(connection)
-        executor.loader.build_graph()
-        leaf_nodes = executor.loader.graph.leaf_nodes("netbox_pathways")
-        if leaf_nodes:
-            executor.migrate([leaf_nodes[0]])
 
 
 # --- Straight-line rules: an aerial span hangs between two supports ---------
