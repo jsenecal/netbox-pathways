@@ -5,16 +5,22 @@ with it: the end vertex only, so a conduit keeps its surveyed bends, while an
 aerial span is rebuilt as the straight line it always is. Conduits that branch
 off a moved conduit at a junction follow the junction's new position.
 
+Writes that bypass Structure.save() (queryset update(), bulk_update, raw SQL)
+leave ends behind; find_drift() and repair() serve the reanchor_pathways
+command that puts them back.
+
 Each pathway change goes through snapshot() + save() so NetBox records it in
 the changelog like any other edit.
 """
+
+from dataclasses import dataclass, field
 
 from django.contrib.gis.geos import LineString, Point
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
 
-from .landing import relocate
+from .landing import landing_on, relocate
 
 SIDES = ("start", "end")
 
@@ -25,36 +31,25 @@ def end_point(pathway, side):
     return Point(x, y, srid=pathway.path.srid)
 
 
-def set_end(pathway, side, point):
-    """Replace the first or last vertex of the pathway's path."""
-    coords = list(pathway.path.coords)
-    coords[0 if side == "start" else -1] = (point.x, point.y)
-    pathway.path = LineString(coords, srid=pathway.path.srid)
+def _rewrite(pathway, placements):
+    """Move ends to `placements` ({side: Point}), straighten aerial spans, save.
 
-
-def straighten_if_aerial(pathway):
-    """Rebuild an aerial span as its straight line; leave other types alone.
-
-    A legacy span with a detached end cannot be straightened; its anchored end
-    has already moved, which is the best that can be done for it.
+    A legacy aerial span with a detached end cannot be straightened; its
+    anchored end still moves, which is the best that can be done for it.
     """
     from .models import AerialSpan
 
+    pathway.snapshot()
+    coords = list(pathway.path.coords)
+    for side, point in placements.items():
+        coords[0 if side == "start" else -1] = (point.x, point.y)
+    pathway.path = LineString(coords, srid=pathway.path.srid)
     if isinstance(pathway, AerialSpan):
         try:
             pathway.straighten()
         except ValidationError:
             pass
-
-
-def anchored_sides(pathway, structure):
-    """Sides of the pathway whose anchor structure is `structure`."""
-    sides = []
-    for side in SIDES:
-        anchor = pathway.anchor_structure(side)
-        if anchor is not None and anchor.pk == structure.pk:
-            sides.append(side)
-    return sides
+    pathway.save()
 
 
 def pathways_anchored_to(structure):
@@ -69,22 +64,19 @@ def pathways_anchored_to(structure):
 
 
 def reanchor_structure(structure, old_geom):
-    """Move every pathway end anchored to `structure` from `old_geom` to its geometry.
-
-    Returns the pathways that were rewritten, junction branches included.
-    """
-    moved = []
+    """Move every pathway end anchored to `structure` from `old_geom` to its geometry."""
     with transaction.atomic():
+        moved = []
         for row in pathways_anchored_to(structure):
             pathway = row.as_concrete()
-            pathway.snapshot()
-            for side in anchored_sides(pathway, structure):
-                set_end(pathway, side, relocate(old_geom, structure.geometry, end_point(pathway, side)))
-            straighten_if_aerial(pathway)
-            pathway.save()
+            placements = {
+                side: relocate(old_geom, structure.geometry, end_point(pathway, side))
+                for side in SIDES
+                if getattr(pathway.anchor_structure(side), "pk", None) == structure.pk
+            }
+            _rewrite(pathway, placements)
             moved.append(pathway)
-        moved.extend(_cascade_junctions(moved))
-    return moved
+        _cascade_junctions(moved)
 
 
 def _cascade_junctions(moved):
@@ -95,24 +87,80 @@ def _cascade_junctions(moved):
     """
     from .models import Conduit, ConduitJunction
 
-    cascaded = []
     visited = set()
     queue = [pathway for pathway in moved if isinstance(pathway, Conduit)]
     while queue:
         trunk = queue.pop()
-        for junction in ConduitJunction.objects.filter(trunk_conduit=trunk):
-            if junction.pk in visited:
-                continue
+        for junction in ConduitJunction.objects.filter(trunk_conduit=trunk).exclude(pk__in=visited):
             visited.add(junction.pk)
             junction.trunk_conduit = trunk
             target = junction.derived_geometry
             branches = Conduit.objects.filter(Q(start_junction=junction) | Q(end_junction=junction), path__isnull=False)
             for branch in branches:
-                branch.snapshot()
-                for side in SIDES:
-                    if getattr(branch, f"{side}_junction_id") == junction.pk:
-                        set_end(branch, side, target)
-                branch.save()
-                cascaded.append(branch)
+                _rewrite(
+                    branch, {side: target for side in SIDES if getattr(branch, f"{side}_junction_id") == junction.pk}
+                )
                 queue.append(branch)
-    return cascaded
+
+
+# --- Repair: ends left behind by writes that bypassed Structure.save() -------
+
+
+@dataclass
+class Drift:
+    """A pathway whose ends no longer sit on what they are attached to."""
+
+    pathway: object
+    problems: list = field(default_factory=list)
+
+
+def anchor_geometry(pathway, side):
+    """Geometry one end must land on: its anchor structure, else its junction."""
+    structure = pathway.anchor_structure(side)
+    if structure is not None and structure.geometry is not None:
+        return structure.geometry
+    junction = getattr(pathway, f"{side}_junction", None)
+    return junction.derived_geometry if junction is not None else None
+
+
+def find_drift(pathways):
+    """Drift for each pathway in `pathways` that has a problem, in order."""
+    from .models import ENDPOINT_TOLERANCE, AerialSpan
+
+    found = []
+    for row in pathways.filter(path__isnull=False):
+        pathway = row.as_concrete()
+        is_aerial = isinstance(pathway, AerialSpan)
+        problems = []
+        for side in SIDES:
+            geom = anchor_geometry(pathway, side)
+            if geom is None:
+                if is_aerial:
+                    problems.append(f"{side} end is not attached to a structure")
+                continue
+            end = end_point(pathway, side)
+            distance = landing_on(geom, end).distance(end)
+            if distance > ENDPOINT_TOLERANCE:
+                problems.append(f"{side} end is {distance:.2f} from its anchor")
+        vertices = len(pathway.path.coords)
+        if is_aerial and vertices > 2:
+            problems.append(f"aerial span has {vertices} vertices, not 2")
+        if problems:
+            found.append(Drift(pathway, problems))
+    return found
+
+
+def repair(pathway):
+    """Land each attached end on its anchor and straighten aerial spans.
+
+    The geometry the anchor had before the bulk write is unknown here, so an
+    end on an area structure goes to the nearest point of its boundary.
+    Junction branches of a repaired conduit follow it.
+    """
+    placements = {}
+    for side in SIDES:
+        geom = anchor_geometry(pathway, side)
+        if geom is not None:
+            placements[side] = landing_on(geom, end_point(pathway, side))
+    _rewrite(pathway, placements)
+    _cascade_junctions([pathway])
