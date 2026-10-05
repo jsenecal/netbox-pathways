@@ -96,3 +96,10 @@ class TestReanchorPathwaysCommand:
 
         assert f"pk {kept.pk}" in output
         assert f"pk {skipped.pk}" not in output
+
+    def test_type_filter_limits_the_scan(self):
+        s1, s2 = make_pole("TF-S1", 0, 0), make_pole("TF-S2", 100, 0)
+        conduit = make_conduit([(0, 0), (100, 0)], start_structure=s1, end_structure=s2)
+        _bulk_move(s2, 100, 10)
+
+        assert f"pk {conduit.pk}" not in _run("--type", "aerial")

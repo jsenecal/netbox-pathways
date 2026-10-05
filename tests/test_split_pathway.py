@@ -548,3 +548,13 @@ class TestCommandGating:
 
         with pytest.raises(CommandError, match="does not exist"):
             call_command("split_pathway", span.pk, "--user", "ghost")
+
+
+@pytest.mark.django_db
+def test_split_command_rejects_unknown_structures():
+    s1 = Structure.objects.create(name="UK-S1", geometry=Point(0, 0, srid=SRID))
+    s2 = Structure.objects.create(name="UK-S2", geometry=Point(100, 0, srid=SRID))
+    span = _span(s1, s2, LineString((0, 0), (100, 0), srid=SRID))
+
+    with pytest.raises(CommandError, match=r"Structure PK\(s\) not found: \[999999\]"):
+        call_command("split_pathway", span.pk, "--structures", "999999", stdout=StringIO())

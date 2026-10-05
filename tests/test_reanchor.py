@@ -111,3 +111,15 @@ class TestReanchorEdgeCases:
         s2.save(update_fields=["name"])
 
         assert coords(conduit, refresh=True)[-1] == (100.0, 0.0)
+
+    def test_moving_the_support_of_a_legacy_detached_span_moves_its_attached_end(self):
+        """A span saved without clean() may lack an end; its attached end still follows."""
+        from netbox_pathways.models import AerialSpan
+
+        pole = make_pole("LD-P1", 0, 0)
+        span = AerialSpan(start_structure=pole, path=LineString((0, 0), (30, 0), srid=SRID))
+        span.save()
+
+        _move(pole, Point(0, 5, srid=SRID))
+
+        assert coords(span, refresh=True) == [(0.0, 5.0), (30.0, 0.0)]

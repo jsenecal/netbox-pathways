@@ -35,6 +35,16 @@ class TestPathwayEndpointFormMixinClean:
         cleaned_path = form.cleaned_data["path"]
         assert len(cleaned_path.coords) == 3
 
+    def test_aerial_span_form_without_path_lands_on_the_facing_wall(self):
+        """Aerial spans derive their own path; the mixin must not synthesize a centroid line."""
+        building = _make_structure("AF-B", Polygon(((0, 0), (10, 0), (10, 10), (0, 10), (0, 0)), srid=SRID))
+        pole = _make_structure("AF-P", Point(60, 3, srid=SRID))
+        form = AerialSpanForm(
+            data={"status": "active", "start_structure": building.pk, "end_structure": pole.pk, "tags": []}
+        )
+        assert form.is_valid(), form.errors
+        assert [(round(x, 6), round(y, 6)) for x, y in form.instance.path.coords] == [(10.0, 3.0), (60.0, 3.0)]
+
     def test_missing_path_auto_generates_from_point_structures(self):
         """When both structures are points and no path is given, the mixin
         must construct a straight LineString between the two points."""
