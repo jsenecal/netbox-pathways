@@ -38,9 +38,10 @@ An overhead route, typically between poles.
 An aerial span hangs between two supports, so its geometry is not drawn
 freely:
 
-- **Both ends must be attached.** Each end needs a structure with geometry,
-  either the start/end structure or the identity structure of the start/end
-  location. A span with a floating end is rejected.
+- **Both ends must be attached.** Each end needs a structure with geometry:
+  the start/end structure, or the structure enclosing the start/end location
+  (see [How pathway ends attach](attachment.md)). A span with a floating end
+  is rejected, and so is a span whose two ends belong to the same structure.
 - **It is always a straight line.** The path is exactly two vertices;
   intermediate vertices are dropped on save. The map editor hides the
   add-vertex handles and blocks vertex removal for aerial spans.
@@ -196,9 +197,9 @@ parallel runs quickly and then draw each path.
 
 Pathway ends follow the structures they are attached to. When a structure's
 geometry is edited -- in the UI, through the REST API, by CSV import or by
-bulk edit -- every pathway end anchored to it (directly, or through the
-identity structure of an endpoint location) moves with it, in the same
-transaction:
+bulk edit -- every pathway end belonging to it (directly, or through a location
+it encloses -- see [How pathway ends attach](attachment.md)) moves with it,
+in the same transaction:
 
 - Conduits, direct-buried runs and other pathways keep their interior
   vertices; only the end vertex moves.

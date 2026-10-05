@@ -18,6 +18,7 @@ nav = [
     { "Concepts" = "user-guide/concepts.md" },
     { "Structures" = "user-guide/structures.md" },
     { "Pathways" = "user-guide/pathways.md" },
+    { "How Pathway Ends Attach" = "user-guide/attachment.md" },
     { "Cable Routing" = "user-guide/cable-routing.md" },
     { "Interactive Map" = "user-guide/interactive-map.md" },
     { "Pull Sheets" = "user-guide/pull-sheets.md" },

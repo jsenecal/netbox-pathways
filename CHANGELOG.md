@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Pathway ends attach through the site/location hierarchy.** An end
+  naming a location belongs to the nearest structure enclosing it: the
+  structure that is the location, else one that is a parent location,
+  else the structure that is the site (Site Geometry). Snapping, aerial
+  spans, moving with a structure and the structure's own pages all follow
+  it. Pathways store the result as read-only `start_anchor` / `end_anchor`,
+  exposed in the REST and GeoJSON APIs, kept current when locations,
+  structures or site geometries change; `reanchor_pathways` reports and
+  refreshes stale ones. Documented in "How Pathway Ends Attach".
+
 - **Pathway ends follow their structures.** Editing a structure's geometry
   moves every pathway end attached to it, directly or through an endpoint
   location's identity structure: conduits and other pathways keep their
@@ -152,6 +162,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with ltree paths. Refs #134.
 
 ### Changed
+
+- **A structure's pathways include ends attached through a location.**
+  Structure tabs and badges, the connected-structures panel, the
+  structure API's `no_pathways`, the `has_pathways` and `occupied`
+  structure filters and the pathway `structure_id` filter now count
+  pathways whose end names a location inside the structure. The
+  `start_structure_id` / `end_structure_id` filters are unchanged. Route
+  planning still treats a location and its enclosing structure as
+  separate places.
+
+- **One endpoint kind per pathway side.** Every pathway type now rejects a
+  side naming both a structure and a location (conduits already rejected
+  combinations with junctions). An aerial span must also connect two
+  different structures. Existing rows are flagged by `reanchor_pathways`.
 
 - **Aerial spans are straight and attached at both ends.** Saving an aerial
   span now requires a structure with geometry at each end (a location

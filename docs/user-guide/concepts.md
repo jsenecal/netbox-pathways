@@ -57,7 +57,7 @@ Pathways support flexible endpoints to model both outdoor and indoor infrastruct
 - **Location** — A NetBox `dcim.Location` (room, floor, wing)
 - **Junction** — A conduit junction (Y-tee) for conduit subtypes only
 
-Each pathway has exactly one start endpoint and one end endpoint. These can be different types (e.g., a conduit starting at a manhole and ending at a building location).
+Each pathway has exactly one start endpoint and one end endpoint. These can be different types (e.g., a conduit starting at a manhole and ending at a building location). A location endpoint still belongs to a structure -- the nearest one enclosing it; see [How Pathway Ends Attach to Structures](attachment.md).
 
 ## Conduit Banks
 
