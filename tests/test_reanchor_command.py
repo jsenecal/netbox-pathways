@@ -48,7 +48,7 @@ class TestReanchorPathwaysCommand:
         output = _run()
 
         assert f"pk {conduit.pk}" in output
-        assert "end is 30.00 from its anchor" in output
+        assert "end vertex is 30.00 from its anchor" in output
         assert _coords(conduit)[-1] == (100.0, 0.0)
 
     def test_apply_moves_drifted_ends_and_straightens_bent_spans(self):
@@ -71,10 +71,24 @@ class TestReanchorPathwaysCommand:
         span = AerialSpan(start_structure=p1, path=LineString((0, 0), (30, 0), srid=SRID))
         span.save()
 
+        before = Pathway.objects.get(pk=span.pk).last_updated
+
         output = _run("--apply")
 
-        assert "end is not attached to a structure" in output
-        assert _coords(span) == [(0.0, 0.0), (30.0, 0.0)]
+        assert "end vertex is not attached to a structure" in output
+        assert "Repaired 0 pathway(s); 1 need(s) attention" in output
+        assert Pathway.objects.get(pk=span.pk).last_updated == before
+
+    def test_scan_query_count_does_not_grow_with_pathways(self, django_assert_max_num_queries):
+        poles = [_pole(f"Q{i}", i * 100, 0) for i in range(7)]
+        for a, b in zip(poles, poles[1:], strict=False):
+            _conduit(a, b, [(a.geometry.x, 0), (b.geometry.x, 0)])
+            span = AerialSpan(start_structure=a, end_structure=b)
+            span.full_clean()
+            span.save()
+
+        with django_assert_max_num_queries(20):
+            _run()
 
     def test_structure_filter_limits_the_scan(self):
         a1, a2 = _pole("A1", 0, 0), _pole("A2", 100, 0)

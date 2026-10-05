@@ -137,8 +137,15 @@ class Structure(NetBoxModel):
         # Read the stored geometry rather than tracking it on the instance:
         # immune to in-place GEOS mutation, and free when structures are
         # loaded in bulk for the map.
+        # Store and compare in the plugin SRID: the REST API hands GeoJSON over
+        # as EPSG:4326, and pathway paths must not be moved in degrees.
+        srid = get_srid()
+        if self.geometry is not None and self.geometry.srid not in (None, srid):
+            self.geometry = self.geometry.transform(srid, clone=True)
+        update_fields = kwargs.get("update_fields")
+        geometry_saved = update_fields is None or "geometry" in update_fields
         old_geom = None
-        if self.pk:
+        if self.pk and geometry_saved:
             old_geom = Structure.objects.filter(pk=self.pk).values_list("geometry", flat=True).first()
         with transaction.atomic():
             super().save(*args, **kwargs)
@@ -835,6 +842,8 @@ class AerialSpan(Pathway):
 
         start_geom = anchors["start"].geometry
         end_geom = anchors["end"].geometry
+        if self.path and self.path.srid != start_geom.srid:
+            self.path = self.path.transform(start_geom.srid, clone=True)
         if self.path:
             srid = self.path.srid
             first, last = self.path.coords[0], self.path.coords[-1]

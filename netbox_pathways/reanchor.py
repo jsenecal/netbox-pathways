@@ -21,6 +21,7 @@ from django.db import transaction
 from django.db.models import Q
 
 from .landing import landing_on, relocate
+from .registry import LOCATION_IDENTITY_ACCESSOR
 
 SIDES = ("start", "end")
 
@@ -63,12 +64,38 @@ def pathways_anchored_to(structure):
     return Pathway.objects.filter(query, path__isnull=False)
 
 
+def concrete_pathways(pathways):
+    """Pathways with a path, as subclass instances, with their anchors preloaded.
+
+    One query per pathway type instead of several per pathway: the endpoint
+    structures, location identity structures and junction trunks that
+    anchor resolution walks are fetched with select_related.
+    """
+    from .models import PATHWAY_TYPE_MODELS, Conduit, Pathway
+
+    pks = pathways.filter(path__isnull=False).values("pk")
+    anchors = (
+        "start_structure",
+        "end_structure",
+        f"start_location__{LOCATION_IDENTITY_ACCESSOR}",
+        f"end_location__{LOCATION_IDENTITY_ACCESSOR}",
+    )
+    junctions = ("start_junction__trunk_conduit", "end_junction__trunk_conduit")
+    querysets = [
+        model.objects.filter(pk__in=pks).select_related(*anchors, *(junctions if model is Conduit else ()))
+        for model in PATHWAY_TYPE_MODELS.values()
+    ]
+    querysets.append(
+        Pathway.objects.filter(pk__in=pks).exclude(pathway_type__in=PATHWAY_TYPE_MODELS).select_related(*anchors)
+    )
+    return sorted((pathway for queryset in querysets for pathway in queryset), key=lambda pathway: pathway.pk)
+
+
 def reanchor_structure(structure, old_geom):
     """Move every pathway end anchored to `structure` from `old_geom` to its geometry."""
     with transaction.atomic():
         moved = []
-        for row in pathways_anchored_to(structure):
-            pathway = row.as_concrete()
+        for pathway in concrete_pathways(pathways_anchored_to(structure)):
             placements = {
                 side: relocate(old_geom, structure.geometry, end_point(pathway, side))
                 for side in SIDES
@@ -112,6 +139,8 @@ class Drift:
 
     pathway: object
     problems: list = field(default_factory=list)
+    # A detached aerial span has no structure to land on: report, never rewrite.
+    repairable: bool = True
 
 
 def anchor_geometry(pathway, side):
@@ -128,25 +157,26 @@ def find_drift(pathways):
     from .models import ENDPOINT_TOLERANCE, AerialSpan
 
     found = []
-    for row in pathways.filter(path__isnull=False):
-        pathway = row.as_concrete()
+    for pathway in concrete_pathways(pathways):
         is_aerial = isinstance(pathway, AerialSpan)
         problems = []
+        repairable = True
         for side in SIDES:
             geom = anchor_geometry(pathway, side)
             if geom is None:
                 if is_aerial:
-                    problems.append(f"{side} end is not attached to a structure")
+                    problems.append(f"{side} vertex is not attached to a structure")
+                    repairable = False
                 continue
             end = end_point(pathway, side)
             distance = landing_on(geom, end).distance(end)
             if distance > ENDPOINT_TOLERANCE:
-                problems.append(f"{side} end is {distance:.2f} from its anchor")
+                problems.append(f"{side} vertex is {distance:.2f} from its anchor")
         vertices = len(pathway.path.coords)
         if is_aerial and vertices > 2:
             problems.append(f"aerial span has {vertices} vertices, not 2")
         if problems:
-            found.append(Drift(pathway, problems))
+            found.append(Drift(pathway, problems, repairable))
     return found
 
 

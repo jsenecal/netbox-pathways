@@ -115,3 +115,28 @@ class TestReanchorOnStructureSave:
         s2.save()
 
         assert Pathway.objects.get(pk=conduit.pk).last_updated == before
+
+
+@pytest.mark.django_db
+class TestReanchorEdgeCases:
+    def test_geometry_in_another_srid_is_transformed_before_dragging_ends(self):
+        """The REST API hands GeoJSON over as EPSG:4326 whatever the plugin SRID."""
+        s1, s2 = _pole("S1", 0, 0), _pole("S2", 100, 0)
+        conduit = _conduit([(0, 0), (100, 0)], start_structure=s1, end_structure=s2)
+        target = Point(100, 30, srid=SRID)
+        wgs84 = target.transform(4326, clone=True)
+
+        _move(s2, wgs84)
+
+        end = _coords(conduit)[-1]
+        assert end == pytest.approx((100.0, 30.0), abs=1e-3)
+
+    def test_save_with_update_fields_excluding_geometry_moves_nothing(self):
+        s1, s2 = _pole("S1", 0, 0), _pole("S2", 100, 0)
+        conduit = _conduit([(0, 0), (100, 0)], start_structure=s1, end_structure=s2)
+
+        s2.geometry = Point(100, 30, srid=SRID)
+        s2.name = "S2-renamed"
+        s2.save(update_fields=["name"])
+
+        assert _coords(conduit)[-1] == (100.0, 0.0)

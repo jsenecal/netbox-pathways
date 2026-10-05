@@ -60,10 +60,14 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f"Dry run -- {len(drifts)} pathway(s) found; re-run with --apply."))
             return
 
+        repairable = [drift for drift in drifts if drift.repairable]
         with tracked(user), transaction.atomic():
-            for drift in drifts:
+            for drift in repairable:
                 repair(drift.pathway)
-        self.stdout.write(self.style.SUCCESS(f"Repaired {len(drifts)} pathway(s)."))
+        attention = len(drifts) - len(repairable)
+        self.stdout.write(
+            self.style.SUCCESS(f"Repaired {len(repairable)} pathway(s); {attention} need(s) attention in the UI.")
+        )
 
     def _pathways(self, options):
         pathways = Pathway.objects.order_by("pk")

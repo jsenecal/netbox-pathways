@@ -230,3 +230,14 @@ class TestAerialSpanStraightLine:
         )
         span.clean()
         assert _coords(span) == [(10.0, 5.0), (60.0, 5.0)]
+
+    def test_path_in_another_srid_lands_on_the_building(self):
+        """API paths arrive as EPSG:4326; landings must be computed in the plugin SRID."""
+        span = AerialSpan(
+            start_structure=_pole("P1", 0, -40),
+            end_structure=_building("B1", 0, 0),
+            path=LineString((0, -40), (3, 0.4), srid=SRID).transform(4326, clone=True),
+        )
+        span.clean()
+        assert span.path.srid == SRID
+        assert _coords(span)[-1] == pytest.approx((3.0, 0.0), abs=1e-3)
