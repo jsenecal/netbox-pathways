@@ -19,7 +19,8 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
 
-from .landing import attaches, end_point, landing_on, relocate, with_end
+from .attachment import refresh_anchors
+from .landing import attaches, end_point, landing_on, relocate, translate, with_end
 from .registry import LOCATION_IDENTITY_ACCESSOR
 
 SIDES = ("start", "end")
@@ -48,15 +49,11 @@ def pathways_anchored_to(structure):
     """Pathways with a path whose start or end resolves to `structure`."""
     from .models import Pathway
 
-    query = Q(start_structure=structure) | Q(end_structure=structure)
-    if structure.location_id:
-        query |= Q(start_structure__isnull=True, start_location_id=structure.location_id)
-        query |= Q(end_structure__isnull=True, end_location_id=structure.location_id)
-    return Pathway.objects.filter(query, path__isnull=False)
+    return Pathway.objects.touching(structure).filter(path__isnull=False)
 
 
-def concrete_pathways(pathways):
-    """Pathways with a path, as subclass instances, with their anchors preloaded.
+def concrete_pathways(pathways, with_path=True):
+    """Pathways (with a path, unless `with_path` is False) as subclass instances, anchors preloaded.
 
     One query per pathway type instead of several per pathway: the endpoint
     structures, location identity structures and junction trunks that
@@ -64,7 +61,9 @@ def concrete_pathways(pathways):
     """
     from .models import PATHWAY_TYPE_MODELS, Conduit, Pathway
 
-    pks = pathways.filter(path__isnull=False).values("pk")
+    if with_path:
+        pathways = pathways.filter(path__isnull=False)
+    pks = pathways.values("pk")
     anchors = (
         "start_structure",
         "end_structure",
@@ -87,11 +86,13 @@ def reanchor_structure(structure, old_geom):
     with transaction.atomic():
         moved = []
         for pathway in concrete_pathways(pathways_anchored_to(structure)):
-            placements = {
-                side: relocate(old_geom, structure.geometry, end_point(pathway.path, side))
-                for side in SIDES
-                if getattr(pathway.anchor_structure(side), "pk", None) == structure.pk
-            }
+            placements = {}
+            for side in SIDES:
+                if getattr(pathway.anchor_structure(side), "pk", None) != structure.pk:
+                    continue
+                # Indoor ends keep their place in the footprint; others follow the outline.
+                move = translate if pathway.is_indoor_end(side, old_geom) else relocate
+                placements[side] = move(old_geom, structure.geometry, end_point(pathway.path, side))
             _rewrite(pathway, placements)
             moved.append(pathway)
         _cascade_junctions(moved)
@@ -139,10 +140,22 @@ def find_drift(pathways):
     from .models import ENDPOINT_TOLERANCE, AerialSpan
 
     found = []
-    for pathway in concrete_pathways(pathways):
+    for pathway in concrete_pathways(pathways, with_path=False):
         is_aerial = isinstance(pathway, AerialSpan)
         problems = []
         repairable = True
+        try:
+            pathway.check_one_endpoint_kind()
+        except ValidationError as exc:
+            # Which end is meant is a human decision: report, never rewrite.
+            problems.extend(message for messages in exc.message_dict.values() for message in messages)
+            repairable = False
+        if pathway.resolved_anchor_ids() != (pathway.start_anchor_id, pathway.end_anchor_id):
+            problems.append("stored anchors are stale")
+        if pathway.path is None:
+            if problems:
+                found.append(Drift(pathway, problems, repairable))
+            continue
         for side in SIDES:
             geom, _kind = pathway.anchor_geometry(side)
             if geom is None:
@@ -163,16 +176,22 @@ def find_drift(pathways):
 
 
 def repair(pathway):
-    """Land each attached end on its anchor and straighten aerial spans.
+    """Land each attached end on its anchor, straighten aerial spans, refresh anchors.
 
     The geometry the anchor had before the bulk write is unknown here, so an
     end on an area structure goes to the nearest point of its boundary.
     Junction branches of a repaired conduit follow it.
     """
+    from .models import Pathway
+
+    if pathway.path is None:
+        refresh_anchors(Pathway.objects.filter(pk=pathway.pk))
+        return
     placements = {}
     for side in SIDES:
         geom, _kind = pathway.anchor_geometry(side)
-        if geom is not None:
+        if geom is not None and not pathway.is_indoor_end(side, geom):
             placements[side] = landing_on(geom, end_point(pathway.path, side))
+    # save() inside _rewrite() also stores fresh anchors.
     _rewrite(pathway, placements)
     _cascade_junctions([pathway])

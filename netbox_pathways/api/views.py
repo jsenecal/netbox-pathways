@@ -1,4 +1,4 @@
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Count, Exists, OuterRef
 from netbox.api.viewsets import NetBoxModelViewSet
 
 from .. import filtersets, models
@@ -7,9 +7,7 @@ from . import serializers
 
 class StructureViewSet(NetBoxModelViewSet):
     queryset = models.Structure.objects.select_related("site", "tenant").annotate(
-        _has_pathways=Exists(
-            models.Pathway.objects.filter(Q(start_structure=OuterRef("pk")) | Q(end_structure=OuterRef("pk")))
-        ),
+        _has_pathways=Exists(models.Pathway.objects.touching(OuterRef("pk"))),
     )
     serializer_class = serializers.StructureSerializer
     filterset_class = filtersets.StructureFilterSet
@@ -33,6 +31,8 @@ class PathwayViewSet(NetBoxModelViewSet):
         "end_structure",
         "start_location",
         "end_location",
+        "start_anchor",
+        "end_anchor",
         "tenant",
     ).annotate(cables_routed=Count("cable_segments"))
     serializer_class = serializers.PathwaySerializer
@@ -45,6 +45,8 @@ class ConduitViewSet(NetBoxModelViewSet):
         "end_structure",
         "start_location",
         "end_location",
+        "start_anchor",
+        "end_anchor",
         "conduit_bank",
         "start_junction",
         "end_junction",
@@ -60,6 +62,8 @@ class AerialSpanViewSet(NetBoxModelViewSet):
         "end_structure",
         "start_location",
         "end_location",
+        "start_anchor",
+        "end_anchor",
         "tenant",
     ).annotate(cables_routed=Count("cable_segments"))
     serializer_class = serializers.AerialSpanSerializer
@@ -72,6 +76,8 @@ class DirectBuriedViewSet(NetBoxModelViewSet):
         "end_structure",
         "start_location",
         "end_location",
+        "start_anchor",
+        "end_anchor",
         "tenant",
     ).annotate(cables_routed=Count("cable_segments"))
     serializer_class = serializers.DirectBuriedSerializer
@@ -85,6 +91,8 @@ class InnerductViewSet(NetBoxModelViewSet):
         "end_structure",
         "start_location",
         "end_location",
+        "start_anchor",
+        "end_anchor",
         "tenant",
     ).annotate(
         cables_routed=Count("cable_segments"),

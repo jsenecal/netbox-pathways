@@ -97,6 +97,66 @@ class TestReanchorPathwaysCommand:
         assert f"pk {kept.pk}" in output
         assert f"pk {skipped.pk}" not in output
 
+    def test_stale_anchors_are_reported_and_refreshed(self):
+        """Anchors written around save() (here: update()) go stale; --apply recomputes them."""
+        from dcim.models import Location, Site
+
+        from netbox_pathways.models import DirectBuried, SiteGeometry
+
+        site = Site.objects.create(name="SA-Site", slug="sa-site")
+        building = make_building("SA-B", 0, 0)
+        SiteGeometry.objects.create(site=site, structure=building)
+        room = Location.objects.create(name="SA-Room", slug="sa-room", site=site)
+        office = Location.objects.create(name="SA-Office", slug="sa-office", site=site)
+        tray = DirectBuried(start_location=room, end_location=office)
+        tray.save()
+        Pathway.objects.filter(pk=tray.pk).update(start_anchor=None, end_anchor=None)
+
+        output = _run("--apply")
+
+        assert f"pk {tray.pk}" in output
+        assert "stored anchors are stale" in output
+        assert Pathway.objects.get(pk=tray.pk).start_anchor == building
+
+    def test_side_naming_two_endpoint_kinds_needs_attention(self):
+        from dcim.models import Location, Site
+
+        from netbox_pathways.models import DirectBuried
+
+        site = Site.objects.create(name="TK-Site", slug="tk-site")
+        room = Location.objects.create(name="TK-Room", slug="tk-room", site=site)
+        s1, s2 = make_pole("TK-S1", 0, 0), make_pole("TK-S2", 100, 0)
+        run = DirectBuried(
+            start_structure=s1, start_location=room, end_structure=s2, path=LineString((0, 0), (100, 0), srid=SRID)
+        )
+        run.save()
+
+        output = _run("--apply")
+
+        assert "The start names a structure and a location; set only one." in output
+        assert "1 need(s) attention" in output
+
+    def test_apply_lands_ends_newly_anchored_far_from_their_structure(self):
+        """Upgrade path: an end at a room in a site whose structure is a point far away.
+
+        Such rows predate site-level anchoring; clean() now rejects any edit to
+        them, and --apply is the documented remedy.
+        """
+        from dcim.models import Location, Site
+
+        from netbox_pathways.models import SiteGeometry
+
+        site = Site.objects.create(name="UP-Site", slug="up-site")
+        hut = make_pole("UP-Hut", 0, 0)
+        SiteGeometry.objects.create(site=site, structure=hut)
+        room = Location.objects.create(name="UP-Room", slug="up-room", site=site)
+        far = make_pole("UP-P9", 200, 0)
+        conduit = make_conduit([(30, 40), (200, 0)], start_location=room, end_structure=far)
+
+        _run("--apply")
+
+        assert coords(conduit, refresh=True)[0] == (0.0, 0.0)
+
     def test_type_filter_limits_the_scan(self):
         s1, s2 = make_pole("TF-S1", 0, 0), make_pole("TF-S2", 100, 0)
         conduit = make_conduit([(0, 0), (100, 0)], start_structure=s1, end_structure=s2)

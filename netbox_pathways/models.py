@@ -6,12 +6,14 @@ from django.contrib.gis.db.models.functions import Length
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import transaction
+from django.db.models import Q
 from django.urls import reverse
 from netbox.models import NetBoxModel
 from tenancy.models import Tenant
 from utilities.fields import ColorField
 from utilities.querysets import RestrictedQuerySet
 
+from .attachment import refresh_for_locations, refresh_for_site, resolve_anchor
 from .choices import (
     AerialTypeChoices,
     BankFaceChoices,
@@ -26,7 +28,6 @@ from .choices import (
 )
 from .geo import get_srid
 from .landing import attaches, end_point, is_area, landing_on, reference_point, with_end
-from .registry import LOCATION_IDENTITY_ACCESSOR
 
 ENDPOINT_TOLERANCE = 1.0
 
@@ -144,12 +145,24 @@ class Structure(NetBoxModel):
             self.geometry = self.geometry.transform(srid, clone=True)
         update_fields = kwargs.get("update_fields")
         geometry_saved = update_fields is None or "geometry" in update_fields
-        old_geom = None
-        if self.pk and geometry_saved:
-            old_geom = Structure.objects.filter(pk=self.pk).values_list("geometry", flat=True).first()
+        location_saved = update_fields is None or "location" in update_fields
+        old_geom = old_location_id = None
+        if self.pk:
+            old_geom, old_location_id = Structure.objects.filter(pk=self.pk).values_list(
+                "geometry", "location_id"
+            ).first() or (None, None)
         with transaction.atomic():
             super().save(*args, **kwargs)
-            if old_geom is not None and self.geometry is not None and not old_geom.equals_exact(self.geometry):
+            if location_saved and old_location_id != self.location_id:
+                # Pathway ends under the old and new location now attach elsewhere.
+                old_location = Location.objects.filter(pk=old_location_id).first() if old_location_id else None
+                refresh_for_locations([old_location, self.location])
+            if (
+                geometry_saved
+                and old_geom is not None
+                and self.geometry is not None
+                and not old_geom.equals_exact(self.geometry)
+            ):
                 from .reanchor import reanchor_structure
 
                 reanchor_structure(self, old_geom)
@@ -217,7 +230,16 @@ class SiteGeometry(NetBoxModel):
     def save(self, *args, **kwargs):
         if self.structure_id and not self.geometry:
             self.geometry = self.structure.geometry
-        super().save(*args, **kwargs)
+        old_structure_id = None
+        if self.pk:
+            old_structure_id = SiteGeometry.objects.filter(pk=self.pk).values_list("structure_id", flat=True).first()
+        created = self.pk is None
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            # Only the linked structure decides what the site's locations
+            # attach to; a redrawn boundary changes nothing.
+            if created or old_structure_id != self.structure_id:
+                refresh_for_site(self.site_id)
 
 
 class CircuitGeometry(NetBoxModel):
@@ -276,7 +298,28 @@ def _distance_to_m(value):
     return round(metres, decimals)
 
 
+def touching_q(structure, direct=False, lookup="", prefix=""):
+    """Q for pathways with an end attached to `structure`.
+
+    `structure` is anything a structure FK lookup accepts (an instance, a pk,
+    an OuterRef); with lookup="__in", a collection of them. `prefix` reaches
+    the pathway through a relation (e.g. "pathway__" from a cable segment).
+
+    By default the stored anchors decide: an end naming a location inside
+    the structure's site or location tree counts (attachment.resolve_anchor,
+    docs/user-guide/attachment.md). With direct=True only the
+    start/end_structure fields count -- the route graph's notion, which
+    keeps locations as places of their own.
+    """
+    field = "structure" if direct else "anchor"
+    return Q(**{f"{prefix}start_{field}{lookup}": structure}) | Q(**{f"{prefix}end_{field}{lookup}": structure})
+
+
 class PathwayQuerySet(RestrictedQuerySet):
+    def touching(self, structure, direct=False):
+        """Pathways with an end attached to `structure`; see touching_q()."""
+        return self.filter(touching_q(structure, direct=direct))
+
     def with_geo_length(self):
         """Annotate each pathway with `_geo_length`: PostGIS `ST_Length(path)`."""
         return self.annotate(_geo_length=Length("path"))
@@ -327,6 +370,25 @@ class Pathway(NetBoxModel):
         null=True,
         blank=True,
         related_name="pathways_in",
+    )
+    # Derived, never edited: the structure each end attaches to under
+    # attachment.resolve_anchor(). Stored so pages, filters and the API can
+    # ask "which pathways are this structure's?" in SQL.
+    start_anchor = models.ForeignKey(
+        Structure,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="pathways_anchored_start",
+    )
+    end_anchor = models.ForeignKey(
+        Structure,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="pathways_anchored_end",
     )
     tenant = models.ForeignKey(
         Tenant,
@@ -431,8 +493,12 @@ class Pathway(NetBoxModel):
         """
         return not self.is_indoor
 
+    # What one pathway side may name; exactly one of them per side.
+    endpoint_kinds = ("structure", "location")
+
     def clean(self):
         super().clean()
+        self.check_one_endpoint_kind()
         if not self.path:
             if self.requires_path:
                 raise ValidationError(
@@ -441,22 +507,65 @@ class Pathway(NetBoxModel):
             return
         for side in ("start", "end"):
             geom, kind = self.anchor_geometry(side)
-            if geom is not None:
+            if geom is not None and not self.is_indoor_end(side, geom):
                 self._snap_path_end(side, geom, kind)
 
-    def anchor_structure(self, side):
-        """The structure one end is attached to.
+    def check_one_endpoint_kind(self):
+        """Reject a side naming more than one of endpoint_kinds.
 
-        The direct <side>_structure, else the identity structure of
-        <side>_location. The reverse one-to-one raises an
-        AttributeError-compatible DoesNotExist, so identity-less locations
-        degrade to None and stay documentary.
+        A side naming both a structure and a location would be ambiguous
+        about where the pathway ends; see docs/user-guide/attachment.md.
         """
-        structure = getattr(self, f"{side}_structure", None)
-        if structure is None:
-            location = getattr(self, f"{side}_location", None)
-            structure = getattr(location, LOCATION_IDENTITY_ACCESSOR, None) if location else None
-        return structure
+        errors = {}
+        for side in ("start", "end"):
+            named = [kind for kind in self.endpoint_kinds if getattr(self, f"{side}_{kind}_id", None)]
+            if len(named) > 1:
+                errors[f"{side}_{named[-1]}"] = f"The {side} names a {' and a '.join(named)}; set only one."
+        if errors:
+            raise ValidationError(errors)
+
+    def anchor_structure(self, side):
+        """The structure one end is attached to, resolved live.
+
+        The <side>_structure, else the nearest structure enclosing
+        <side>_location -- see attachment.resolve_anchor() and
+        docs/user-guide/attachment.md.
+        """
+        return resolve_anchor(getattr(self, f"{side}_structure", None), getattr(self, f"{side}_location", None))
+
+    def is_indoor_end(self, side, geom):
+        """Whether this end is an indoor position inside its area structure.
+
+        True when the end names a location (not the structure itself), the
+        structure it belongs to is an area (a building footprint), and the
+        drawn end lies inside it: a room, not a building entry. Snapping,
+        moving the structure and repair keep such an end's place inside the
+        footprint; see docs/user-guide/attachment.md.
+        """
+        return (
+            self.path is not None
+            and getattr(self, f"{side}_structure_id", None) is None
+            and getattr(self, f"{side}_location_id", None) is not None
+            and is_area(geom)
+            and geom.contains(end_point(self.path, side))
+        )
+
+    def resolved_anchor_ids(self, memo=None):
+        """(start, end) pks of the structures the ends attach to, resolved live.
+
+        `memo` (location pk -> structure pk) lets a batch resolve each named
+        location once instead of once per pathway end.
+        """
+        ids = []
+        for side in ("start", "end"):
+            location_id = getattr(self, f"{side}_location_id", None)
+            if memo is None or location_id is None or getattr(self, f"{side}_structure_id", None):
+                ids.append(getattr(self.anchor_structure(side), "pk", None))
+                continue
+            if location_id not in memo:
+                memo[location_id] = getattr(self.anchor_structure(side), "pk", None)
+            ids.append(memo[location_id])
+        return tuple(ids)
 
     def anchor_geometry(self, side):
         """Geometry one end must land on, and what it is: (geom, "structure") or (None, None)."""
@@ -530,6 +639,7 @@ class Pathway(NetBoxModel):
         )
 
     def save(self, *args, **kwargs):
+        self.start_anchor_id, self.end_anchor_id = self.resolved_anchor_ids()
         if not self.pathway_type:
             if isinstance(self, ConduitBank):
                 self.pathway_type = "conduit_bank"
@@ -722,17 +832,13 @@ class Conduit(Pathway):
         # check and path snapping see the effective endpoints.
         self._inherit_bank_endpoints()
         super().clean()  # Pathway.clean() snaps structure and junction endpoints
-        start_options = sum(bool(x) for x in [self.start_structure, self.start_location, self.start_junction])
-        end_options = sum(bool(x) for x in [self.end_structure, self.end_location, self.end_junction])
-
-        if start_options == 0:
+        # Pathway.clean() already rejected a side naming more than one kind.
+        if not any(getattr(self, f"start_{kind}_id") for kind in self.endpoint_kinds):
             raise ValidationError("Conduit must have a start point (structure, location, or junction)")
-        if start_options > 1:
-            raise ValidationError("Conduit start must be exactly one of: structure, location, or junction")
-        if end_options == 0:
+        if not any(getattr(self, f"end_{kind}_id") for kind in self.endpoint_kinds):
             raise ValidationError("Conduit must have an end point (structure, location, or junction)")
-        if end_options > 1:
-            raise ValidationError("Conduit end must be exactly one of: structure, location, or junction")
+
+    endpoint_kinds = ("structure", "location", "junction")
 
     def anchor_geometry(self, side):
         """A conduit end may also hang from a junction on a trunk conduit."""
@@ -792,6 +898,8 @@ class AerialSpan(Pathway):
         ]
 
     def clean(self):
+        # Ambiguous sides first: straighten() would silently prefer the structure.
+        self.check_one_endpoint_kind()
         self.straighten()
         super().clean()
 
@@ -813,6 +921,8 @@ class AerialSpan(Pathway):
         }
         if detached:
             raise ValidationError(detached)
+        if anchors["start"].pk == anchors["end"].pk:
+            raise ValidationError({"end_structure": "An aerial span connects two different supports."})
 
         start_geom = anchors["start"].geometry
         end_geom = anchors["end"].geometry

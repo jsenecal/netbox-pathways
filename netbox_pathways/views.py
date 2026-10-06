@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.gis.db.models.functions import Length
 from django.db import transaction
-from django.db.models import Count, Exists, F, OuterRef, Q, Subquery, Sum
+from django.db.models import Count, Exists, F, OuterRef, Subquery, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -83,16 +83,11 @@ class StructureView(generic.ObjectView):
     )
 
     def get_extra_context(self, request, instance):
-        # Find all structures directly connected via any pathway
+        # Structures at the far end of this structure's pathways, by anchor:
+        # an end naming a location counts as the structure enclosing it.
         connected_ids = set()
-        pathways = models.Pathway.objects.filter(
-            Q(start_structure=instance) | Q(end_structure=instance)
-        ).select_related("start_structure", "end_structure")
-        for p in pathways:
-            if p.start_structure_id and p.start_structure_id != instance.pk:
-                connected_ids.add(p.start_structure_id)
-            if p.end_structure_id and p.end_structure_id != instance.pk:
-                connected_ids.add(p.end_structure_id)
+        for start_pk, end_pk in models.Pathway.objects.touching(instance).values_list("start_anchor", "end_anchor"):
+            connected_ids.update(pk for pk in (start_pk, end_pk) if pk and pk != instance.pk)
 
         connected_qs = models.Structure.objects.filter(pk__in=connected_ids).select_related("site", "tenant")
         table = tables.StructureTable(connected_qs, orderable=False)
@@ -184,13 +179,11 @@ class StructureConduitBanksView(generic.ObjectChildrenView):
     filterset = filtersets.ConduitBankFilterSet
     tab = ViewTab(
         label="Conduit Banks",
-        badge=lambda obj: models.ConduitBank.objects.filter(Q(start_structure=obj) | Q(end_structure=obj)).count(),
+        badge=lambda obj: models.ConduitBank.objects.touching(obj).count(),
     )
 
     def get_children(self, request, parent):
-        return models.ConduitBank.objects.filter(Q(start_structure=parent) | Q(end_structure=parent)).annotate(
-            conduit_count=Count("conduits")
-        )
+        return models.ConduitBank.objects.touching(parent).annotate(conduit_count=Count("conduits"))
 
 
 @register_model_view(models.Structure, "conduits")
@@ -201,12 +194,12 @@ class StructureConduitsView(generic.ObjectChildrenView):
     filterset = filtersets.ConduitFilterSet
     tab = ViewTab(
         label="Conduits",
-        badge=lambda obj: models.Conduit.objects.filter(Q(start_structure=obj) | Q(end_structure=obj)).count(),
+        badge=lambda obj: models.Conduit.objects.touching(obj).count(),
         hide_if_empty=True,
     )
 
     def get_children(self, request, parent):
-        return models.Conduit.objects.filter(Q(start_structure=parent) | Q(end_structure=parent)).annotate(
+        return models.Conduit.objects.touching(parent).annotate(
             cables_routed=Count("cable_segments"),
             in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
         )
@@ -220,12 +213,12 @@ class StructureAerialSpansView(generic.ObjectChildrenView):
     filterset = filtersets.AerialSpanFilterSet
     tab = ViewTab(
         label="Aerial Spans",
-        badge=lambda obj: models.AerialSpan.objects.filter(Q(start_structure=obj) | Q(end_structure=obj)).count(),
+        badge=lambda obj: models.AerialSpan.objects.touching(obj).count(),
         hide_if_empty=True,
     )
 
     def get_children(self, request, parent):
-        return models.AerialSpan.objects.filter(Q(start_structure=parent) | Q(end_structure=parent)).annotate(
+        return models.AerialSpan.objects.touching(parent).annotate(
             cables_routed=Count("cable_segments"),
             in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
         )
@@ -239,12 +232,12 @@ class StructureDirectBuriedView(generic.ObjectChildrenView):
     filterset = filtersets.DirectBuriedFilterSet
     tab = ViewTab(
         label="Direct Buried",
-        badge=lambda obj: models.DirectBuried.objects.filter(Q(start_structure=obj) | Q(end_structure=obj)).count(),
+        badge=lambda obj: models.DirectBuried.objects.touching(obj).count(),
         hide_if_empty=True,
     )
 
     def get_children(self, request, parent):
-        return models.DirectBuried.objects.filter(Q(start_structure=parent) | Q(end_structure=parent)).annotate(
+        return models.DirectBuried.objects.touching(parent).annotate(
             cables_routed=Count("cable_segments"),
             in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
         )
