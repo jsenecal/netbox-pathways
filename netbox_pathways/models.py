@@ -5,6 +5,7 @@ from django.contrib.gis.db import models
 from django.contrib.gis.db.models.functions import Length
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import transaction
 from django.urls import reverse
 from netbox.models import NetBoxModel
 from tenancy.models import Tenant
@@ -24,6 +25,7 @@ from .choices import (
     StructureTypeChoices,
 )
 from .geo import get_srid
+from .landing import attaches, end_point, is_area, landing_on, reference_point, with_end
 from .registry import LOCATION_IDENTITY_ACCESSOR
 
 ENDPOINT_TOLERANCE = 1.0
@@ -130,6 +132,27 @@ class Structure(NetBoxModel):
             # keeps the site-centroid map fallback working.
             if not self.site_id:
                 self.site = self.location.site
+
+    def save(self, *args, **kwargs):
+        # Read the stored geometry rather than tracking it on the instance:
+        # immune to in-place GEOS mutation, and free when structures are
+        # loaded in bulk for the map.
+        # Store and compare in the plugin SRID: the REST API hands GeoJSON over
+        # as EPSG:4326, and pathway paths must not be moved in degrees.
+        srid = get_srid()
+        if self.geometry is not None and self.geometry.srid not in (None, srid):
+            self.geometry = self.geometry.transform(srid, clone=True)
+        update_fields = kwargs.get("update_fields")
+        geometry_saved = update_fields is None or "geometry" in update_fields
+        old_geom = None
+        if self.pk and geometry_saved:
+            old_geom = Structure.objects.filter(pk=self.pk).values_list("geometry", flat=True).first()
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            if old_geom is not None and self.geometry is not None and not old_geom.equals_exact(self.geometry):
+                from .reanchor import reanchor_structure
+
+                reanchor_structure(self, old_geom)
 
     def __str__(self):
         if self.structure_type:
@@ -356,6 +379,13 @@ class Pathway(NetBoxModel):
     def get_status_color(self):
         return PathwayStatusChoices.colors.get(self.status)
 
+    def as_concrete(self):
+        """This pathway as its multi-table subclass instance."""
+        cls = PATHWAY_TYPE_MODELS.get(self.pathway_type)
+        if cls is None or isinstance(self, cls):
+            return self
+        return cls.objects.get(pk=self.pk)
+
     @property
     def start_endpoint(self):
         return self.start_structure or self.start_location
@@ -409,62 +439,49 @@ class Pathway(NetBoxModel):
                     {"path": "Path is required unless both endpoints are locations (indoor pathway)."}
                 )
             return
-        self._validate_and_snap_endpoint("start")
-        self._validate_and_snap_endpoint("end")
+        for side in ("start", "end"):
+            geom, kind = self.anchor_geometry(side)
+            if geom is not None:
+                self._snap_path_end(side, geom, kind)
 
-    def _validate_and_snap_endpoint(self, side):
-        """Validate and snap one endpoint of self.path to the attached structure, or to the
-        endpoint location's identity structure when no structure is set."""
+    def anchor_structure(self, side):
+        """The structure one end is attached to.
+
+        The direct <side>_structure, else the identity structure of
+        <side>_location. The reverse one-to-one raises an
+        AttributeError-compatible DoesNotExist, so identity-less locations
+        degrade to None and stay documentary.
+        """
         structure = getattr(self, f"{side}_structure", None)
-        if not structure:
+        if structure is None:
             location = getattr(self, f"{side}_location", None)
-            # The reverse one-to-one raises an AttributeError-compatible
-            # DoesNotExist, so identity-less locations degrade to None and
-            # stay documentary.
             structure = getattr(location, LOCATION_IDENTITY_ACCESSOR, None) if location else None
-        if not structure or not structure.geometry:
-            return
+        return structure
 
-        self._snap_path_end(side, structure.geometry, "structure")
+    def anchor_geometry(self, side):
+        """Geometry one end must land on, and what it is: (geom, "structure") or (None, None)."""
+        structure = self.anchor_structure(side)
+        if structure is not None and structure.geometry is not None:
+            return structure.geometry, "structure"
+        return None, None
 
     def _snap_path_end(self, side, geom, kind):
-        """Snap the path's <side> end to geom; raise if beyond tolerance.
+        """Snap the path's <side> end to geom; raise if it is not attached.
 
         geom may be a Point or an area geometry (snapped to its boundary).
         kind names the endpoint type ("structure" or "junction") in the
         validation message.
         """
-        from django.contrib.gis.geos import LineString, Point
-
-        coords = list(self.path.coords)
-        idx = 0 if side == "start" else -1
-        endpoint = Point(coords[idx][0], coords[idx][1], srid=self.path.srid)
-
-        if geom.geom_type == "Point":
-            if endpoint.distance(geom) <= ENDPOINT_TOLERANCE:
-                coords[idx] = (geom.x, geom.y)
-            else:
-                raise ValidationError(
-                    {
-                        "path": f"Path {side} point is too far from the {side} {kind} "
-                        f"(must be within {ENDPOINT_TOLERANCE}m)."
-                    }
-                )
-        else:
-            # Polygon or other area geometry
-            if geom.contains(endpoint) or geom.boundary.distance(endpoint) <= ENDPOINT_TOLERANCE:
-                boundary = geom.boundary
-                snap_point = boundary.interpolate(boundary.project(endpoint))
-                coords[idx] = (snap_point.x, snap_point.y)
-            else:
-                raise ValidationError(
-                    {
-                        "path": f"Path {side} point is too far from the {side} {kind} "
-                        f"(must be within {ENDPOINT_TOLERANCE}m of the boundary)."
-                    }
-                )
-
-        self.path = LineString(coords, srid=self.path.srid)
+        endpoint = end_point(self.path, side)
+        if not attaches(geom, endpoint, ENDPOINT_TOLERANCE):
+            of_boundary = " of the boundary" if is_area(geom) else ""
+            raise ValidationError(
+                {
+                    "path": f"Path {side} point is too far from the {side} {kind} "
+                    f"(must be within {ENDPOINT_TOLERANCE}m{of_boundary})."
+                }
+            )
+        self.path = with_end(self.path, side, landing_on(geom, endpoint))
 
     def __str__(self):
         return self.label or f"#{self.pk or self._pk}"
@@ -704,7 +721,7 @@ class Conduit(Pathway):
         # Inherit before validation so the exactly-one-endpoint-per-side
         # check and path snapping see the effective endpoints.
         self._inherit_bank_endpoints()
-        super().clean()  # Pathway.clean() handles structure endpoints
+        super().clean()  # Pathway.clean() snaps structure and junction endpoints
         start_options = sum(bool(x) for x in [self.start_structure, self.start_location, self.start_junction])
         end_options = sum(bool(x) for x in [self.end_structure, self.end_location, self.end_junction])
 
@@ -717,21 +734,15 @@ class Conduit(Pathway):
         if end_options > 1:
             raise ValidationError("Conduit end must be exactly one of: structure, location, or junction")
 
-        # Validate/snap junction endpoints (structure endpoints handled by Pathway.clean)
-        if self.path:
-            self._validate_and_snap_junction("start")
-            self._validate_and_snap_junction("end")
-
-    def _validate_and_snap_junction(self, side):
-        """Validate and snap one endpoint to the attached junction's derived point."""
-        junction = getattr(self, f"{side}_junction", None)
-        if not junction:
-            return
-        junc_geom = junction.derived_geometry
-        if junc_geom is None:
-            return
-
-        self._snap_path_end(side, junc_geom, "junction")
+    def anchor_geometry(self, side):
+        """A conduit end may also hang from a junction on a trunk conduit."""
+        geom, kind = super().anchor_geometry(side)
+        if geom is None:
+            junction = getattr(self, f"{side}_junction", None)
+            junction_geom = junction.derived_geometry if junction is not None else None
+            if junction_geom is not None:
+                return junction_geom, "junction"
+        return geom, kind
 
     def save(self, *args, **kwargs):
         self.pathway_type = "conduit"
@@ -769,12 +780,51 @@ class AerialSpan(Pathway):
         "ice_loading",
     )
 
+    # An aerial span is a straight line between two supports: its path is
+    # derived from the endpoints in clean(), so forms must not synthesize one.
+    derives_path = True
+
     class Meta:
         verbose_name = "Aerial Span"
         verbose_name_plural = "Aerial Spans"
         indexes = [
             models.Index(fields=["aerial_type"]),
         ]
+
+    def clean(self):
+        self.straighten()
+        super().clean()
+
+    def straighten(self):
+        """Rebuild path as the straight line between the two landings.
+
+        Both ends must hang from a structure with geometry -- a span cannot
+        float. A point structure pins its end; an area structure (building)
+        lands the end on its boundary nearest the submitted end, or nearest
+        the other support when no path was submitted.
+        """
+        from django.contrib.gis.geos import LineString
+
+        anchors = {side: self.anchor_structure(side) for side in ("start", "end")}
+        detached = {
+            f"{side}_structure": "Aerial spans must attach to a structure with geometry at both ends."
+            for side, structure in anchors.items()
+            if structure is None or structure.geometry is None
+        }
+        if detached:
+            raise ValidationError(detached)
+
+        start_geom = anchors["start"].geometry
+        end_geom = anchors["end"].geometry
+        if self.path and self.path.srid != start_geom.srid:
+            self.path = self.path.transform(start_geom.srid, clone=True)
+        if self.path:
+            start = landing_on(start_geom, end_point(self.path, "start"))
+            end = landing_on(end_geom, end_point(self.path, "end"))
+        else:
+            start = landing_on(start_geom, reference_point(end_geom))
+            end = landing_on(end_geom, start)
+        self.path = LineString((start.x, start.y), (end.x, end.y), srid=start_geom.srid)
 
     def save(self, *args, **kwargs):
         self.pathway_type = "aerial"
@@ -873,6 +923,15 @@ class Innerduct(Pathway):
         self.pathway_type = "innerduct"
         self._inherit_parent_endpoints()
         super().save(*args, **kwargs)
+
+
+PATHWAY_TYPE_MODELS = {
+    "conduit_bank": ConduitBank,
+    "conduit": Conduit,
+    "aerial": AerialSpan,
+    "direct_buried": DirectBuried,
+    "innerduct": Innerduct,
+}
 
 
 class ConduitJunction(NetBoxModel):

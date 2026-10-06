@@ -278,7 +278,7 @@ def test_identity_migration_fails_loudly_on_shared_locations(migrate_to):
 
 @pytest.mark.django_db
 def test_pathway_snapping_reads_structure_geometry():
-    """Pathway._validate_and_snap_endpoint reads the structure geometry; after
+    """Pathway endpoint snapping reads the structure geometry; after
     the rename it must not read the Location FK."""
     from netbox_pathways.models import Conduit
 

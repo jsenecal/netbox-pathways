@@ -1,9 +1,10 @@
 """Tests for PathwayEndpointFormMixin.clean -- form-side auto-path generation."""
 
 import pytest
+from dcim.models import Location, Site
 from django.contrib.gis.geos import LineString, Point, Polygon
 
-from netbox_pathways.forms import ConduitForm, InnerductForm
+from netbox_pathways.forms import AerialSpanForm, ConduitForm, InnerductForm
 from netbox_pathways.geo import get_srid, to_leaflet
 from netbox_pathways.models import Conduit, ConduitBank, Structure
 
@@ -33,6 +34,16 @@ class TestPathwayEndpointFormMixinClean:
         assert form.is_valid(), form.errors
         cleaned_path = form.cleaned_data["path"]
         assert len(cleaned_path.coords) == 3
+
+    def test_aerial_span_form_without_path_lands_on_the_facing_wall(self):
+        """Aerial spans derive their own path; the mixin must not synthesize a centroid line."""
+        building = _make_structure("AF-B", Polygon(((0, 0), (10, 0), (10, 10), (0, 10), (0, 0)), srid=SRID))
+        pole = _make_structure("AF-P", Point(60, 3, srid=SRID))
+        form = AerialSpanForm(
+            data={"status": "active", "start_structure": building.pk, "end_structure": pole.pk, "tags": []}
+        )
+        assert form.is_valid(), form.errors
+        assert [(round(x, 6), round(y, 6)) for x, y in form.instance.path.coords] == [(10.0, 3.0), (60.0, 3.0)]
 
     def test_missing_path_auto_generates_from_point_structures(self):
         """When both structures are points and no path is given, the mixin
@@ -149,3 +160,19 @@ class TestInjectEndpointGeometry:
     def test_no_endpoints_injects_nothing(self):
         form = ConduitForm()
         assert form.fields["path"].widget.endpoint_geojson is None
+
+    def test_aerial_span_form_requests_straight_mode(self):
+        form = AerialSpanForm()
+        assert form.fields["path"].widget.endpoint_geojson == {"straight": True}
+
+    def test_location_identity_structure_is_injected(self):
+        site = Site.objects.create(name="Inj-Site", slug="inj-site")
+        loc = Location.objects.create(name="Inj-Loc", slug="inj-loc", site=site)
+        Structure.objects.create(name="Vault-9", geometry=Point(0, 0, srid=SRID), location=loc)
+        conduit = Conduit(start_location=loc, path=LineString((0, 0), (10, 0), srid=SRID))
+
+        form = ConduitForm(instance=conduit)
+
+        data = form.fields["path"].widget.endpoint_geojson
+        assert data["start_name"] == "Vault-9"
+        assert "end" not in data

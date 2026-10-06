@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Pathway ends follow their structures.** Editing a structure's geometry
+  moves every pathway end attached to it, directly or through an endpoint
+  location's identity structure: conduits and other pathways keep their
+  interior vertices, aerial spans are rebuilt straight, ends on a moved
+  building keep their relative position on its outline, and conduits
+  branching at a junction follow the moved trunk. Each rewrite is recorded
+  in the change log.
+
+- **`reanchor_pathways` management command.** Reports pathway ends left
+  behind by writes that bypass a structure's save (queryset updates, raw
+  SQL, restored dumps) and bent or detached aerial spans; `--apply`
+  repairs them in one transaction, optionally attributed via --user.
+
 - **`split_pathway` management command.** Splits a pathway at the structures
   it passes into per-hop pathways, with PostGIS candidate detection,
   dry-run preview, containment cascade (conduit banks and innerducts),
@@ -139,6 +152,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with ltree paths. Refs #134.
 
 ### Changed
+
+- **Aerial spans are straight and attached at both ends.** Saving an aerial
+  span now requires a structure with geometry at each end (a location
+  counts when it has an identity structure), rebuilds the path as the
+  straight line between the two landings, pins ends on point structures,
+  and lands ends on polygon structures on the outline nearest the drawn
+  end. Spans with a floating end are rejected by the UI, CSV import and
+  the REST API; existing bent or detached spans are left as they are until
+  edited or repaired with `reanchor_pathways`. The map editor hides the
+  add-vertex handles for aerial spans, and edits to a loaded path are now
+  snapped to the endpoint structures too.
 
 - The Conduits table on a conduit bank's detail page now shows the Bank
   Position column instead of the redundant Conduit Bank column, which only

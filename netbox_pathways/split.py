@@ -14,11 +14,9 @@ from django.contrib.gis.geos import LineString
 from django.db import transaction
 
 from .models import (
-    AerialSpan,
     CableSegment,
     Conduit,
     ConduitBank,
-    DirectBuried,
     Innerduct,
     PlannedRoute,
     Structure,
@@ -103,15 +101,6 @@ def _cut_line(line, cuts):
     return [LineString(piece, srid=line.srid) for piece in pieces]
 
 
-_TYPE_TO_MODEL = {
-    "conduit_bank": ConduitBank,
-    "conduit": Conduit,
-    "aerial": AerialSpan,
-    "direct_buried": DirectBuried,
-    "innerduct": Innerduct,
-}
-
-
 @dataclass
 class SplitPlan:
     """A validated split: concrete pathway, ordered cuts, prospective warnings."""
@@ -119,14 +108,6 @@ class SplitPlan:
     pathway: object
     cuts: list
     warnings: list = field(default_factory=list)
-
-
-def _concrete(pathway):
-    """Resolve a base Pathway row to its MTI subclass instance."""
-    cls = _TYPE_TO_MODEL.get(pathway.pathway_type)
-    if cls is None or isinstance(pathway, cls):
-        return pathway
-    return cls.objects.get(pk=pathway.pk)
 
 
 def _contained(original):
@@ -195,7 +176,7 @@ def plan_split(pathway, structures, tolerance=DEFAULT_TOLERANCE):
     Shared by the dry-run preview and the apply path so both see exactly the
     same refusals and warnings.
     """
-    original = _concrete(pathway)
+    original = pathway.as_concrete()
     _check_splittable(original)
     warnings = []
     cuts = _resolve_cuts(original, structures, tolerance, warnings)

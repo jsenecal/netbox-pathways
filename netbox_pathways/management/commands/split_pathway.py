@@ -6,15 +6,17 @@ chainage, together with the resulting hop layout and any warnings.
 Re-run with --apply to execute the split atomically.
 """
 
-import uuid
-
-from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
-from netbox.context_managers import event_tracking
-from utilities.request import NetBoxFakeRequest
 
-from netbox_pathways.models import Pathway, Structure
+from netbox_pathways.management.commands._common import (
+    add_apply_argument,
+    add_user_argument,
+    resolve_structures,
+    resolve_user,
+    tracked,
+)
+from netbox_pathways.models import Pathway
 from netbox_pathways.split import (
     DEFAULT_TOLERANCE,
     SplitError,
@@ -50,20 +52,8 @@ class Command(BaseCommand):
             default=[],
             help="Structure PKs to drop from the detected candidates",
         )
-        parser.add_argument(
-            "--apply",
-            action="store_true",
-            help="Execute the split (without this flag the command only previews)",
-        )
-        parser.add_argument(
-            "--user",
-            metavar="USERNAME",
-            help=(
-                "NetBox username to attribute the split to. When given, --apply runs "
-                "inside NetBox's event pipeline: change-log entries are recorded and "
-                "webhooks/event rules fire. Without it the split bypasses the pipeline."
-            ),
-        )
+        add_apply_argument(parser, "Execute the split (without this flag the command only previews)")
+        add_user_argument(parser, "split")
 
     def handle(self, *args, **options):
         try:
@@ -71,7 +61,7 @@ class Command(BaseCommand):
         except Pathway.DoesNotExist:
             raise CommandError(f"Pathway {options['pathway_pk']} does not exist.") from None
 
-        user = self._resolve_user(options["user"])
+        user = resolve_user(options["user"])
 
         tolerance = options["tolerance"]
         try:
@@ -91,44 +81,16 @@ class Command(BaseCommand):
             raise CommandError(f"Split failed validation: {exc}") from None
         self._print_result(result)
 
-    def _resolve_user(self, username):
-        if not username:
-            return None
-        user_model = get_user_model()
-        try:
-            return user_model.objects.get(username=username)
-        except user_model.DoesNotExist:
-            raise CommandError(f"User '{username}' does not exist.") from None
-
     def _execute(self, plan, user):
         """Run the split, inside NetBox's event pipeline when a user is given."""
-        if user is None:
-            return execute_split(plan)
-        request = NetBoxFakeRequest(
-            {
-                "META": {},
-                "COOKIES": {},
-                "POST": {},
-                "GET": {},
-                "FILES": {},
-                "user": user,
-                "method": "POST",
-                "path": "",
-                "id": uuid.uuid4(),
-            }
-        )
-        with event_tracking(request):
+        with tracked(user):
             return execute_split(plan)
 
     def _resolve_structures(self, pathway, options, tolerance):
         if options["structures"] and options["exclude"]:
             raise CommandError("--exclude only applies to detected candidates; do not combine it with --structures.")
         if options["structures"]:
-            structures = list(Structure.objects.filter(pk__in=options["structures"]))
-            missing = set(options["structures"]) - {s.pk for s in structures}
-            if missing:
-                raise CommandError(f"Structure PK(s) not found: {sorted(missing)}")
-            return structures
+            return resolve_structures(options["structures"])
         candidates = find_candidates(pathway, tolerance)
         excluded = set(options["exclude"])
         return [c.structure for c in candidates if c.structure.pk not in excluded]

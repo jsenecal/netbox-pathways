@@ -180,6 +180,10 @@ class PathwayPathFallbackMixin:
         # parent's route; never synthesize a standalone path for them.
         if cleaned.get("conduit_bank") or cleaned.get("parent_conduit"):
             return cleaned
+        # Models that derive their own path from the endpoints (aerial spans)
+        # build it in clean(); a synthesized centroid line would be wrong.
+        if getattr(self._meta.model, "derives_path", False):
+            return cleaned
 
         start_struct = cleaned.get("start_structure")
         end_struct = cleaned.get("end_structure")
@@ -224,12 +228,18 @@ class PathwayEndpointFormMixin(PathwayPathFallbackMixin):
         self._inject_endpoint_geometry()
 
     def _inject_endpoint_geometry(self):
-        """Serialize structure geometry (and names, for labels) into the widget."""
+        """Serialize anchor structure geometry (and names, for labels) into the widget.
+
+        Models that derive a straight path (aerial spans) also ask the widget
+        for straight mode, even before any endpoint is chosen.
+        """
         if "path" not in self.fields:
             return
         endpoint_data = {}
+        if getattr(self._meta.model, "derives_path", False):
+            endpoint_data["straight"] = True
         for side in ("start", "end"):
-            structure = getattr(self.instance, f"{side}_structure", None)
+            structure = self.instance.anchor_structure(side)
             if structure and structure.geometry:
                 geom_4326 = to_leaflet(structure.geometry)
                 endpoint_data[side] = json.loads(geom_4326.geojson)

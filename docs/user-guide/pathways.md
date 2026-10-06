@@ -33,6 +33,25 @@ An overhead route, typically between poles.
 | Wind Loading | Wind loading specification |
 | Ice Loading | Ice loading specification |
 
+#### Geometry of an aerial span
+
+An aerial span hangs between two supports, so its geometry is not drawn
+freely:
+
+- **Both ends must be attached.** Each end needs a structure with geometry,
+  either the start/end structure or the identity structure of the start/end
+  location. A span with a floating end is rejected.
+- **It is always a straight line.** The path is exactly two vertices;
+  intermediate vertices are dropped on save. The map editor hides the
+  add-vertex handles and blocks vertex removal for aerial spans.
+- **A pole pins its end.** On a point structure the end sits exactly on the
+  structure, whatever coordinate was submitted.
+- **A building offers a landing.** On a polygon structure (a building
+  footprint, typically the structure linked from a Site Geometry) the end
+  lands on the footprint's outline. Drag the end along the outline to choose
+  where the span lands; the nearest outline point is kept. Without a drawn
+  path the end lands on the wall facing the other support.
+
 ### Direct Buried
 
 A cable path buried directly in the ground without a conduit.
@@ -172,6 +191,44 @@ attributes for aerial spans, burial attributes for direct-buried runs,
 parent conduit, size, and color for innerducts). The route geometry,
 label, and per-parent positions are never copied, so you can document
 parallel runs quickly and then draw each path.
+
+## Keeping pathway ends attached to structures
+
+Pathway ends follow the structures they are attached to. When a structure's
+geometry is edited -- in the UI, through the REST API, by CSV import or by
+bulk edit -- every pathway end anchored to it (directly, or through the
+identity structure of an endpoint location) moves with it, in the same
+transaction:
+
+- Conduits, direct-buried runs and other pathways keep their interior
+  vertices; only the end vertex moves.
+- Aerial spans are rebuilt as the straight line between their supports.
+- An end on a moved or reshaped building keeps its relative position on the
+  outline, so a landing on the east wall stays on the east wall.
+- Conduits branching off a moved conduit at a junction follow the junction's
+  new position.
+
+Each rewritten pathway gets its own change-log entry.
+
+Writes that bypass a structure's save -- queryset `update()`,
+`bulk_update`, raw SQL, a restored database dump -- leave pathway ends
+behind. The `reanchor_pathways` management command finds and repairs them:
+
+```
+python manage.py reanchor_pathways                       # report only
+python manage.py reanchor_pathways --structure 17 23     # pathways on these structures
+python manage.py reanchor_pathways --type aerial --apply # repair aerial spans
+```
+
+It reports every pathway end farther than the endpoint tolerance (1.0 SRID
+unit) from its structure or junction, and every aerial span that is bent
+(more than two vertices) or detached. `--apply` repairs everything found in
+one transaction: ends land on their structure (the nearest outline point for
+a building, since the geometry before the bulk write is unknown), aerial
+spans are straightened, and junction branches follow. Detached aerial spans
+are reported but left alone -- there is no structure to land them on; attach
+them in the UI. As with `split_pathway`, `--user <username>` runs the repair
+inside NetBox's event pipeline so it is recorded in the change log.
 
 ## Splitting an imported pathway at structures
 
