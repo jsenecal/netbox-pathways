@@ -27,7 +27,7 @@ needs a way to anchor data on a Site for two cases:
 | Field      | Type                | Notes                                                                                  |
 |------------|---------------------|----------------------------------------------------------------------------------------|
 | `site`     | OneToOne `dcim.Site`| Required. Each site has at most one geometry record.                                   |
-| `structure`| OneToOne Structure  | Optional. If set, the site "is" this structure.                                        |
+| `structure`| OneToOne Structure  | Optional. If set, the site "is" this structure; pathway ends naming a location in the site without a closer structure belong to it ([How pathway ends attach](attachment.md)). |
 | `geometry` | Point or Polygon    | Optional. Explicit geometry. Auto-populated from `structure.geometry` if blank on save.|
 | `comments` | text                |                                                                                        |
 

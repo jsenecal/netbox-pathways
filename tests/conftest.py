@@ -1,5 +1,7 @@
 import pytest
 from django.contrib.auth import get_user_model
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
 
 from netbox_pathways.registry import LayerDetail, LayerStyle, registry
 
@@ -135,3 +137,24 @@ def ref_layer_kwargs():
             fields=["name", "status"],
         ),
     }
+
+
+@pytest.fixture
+def migrate_to():
+    """Migrate netbox_pathways to a target migration; restore the latest afterwards.
+
+    Use with @pytest.mark.django_db(transaction=True). `--reuse-db` means a
+    stranded schema outlives the run and breaks every later test file, so the
+    restore is not optional.
+    """
+
+    def _do(target_name):
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate([("netbox_pathways", target_name)])
+        return MigrationExecutor(connection)
+
+    yield _do
+    executor = MigrationExecutor(connection)
+    executor.loader.build_graph()
+    executor.migrate(executor.loader.graph.leaf_nodes("netbox_pathways"))

@@ -166,34 +166,6 @@ class TestGraphQLTypeExposesLocationFK:
         assert "location" in field_names
 
 
-@pytest.fixture
-def migrate_to():
-    """Migrate the netbox_pathways app to a specific migration target."""
-
-    def _do(target_name):
-        executor = MigrationExecutor(connection)
-        executor.loader.build_graph()
-        executor.migrate([("netbox_pathways", target_name)])
-        return MigrationExecutor(connection)
-
-    return _do
-
-
-@pytest.fixture(autouse=True)
-def _restore_head(request):
-    """Re-migrate to the latest migration after any test in this module that
-    touched migrations. `--reuse-db` means a stranded schema outlives the run
-    and breaks every later test file, so this is not optional."""
-    yield
-    marker = request.node.get_closest_marker("django_db")
-    if marker and marker.kwargs.get("transaction"):
-        executor = MigrationExecutor(connection)
-        executor.loader.build_graph()
-        leaf_nodes = executor.loader.graph.leaf_nodes("netbox_pathways")
-        if leaf_nodes:
-            executor.migrate([leaf_nodes[0]])
-
-
 @pytest.mark.django_db(transaction=True)
 def test_migration_blanks_splice_closure_structures(migrate_to):
     """Operators reclassify blanked rows to the real container type; asserting

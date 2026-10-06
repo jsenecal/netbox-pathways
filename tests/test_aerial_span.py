@@ -43,19 +43,6 @@ from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 
 
-@pytest.fixture
-def migrate_to():
-    """Migrate the netbox_pathways app to a specific migration target."""
-
-    def _do(target_name):
-        executor = MigrationExecutor(connection)
-        executor.loader.build_graph()
-        executor.migrate([("netbox_pathways", target_name)])
-        return MigrationExecutor(connection)
-
-    return _do
-
-
 @pytest.mark.django_db(transaction=True)
 def test_forward_migration_copies_attachment_height_to_both_sides(migrate_to):
     pre = "0017_conduitbank_height_width"
@@ -116,20 +103,6 @@ def test_reverse_migration_copies_start_attachment_height_back(migrate_to):
     )
     c = PreAerialSpan.objects.get(label="span-c")
     assert c.attachment_height == 7.0
-
-
-@pytest.fixture(autouse=True)
-def _restore_head(request):
-    """Re-migrate to the latest migration after any test in this module that touched migrations."""
-    yield
-    if request.node.get_closest_marker("django_db") and request.node.get_closest_marker("django_db").kwargs.get(
-        "transaction"
-    ):
-        executor = MigrationExecutor(connection)
-        executor.loader.build_graph()
-        leaf_nodes = executor.loader.graph.leaf_nodes("netbox_pathways")
-        if leaf_nodes:
-            executor.migrate([leaf_nodes[0]])
 
 
 # --- Straight-line rules: an aerial span hangs between two supports ---------
@@ -217,3 +190,24 @@ class TestAerialSpanStraightLine:
         span.clean()
         assert span.path.srid == SRID
         assert coords(span)[-1] == pytest.approx((3.0, 0.0), abs=1e-3)
+
+    def test_room_end_lands_on_the_outline_of_the_building_site(self):
+        """Room 101 has no structure; its site is represented by the building."""
+        from dcim.models import Location, Site
+
+        from netbox_pathways.models import SiteGeometry
+
+        site = Site.objects.create(name="Bldg", slug="bldg")
+        SiteGeometry.objects.create(site=site, structure=make_building("B1", 0, 0))
+        room = Location.objects.create(name="Room 101", slug="room-101", site=site)
+        span = AerialSpan(start_location=room, end_structure=make_pole("P1", 60, 5))
+        span.clean()
+        assert coords(span) == [(10.0, 5.0), (60.0, 5.0)]
+
+    def test_both_ends_on_the_same_support_is_rejected(self):
+        from django.core.exceptions import ValidationError
+
+        pole = make_pole("P1", 0, 0)
+        span = AerialSpan(start_structure=pole, end_structure=pole)
+        with pytest.raises(ValidationError, match="two different supports"):
+            span.clean()

@@ -50,6 +50,10 @@ rejected, and a location on its own fills in the site for you. Use these to
 tie a structure to indoor space (a floor, an equipment room, a vault row) so
 devices in the same location can be reconciled against it.
 
+The *Location* field means more than "sits in": the structure **is** that
+location, and pathway ends that name the location or a location below it
+belong to the structure. See [How pathway ends attach](attachment.md).
+
 Geographic position is the separate `Geometry` field, described below.
 
 ## Geometry

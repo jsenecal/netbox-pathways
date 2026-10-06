@@ -75,3 +75,13 @@ def relocate(old_geom, new_geom, pt):
         return landing_on(new_geom, pt)
     fraction = old_geom.boundary.project_normalized(pt)
     return new_geom.boundary.interpolate_normalized(fraction)
+
+
+def translate(old_geom, new_geom, pt):
+    """`pt` moved by the displacement of the structure's centroid.
+
+    Used for indoor ends (a room inside a building): they keep their place
+    inside the footprint instead of landing on its outline.
+    """
+    old_centre, new_centre = old_geom.centroid, new_geom.centroid
+    return Point(pt.x + new_centre.x - old_centre.x, pt.y + new_centre.y - old_centre.y, srid=pt.srid)

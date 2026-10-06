@@ -449,3 +449,48 @@ class TestConduitBankEndpointInheritance:
         conduit = Conduit(label="C-14", path=path)
         with pytest.raises(ValidationError, match="start point"):
             conduit.clean()
+
+
+@pytest.mark.django_db
+class TestOneEndpointKindPerSide:
+    """A pathway side names a structure, a location or (conduits) a junction -- one of them."""
+
+    def _room(self):
+        from dcim.models import Location, Site
+
+        site = Site.objects.create(name="OK-Site", slug="ok-site")
+        return Location.objects.create(name="OK-Room", slug="ok-room", site=site)
+
+    def test_direct_buried_side_naming_structure_and_location_is_rejected(self):
+        from netbox_pathways.models import DirectBuried
+
+        s1 = _make_structure("OK-S1", Point(0, 0, srid=SRID))
+        s2 = _make_structure("OK-S2", Point(100, 0, srid=SRID))
+        run = DirectBuried(
+            path=LineString((0, 0), (100, 0), srid=SRID),
+            start_structure=s1,
+            start_location=self._room(),
+            end_structure=s2,
+        )
+        with pytest.raises(ValidationError) as exc:
+            run.clean()
+        assert "start_location" in exc.value.message_dict
+
+    def test_conduit_side_naming_structure_and_junction_is_rejected(self):
+        bank, s1, s2 = _make_bank("OK")
+        trunk = Conduit(path=LineString((0, 0), (100, 100), srid=SRID), start_structure=s1, end_structure=s2)
+        trunk.save()
+        branch = Conduit(path=LineString((50, 50), (100, 100), srid=SRID), end_structure=s2)
+        branch.save()
+        junction = ConduitJunction.objects.create(
+            trunk_conduit=trunk, branch_conduit=branch, towards_structure=s2, position_on_trunk=0.5
+        )
+        conduit = Conduit(
+            path=LineString((50, 50), (100, 100), srid=SRID),
+            start_structure=s1,
+            start_junction=junction,
+            end_structure=s2,
+        )
+        with pytest.raises(ValidationError) as exc:
+            conduit.clean()
+        assert "start_junction" in exc.value.message_dict
