@@ -24,7 +24,7 @@
 - **Structures** -- poles, manholes, cabinets, equipment rooms, and more with PostGIS geometry (point or polygon), optionally anchored to a NetBox site and location.
 - **Pathways** -- conduits, aerial spans, direct buried, innerducts, cable trays with PostGIS line geometry; a computed `geo_length` (PostGIS `ST_Length`) sits alongside the manual as-built `length` so the drawn-versus-field distinction is always visible and sortable.
 - **Conduit Banks and Junctions** -- model conduit bank configurations and mid-span Y-tees.
-- **Cable Routing** -- track which NetBox cables traverse which pathways, in sequence.
+- **Cable Routing** -- track which NetBox cables traverse which pathways, in sequence, and see the route, its gaps and the cable's ends on a map.
 - **Attached Endpoints** -- every pathway end belongs to a structure, including ends that name a room or floor inside a building site; aerial spans are straight lines hung between two structures (pinned on poles, landing anywhere on a building outline), and moving a structure drags every attached pathway end with it; `manage.py reanchor_pathways` repairs ends left behind by bulk writes.
 - **Pathway Splitting** -- `manage.py split_pathway` replaces a long imported polyline with per-hop pathways between the structures it passes (dry-run preview, PostGIS candidate detection, cable segments re-routed).
 - **Pull Sheets** -- printable cable routing documents for field crews.

@@ -383,3 +383,20 @@ class TestSiteBoundary:
         assert len(boundary) == 1
         # Closed ring, in [lon, lat] pairs
         assert boundary[0]["coords"][0] == boundary[0]["coords"][-1]
+
+
+@pytest.mark.django_db
+class TestSiteGeoData:
+    def test_pathways_leaving_the_sites_structures_are_drawn(self, site):
+        inside = _structure("Site-MH", 0, 0, site=site)
+        outside = _structure("Far-MH", 100, 0)
+        _conduit(
+            label="Site-C1",
+            start_structure=inside,
+            end_structure=outside,
+            path=LineString((0, 0), (100, 0), srid=SRID),
+        )
+
+        data = _extension()._get_geo_data(site)
+
+        assert [line["name"] for line in data["lines"]] == ["Site-C1"]

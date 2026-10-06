@@ -51,6 +51,12 @@
       <td>{{ seg.end_name|default:"&mdash;" }}</td>
       <td>{% if seg.pathway and seg.pathway.length %}{{ seg.pathway.length|floatformat:1 }}{% else %}&mdash;{% endif %}</td>
       <td class="text-end d-print-none">
+        {% if seg.pathway.path %}
+        <a href="{{ cable.get_absolute_url }}route-map/?segment={{ seg.pk }}"
+           class="btn btn-sm btn-outline-secondary" title="Show this segment on the map">
+          <i class="mdi mdi-map-marker-path"></i>
+        </a>
+        {% endif %}
         <button class="btn btn-sm btn-red"
                 hx-post="/plugins/pathways/cable-routing/{{ cable.pk }}/delete-segment/{{ seg.pk }}/"
                 hx-target="#pw-segment-table"

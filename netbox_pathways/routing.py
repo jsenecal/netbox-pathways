@@ -24,44 +24,26 @@ def validate_cable_route(cable_id):
             segments reach the cable's own ends. Each status is "ok",
             "mismatch", or "unverified" when that cable end cannot be placed
             in the plant. Advisory only; it does not affect `valid`.
+        end_segments: {"a": pk, "b": pk} -- the segment each `ends` status
+            judges (None when the cable has no segments).
+        segments: the CableSegments in route order, as validated.
     """
     # Annotate conduit junction endpoints via subquery (same pattern as graph.py)
     conduit_qs = models.Conduit.objects.filter(pathway_ptr_id=OuterRef("pathway_id"))
     segments = list(
-        models.CableSegment.objects.filter(cable_id=cable_id)
-        .select_related(
-            "pathway",
-            "pathway__start_structure",
-            "pathway__end_structure",
-            "pathway__start_location",
-            "pathway__end_location",
-        )
-        .annotate(
+        models.CableSegment.objects.route_of(cable_id).annotate(
             _start_junction_id=Subquery(conduit_qs.values("start_junction_id")[:1]),
             _end_junction_id=Subquery(conduit_qs.values("end_junction_id")[:1]),
         )
-        .order_by("sequence")
     )
 
     segment_count = len(segments)
     if segment_count == 0:
-        return {"valid": False, "segment_count": 0, "gaps": [], "ends": _end_statuses(cable_id, segments)}
+        return _result(cable_id, segments, [])
 
     if segment_count == 1:
-        pw = segments[0].pathway
-        if pw is None:
-            return {
-                "valid": False,
-                "segment_count": 1,
-                "gaps": [_null_gap(segments[0], None)],
-                "ends": _end_statuses(cable_id, segments),
-            }
-        return {
-            "valid": True,
-            "segment_count": 1,
-            "gaps": [],
-            "ends": _end_statuses(cable_id, segments),
-        }
+        gaps = [_null_gap(segments[0], None)] if segments[0].pathway is None else []
+        return _result(cable_id, segments, gaps)
 
     gaps = []
     for i in range(len(segments) - 1):
@@ -95,11 +77,22 @@ def validate_cable_route(cable_id):
                 }
             )
 
+    return _result(cable_id, segments, gaps)
+
+
+def _result(cable_id, segments, gaps):
+    """The validate_cable_route() result for `segments` (in route order) and their `gaps`."""
     return {
-        "valid": len(gaps) == 0,
-        "segment_count": segment_count,
+        "valid": bool(segments) and not gaps,
+        "segment_count": len(segments),
         "gaps": gaps,
         "ends": _end_statuses(cable_id, segments),
+        # The segment each end status is about: the first faces end A, the last end B.
+        "end_segments": {
+            "a": segments[0].pk if segments else None,
+            "b": segments[-1].pk if segments else None,
+        },
+        "segments": segments,
     }
 
 

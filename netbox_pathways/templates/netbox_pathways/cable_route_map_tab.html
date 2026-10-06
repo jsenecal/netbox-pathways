@@ -1,0 +1,21 @@
+{% extends 'generic/object.html' %}
+
+{% block content %}
+<style>
+  /* The Map tab is the map: give it most of the viewport, not a card's height. */
+  .pw-route-map .pw-detail-map:not(.pw-detail-map-expanded) {
+    height: 70vh;
+  }
+</style>
+<div class="pw-route-map mb-3">
+  {% include "netbox_pathways/inc/geo_map_panel.html" with panel_title="Cable Route" map_id="pw-cable-route-map" data_id="pw-cable-route-data" %}
+</div>
+<div class="text-muted small">
+  Segments are numbered in route order: green when the route is complete,
+  <span class="text-orange">orange</span> when the first or last segment does not reach its cable end.
+  <span class="text-red">Dashed red</span> lines are gaps between segments that do not connect.
+  Markers show where cable end <span class="text-green">A</span> and <span class="text-red">B</span>
+  attach in the plant.
+  <a href="{{ object.get_absolute_url }}route/">Back to the route table</a>.
+</div>
+{% endblock %}

@@ -39,6 +39,9 @@
         <a href="/plugins/pathways/pull-sheets/{{ cable.pk }}/" class="btn btn-sm btn-outline-secondary">
           <i class="mdi mdi-file-document-outline"></i> Pull Sheet
         </a>
+        <a href="{{ cable.get_absolute_url }}route-map/" class="btn btn-sm btn-outline-secondary">
+          <i class="mdi mdi-map-outline"></i> View on map
+        </a>
         {% endif %}
       </div>
 
