@@ -27,9 +27,7 @@ def building(db):
 
 
 def _indoor_tray(room_101, room_102):
-    tray = DirectBuried(
-        start_location=room_101, end_location=room_102, path=LineString((10, 10), (40, 30), srid=SRID)
-    )
+    tray = DirectBuried(start_location=room_101, end_location=room_102, path=LineString((10, 10), (40, 30), srid=SRID))
     tray.full_clean()
     tray.save()
     return tray
