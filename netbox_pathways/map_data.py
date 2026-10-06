@@ -54,9 +54,8 @@ def structure_point(structure, color=None, muted=False):
     The key is omitted when false so the common case costs nothing in a payload
     that can carry 500 points.
     """
+    # Structure.geometry is required, so a saved structure always has a centroid.
     latlon = point_to_latlon(structure.centroid)
-    if latlon is None:
-        return None
     point = {
         "lat": latlon[0],
         "lon": latlon[1],
@@ -92,8 +91,6 @@ def add_structure(data, structure, color=None, muted=False, name=None):
     a single icon below the footprint zoom, where an outline is sub-pixel.
     """
     shape = structure_point(structure, color=color, muted=muted)
-    if shape is None:
-        return
     if name is not None:
         shape["name"] = name
     ring = footprint_ring(structure)

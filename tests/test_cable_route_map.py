@@ -139,3 +139,14 @@ def test_pull_sheet_lists_the_route_in_order(plant, client, admin_user):
     content = client.get(f"/plugins/pathways/pull-sheets/{plant['cable'].pk}/").content.decode()
 
     assert content.index("RM-3") < content.index("RM-2") < content.index("RM-1")
+
+
+def test_segments_without_a_drawn_path_are_skipped_but_keep_the_numbering(plant):
+    """Map labels must match the Route table's row numbers even past an indoor run."""
+    indoor = Conduit(start_structure=plant["SA"], end_structure=plant["M"])
+    indoor.save()
+    segments = _route(plant["cable"], [indoor, plant["hops"][1]])
+
+    lines = _lines(cable_route_geo(plant["cable"]))
+
+    assert [(line["key"], line["label"]) for line in lines] == [(f"segment-{segments[1].pk}", "2")]
