@@ -28,6 +28,7 @@
  */
 
 import { bindModalScrollbarGutter } from './map-utils';
+import { lineStyle } from './line-style';
 
 (function () {
     'use strict';
@@ -51,6 +52,12 @@ import { bindModalScrollbarGutter } from './map-utils';
         name: string;
         color?: string;
         url?: string;
+        /** Stable id matched by InitGeoMapOptions.highlight. */
+        key?: string;
+        /** Short permanent label drawn on the line (a route segment's number). */
+        label?: string;
+        /** Drawn dashed (a gap on the cable Map tab). */
+        dashed?: boolean;
     }
 
     /** A structure whose geometry is a footprint: outline plus its centroid,
@@ -67,6 +74,8 @@ import { bindModalScrollbarGutter } from './map-utils';
 
     interface InitGeoMapOptions {
         dynamicLayers?: boolean;
+        /** Key of a line to emphasise and zoom to; the other lines are dimmed. */
+        highlight?: string | null;
     }
 
     /** Extend HTMLElement to store the Leaflet map instance. */
@@ -305,7 +314,7 @@ import { bindModalScrollbarGutter } from './map-utils';
 
     function _pathwayStyle(feature?: GeoJSON.Feature): L.PathOptions {
         const color: string = PATHWAY_COLORS[(feature?.properties as Record<string, any>)?.pathway_type] || 'gray';
-        return { color: color, weight: 4, opacity: 0.8 };
+        return lineStyle({ color: color });
     }
 
     function _pathwayPopup(feature: GeoJSON.Feature, layer: L.Layer): void {
@@ -445,12 +454,15 @@ import { bindModalScrollbarGutter } from './map-utils';
         overlays['Footprints'] = group;
     }
 
+    /** Adds inline data; returns the bounds of the highlighted line, if any. */
     function _addInlineData(
         map: L.Map,
         data: InlineData,
         overlays: Record<string, L.LayerGroup>,
         bounds: L.LatLngBounds,
-    ): void {
+        highlight?: string | null,
+    ): L.LatLngBounds | null {
+        let highlightBounds: L.LatLngBounds | null = null;
         if (data.points && data.points.length) {
             const pointsLayer: L.LayerGroup = L.layerGroup();
             data.points.forEach(function (pt: PointData) {
@@ -465,10 +477,17 @@ import { bindModalScrollbarGutter } from './map-utils';
             const linesLayer: L.LayerGroup = L.layerGroup();
             data.lines.forEach(function (line: LineData) {
                 const latlngs: [number, number][] = line.coords.map(function (c: [number, number]): [number, number] { return [c[1], c[0]]; });
-                const polyline: L.Polyline = L.polyline(latlngs, {
-                    color: line.color || 'blue', weight: 4, opacity: 0.8,
-                });
+                const polyline: L.Polyline = L.polyline(latlngs, lineStyle(line, highlight));
                 polyline.bindPopup(_makePopup(line.name, line.url));
+                if (line.label) {
+                    polyline.bindTooltip(line.label, {
+                        permanent: true, direction: 'center', className: 'pw-line-label',
+                    });
+                }
+                if (highlight && line.key === highlight) {
+                    highlightBounds = polyline.getBounds();
+                    polyline.bringToFront();
+                }
                 polyline.addTo(linesLayer);
                 latlngs.forEach(function (ll: [number, number]) { bounds.extend(ll); });
             });
@@ -479,6 +498,7 @@ import { bindModalScrollbarGutter } from './map-utils';
         if (data.polygons && data.polygons.length) {
             _addPolygons(map, data.polygons, overlays, bounds);
         }
+        return highlightBounds;
     }
 
     // --- Main Entry Point ---
@@ -509,7 +529,9 @@ import { bindModalScrollbarGutter } from './map-utils';
         const bounds: L.LatLngBounds = L.latLngBounds([]);
 
         // Inline data as togglable overlay groups
-        _addInlineData(map, data, overlayLayers, bounds);
+        const highlightBounds: L.LatLngBounds | null = _addInlineData(
+            map, data, overlayLayers, bounds, options.highlight,
+        );
 
         // User-configured WMS/WMTS/tile overlays
         const userOverlays: Record<string, L.TileLayer | L.TileLayer.WMS> = _createUserOverlays();
@@ -533,8 +555,10 @@ import { bindModalScrollbarGutter } from './map-utils';
             ? Math.max(DEFAULT_FIT_ZOOM, STRUCTURE_POLYGON_ZOOM)
             : DEFAULT_FIT_ZOOM;
 
-        // Set view
-        if (bounds.isValid()) {
+        // Set view: the highlighted line when one was asked for, else everything
+        if (highlightBounds && highlightBounds.isValid()) {
+            map.fitBounds(highlightBounds, { padding: [80, 80] as [number, number], maxZoom: fitMaxZoom });
+        } else if (bounds.isValid()) {
             map.fitBounds(bounds, { padding: [40, 40] as [number, number], maxZoom: fitMaxZoom });
         } else {
             map.setView([0, 0], 2);

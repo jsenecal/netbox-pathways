@@ -33,7 +33,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var data = JSON.parse(document.getElementById('{{ data_id }}').textContent);
-    var opts = { dynamicLayers: {{ dynamic_layers|default:"false" }} };
+    var opts = { dynamicLayers: {{ dynamic_layers|default:"false" }}{% if highlight_key %}, highlight: "{{ highlight_key|escapejs }}"{% endif %} };
     var map = initGeoMap('{{ map_id }}', data, opts);
 
     // Leaflet needs a size recalc after the layout settles

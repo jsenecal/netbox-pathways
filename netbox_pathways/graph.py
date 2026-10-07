@@ -449,17 +449,7 @@ def trace_cable(cable_id):
     Trace a cable's physical route through pathways via CableSegments.
     Returns list of segment dicts with pathway geo data.
     """
-    segments = (
-        models.CableSegment.objects.filter(cable_id=cable_id)
-        .select_related(
-            "pathway",
-            "pathway__start_structure",
-            "pathway__end_structure",
-            "pathway__start_location",
-            "pathway__end_location",
-        )
-        .order_by("sequence")
-    )
+    segments = models.CableSegment.objects.route_of(cable_id)
 
     result = []
     for seg in segments:

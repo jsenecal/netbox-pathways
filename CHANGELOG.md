@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Cable route map.** Cables with routed segments get a Map tab showing
+  the route: segments numbered in order, gaps as dashed red lines, the
+  segment that misses its cable end in orange, and markers where cable ends
+  A and B attach. Each Route tab row has a button that opens the map zoomed
+  to that segment. Refs #124.
+
 - **Pathway ends attach through the site/location hierarchy.** An end
   naming a location belongs to the nearest structure enclosing it: the
   structure that is the location, else one that is a parent location,
@@ -307,6 +313,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `location`; reassign or clear the duplicates first. Refs #90.
 
 ### Fixed
+
+- **Pull sheets show pathway names.** The pathway column linked each
+  segment with empty text because the template read a field pathways do not
+  have; it now shows the pathway's label.
 
 - **Server-side structure clusters ignored filter parameters.** The
   clustered response at low zoom rebuilt its queryset from scratch, so any

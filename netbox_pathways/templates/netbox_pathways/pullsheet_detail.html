@@ -71,7 +71,7 @@
                     <td>{{ forloop.counter }}</td>
                     <td>
                         {% if segment.pathway %}
-                        <a href="{{ segment.pathway.get_absolute_url }}">{{ segment.pathway.name }}</a>
+                        <a href="{{ segment.pathway.get_absolute_url }}">{{ segment.pathway }}</a>
                         {% else %}
                         <span class="text-muted">—</span>
                         {% endif %}

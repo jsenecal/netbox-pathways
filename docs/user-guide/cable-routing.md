@@ -59,6 +59,23 @@ setting a site or location on your structures.
 Use **Show all pathways** to search the full list at any time; the filter is a
 starting point, not a restriction.
 
+### Seeing the route on a map
+
+A cable with at least one segment on a drawn pathway gets a **Map** tab next to
+**Route**. It shows:
+
+- each segment, numbered in route order -- green when the route is complete,
+  orange when the first or last segment does not reach its cable end;
+- dashed red lines where two consecutive segments do not connect (a gap);
+- a marker where cable end **A** (green) and **B** (red) attach in the plant,
+  resolved the same way as the Route tab's endpoint readout
+  (see [How Pathway Ends Attach](attachment.md)).
+
+On the Route tab, **View on map** opens the Map tab, and the map button on each
+segment row opens it zoomed to that segment, highlighted with the others
+dimmed. Segments on pathways without a drawn path (indoor runs between two
+locations) have no map button.
+
 ## Conduit Banks
 
 Conduit banks organize the conduit openings on a structure. This is essential for field documentation — crews need to know exactly which opening to use.

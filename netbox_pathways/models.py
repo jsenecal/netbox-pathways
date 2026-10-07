@@ -1175,8 +1175,29 @@ class PathwayLocation(NetBoxModel):
             raise ValidationError("At least one of site or location is required")
 
 
+class CableSegmentQuerySet(RestrictedQuerySet):
+    def route_of(self, cable):
+        """`cable`'s segments in route order, with each pathway and its endpoints loaded.
+
+        `cable` is a Cable or its pk.
+        """
+        return (
+            self.filter(cable=cable)
+            .select_related(
+                "pathway",
+                "pathway__start_structure",
+                "pathway__end_structure",
+                "pathway__start_location",
+                "pathway__end_location",
+            )
+            .order_by("sequence")
+        )
+
+
 class CableSegment(NetBoxModel):
     prerequisite_models = ("netbox_pathways.Pathway",)
+
+    objects = CableSegmentQuerySet.as_manager()
 
     cable = models.ForeignKey(Cable, on_delete=models.CASCADE, related_name="pathway_segments")
     pathway = models.ForeignKey(

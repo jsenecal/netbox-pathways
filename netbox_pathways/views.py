@@ -725,9 +725,7 @@ class CableSegmentView(generic.ObjectView):
 
     def get_extra_context(self, request, instance):
         ctx = super().get_extra_context(request, instance)
-        siblings = list(
-            models.CableSegment.objects.filter(cable=instance.cable).select_related("pathway").order_by("sequence")
-        )
+        siblings = list(models.CableSegment.objects.route_of(instance.cable))
         current_idx = next((i for i, s in enumerate(siblings) if s.pk == instance.pk), 0)
         ctx["prev_segment"] = siblings[current_idx - 1] if current_idx > 0 else None
         ctx["next_segment"] = siblings[current_idx + 1] if current_idx < len(siblings) - 1 else None
@@ -1902,17 +1900,7 @@ class PullSheetDetailView(LoginRequiredMixin, View):
         cable = get_object_or_404(Cable, pk=cable_pk)
         route = validate_cable_route(cable.pk)
 
-        segments = (
-            models.CableSegment.objects.filter(cable=cable)
-            .select_related(
-                "pathway",
-                "pathway__start_structure",
-                "pathway__end_structure",
-                "pathway__start_location",
-                "pathway__end_location",
-            )
-            .order_by("sequence")
-        )
+        segments = models.CableSegment.objects.route_of(cable)
 
         totals = segments.aggregate(
             total_pathway_length=Sum("pathway__length"),
@@ -2022,17 +2010,7 @@ class CableRouteView(generic.ObjectView):
     def get_extra_context(self, request, instance):
         from .routing import validate_cable_route
 
-        segments_qs = (
-            models.CableSegment.objects.filter(cable=instance)
-            .select_related(
-                "pathway",
-                "pathway__start_structure",
-                "pathway__end_structure",
-                "pathway__start_location",
-                "pathway__end_location",
-            )
-            .order_by("sequence")
-        )
+        segments_qs = models.CableSegment.objects.route_of(instance)
         segments = list(segments_qs)
 
         _annotate_segments(segments)
@@ -2068,6 +2046,32 @@ class CableRouteView(generic.ObjectView):
         }
 
 
+@register_model_view(Cable, "route-map", path="route-map")
+class CableRouteMapView(generic.ObjectView):
+    """The cable's route on a map: segments, cable ends and gaps.
+
+    `?segment=<pk>` (the Route tab's per-row map buttons) zooms to and
+    highlights that segment when it belongs to this cable.
+    """
+
+    queryset = Cable.objects.all()
+    template_name = "netbox_pathways/cable_route_map_tab.html"
+    tab = ViewTab(
+        label="Map",
+        badge=lambda obj: obj.pathway_segments.filter(pathway__path__isnull=False).count() or None,
+        hide_if_empty=True,
+    )
+
+    def get_extra_context(self, request, instance):
+        from .route_map import cable_route_geo, segment_key
+
+        segment = request.GET.get("segment", "")
+        highlight = None
+        if segment.isdigit() and instance.pathway_segments.filter(pk=segment).exists():
+            highlight = segment_key(segment)
+        return {"geo_data": cable_route_geo(instance), "highlight_key": highlight}
+
+
 # --- Cable Routing Panel HTMX Views ---
 
 
@@ -2075,17 +2079,7 @@ class CableRoutingMixin:
     """Shared helpers for routing panel views."""
 
     def _render_table(self, request, cable):
-        segments = list(
-            models.CableSegment.objects.filter(cable=cable)
-            .select_related(
-                "pathway",
-                "pathway__start_structure",
-                "pathway__end_structure",
-                "pathway__start_location",
-                "pathway__end_location",
-            )
-            .order_by("sequence")
-        )
+        segments = list(models.CableSegment.objects.route_of(cable))
         _annotate_segments(segments)
 
         html = render_to_string(
@@ -2120,13 +2114,10 @@ class CableRoutingAddSegmentView(CableRoutingMixin, LoginRequiredMixin, Permissi
         # from these annotations (same subquery pattern as routing.py).
         conduit_qs = models.Conduit.objects.filter(pathway_ptr_id=OuterRef("pathway_id"))
         segments = list(
-            models.CableSegment.objects.filter(cable=cable)
-            .select_related("pathway")
-            .annotate(
+            models.CableSegment.objects.route_of(cable).annotate(
                 _start_junction_id=Subquery(conduit_qs.values("start_junction_id")[:1]),
                 _end_junction_id=Subquery(conduit_qs.values("end_junction_id")[:1]),
             )
-            .order_by("sequence")
         )
 
         previous = None
