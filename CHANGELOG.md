@@ -314,6 +314,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **OpenAPI schema builds with the plugin enabled.** The GeoJSON
+  serializers named a queryset annotation as their geometry field, which
+  drf-spectacular looks up on the model, so `manage.py spectacular`,
+  `/api/schema/` and the Swagger UI failed with `KeyError: 'geo_4326'`.
+  The geometry is now declared under the model's own field name; GeoJSON
+  output is unchanged.
+
 - **Pull sheets show pathway names.** The pathway column linked each
   segment with empty text because the template read a field pathways do not
   have; it now shows the pathway's label.
