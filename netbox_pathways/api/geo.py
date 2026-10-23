@@ -135,8 +135,9 @@ def _parse_occupied(request):
 
 
 # --- GeoJSON Serializers ---
-# geo_field points to an annotated field (already WGS84), declared explicitly
-# so DRF doesn't try to introspect the model for it.
+# geo_field is declared under the model's own geometry field name but sourced
+# from the geo_4326 annotation (already WGS84).  The name must be a real model
+# field: drf-spectacular looks it up on the model to type the geometry.
 #
 # NOTE: These serializers intentionally omit ``url`` (get_absolute_url).
 # Calling reverse() per row is extremely expensive (~12 s / 1000 rows) due to
@@ -145,13 +146,13 @@ def _parse_occupied(request):
 
 
 class StructureGeoSerializer(GeoFeatureModelSerializer):
-    geo_4326 = GeometryField(read_only=True)
+    geometry = GeometryField(source="geo_4326", read_only=True)
     name = drf_serializers.CharField(read_only=True)
     site_name = drf_serializers.SerializerMethodField()
 
     class Meta:
         model = models.Structure
-        geo_field = "geo_4326"
+        geo_field = "geometry"
         fields = ["id", "name", "structure_type", "site_name"]
 
     def get_site_name(self, obj):
@@ -159,58 +160,58 @@ class StructureGeoSerializer(GeoFeatureModelSerializer):
 
 
 class PathwayGeoSerializer(GeoFeatureModelSerializer):
-    geo_4326 = GeometryField(read_only=True)
+    path = GeometryField(source="geo_4326", read_only=True)
     geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = models.Pathway
-        geo_field = "geo_4326"
+        geo_field = "path"
         fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor"]
 
 
 class ConduitBankGeoSerializer(GeoFeatureModelSerializer):
-    geo_4326 = GeometryField(read_only=True)
+    path = GeometryField(source="geo_4326", read_only=True)
     conduit_count = drf_serializers.IntegerField(read_only=True)
     geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = models.ConduitBank
-        geo_field = "geo_4326"
+        geo_field = "path"
         fields = ["id", "label", "pathway_type", "configuration", "conduit_count", "geo_length"]
 
 
 class ConduitGeoSerializer(GeoFeatureModelSerializer):
-    geo_4326 = GeometryField(read_only=True)
+    path = GeometryField(source="geo_4326", read_only=True)
     geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = models.Conduit
-        geo_field = "geo_4326"
+        geo_field = "path"
         fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor"]
 
 
 class AerialSpanGeoSerializer(GeoFeatureModelSerializer):
-    geo_4326 = GeometryField(read_only=True)
+    path = GeometryField(source="geo_4326", read_only=True)
     geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = models.AerialSpan
-        geo_field = "geo_4326"
+        geo_field = "path"
         fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor"]
 
 
 class DirectBuriedGeoSerializer(GeoFeatureModelSerializer):
-    geo_4326 = GeometryField(read_only=True)
+    path = GeometryField(source="geo_4326", read_only=True)
     geo_length = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = models.DirectBuried
-        geo_field = "geo_4326"
+        geo_field = "path"
         fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor"]
 
 
 class CircuitGeoSerializer(GeoFeatureModelSerializer):
-    geo_4326 = GeometryField(read_only=True)
+    path = GeometryField(source="geo_4326", read_only=True)
     cid = drf_serializers.CharField(source="circuit.cid", read_only=True)
     provider = drf_serializers.CharField(source="circuit.provider.name", read_only=True)
     circuit_type = drf_serializers.CharField(source="circuit.type.name", read_only=True)
@@ -218,7 +219,7 @@ class CircuitGeoSerializer(GeoFeatureModelSerializer):
 
     class Meta:
         model = models.CircuitGeometry
-        geo_field = "geo_4326"
+        geo_field = "path"
         fields = ["id", "cid", "provider", "circuit_type", "status", "provider_reference"]
 
 
