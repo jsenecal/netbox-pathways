@@ -1682,12 +1682,15 @@ class MapView(LoginRequiredMixin, View):
         Uses a two-pass approach for structures: first compute a rough
         centroid, then re-compute the extent excluding points that are
         far from the median (> 2 degrees), which filters GPS outliers.
+
+        The raw SQL runs on the connection the database router picks, so an
+        active netbox-branching branch sees its own structures and pathways.
         """
-        from django.db import connection
+        from django.db import connections, router
 
         bbox = None
 
-        with connection.cursor() as cursor:
+        with connections[router.db_for_read(models.Structure)].cursor() as cursor:
             # Structures — trimmed extent to reject outliers. Geometries may be
             # any type (polygon footprints), and ST_X/ST_Y only accept
             # points, so trim on each row's centroid; extents still use the

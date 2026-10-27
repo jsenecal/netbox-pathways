@@ -12,6 +12,7 @@ from netbox_pathways.checks import (
     _introspect_column_srids,
     check_geometry_column_srids,
 )
+from netbox_pathways.geo import get_srid
 
 
 class TestMigrationSrid:
@@ -45,6 +46,22 @@ class TestIntrospectColumnSrids:
     def test_introspects_real_columns(self, db):
         result = _introspect_column_srids(connection, "netbox_pathways")
         assert ("netbox_pathways_structure", "geometry") in result
+
+    def test_srid_introspection_filters_current_schema(self, db):
+        """Same-named tables in another schema (a netbox-branching branch) are ignored (#103)."""
+        public_srid = get_srid()
+        probe_srid = 3857 if public_srid != 3857 else 4326
+        with connection.cursor() as cursor:
+            cursor.execute("CREATE SCHEMA pathways_srid_probe")
+            try:
+                for table in ("netbox_pathways_structure", "netbox_pathways_zz_probe"):
+                    cursor.execute(f"CREATE TABLE pathways_srid_probe.{table} (geometry geometry(Point, {probe_srid}))")
+                result = _introspect_column_srids(connection, "netbox_pathways")
+            finally:
+                cursor.execute("DROP SCHEMA pathways_srid_probe CASCADE")
+
+        assert ("netbox_pathways_zz_probe", "geometry") not in result
+        assert result[("netbox_pathways_structure", "geometry")] == public_srid
 
 
 class TestCheckGeometryColumnSrids:
