@@ -3,6 +3,8 @@ import re
 from os import environ
 from os.path import abspath, dirname, join
 
+from netbox_branching.utilities import DynamicSchemaDict
+
 
 # Read secret from file
 def _read_secret(secret_name, default=None):
@@ -25,22 +27,32 @@ _BASE_DIR = dirname(dirname(abspath(__file__)))
 
 ALLOWED_HOSTS = environ.get("ALLOWED_HOSTS", "*").split(" ")
 
-# PostgreSQL database configuration — uses PostGIS engine for GIS support
-DATABASE = {
-    "ENGINE": "django.contrib.gis.db.backends.postgis",
-    "NAME": environ.get("DB_NAME", "netbox"),
-    "USER": environ.get("DB_USER", ""),
-    "PASSWORD": _read_secret("db_password", environ.get("DB_PASSWORD", "")),
-    "HOST": environ.get("DB_HOST", "localhost"),
-    "PORT": environ.get("DB_PORT", ""),
-    "OPTIONS": {"sslmode": environ.get("DB_SSLMODE", "prefer")},
-    "CONN_MAX_AGE": int(environ.get("DB_CONN_MAX_AGE", "300")),
-    "DISABLE_SERVER_SIDE_CURSORS": environ.get(
-        "DB_DISABLE_SERVER_SIDE_CURSORS",
-        "False",
-    ).lower()
-    == "true",
-}
+# PostgreSQL database configuration -- uses PostGIS engine for GIS support.
+# netbox-branching needs DATABASES wrapped in DynamicSchemaDict plus its
+# BranchAwareRouter so each branch can be served from its own schema.
+DATABASES = DynamicSchemaDict(
+    {
+        "default": {
+            "ENGINE": "django.contrib.gis.db.backends.postgis",
+            "NAME": environ.get("DB_NAME", "netbox"),
+            "USER": environ.get("DB_USER", ""),
+            "PASSWORD": _read_secret("db_password", environ.get("DB_PASSWORD", "")),
+            "HOST": environ.get("DB_HOST", "localhost"),
+            "PORT": environ.get("DB_PORT", ""),
+            "OPTIONS": {"sslmode": environ.get("DB_SSLMODE", "prefer")},
+            "CONN_MAX_AGE": int(environ.get("DB_CONN_MAX_AGE", "300")),
+            "DISABLE_SERVER_SIDE_CURSORS": environ.get(
+                "DB_DISABLE_SERVER_SIDE_CURSORS",
+                "False",
+            ).lower()
+            == "true",
+        },
+    }
+)
+
+DATABASE_ROUTERS = [
+    "netbox_branching.database.BranchAwareRouter",
+]
 
 REDIS = {
     "tasks": {

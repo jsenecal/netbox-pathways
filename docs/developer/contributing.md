@@ -28,6 +28,17 @@ python manage.py runserver 0.0.0.0:8000
 python manage.py migrate netbox_pathways
 ```
 
+### netbox-branching
+
+The devcontainer installs [netbox-branching](https://github.com/netboxlabs/netbox-branching)
+(the 1.2.x line, which targets NetBox 4.7) for manual testing of pathway
+changes inside branches. `.devcontainer/configuration/configuration.py` wraps
+`DATABASES` in `DynamicSchemaDict` and sets the `BranchAwareRouter`, and
+`netbox_branching` is listed last in `PLUGINS` as its install docs require.
+After rebuilding the container run `python manage.py migrate` to create the
+branching tables. The pytest suite does not load this configuration, so tests
+run without branching.
+
 ## Code Style
 
 ### Python

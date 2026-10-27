@@ -6,6 +6,8 @@ import os
 PLUGINS = [
     # "netbox_initializers",  # Loads demo data
     "netbox_pathways",
+    # netbox-branching must stay last in PLUGINS (its install docs require it)
+    "netbox_branching",
 ]
 
 _MAPBOX_TOKEN = os.environ.get("MAPBOX_ACCESS_TOKEN", "")
