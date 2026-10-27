@@ -82,7 +82,7 @@ The boundary is NetBox's native `dcim.Cable` model: Pathways tracks physical rou
 
 | Component    | Version                         |
 |--------------|---------------------------------|
-| NetBox       | 4.5.3+ (incl. 4.6.x, 4.7.x)     |
+| NetBox       | 4.5.10+ (incl. 4.6.x, 4.7.x)    |
 | Python       | 3.12+                          |
 | PostgreSQL   | 16+ with PostGIS 3.4+          |
 | Django       | 5.2, 6.0, or 6.1 (ships with NetBox) |
