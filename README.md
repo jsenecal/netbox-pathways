@@ -6,7 +6,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/netbox-pathways.svg)](https://pypi.org/project/netbox-pathways/)
 [![Python](https://img.shields.io/pypi/pyversions/netbox-pathways.svg)](https://pypi.org/project/netbox-pathways/)
-[![NetBox](https://img.shields.io/badge/NetBox-4.5%2B-success.svg)](https://github.com/netbox-community/netbox)
+[![NetBox](https://img.shields.io/badge/NetBox-4.7%2B-success.svg)](https://github.com/netbox-community/netbox)
 [![CI](https://github.com/jsenecal/netbox-pathways/actions/workflows/ci.yml/badge.svg)](https://github.com/jsenecal/netbox-pathways/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/jsenecal/netbox-pathways/branch/main/graph/badge.svg)](https://codecov.io/gh/jsenecal/netbox-pathways)
 [![Documentation](https://img.shields.io/badge/docs-jsenecal.github.io-blue)](https://jsenecal.github.io/netbox-pathways/)
@@ -40,11 +40,14 @@
 |-----------------|-------------------------------|-----------|----------------------|
 | 0.1.x -- 0.2.1  | 4.5.3 -- 4.5.x                | 3.12-3.14 | 16+ with PostGIS 3.4+|
 | 0.2.2 -- 0.3.0  | 4.5.3+ (incl. 4.6.x, 4.7.x)   | 3.12-3.14 | 16+ with PostGIS 3.4+|
-| 0.4.0+          | 4.5.10+ (incl. 4.6.x, 4.7.x)  | 3.12-3.14 | 16+ with PostGIS 3.4+|
+| 0.4.0+          | 4.7.0+                        | 3.12-3.14 | 16+ with PostGIS 3.4+|
 
 > NetBox 4.6 ships Django 6.0. Plugin versions 0.2.1 and earlier do not render
 > the geometry map widget on NetBox 4.6 (issue #52); upgrade to 0.2.2 or later
 > for NetBox 4.6 support.
+>
+> Plugin 0.4.0 requires NetBox 4.7.0 or later. On NetBox 4.5 or 4.6, stay on
+> plugin 0.3.0.
 
 ## Installation
 

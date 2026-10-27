@@ -27,7 +27,7 @@ netbox_pathways/
 │   ├── external_geo.py      # External layer GeoJSON endpoint
 │   └── traversal.py         # Graph traversal endpoints
 ├── ui/
-│   └── panels.py            # NetBox 4.5 layout panels
+│   └── panels.py            # NetBox layout panels
 ├── templates/
 │   └── netbox_pathways/
 │       ├── map.html          # Interactive map template
@@ -118,7 +118,7 @@ The SRID is configured in `geo.py` and used consistently across all models and A
 
 ## View System
 
-Views use the NetBox 4.5 layout system:
+Views use the NetBox layout system:
 
 - **List views** — Standard `generic.ObjectListView` with custom tables and filter sets
 - **Detail views** — `SimpleLayout` with `ObjectAttributesPanel` subclasses defined in `ui/panels.py`
