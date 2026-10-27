@@ -545,7 +545,7 @@ class CircuitGeometrySerializer(NetBoxModelSerializer):
             "display_url",
             "display",
             "circuit",
-            "geometry",
+            "path",
             "provider_reference",
             "comments",
             "tags",
