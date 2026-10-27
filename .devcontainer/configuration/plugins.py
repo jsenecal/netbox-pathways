@@ -2,13 +2,20 @@
 Plugin related config
 """
 import os
+import sys
+
+# Same switch as configuration.py: no branching under pytest, and
+# NETBOX_BRANCHING=false turns it off by hand.
+_BRANCHING = "pytest" not in sys.modules and os.environ.get("NETBOX_BRANCHING", "true").lower() == "true"
 
 PLUGINS = [
     # "netbox_initializers",  # Loads demo data
     "netbox_pathways",
-    # netbox-branching must stay last in PLUGINS (its install docs require it)
-    "netbox_branching",
 ]
+
+if _BRANCHING:
+    # netbox-branching must stay last in PLUGINS (its install docs require it)
+    PLUGINS.append("netbox_branching")
 
 _MAPBOX_TOKEN = os.environ.get("MAPBOX_ACCESS_TOKEN", "")
 

@@ -1,9 +1,14 @@
 # Based on https://github.com/netbox-community/netbox-docker/blob/release/configuration/configuration.py
 import re
+import sys
 from os import environ
 from os.path import abspath, dirname, join
 
-from netbox_branching.utilities import DynamicSchemaDict
+# netbox-branching is for manual testing only. pytest-django loads this same
+# configuration inside the devcontainer (it is mounted at /etc/netbox/config),
+# so keep branching out of pytest runs; NETBOX_BRANCHING=false turns it off by
+# hand. plugins.py repeats this test to decide whether to list the plugin.
+_BRANCHING = "pytest" not in sys.modules and environ.get("NETBOX_BRANCHING", "true").lower() == "true"
 
 
 # Read secret from file
@@ -28,31 +33,31 @@ _BASE_DIR = dirname(dirname(abspath(__file__)))
 ALLOWED_HOSTS = environ.get("ALLOWED_HOSTS", "*").split(" ")
 
 # PostgreSQL database configuration -- uses PostGIS engine for GIS support.
+DATABASES = {
+    "default": {
+        "ENGINE": "django.contrib.gis.db.backends.postgis",
+        "NAME": environ.get("DB_NAME", "netbox"),
+        "USER": environ.get("DB_USER", ""),
+        "PASSWORD": _read_secret("db_password", environ.get("DB_PASSWORD", "")),
+        "HOST": environ.get("DB_HOST", "localhost"),
+        "PORT": environ.get("DB_PORT", ""),
+        "OPTIONS": {"sslmode": environ.get("DB_SSLMODE", "prefer")},
+        "CONN_MAX_AGE": int(environ.get("DB_CONN_MAX_AGE", "300")),
+        "DISABLE_SERVER_SIDE_CURSORS": environ.get(
+            "DB_DISABLE_SERVER_SIDE_CURSORS",
+            "False",
+        ).lower()
+        == "true",
+    },
+}
+
 # netbox-branching needs DATABASES wrapped in DynamicSchemaDict plus its
 # BranchAwareRouter so each branch can be served from its own schema.
-DATABASES = DynamicSchemaDict(
-    {
-        "default": {
-            "ENGINE": "django.contrib.gis.db.backends.postgis",
-            "NAME": environ.get("DB_NAME", "netbox"),
-            "USER": environ.get("DB_USER", ""),
-            "PASSWORD": _read_secret("db_password", environ.get("DB_PASSWORD", "")),
-            "HOST": environ.get("DB_HOST", "localhost"),
-            "PORT": environ.get("DB_PORT", ""),
-            "OPTIONS": {"sslmode": environ.get("DB_SSLMODE", "prefer")},
-            "CONN_MAX_AGE": int(environ.get("DB_CONN_MAX_AGE", "300")),
-            "DISABLE_SERVER_SIDE_CURSORS": environ.get(
-                "DB_DISABLE_SERVER_SIDE_CURSORS",
-                "False",
-            ).lower()
-            == "true",
-        },
-    }
-)
+if _BRANCHING:
+    from netbox_branching.utilities import DynamicSchemaDict
 
-DATABASE_ROUTERS = [
-    "netbox_branching.database.BranchAwareRouter",
-]
+    DATABASES = DynamicSchemaDict(DATABASES)
+    DATABASE_ROUTERS = ["netbox_branching.database.BranchAwareRouter"]
 
 REDIS = {
     "tasks": {
