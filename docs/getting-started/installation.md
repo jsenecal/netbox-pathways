@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- **NetBox** 4.5.3 or later
+- **NetBox** 4.5.10 or later
 - **PostgreSQL** 16+ with **PostGIS 3.4** extension
 - **GDAL**, **GEOS**, and **PROJ** system libraries
 - **Python** 3.12+

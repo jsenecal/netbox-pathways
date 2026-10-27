@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Minimum supported NetBox raised from 4.5.3 to 4.5.10, the oldest release CI tests. The plugin now declares `min_version = "4.5.10"`, so NetBox refuses to load it on older releases instead of failing later on a broken page (#169).
+
 ## [0.3.0] - 2026-10-23
 
 ### Added
