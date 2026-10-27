@@ -392,6 +392,7 @@ class InnerductSerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
     start_location = LocationSerializer(nested=True, required=False, allow_null=True)
     end_location = LocationSerializer(nested=True, required=False, allow_null=True)
     parent_conduit = ConduitSerializer(nested=True, required=False, allow_null=True)
+    tenant = TenantSerializer(nested=True, required=False, allow_null=True)
     installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
     cables_routed = drf_serializers.IntegerField(read_only=True)
     geo_length = drf_serializers.FloatField(read_only=True)
@@ -417,6 +418,7 @@ class InnerductSerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
             "size",
             "color",
             "position",
+            "tenant",
             "installed_by",
             "length",
             "geo_length",
