@@ -4,7 +4,7 @@
 
 The project includes a DevContainer configuration for VS Code:
 
-- **Base image**: `ghcr.io/netbox-community/netbox:v4.5.3-4.0.0`
+- **Base image**: the NetBox image pinned by `NETBOX_VARIANT` in `.devcontainer/Dockerfile-plugin_dev`
 - **Database**: `postgis/postgis:16-3.4` (PostgreSQL 16 + PostGIS 3.4)
 - **Cache**: Redis 7 Alpine
 - **Tools**: fish shell, oh-my-fish, GitHub CLI
@@ -127,7 +127,7 @@ docs(map): add interactive map documentation
 ## Architecture Notes
 
 - Follow NetBox plugin conventions for views, forms, tables, and serializers
-- Use the NetBox 4.5 layout system (`SimpleLayout` + panels) for detail views
+- Use the NetBox layout system (`SimpleLayout` + panels) for detail views
 - All geographic fields use PostGIS via `django.contrib.gis`
 - GeoJSON endpoints use `djangorestframework-gis` serializers
 - Frontend TypeScript targets ES2016 for browser compatibility
