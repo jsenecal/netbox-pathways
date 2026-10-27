@@ -89,7 +89,7 @@ class PathwayTable(NetBoxTable):
     geo_length = tables.Column(verbose_name="Geo length (m)", order_by="_geo_length")
     cables_routed = tables.Column(verbose_name="Cables", orderable=True)
     in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
-    actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
+    actions = columns.ActionsColumn(actions=(), extra_buttons=_MAP_BUTTON)
 
     class Meta(NetBoxTable.Meta):
         model = Pathway
