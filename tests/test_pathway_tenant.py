@@ -9,9 +9,8 @@ pathways endpoint or CSV import.
 import pytest
 from tenancy.models import Tenant
 
-from netbox_pathways import filterforms, filtersets, forms
+from netbox_pathways import filterforms, filtersets, forms, models
 from netbox_pathways.api import serializers
-from netbox_pathways.models import AerialSpan, Conduit, DirectBuried, Innerduct
 
 PATHWAY_TYPES = ["Conduit", "AerialSpan", "DirectBuried", "Innerduct"]
 
@@ -44,19 +43,13 @@ def test_filter_form_has_tenant(name):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize(
-    "model,filterset",
-    [
-        (Conduit, filtersets.ConduitFilterSet),
-        (AerialSpan, filtersets.AerialSpanFilterSet),
-        (DirectBuried, filtersets.DirectBuriedFilterSet),
-        (Innerduct, filtersets.InnerductFilterSet),
-    ],
-)
-def test_filterset_filters_by_tenant(model, filterset):
+@pytest.mark.parametrize("name", PATHWAY_TYPES)
+def test_filterset_filters_by_tenant(name):
+    model = getattr(models, name)
+    filterset = getattr(filtersets, f"{name}FilterSet")
     owner = Tenant.objects.create(name="Owner", slug="owner")
     other = Tenant.objects.create(name="Other", slug="other")
-    kwargs = {"parent_conduit": Conduit.objects.create(label="parent")} if model is Innerduct else {}
+    kwargs = {"parent_conduit": models.Conduit.objects.create(label="parent")} if name == "Innerduct" else {}
     mine = model.objects.create(label="mine", tenant=owner, **kwargs)
     model.objects.create(label="theirs", tenant=other, **kwargs)
 
