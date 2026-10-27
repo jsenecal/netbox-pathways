@@ -12,7 +12,6 @@ PATHWAY_COLORS = {
     "aerial": "blue",
     "direct_buried": "gray",
     "innerduct": "orange",
-    "microduct": "purple",
     "tray": "green",
     "raceway": "cyan",
     "submarine": "navy",
