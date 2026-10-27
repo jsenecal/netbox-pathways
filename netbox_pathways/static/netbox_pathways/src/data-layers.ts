@@ -339,6 +339,7 @@ export async function serverSearch(
                         typeKey: (props[typeField] as string) || featureType,
                         latlng: latlng,
                         url: props.url as string | undefined,
+                        matchedChild: (props.search_match as string | null) || undefined,
                     });
                 });
             })

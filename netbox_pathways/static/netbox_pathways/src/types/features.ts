@@ -32,6 +32,8 @@ export interface ServerSearchResult {
   typeKey: string;
   latlng: L.LatLng;
   url?: string;
+  /** Label of the undrawn child (innerduct, banked conduit) the search matched */
+  matchedChild?: string;
 }
 
 export type DetailFieldDef = [string, string] | [string, string, string];

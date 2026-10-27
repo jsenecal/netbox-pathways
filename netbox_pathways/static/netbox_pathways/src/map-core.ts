@@ -174,8 +174,8 @@ export function createLegend(map: L.Map): void {
             const pathTitle = L.DomUtil.create('div', 'pw-legend-section-title', pathSec);
             pathTitle.textContent = 'Pathways';
 
-            const pathTypes = ['conduit', 'conduit_bank', 'aerial', 'direct_buried',
-                'innerduct', 'microduct', 'tray', 'raceway', 'submarine'];
+            // Only the types the map draws; children resolve to their container
+            const pathTypes = ['conduit', 'conduit_bank', 'aerial', 'direct_buried'];
             for (let i = 0; i < pathTypes.length; i++) {
                 const ptype = pathTypes[i];
                 const color = PATHWAY_COLORS[ptype] || '#616161';

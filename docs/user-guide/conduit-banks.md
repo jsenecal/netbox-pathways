@@ -82,7 +82,7 @@ Position is a free-text field, so you can use any naming you like
 
 A bank renders as a single LineString on the interactive map and on
 exported QGIS layers. The conduits inside it do not appear as separate
-features (`Conduit.map_visible` returns `False` when `conduit_bank` is
+features (`Conduit.map_container` returns the bank when `conduit_bank` is
 populated, and `Pathway.map_queryset` filters them out of the
 `/api/plugins/pathways/geo/conduits/` and `/api/plugins/pathways/geo/pathways/`
 GeoJSON endpoints).

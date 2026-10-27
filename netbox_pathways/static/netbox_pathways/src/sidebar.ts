@@ -1332,7 +1332,8 @@ function setServerResults(results: ServerSearchResult[]): void {
         const label = document.createElement('span');
         label.className = 'pw-list-label';
         label.textContent = result.name || 'Unnamed';
-        label.title = result.name || 'Unnamed';
+        if (result.matchedChild) label.textContent += ' (via ' + result.matchedChild + ')';
+        label.title = label.textContent;
         item.appendChild(label);
 
         const typeBadge = document.createElement('span');

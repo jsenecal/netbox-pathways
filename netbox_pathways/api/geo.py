@@ -17,7 +17,8 @@ from django.contrib.gis.db.models import Collect
 from django.contrib.gis.db.models.functions import Centroid, Length, SnapToGrid, Transform
 from django.contrib.gis.geos import Polygon
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models import Count, F, Max
+from django.db.models import Case, CharField, Count, F, Max, OuterRef, Q, Subquery, Value, When
+from django.db.models.functions import Coalesce
 from rest_framework import serializers as drf_serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -173,21 +174,23 @@ class ConduitBankGeoSerializer(GeoFeatureModelSerializer):
     path = GeometryField(source="geo_4326", read_only=True)
     conduit_count = drf_serializers.IntegerField(read_only=True)
     geo_length = drf_serializers.FloatField(read_only=True)
+    search_match = drf_serializers.CharField(read_only=True, default=None)
 
     class Meta:
         model = models.ConduitBank
         geo_field = "path"
-        fields = ["id", "label", "pathway_type", "configuration", "conduit_count", "geo_length"]
+        fields = ["id", "label", "pathway_type", "configuration", "conduit_count", "geo_length", "search_match"]
 
 
 class ConduitGeoSerializer(GeoFeatureModelSerializer):
     path = GeometryField(source="geo_4326", read_only=True)
     geo_length = drf_serializers.FloatField(read_only=True)
+    search_match = drf_serializers.CharField(read_only=True, default=None)
 
     class Meta:
         model = models.Conduit
         geo_field = "path"
-        fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor"]
+        fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor", "search_match"]
 
 
 class AerialSpanGeoSerializer(GeoFeatureModelSerializer):
@@ -272,6 +275,37 @@ class BboxFilterMixin:
         response = Response(serializer.data)
         response["ETag"] = etag
         return response
+
+
+class ChildSearchMixin:
+    """Let ``?q=`` match the children a drawn container stands in for.
+
+    The map never draws innerducts or conduits inside a bank, so a search
+    for one must return its container. Each ``child_searches`` entry is
+    (child model, child filterset, lookup from the child to this model).
+    A container found through a child carries that child's label as
+    ``search_match``; one matched on its own fields carries no hint.
+    """
+
+    child_searches = ()
+
+    def filter_queryset(self, queryset):
+        filtered = super().filter_queryset(queryset)
+        q = self.request.query_params.get("q", "").strip()
+        if not q:
+            return filtered
+
+        children = []
+        for model, filterset, lookup in self.child_searches:
+            # Restricted, so a search cannot probe labels the user may not view
+            matching = filterset({"q": q}, model.objects.restrict(self.request.user, "view")).qs
+            children.append(Subquery(matching.filter(**{lookup: OuterRef("pk")}).order_by("label").values("label")[:1]))
+        child_match = Coalesce(*children) if len(children) > 1 else children[0]
+
+        own = filtered.values("pk")
+        return queryset.annotate(
+            search_match=Case(When(pk__in=own, then=Value(None)), default=child_match, output_field=CharField())
+        ).filter(Q(pk__in=own) | Q(search_match__isnull=False))
 
 
 # --- GeoJSON ViewSets (read-only, unpaginated) ---
@@ -389,7 +423,11 @@ class PathwayGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     pagination_class = None
 
 
-class ConduitBankGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
+class ConduitBankGeoViewSet(ChildSearchMixin, BboxFilterMixin, ReadOnlyModelViewSet):
+    child_searches = (
+        (models.Conduit, filtersets.ConduitFilterSet, "conduit_bank"),
+        (models.Innerduct, filtersets.InnerductFilterSet, "parent_conduit__conduit_bank"),
+    )
     queryset = (
         models.ConduitBank.objects.filter(path__isnull=False)
         .annotate(
@@ -411,7 +449,8 @@ class ConduitBankGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     pagination_class = None
 
 
-class ConduitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
+class ConduitGeoViewSet(ChildSearchMixin, BboxFilterMixin, ReadOnlyModelViewSet):
+    child_searches = ((models.Innerduct, filtersets.InnerductFilterSet, "parent_conduit"),)
     # Exclude conduits that belong to a bank -- those are represented by the bank line
     queryset = (
         models.Conduit.objects.filter(

@@ -3,7 +3,6 @@
 import pytest
 from dcim.models import Site
 from django.contrib.gis.geos import LineString, Point
-from rest_framework.test import APIClient
 
 from netbox_pathways.geo import (
     LEAFLET_SRID,
@@ -14,6 +13,8 @@ from netbox_pathways.geo import (
     to_leaflet,
 )
 from netbox_pathways.models import AerialSpan, CableSegment, Conduit, ConduitBank, DirectBuried, Structure
+
+from .request_helpers import api_client_for, parse_json_script, render_map, user_with_view_permission
 
 # ---------------------------------------------------------------------------
 # geo.py utility functions
@@ -164,14 +165,8 @@ def occupied_conduit(conduits, _disable_routability_signal):
 
 
 @pytest.fixture
-def api_client():
-    from django.contrib.auth import get_user_model
-
-    user_model = get_user_model()
-    user = user_model.objects.create_user(username="geotest", password="geotest", is_superuser=True)  # noqa: S106
-    client = APIClient()
-    client.force_authenticate(user=user)
-    return client
+def api_client(admin_user):
+    return api_client_for(admin_user)
 
 
 # ---------------------------------------------------------------------------
@@ -642,48 +637,29 @@ class TestMapViewExtent:
         view = MapView()
         view._data_extent()  # should not crash on empty DB
 
-    def test_resolve_feature_extent_structure(self, structures):
+    def test_resolve_selection_structure(self, structures, admin_user):
         from netbox_pathways.views import MapView
 
         s = structures[0]
-        extent = MapView._resolve_feature_extent(f"structure-{s.pk}")
-        assert extent is not None
-        west, south, east, north = extent
-        assert -180 <= west <= 180
-        assert -90 <= south <= 90
+        assert MapView._resolve_selection(f"structure-{s.pk}", admin_user) == s
 
-    def test_resolve_feature_extent_conduit(self, conduits):
+    @pytest.mark.parametrize("param", ["unknown-123", "noid", "structure-999999", None])
+    def test_resolve_selection_unresolvable(self, param, admin_user):
         from netbox_pathways.views import MapView
 
-        c = conduits[0]
-        extent = MapView._resolve_feature_extent(f"conduit-{c.pk}")
-        assert extent is not None
+        assert MapView._resolve_selection(param, admin_user) is None
 
-    def test_resolve_feature_extent_conduit_bank(self, conduit_bank):
+    def test_feature_extent_structure_is_wgs84(self, structures):
         from netbox_pathways.views import MapView
 
-        extent = MapView._resolve_feature_extent(f"conduit_bank-{conduit_bank.pk}")
-        assert extent is not None
+        west, south, east, north = MapView._feature_extent(structures[0])
+        assert -180 <= west <= east <= 180
+        assert -90 <= south <= north <= 90
 
-    def test_resolve_feature_extent_invalid_type(self):
+    def test_feature_extent_conduit(self, conduits):
         from netbox_pathways.views import MapView
 
-        assert MapView._resolve_feature_extent("unknown-123") is None
-
-    def test_resolve_feature_extent_invalid_format(self):
-        from netbox_pathways.views import MapView
-
-        assert MapView._resolve_feature_extent("noid") is None
-
-    def test_resolve_feature_extent_missing_pk(self):
-        from netbox_pathways.views import MapView
-
-        assert MapView._resolve_feature_extent("structure-999999") is None
-
-    def test_resolve_feature_extent_none(self):
-        from netbox_pathways.views import MapView
-
-        assert MapView._resolve_feature_extent(None) is None
+        assert MapView._feature_extent(conduits[0]) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -693,43 +669,15 @@ class TestMapViewExtent:
 
 @pytest.mark.django_db
 class TestMapViewSelect:
-    def test_select_param_sets_bounds(self, structures):
+    def test_select_param_sets_bounds(self, structures, admin_user):
+        content = render_map(f"select=structure-{structures[0].pk}", user=admin_user)
+        assert parse_json_script(content, "pathways-map-init")["bounds"] is not None
 
-        from django.test import RequestFactory
-
-        from netbox_pathways.views import MapView
-
-        factory = RequestFactory()
-        s = structures[0]
-        request = factory.get(f"/plugins/pathways/map/?select=structure-{s.pk}")
-        from django.contrib.auth.models import AnonymousUser
-
-        request.user = AnonymousUser()
-
-        view = MapView()
-        response = view.get(request)
-        assert response.status_code == 200
-        content = response.content.decode()
-        # Should contain map_bounds JSON (not empty)
-        assert "map_bounds" not in content or "[[" in content
-
-    def test_select_param_invalid_uses_fallback(self):
-        from unittest.mock import patch
-
-        from django.test import RequestFactory
-
-        from netbox_pathways.views import MapView
-
-        factory = RequestFactory()
-        request = factory.get("/plugins/pathways/map/?select=bad-999")
-        from django.contrib.auth.models import AnonymousUser
-
-        request.user = AnonymousUser()
-
-        view = MapView()
-        with patch.object(view, "_data_extent", return_value=None):
-            response = view.get(request)
-        assert response.status_code == 200
+    def test_select_param_invalid_uses_fallback(self, admin_user):
+        content = render_map("select=bad-999", user=admin_user)
+        config = parse_json_script(content, "pathways-map-init")
+        assert config["select"] == "bad-999"
+        assert config["bounds"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -764,24 +712,8 @@ def tenant_structures(srid, site):
 @pytest.fixture
 def constrained_client(tenant_structures):
     """API client for a user whose Structure view permission is constrained to tenant A."""
-    from django.contrib.auth import get_user_model
-    from django.contrib.contenttypes.models import ContentType
-    from users.models import ObjectPermission
-
-    user_model = get_user_model()
-    user = user_model.objects.create_user(username="geo-constrained", password="x")  # noqa: S106
-    perm = ObjectPermission.objects.create(
-        name="geo-perm-test",
-        enabled=True,
-        actions=["view"],
-        constraints={"tenant__slug": "geo-tenant-a"},
-    )
-    perm.object_types.set([ContentType.objects.get_for_model(Structure)])
-    perm.users.add(user)
-    client = APIClient()
-    # Re-fetch so no stale permission cache rides along on the user instance
-    client.force_authenticate(user=user_model.objects.get(pk=user.pk))
-    return client
+    user = user_with_view_permission("geo-constrained", Structure, {"tenant__slug": "geo-tenant-a"})
+    return api_client_for(user)
 
 
 @pytest.mark.django_db

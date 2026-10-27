@@ -24,10 +24,16 @@ Markers cluster when zoomed out and expand as you zoom in.
 
 Pathways render as colored lines connecting structures:
 
-- **Conduit** — Solid brown line
-- **Aerial Span** — Dashed blue line
-- **Direct Buried** — Dotted gray line
-- **Innerduct** — Solid thin orange line
+- **Conduit Bank** -- Solid magenta line
+- **Conduit** -- Dashed orange line
+- **Aerial Span** -- Dashed blue line
+- **Direct Buried** -- Dotted gray line
+
+The map draws containers only. Innerducts and conduits inside a bank are
+not drawn on their own: they are listed in their container's sidebar and
+detail page, and the Map button on their detail page opens the map on the
+container (the bank for a conduit in a bank or an innerduct in one, else
+the conduit).
 
 ### Layer Toggles
 
@@ -97,7 +103,9 @@ Clicking any feature opens a sidebar panel with two views:
 
 **List View:**
 
-- Search field to filter features by name
+- Search field to filter features by name; when nothing in view matches,
+  the search runs across the whole map, and a container found through one
+  of its innerducts or conduits is listed as `Bank 1 (via Duct 7)`
 - Type filter pills to show/hide feature categories
 - Scrollable list of all visible features
 - Feature count and aggregate statistics
@@ -137,6 +145,7 @@ Override default map position via URL:
 | `lon` | `?lon=-74.0060` | Center longitude |
 | `zoom` | `?zoom=15` | Zoom level |
 | `bbox` | `?bbox=-74,40,-73,41` | Bounding box (W,S,E,N) |
+| `select` | `?select=conduit-42` | Select a feature and zoom to it; an innerduct or a conduit in a bank selects its container |
 
 ## Map Panels on Detail Pages
 

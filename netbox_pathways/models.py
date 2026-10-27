@@ -175,6 +175,16 @@ class Structure(NetBoxModel):
     def get_absolute_url(self):
         return reverse("plugins:netbox_pathways:structure", args=[self.pk])
 
+    @property
+    def map_container(self):
+        """Structures are always drawn as themselves."""
+        return self
+
+    @property
+    def map_select_id(self):
+        """The map's ``?select=`` value for this structure."""
+        return f"structure-{self.pk}"
+
 
 class SiteGeometry(NetBoxModel):
     """
@@ -599,15 +609,19 @@ class Pathway(NetBoxModel):
         return reverse("plugins:netbox_pathways:pathway", args=[self.pk])
 
     @property
-    def map_visible(self):
-        """Whether this pathway should be rendered as its own feature on the map.
+    def map_container(self):
+        """The drawn map feature that stands in for this pathway.
 
-        Returns False for pathways that are children of a container which owns the
-        map representation (e.g. a conduit inside a bank, an innerduct inside a
-        conduit).  The container is the feature that gets drawn; children are
-        detail-level records shown in the sidebar / detail view.
+        Children of a container that owns the map representation (a conduit
+        inside a bank, an innerduct inside a conduit) are never drawn; they
+        resolve to that container. Everything else is drawn as itself.
         """
-        return True
+        return self
+
+    @property
+    def map_select_id(self):
+        """The map's ``?select=`` value for this pathway."""
+        return f"{self.pathway_type}-{self.pk}"
 
     def _inherit_endpoints_from(self, parent, occupied_suffixes=("structure_id", "location_id")):
         """Inherit endpoints from a parent pathway, per side, if not explicitly set.
@@ -766,8 +780,8 @@ class Conduit(Pathway):
     )
 
     @property
-    def map_visible(self):
-        return self.conduit_bank_id is None
+    def map_container(self):
+        return self.conduit_bank if self.conduit_bank_id else self
 
     @property
     def effective_tenant(self):
@@ -988,8 +1002,8 @@ class Innerduct(Pathway):
     parent_conduit = models.ForeignKey(Conduit, on_delete=models.CASCADE, related_name="innerducts")
 
     @property
-    def map_visible(self):
-        return False
+    def map_container(self):
+        return self.parent_conduit.map_container
 
     @property
     def effective_tenant(self):

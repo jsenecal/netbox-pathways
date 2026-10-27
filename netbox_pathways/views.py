@@ -32,17 +32,14 @@ from netbox_pathways.registry import registry as map_layer_registry
 
 from . import anchors, filterforms, filtersets, forms, models, tables
 from .choices import PlannedRouteStatusChoices
+from .geo import to_leaflet
 from .graph import PathwayGraph, _endpoint_nodes
 from .ui import panels
 
 
 def _map_url_for(obj):
     """Build a map URL that centres on and selects this object."""
-    if hasattr(obj, "pathway_type") and obj.pathway_type:
-        feature_type = obj.pathway_type
-    else:
-        feature_type = "structure"
-    return reverse("plugins:netbox_pathways:map") + f"?select={feature_type}-{obj.pk}"
+    return reverse("plugins:netbox_pathways:map") + f"?select={obj.map_select_id}"
 
 
 class ViewInMap(ObjectAction):
@@ -1757,46 +1754,28 @@ class MapView(LoginRequiredMixin, View):
             return None
 
     @staticmethod
-    def _resolve_feature_extent(select_param):
-        """Resolve WGS84 bounding box from a select param like 'structure-123'.
+    def _resolve_selection(select_param, user):
+        """Return the drawn object a select param like 'structure-123' stands for.
 
-        Returns (west, south, east, north) or None.
+        Child pathways (innerducts, conduits in a bank) are never drawn, so
+        they resolve to their container. Returns None when nothing matches.
         """
-        from django.contrib.gis.db.models import Extent
-        from django.contrib.gis.db.models.functions import Transform
-
         try:
             ftype, fid = select_param.rsplit("-", 1)
             fid = int(fid)
         except (ValueError, AttributeError):
             return None
-
-        model_map = {
-            "structure": (models.Structure, "geometry"),
-            "conduit": (models.Conduit, "path"),
-            "conduit_bank": (models.ConduitBank, "path"),
-            "aerial": (models.AerialSpan, "path"),
-            "direct_buried": (models.DirectBuried, "path"),
-        }
-        entry = model_map.get(ftype)
-        if not entry:
+        model_cls = {"structure": models.Structure, **models.PATHWAY_TYPE_MODELS}.get(ftype)
+        if model_cls is None:
             return None
+        obj = model_cls.objects.restrict(user, "view").filter(pk=fid).first()
+        return obj.map_container if obj else None
 
-        model_cls, geom_field = entry
-        try:
-            result = (
-                model_cls.objects.filter(pk=fid)
-                .annotate(
-                    _geo=Transform(geom_field, 4326),
-                )
-                .aggregate(bbox=Extent("_geo"))
-            )
-            bbox = result.get("bbox")
-            if bbox:
-                return bbox  # (west, south, east, north)
-        except Exception:  # noqa: S110
-            pass
-        return None
+    @staticmethod
+    def _feature_extent(obj):
+        """WGS84 (west, south, east, north) of an object's geometry, or None."""
+        geom = obj.geometry if isinstance(obj, models.Structure) else obj.path
+        return to_leaflet(geom).extent if geom else None
 
     def get(self, request):
         from django.conf import settings
@@ -1827,7 +1806,9 @@ class MapView(LoginRequiredMixin, View):
         default_lon = plugin_cfg.get("map_center_lon", -73.5673)
         default_zoom = plugin_cfg.get("map_zoom", 10)
 
-        selected_feature = request.GET.get("select", "")
+        select_param = request.GET.get("select", "")
+        selected = self._resolve_selection(select_param, request.user) if select_param else None
+        selected_feature = selected.map_select_id if selected else select_param
 
         # Viewport precedence: explicit lat/lon params, then the selected
         # feature's bbox, then the data extent, then the configured default.
@@ -1844,7 +1825,7 @@ class MapView(LoginRequiredMixin, View):
             ]
             zoom = self._safe_int(request.GET.get("zoom"), default_zoom)
         else:
-            box = self._resolve_feature_extent(selected_feature) if selected_feature else None
+            box = self._feature_extent(selected) if selected else None
             if box:
                 zoom = 18  # fallback if fitBounds is not used
             else:

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Map: the Map button and `?select=` for an innerduct or a conduit inside a bank open the map on the drawn container instead of zooming out to the whole dataset; map search finds a container through its innerducts and banked conduits, and the legend lists only the pathway types the map draws (#166).
+
 ### Changed
 
 - Minimum supported NetBox raised from 4.5.3 to 4.5.10, the oldest release CI tests. The plugin now declares `min_version = "4.5.10"`, so NetBox refuses to load it on older releases instead of failing later on a broken page (#169).
