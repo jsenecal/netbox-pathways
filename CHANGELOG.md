@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The generic Pathways list (`/plugins/pathways/pathways/`) no longer returns HTTP 500 (`NoReverseMatch: pathway_edit`). Its rows offered edit and delete buttons for the base pathway model, which has no such views; they now carry only the map button. Edit and delete pathways from the list or detail page of their concrete type (conduits, aerial spans, ...) (#167).
+
 ## [0.4.0] - 2026-10-27
 
 ### Changed
