@@ -4,7 +4,7 @@
 
 The project includes a DevContainer configuration for VS Code:
 
-- **Base image**: `ghcr.io/netbox-community/netbox:v4.7.0-5.1.0`
+- **Base image**: the NetBox image pinned by `NETBOX_VARIANT` in `.devcontainer/Dockerfile-plugin_dev`
 - **Database**: `postgis/postgis:16-3.4` (PostgreSQL 16 + PostGIS 3.4)
 - **Cache**: Redis 7 Alpine
 - **Tools**: fish shell, oh-my-fish, GitHub CLI
