@@ -100,20 +100,6 @@ class StructureSerializer(NetBoxModelSerializer):
         return None
 
 
-# --- Shared FK field declarations for pathway subtypes ---
-
-
-def _pathway_fk_fields():
-    """Common FK field declarations for all pathway-based serializers."""
-    return {
-        "start_structure": StructureSerializer(nested=True, required=False, allow_null=True),
-        "end_structure": StructureSerializer(nested=True, required=False, allow_null=True),
-        "start_location": LocationSerializer(nested=True, required=False, allow_null=True),
-        "end_location": LocationSerializer(nested=True, required=False, allow_null=True),
-        "tenant": TenantSerializer(nested=True, required=False, allow_null=True),
-    }
-
-
 class PathwayAnchorsMixin(drf_serializers.Serializer):
     """Read-only: the structure each end attaches to.
 
