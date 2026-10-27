@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Minimum supported NetBox raised from 4.5.3 to 4.5.10, the oldest release CI tests. The plugin now declares `min_version = "4.5.10"`, so NetBox refuses to load it on older releases instead of failing later on a broken page (#169).
 
+### Fixed
+
+- Innerducts can be given a tenant through the REST API; `tenant` was missing from the innerduct serializer and silently ignored on create and update (#168).
+- Conduits, aerial spans, direct buried pathways and innerducts now offer `tenant` on their add/edit forms, bulk edit forms (set or clear) and list filter forms, and their API filters accept `tenant_id`, `tenant`, `tenant_group_id` and `tenant_group`. Before, only the base pathways endpoint and CSV import could set or filter on it (#168).
+
 ## [0.3.0] - 2026-10-23
 
 ### Added

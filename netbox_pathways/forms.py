@@ -537,6 +537,8 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
         quick_add=True,
     )
 
+    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
+
     installed_by = DynamicModelChoiceField(
         queryset=Tenant.objects.all(),
         required=False,
@@ -566,7 +568,7 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
             )
 
     fieldsets = (
-        FieldSet("label", "status", "material", "length", name="Conduit"),
+        FieldSet("label", "status", "tenant", "material", "length", name="Conduit"),
         FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet(
             "start_structure",
@@ -605,6 +607,7 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "conduit_bank",
             "bank_position",
             "length",
+            "tenant",
             "installed_by",
             "installation_date",
             "commissioned_date",
@@ -680,16 +683,17 @@ class ConduitImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
 
 class ConduitBulkEditForm(NetBoxModelBulkEditForm):
     status = forms.ChoiceField(choices=PathwayStatusChoices, required=False)
+    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
     material = forms.ChoiceField(choices=ConduitMaterialChoices, required=False)
     installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
     commissioned_date = forms.DateField(required=False)
 
     model = Conduit
     fieldsets = (
-        FieldSet("status", "material", name="Conduit"),
+        FieldSet("status", "tenant", "material", name="Conduit"),
         FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
     )
-    nullable_fields = ("material", "installed_by", "commissioned_date")
+    nullable_fields = ("tenant", "material", "installed_by", "commissioned_date")
 
 
 # --- Aerial Span ---
@@ -721,6 +725,8 @@ class AerialSpanForm(PathwayEndpointFormMixin, NetBoxModelForm):
         quick_add=True,
     )
 
+    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
+
     installed_by = DynamicModelChoiceField(
         queryset=Tenant.objects.all(),
         required=False,
@@ -730,7 +736,7 @@ class AerialSpanForm(PathwayEndpointFormMixin, NetBoxModelForm):
     )
 
     fieldsets = (
-        FieldSet("label", "status", "aerial_type", "length", name="Aerial Span"),
+        FieldSet("label", "status", "tenant", "aerial_type", "length", name="Aerial Span"),
         FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
         FieldSet("start_attachment_height", "end_attachment_height", "sag", "messenger_size", name="Physical"),
@@ -757,6 +763,7 @@ class AerialSpanForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "wind_loading",
             "ice_loading",
             "length",
+            "tenant",
             "installed_by",
             "installation_date",
             "commissioned_date",
@@ -812,6 +819,7 @@ class AerialSpanImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
 
 class AerialSpanBulkEditForm(NetBoxModelBulkEditForm):
     status = forms.ChoiceField(choices=PathwayStatusChoices, required=False)
+    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
     aerial_type = forms.ChoiceField(choices=AerialTypeChoices, required=False)
     messenger_size = forms.CharField(max_length=50, required=False)
     installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
@@ -819,10 +827,10 @@ class AerialSpanBulkEditForm(NetBoxModelBulkEditForm):
 
     model = AerialSpan
     fieldsets = (
-        FieldSet("status", "aerial_type", "messenger_size", name="Aerial Span"),
+        FieldSet("status", "tenant", "aerial_type", "messenger_size", name="Aerial Span"),
         FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
     )
-    nullable_fields = ("messenger_size", "wind_loading", "ice_loading", "installed_by", "commissioned_date")
+    nullable_fields = ("tenant", "messenger_size", "wind_loading", "ice_loading", "installed_by", "commissioned_date")
 
 
 # --- Direct Buried ---
@@ -871,6 +879,8 @@ class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
         quick_add=True,
     )
 
+    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
+
     installed_by = DynamicModelChoiceField(
         queryset=Tenant.objects.all(),
         required=False,
@@ -880,7 +890,7 @@ class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
     )
 
     fieldsets = (
-        FieldSet("label", "status", "length", name="Direct Buried"),
+        FieldSet("label", "status", "tenant", "length", name="Direct Buried"),
         FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
         FieldSet("burial_depth", "warning_tape", "tracer_wire", "armor_type", name="Physical"),
@@ -903,6 +913,7 @@ class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "tracer_wire",
             "armor_type",
             "length",
+            "tenant",
             "installed_by",
             "installation_date",
             "commissioned_date",
@@ -962,6 +973,7 @@ class InnerductBulkEditForm(NetBoxModelBulkEditForm):
         selector=True,
     )
     status = forms.ChoiceField(choices=PathwayStatusChoices, required=False)
+    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
     color = ColorField(required=False)
     size = forms.CharField(max_length=50, required=False)
     installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
@@ -969,10 +981,10 @@ class InnerductBulkEditForm(NetBoxModelBulkEditForm):
 
     model = Innerduct
     fieldsets = (
-        FieldSet("status", "parent_conduit", "size", "color", name="Innerduct"),
+        FieldSet("status", "tenant", "parent_conduit", "size", "color", name="Innerduct"),
         FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
     )
-    nullable_fields = ("color", "installed_by", "commissioned_date")
+    nullable_fields = ("tenant", "color", "installed_by", "commissioned_date")
 
 
 class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
@@ -1006,6 +1018,8 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
         quick_add=True,
     )
 
+    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
+
     installed_by = DynamicModelChoiceField(
         queryset=Tenant.objects.all(),
         required=False,
@@ -1025,7 +1039,7 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
             )
 
     fieldsets = (
-        FieldSet("label", "status", "parent_conduit", "size", "color", "position", name="Innerduct"),
+        FieldSet("label", "status", "tenant", "parent_conduit", "size", "color", "position", name="Innerduct"),
         FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
         FieldSet("length", name="Physical"),
@@ -1048,6 +1062,7 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "start_location",
             "end_location",
             "length",
+            "tenant",
             "installed_by",
             "installation_date",
             "commissioned_date",

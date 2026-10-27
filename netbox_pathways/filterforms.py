@@ -124,6 +124,7 @@ class ConduitFilterForm(NetBoxModelFilterSetForm):
         FieldSet("q", "filter_id", "tag"),
         FieldSet("status", "material", "conduit_bank_id", name="Attributes"),
         FieldSet("start_structure_id", "end_structure_id", "start_location_id", "end_location_id", name="Endpoints"),
+        FieldSet("tenant_id", name="Tenant"),
     )
     status = forms.MultipleChoiceField(choices=PathwayStatusChoices, required=False)
     material = forms.MultipleChoiceField(choices=ConduitMaterialChoices, required=False)
@@ -152,6 +153,12 @@ class ConduitFilterForm(NetBoxModelFilterSetForm):
         required=False,
         label="End Location",
     )
+    tenant_id = DynamicModelMultipleChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        null_option="None",
+        label="Tenant",
+    )
     tag = TagFilterField(model)
 
 
@@ -161,6 +168,7 @@ class AerialSpanFilterForm(NetBoxModelFilterSetForm):
         FieldSet("q", "filter_id", "tag"),
         FieldSet("status", "aerial_type", name="Attributes"),
         FieldSet("start_structure_id", "end_structure_id", "start_location_id", "end_location_id", name="Endpoints"),
+        FieldSet("tenant_id", name="Tenant"),
     )
     status = forms.MultipleChoiceField(choices=PathwayStatusChoices, required=False)
     aerial_type = forms.MultipleChoiceField(choices=AerialTypeChoices, required=False)
@@ -184,6 +192,12 @@ class AerialSpanFilterForm(NetBoxModelFilterSetForm):
         required=False,
         label="End Location",
     )
+    tenant_id = DynamicModelMultipleChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        null_option="None",
+        label="Tenant",
+    )
     tag = TagFilterField(model)
 
 
@@ -193,6 +207,7 @@ class DirectBuriedFilterForm(NetBoxModelFilterSetForm):
         FieldSet("q", "filter_id", "tag"),
         FieldSet("status", name="Attributes"),
         FieldSet("start_structure_id", "end_structure_id", "start_location_id", "end_location_id", name="Endpoints"),
+        FieldSet("tenant_id", name="Tenant"),
     )
     status = forms.MultipleChoiceField(choices=PathwayStatusChoices, required=False)
     start_structure_id = DynamicModelMultipleChoiceField(
@@ -215,6 +230,12 @@ class DirectBuriedFilterForm(NetBoxModelFilterSetForm):
         required=False,
         label="End Location",
     )
+    tenant_id = DynamicModelMultipleChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        null_option="None",
+        label="Tenant",
+    )
     tag = TagFilterField(model)
 
 
@@ -223,6 +244,7 @@ class InnerductFilterForm(NetBoxModelFilterSetForm):
     fieldsets = (
         FieldSet("q", "filter_id", "tag"),
         FieldSet("status", "parent_conduit_id", "size", "color", "position", name="Attributes"),
+        FieldSet("tenant_id", name="Tenant"),
     )
     status = forms.MultipleChoiceField(choices=PathwayStatusChoices, required=False)
     parent_conduit_id = DynamicModelMultipleChoiceField(
@@ -234,6 +256,12 @@ class InnerductFilterForm(NetBoxModelFilterSetForm):
     # The picker is the only practical way to filter on a stored hex code.
     color = ColorField(required=False)
     position = forms.CharField(required=False)
+    tenant_id = DynamicModelMultipleChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        null_option="None",
+        label="Tenant",
+    )
     tag = TagFilterField(model)
 
 

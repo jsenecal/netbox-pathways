@@ -373,7 +373,9 @@ class PathwayFilterSet(
         return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
-class ConduitFilterSet(OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, NetBoxModelFilterSet):
+class ConduitFilterSet(
+    OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet
+):
     label = MultiValueCharFilter()
     material = django_filters.MultipleChoiceFilter(
         choices=ConduitMaterialChoices,
@@ -425,7 +427,9 @@ class ConduitFilterSet(OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthF
         return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
-class AerialSpanFilterSet(OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, NetBoxModelFilterSet):
+class AerialSpanFilterSet(
+    OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet
+):
     label = MultiValueCharFilter()
     aerial_type = django_filters.MultipleChoiceFilter(
         choices=AerialTypeChoices,
@@ -474,7 +478,9 @@ class AerialSpanFilterSet(OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLeng
         return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
-class DirectBuriedFilterSet(OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, NetBoxModelFilterSet):
+class DirectBuriedFilterSet(
+    OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet
+):
     label = MultiValueCharFilter()
     start_structure_id = django_filters.ModelMultipleChoiceFilter(
         field_name="start_structure",
@@ -516,7 +522,9 @@ class DirectBuriedFilterSet(OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLe
         return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
 
 
-class InnerductFilterSet(OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, NetBoxModelFilterSet):
+class InnerductFilterSet(
+    OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet
+):
     label = MultiValueCharFilter()
     parent_conduit_id = django_filters.ModelMultipleChoiceFilter(
         field_name="parent_conduit",

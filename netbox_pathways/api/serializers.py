@@ -100,20 +100,6 @@ class StructureSerializer(NetBoxModelSerializer):
         return None
 
 
-# --- Shared FK field declarations for pathway subtypes ---
-
-
-def _pathway_fk_fields():
-    """Common FK field declarations for all pathway-based serializers."""
-    return {
-        "start_structure": StructureSerializer(nested=True, required=False, allow_null=True),
-        "end_structure": StructureSerializer(nested=True, required=False, allow_null=True),
-        "start_location": LocationSerializer(nested=True, required=False, allow_null=True),
-        "end_location": LocationSerializer(nested=True, required=False, allow_null=True),
-        "tenant": TenantSerializer(nested=True, required=False, allow_null=True),
-    }
-
-
 class PathwayAnchorsMixin(drf_serializers.Serializer):
     """Read-only: the structure each end attaches to.
 
@@ -392,6 +378,7 @@ class InnerductSerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
     start_location = LocationSerializer(nested=True, required=False, allow_null=True)
     end_location = LocationSerializer(nested=True, required=False, allow_null=True)
     parent_conduit = ConduitSerializer(nested=True, required=False, allow_null=True)
+    tenant = TenantSerializer(nested=True, required=False, allow_null=True)
     installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
     cables_routed = drf_serializers.IntegerField(read_only=True)
     geo_length = drf_serializers.FloatField(read_only=True)
@@ -417,6 +404,7 @@ class InnerductSerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
             "size",
             "color",
             "position",
+            "tenant",
             "installed_by",
             "length",
             "geo_length",
