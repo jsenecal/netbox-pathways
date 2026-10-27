@@ -109,7 +109,7 @@ def conduits(structures, srid):
             label=f"Geo-C{i}",
             start_structure=structures[i],
             end_structure=structures[i + 1],
-            path=LineString(
+            geometry=LineString(
                 (i * 100, i * 100),
                 ((i + 1) * 100, (i + 1) * 100),
                 srid=srid,
@@ -126,7 +126,7 @@ def aerial_span(structures, srid):
         label="Geo-A1",
         start_structure=structures[0],
         end_structure=structures[1],
-        path=LineString((100, 100), (200, 200), srid=srid),
+        geometry=LineString((100, 100), (200, 200), srid=srid),
         length=50,
     )
 
@@ -137,7 +137,7 @@ def direct_buried(structures, srid):
         label="Geo-DB1",
         start_structure=structures[1],
         end_structure=structures[2],
-        path=LineString((200, 200), (300, 300), srid=srid),
+        geometry=LineString((200, 200), (300, 300), srid=srid),
         length=75,
     )
 
@@ -148,7 +148,7 @@ def conduit_bank(structures, srid):
         label="Geo-CB1",
         start_structure=structures[0],
         end_structure=structures[2],
-        path=LineString((100, 100), (300, 300), srid=srid),
+        geometry=LineString((100, 100), (300, 300), srid=srid),
         length=200,
     )
 
@@ -484,7 +484,7 @@ class TestMapInfoAPI:
             label="In-bank",
             conduit_bank=conduit_bank,
             bank_position="A1",
-            path=LineString((100, 100), (300, 300), srid=srid),
+            geometry=LineString((100, 100), (300, 300), srid=srid),
             length=200,
         )
         resp = api_client.get(self.URL, format="json")
@@ -570,7 +570,7 @@ class TestMapInfoAPI:
             label="INFO-C1",
             start_structure=anchor,
             end_location=loc,
-            path=LineString((0, 0), (10, 20), srid=srid),
+            geometry=LineString((0, 0), (10, 20), srid=srid),
         )
 
         registry.register(

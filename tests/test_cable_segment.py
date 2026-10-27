@@ -31,7 +31,7 @@ class TestCableSegmentSequence:
             label="C-1",
             start_structure=structures[0],
             end_structure=structures[1],
-            path=LineString((0, 0), (1, 1), srid=srid),
+            geometry=LineString((0, 0), (1, 1), srid=srid),
         )
 
     @pytest.fixture
@@ -41,7 +41,7 @@ class TestCableSegmentSequence:
             label="C-2",
             start_structure=structures[1],
             end_structure=structures[2],
-            path=LineString((1, 1), (2, 2), srid=srid),
+            geometry=LineString((1, 1), (2, 2), srid=srid),
         )
 
     @pytest.fixture
@@ -86,7 +86,7 @@ class TestCableSegmentRoutability:
             label="C-RT-1",
             start_structure=structures[0],
             end_structure=structures[1],
-            path=LineString((0, 0), (1, 1), srid=srid),
+            geometry=LineString((0, 0), (1, 1), srid=srid),
         )
 
     def test_cable_without_terminations_fails_clean(self, pathway):

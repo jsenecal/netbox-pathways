@@ -321,8 +321,8 @@ class PathwayQuerySet(RestrictedQuerySet):
         return self.filter(touching_q(structure, direct=direct))
 
     def with_geo_length(self):
-        """Annotate each pathway with `_geo_length`: PostGIS `ST_Length(path)`."""
-        return self.annotate(_geo_length=Length("path"))
+        """Annotate each pathway with `_geo_length`: PostGIS `ST_Length(geometry)`."""
+        return self.annotate(_geo_length=Length("geometry"))
 
 
 class Pathway(NetBoxModel):
@@ -337,11 +337,11 @@ class Pathway(NetBoxModel):
         default=PathwayStatusChoices.STATUS_ACTIVE,
     )
     pathway_type = models.CharField(max_length=50, choices=PathwayTypeChoices, editable=False)
-    path = models.LineStringField(
+    geometry = models.LineStringField(
         srid=get_srid(),
         null=True,
         blank=True,
-        help_text="Geographic path (not applicable to indoor pathways between two locations)",
+        help_text="Route geometry (not applicable to indoor pathways between two locations)",
     )
     start_structure = models.ForeignKey(
         Structure,
@@ -468,7 +468,7 @@ class Pathway(NetBoxModel):
 
     @property
     def geo_length(self):
-        """Length of `path` in metres, computed by PostGIS `ST_Length`.
+        """Length of `geometry` in metres, computed by PostGIS `ST_Length`.
 
         Reuses `_geo_length` when the instance was loaded via
         `Pathway.objects.with_geo_length()`; otherwise issues an annotated
@@ -484,8 +484,8 @@ class Pathway(NetBoxModel):
         return _distance_to_m(value)
 
     @property
-    def requires_path(self):
-        """Whether clean() demands a geometry path.
+    def requires_geometry(self):
+        """Whether clean() demands a route geometry.
 
         Indoor pathways (both endpoints are locations) carry no geographic
         path. Subclasses contained in a parent pathway override this: the
@@ -499,16 +499,16 @@ class Pathway(NetBoxModel):
     def clean(self):
         super().clean()
         self.check_one_endpoint_kind()
-        if not self.path:
-            if self.requires_path:
+        if not self.geometry:
+            if self.requires_geometry:
                 raise ValidationError(
-                    {"path": "Path is required unless both endpoints are locations (indoor pathway)."}
+                    {"geometry": "Geometry is required unless both endpoints are locations (indoor pathway)."}
                 )
             return
         for side in ("start", "end"):
             geom, kind = self.anchor_geometry(side)
             if geom is not None and not self.is_indoor_end(side, geom):
-                self._snap_path_end(side, geom, kind)
+                self._snap_geometry_end(side, geom, kind)
 
     def check_one_endpoint_kind(self):
         """Reject a side naming more than one of endpoint_kinds.
@@ -543,11 +543,11 @@ class Pathway(NetBoxModel):
         footprint; see docs/user-guide/attachment.md.
         """
         return (
-            self.path is not None
+            self.geometry is not None
             and getattr(self, f"{side}_structure_id", None) is None
             and getattr(self, f"{side}_location_id", None) is not None
             and is_area(geom)
-            and geom.contains(end_point(self.path, side))
+            and geom.contains(end_point(self.geometry, side))
         )
 
     def resolved_anchor_ids(self, memo=None):
@@ -574,23 +574,23 @@ class Pathway(NetBoxModel):
             return structure.geometry, "structure"
         return None, None
 
-    def _snap_path_end(self, side, geom, kind):
-        """Snap the path's <side> end to geom; raise if it is not attached.
+    def _snap_geometry_end(self, side, geom, kind):
+        """Snap the geometry's <side> end to geom; raise if it is not attached.
 
         geom may be a Point or an area geometry (snapped to its boundary).
         kind names the endpoint type ("structure" or "junction") in the
         validation message.
         """
-        endpoint = end_point(self.path, side)
+        endpoint = end_point(self.geometry, side)
         if not attaches(geom, endpoint, ENDPOINT_TOLERANCE):
             of_boundary = " of the boundary" if is_area(geom) else ""
             raise ValidationError(
                 {
-                    "path": f"Path {side} point is too far from the {side} {kind} "
+                    "geometry": f"Geometry {side} point is too far from the {side} {kind} "
                     f"(must be within {ENDPOINT_TOLERANCE}m{of_boundary})."
                 }
             )
-        self.path = with_end(self.path, side, landing_on(geom, endpoint))
+        self.geometry = with_end(self.geometry, side, landing_on(geom, endpoint))
 
     def __str__(self):
         return self.label or f"#{self.pk or self._pk}"
@@ -783,11 +783,11 @@ class Conduit(Pathway):
         return None
 
     @property
-    def requires_path(self):
-        """A conduit inside a bank follows the bank's route; no own path needed."""
+    def requires_geometry(self):
+        """A conduit inside a bank follows the bank's route; no own geometry needed."""
         if self.conduit_bank_id:
             return False
-        return super().requires_path
+        return super().requires_geometry
 
     @property
     def is_indoor(self):
@@ -888,7 +888,7 @@ class AerialSpan(Pathway):
 
     # An aerial span is a straight line between two supports: its path is
     # derived from the endpoints in clean(), so forms must not synthesize one.
-    derives_path = True
+    derives_geometry = True
 
     class Meta:
         verbose_name = "Aerial Span"
@@ -904,7 +904,7 @@ class AerialSpan(Pathway):
         super().clean()
 
     def straighten(self):
-        """Rebuild path as the straight line between the two landings.
+        """Rebuild geometry as the straight line between the two landings.
 
         Both ends must hang from a structure with geometry -- a span cannot
         float. A point structure pins its end; an area structure (building)
@@ -926,15 +926,15 @@ class AerialSpan(Pathway):
 
         start_geom = anchors["start"].geometry
         end_geom = anchors["end"].geometry
-        if self.path and self.path.srid != start_geom.srid:
-            self.path = self.path.transform(start_geom.srid, clone=True)
-        if self.path:
-            start = landing_on(start_geom, end_point(self.path, "start"))
-            end = landing_on(end_geom, end_point(self.path, "end"))
+        if self.geometry and self.geometry.srid != start_geom.srid:
+            self.geometry = self.geometry.transform(start_geom.srid, clone=True)
+        if self.geometry:
+            start = landing_on(start_geom, end_point(self.geometry, "start"))
+            end = landing_on(end_geom, end_point(self.geometry, "end"))
         else:
             start = landing_on(start_geom, reference_point(end_geom))
             end = landing_on(end_geom, start)
-        self.path = LineString((start.x, start.y), (end.x, end.y), srid=start_geom.srid)
+        self.geometry = LineString((start.x, start.y), (end.x, end.y), srid=start_geom.srid)
 
     def save(self, *args, **kwargs):
         self.pathway_type = "aerial"
@@ -1001,7 +1001,7 @@ class Innerduct(Pathway):
         return None
 
     @property
-    def requires_path(self):
+    def requires_geometry(self):
         """An innerduct follows its parent conduit's geometry."""
         return False
 
@@ -1113,13 +1113,13 @@ class ConduitJunction(NetBoxModel):
 
     @property
     def derived_geometry(self):
-        """Point on the trunk conduit's path at position_on_trunk.
+        """Point on the trunk conduit's geometry at position_on_trunk.
 
         Derived, not stored: a junction carries no geometry column and no
         dcim.Location relation.
         """
-        if self.trunk_conduit and self.trunk_conduit.path:
-            return self.trunk_conduit.path.interpolate_normalized(self.position_on_trunk)
+        if self.trunk_conduit and self.trunk_conduit.geometry:
+            return self.trunk_conduit.geometry.interpolate_normalized(self.position_on_trunk)
         return None
 
 

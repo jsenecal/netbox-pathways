@@ -96,7 +96,7 @@ class TestRoutePlannerFindView:
         pw = Pathway.objects.create(
             label="P1",
             pathway_type="conduit",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
@@ -134,7 +134,7 @@ class TestRoutePlannerSaveView:
         pw = Pathway.objects.create(
             label="P1",
             pathway_type="conduit",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )

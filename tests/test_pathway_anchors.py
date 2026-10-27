@@ -36,13 +36,13 @@ def test_indoor_pathway_gets_anchors_and_still_needs_no_path(building_site):
     tray = DirectBuried(start_location=room, end_location=office)
     tray.full_clean()
     tray.save()
-    assert tray.path is None
+    assert tray.geometry is None
     assert (tray.start_anchor, tray.end_anchor) == (building, building)
 
 
 def test_bank_conduit_anchors_follow_the_inherited_bank_endpoints(db):
     s1, s2 = make_pole("S1", 0, 0), make_pole("S2", 100, 0)
-    bank = ConduitBank(path=LineString((0, 0), (100, 0), srid=SRID), start_structure=s1, end_structure=s2)
+    bank = ConduitBank(geometry=LineString((0, 0), (100, 0), srid=SRID), start_structure=s1, end_structure=s2)
     bank.save()
     conduit = Conduit(label="C1", conduit_bank=bank)
     conduit.save()

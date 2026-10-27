@@ -256,7 +256,7 @@ class PathwayListView(generic.ObjectListView):
     ).annotate(
         cables_routed=Count("cable_segments"),
         in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        _geo_length=Length("path"),
+        _geo_length=Length("geometry"),
     )
     table = tables.PathwayTable
     filterset = filtersets.PathwayFilterSet
@@ -299,7 +299,7 @@ class ConduitListView(generic.ObjectListView):
     ).annotate(
         cables_routed=Count("cable_segments"),
         in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        _geo_length=Length("path"),
+        _geo_length=Length("geometry"),
     )
     table = tables.ConduitTable
     filterset_form = filterforms.ConduitFilterForm
@@ -393,7 +393,7 @@ class AerialSpanListView(generic.ObjectListView):
         "tenant",
     ).annotate(
         cables_routed=Count("cable_segments"),
-        _geo_length=Length("path"),
+        _geo_length=Length("geometry"),
         in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
     )
     table = tables.AerialSpanTable
@@ -460,7 +460,7 @@ class DirectBuriedListView(generic.ObjectListView):
     ).annotate(
         cables_routed=Count("cable_segments"),
         in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        _geo_length=Length("path"),
+        _geo_length=Length("geometry"),
     )
     table = tables.DirectBuriedTable
     filterset = filtersets.DirectBuriedFilterSet
@@ -526,7 +526,7 @@ class InnerductListView(generic.ObjectListView):
     ).annotate(
         cables_routed=Count("cable_segments"),
         in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        _geo_length=Length("path"),
+        _geo_length=Length("geometry"),
     )
     table = tables.InnerductTable
     filterset = filtersets.InnerductFilterSet
@@ -586,7 +586,7 @@ class InnerductBulkDeleteView(generic.BulkDeleteView):
 class ConduitBankListView(generic.ObjectListView):
     queryset = models.ConduitBank.objects.select_related("start_structure", "end_structure", "tenant").annotate(
         conduit_count=Count("conduits"),
-        _geo_length=Length("path"),
+        _geo_length=Length("geometry"),
     )
     table = tables.ConduitBankTable
     filterset = filtersets.ConduitBankFilterSet
@@ -966,7 +966,7 @@ class PlannedRouteView(generic.ObjectView):
             route_geometry = {"pathways": [], "structures": []}
             structure_pks = set()
             for pw in ordered:
-                coords = linestring_to_coords(pw.path) if pw.path else []
+                coords = linestring_to_coords(pw.geometry) if pw.geometry else []
                 route_geometry["pathways"].append(
                     {
                         "pk": pw.pk,
@@ -1404,7 +1404,7 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
             # Collect all structures along the route
             structure_pks = set()
             for pw in ordered:
-                coords = linestring_to_coords(pw.path) if pw.path else []
+                coords = linestring_to_coords(pw.geometry) if pw.geometry else []
                 route_geometry["pathways"].append(
                     {
                         "pk": pw.pk,
@@ -1465,7 +1465,7 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
                     hops.append({"kind": "structure", **struct_map[entry_pk]})
 
                 # Add the pathway
-                mid = linestring_to_coords(pw.path)
+                mid = linestring_to_coords(pw.geometry)
                 pw_geo = None
                 if mid:
                     mid_idx = len(mid) // 2
@@ -1721,9 +1721,9 @@ class MapView(LoginRequiredMixin, View):
 
             # Pathways
             cursor.execute("""
-                SELECT ST_Extent(ST_Transform(path, 4326))
+                SELECT ST_Extent(ST_Transform(geometry, 4326))
                 FROM netbox_pathways_pathway
-                WHERE path IS NOT NULL
+                WHERE geometry IS NOT NULL
             """)
             row = cursor.fetchone()
             if row and row[0]:
@@ -1770,10 +1770,10 @@ class MapView(LoginRequiredMixin, View):
 
         model_map = {
             "structure": (models.Structure, "geometry"),
-            "conduit": (models.Conduit, "path"),
-            "conduit_bank": (models.ConduitBank, "path"),
-            "aerial": (models.AerialSpan, "path"),
-            "direct_buried": (models.DirectBuried, "path"),
+            "conduit": (models.Conduit, "geometry"),
+            "conduit_bank": (models.ConduitBank, "geometry"),
+            "aerial": (models.AerialSpan, "geometry"),
+            "direct_buried": (models.DirectBuried, "geometry"),
         }
         entry = model_map.get(ftype)
         if not entry:
@@ -2055,7 +2055,7 @@ class CableRouteMapView(generic.ObjectView):
     template_name = "netbox_pathways/cable_route_map_tab.html"
     tab = ViewTab(
         label="Map",
-        badge=lambda obj: obj.pathway_segments.filter(pathway__path__isnull=False).count() or None,
+        badge=lambda obj: obj.pathway_segments.filter(pathway__geometry__isnull=False).count() or None,
         hide_if_empty=True,
     )
 

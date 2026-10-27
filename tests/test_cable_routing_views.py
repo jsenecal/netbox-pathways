@@ -25,14 +25,14 @@ def linear_topology(db):
     p1 = Pathway.objects.create(
         label="P1",
         pathway_type="conduit",
-        path=LineString((0, 0), (100, 0), srid=SRID),
+        geometry=LineString((0, 0), (100, 0), srid=SRID),
         start_structure=a,
         end_structure=b,
     )
     p2 = Pathway.objects.create(
         label="P2",
         pathway_type="conduit",
-        path=LineString((100, 0), (200, 0), srid=SRID),
+        geometry=LineString((100, 0), (200, 0), srid=SRID),
         start_structure=b,
         end_structure=c,
     )

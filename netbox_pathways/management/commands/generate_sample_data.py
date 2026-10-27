@@ -301,7 +301,7 @@ class Command(BaseCommand):
             banks.append(
                 ConduitBank(
                     label=f"Bank-{i + 1:04d}",
-                    path=_line_between(s1.geometry, s2.geometry),
+                    geometry=_line_between(s1.geometry, s2.geometry),
                     start_structure=s1,
                     end_structure=s2,
                     start_face=random.choice(faces),
@@ -339,7 +339,7 @@ class Command(BaseCommand):
             conduits.append(
                 Conduit(
                     label=f"CDT-{i + 1:04d}",
-                    path=path,
+                    geometry=path,
                     start_structure=s1,
                     end_structure=s2,
                     tenant=random.choice(tenants) if random.random() < 0.5 else None,
@@ -372,7 +372,7 @@ class Command(BaseCommand):
             spans.append(
                 AerialSpan(
                     label=f"AER-{i + 1:04d}",
-                    path=path,
+                    geometry=path,
                     start_structure=s1,
                     end_structure=s2,
                     tenant=random.choice(tenants) if random.random() < 0.4 else None,
@@ -403,7 +403,7 @@ class Command(BaseCommand):
             dbs.append(
                 DirectBuried(
                     label=f"DB-{i + 1:04d}",
-                    path=path,
+                    geometry=path,
                     start_structure=s1,
                     end_structure=s2,
                     tenant=random.choice(tenants) if random.random() < 0.4 else None,
@@ -432,7 +432,7 @@ class Command(BaseCommand):
             innerducts.append(
                 Innerduct(
                     label=f"ID-{i + 1:04d}",
-                    path=parent.path,
+                    geometry=parent.geometry,
                     parent_conduit=parent,
                     size=random.choice(INNERDUCT_SIZES),
                     color=random.choice(INNERDUCT_COLORS),

@@ -28,14 +28,14 @@ def topology(db):
     p1 = Pathway.objects.create(
         label="CT-P1",
         pathway_type="conduit",
-        path=LineString((0, 0), (100, 0), srid=SRID),
+        geometry=LineString((0, 0), (100, 0), srid=SRID),
         start_structure=a,
         end_structure=b,
     )
     p2 = Pathway.objects.create(
         label="CT-P2",
         pathway_type="conduit",
-        path=LineString((100, 0), (200, 0), srid=SRID),
+        geometry=LineString((100, 0), (200, 0), srid=SRID),
         start_structure=b,
         end_location=location,
     )
@@ -102,7 +102,7 @@ class TestConnectedToCableEndFilter:
         Pathway.objects.create(
             label="CE-P1",
             pathway_type="conduit",
-            path=LineString((0, 0), (100, 0), srid=SRID),
+            geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=anchor,
         )
         cable = build_cable_with_terminations(label="CE-cable", site=site)
@@ -118,7 +118,7 @@ class TestConnectedToCableEndFilter:
         Pathway.objects.create(
             label="CE-indoor",
             pathway_type="conduit",
-            path=LineString((0, 0), (50, 0), srid=SRID),
+            geometry=LineString((0, 0), (50, 0), srid=SRID),
             start_location=room,
         )
         cable = build_cable_with_terminations(label="CE-cable-loc", site=site, location=room)
@@ -135,13 +135,13 @@ class TestConnectedToCableEndFilter:
         Pathway.objects.create(
             label="CE-at-a",
             pathway_type="conduit",
-            path=LineString((0, 0), (10, 0), srid=SRID),
+            geometry=LineString((0, 0), (10, 0), srid=SRID),
             start_structure=struct_a,
         )
         Pathway.objects.create(
             label="CE-at-b",
             pathway_type="conduit",
-            path=LineString((500, 0), (510, 0), srid=SRID),
+            geometry=LineString((500, 0), (510, 0), srid=SRID),
             start_structure=struct_b,
         )
         cable = build_cable_with_terminations(label="CE-cable-ends", site=site_a, site_b=site_b)

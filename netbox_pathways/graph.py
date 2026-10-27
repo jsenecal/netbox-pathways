@@ -186,7 +186,7 @@ class PathwayGraph:
                 "end_structure",
                 "start_location",
                 "end_location",
-                *(["path"] if include_metadata else []),
+                *(["geometry"] if include_metadata else []),
             )
         )
 
@@ -208,7 +208,7 @@ class PathwayGraph:
             weight = pw.length or 0
 
             if include_metadata:
-                coords = linestring_to_coords(pw.path)
+                coords = linestring_to_coords(pw.geometry)
                 instance.pathways[pw.pk] = {
                     "id": pw.pk,
                     "name": str(pw),
@@ -465,8 +465,8 @@ def trace_cable(cable_id):
             "start_name": str(pw.start_endpoint) if pw and pw.start_endpoint else None,
             "end_name": str(pw.end_endpoint) if pw and pw.end_endpoint else None,
         }
-        if pw and pw.path:
-            entry["coords"] = linestring_to_coords(pw.path)
+        if pw and pw.geometry:
+            entry["coords"] = linestring_to_coords(pw.geometry)
         result.append(entry)
 
     return result
@@ -508,7 +508,7 @@ def _batch_fetch_junctions(pks):
             "id",
             "name",
             "trunk_conduit__name",
-            "trunk_conduit__path",
+            "trunk_conduit__geometry",
             "position_on_trunk",
         )
         .in_bulk(list(pks))

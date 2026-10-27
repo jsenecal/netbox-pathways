@@ -29,7 +29,7 @@ def make_building(name, x0, y0, size=10):
 
 def make_conduit(path, **kwargs):
     """A saved conduit along `path` (a list of (x, y) vertices)."""
-    instance = Conduit(path=LineString(path, srid=SRID), **kwargs)
+    instance = Conduit(geometry=LineString(path, srid=SRID), **kwargs)
     instance.save()
     return instance
 
@@ -46,4 +46,4 @@ def coords(pathway, refresh=False):
     """The pathway's path vertices, rounded; reloaded from the database when `refresh`."""
     if refresh:
         pathway.refresh_from_db()
-    return [(round(x, 6), round(y, 6)) for x, y in pathway.path.coords]
+    return [(round(x, 6), round(y, 6)) for x, y in pathway.geometry.coords]

@@ -57,7 +57,7 @@ class TestReanchorOnStructureSave:
     def test_branch_conduit_follows_its_junction_on_the_moved_trunk(self):
         s1, s2, s3 = make_pole("S1", 0, 0), make_pole("S2", 100, 0), make_pole("S3", 50, 50)
         trunk = make_conduit([(0, 0), (100, 0)], start_structure=s1, end_structure=s2)
-        branch = Conduit(path=LineString((50, 0), (50, 50), srid=SRID), end_structure=s3)
+        branch = Conduit(geometry=LineString((50, 0), (50, 50), srid=SRID), end_structure=s3)
         branch.save()
         junction = ConduitJunction.objects.create(
             trunk_conduit=trunk, branch_conduit=branch, towards_structure=s2, position_on_trunk=0.5
@@ -117,7 +117,7 @@ class TestReanchorEdgeCases:
         from netbox_pathways.models import AerialSpan
 
         pole = make_pole("LD-P1", 0, 0)
-        span = AerialSpan(start_structure=pole, path=LineString((0, 0), (30, 0), srid=SRID))
+        span = AerialSpan(start_structure=pole, geometry=LineString((0, 0), (30, 0), srid=SRID))
         span.save()
 
         _move(pole, Point(0, 5, srid=SRID))

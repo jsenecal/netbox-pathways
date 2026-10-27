@@ -49,9 +49,9 @@ def find_candidates(pathway, tolerance=DEFAULT_TOLERANCE):
     distance along the line of the structure's projection (centroid for
     polygon footprints); offset is the structure's distance from the line.
     """
-    if pathway.path is None:
+    if pathway.geometry is None:
         raise SplitError("Pathway has no geometry path; only pathways with a drawn path can be split.")
-    line = pathway.path
+    line = pathway.geometry
     anchors = (pathway.anchor_structure("start"), pathway.anchor_structure("end"))
     exclude_pks = [anchor.pk for anchor in anchors if anchor is not None]
     queryset = Structure.objects.filter(geometry__dwithin=(line, tolerance)).exclude(pk__in=exclude_pks)
@@ -128,7 +128,7 @@ def _check_splittable(original):
         raise SplitError("Innerducts follow their parent conduit; split the conduit instead.")
     if isinstance(original, Conduit) and original.conduit_bank_id:
         raise SplitError("This conduit is contained in a bank; split the conduit bank instead.")
-    if original.path is None:
+    if original.geometry is None:
         raise SplitError("Pathway has no geometry path; only pathways with a drawn path can be split.")
     involved = [original, *_contained(original)]
     for pathway in involved:
@@ -148,7 +148,7 @@ def _check_splittable(original):
 
 def _resolve_cuts(original, structures, tolerance, warnings):
     """Project structures onto the path; validate, order, and collapse them."""
-    line = original.path
+    line = original.geometry
     entries = []
     for structure in structures:
         offset = structure.geometry.distance(line)
@@ -202,7 +202,7 @@ _SKIP_FIELDS = {
     "id",
     "created",
     "last_updated",
-    "path",
+    "geometry",
     "length",
     "label",
     "pathway_type",
@@ -263,7 +263,7 @@ def _create_children(original, cuts, pieces, parents=None, parent_field=None):
         # Subclass save() overwrites this; base-typed pathways (e.g.
         # submarine) have no subclass to do it, so copy explicitly.
         child.pathway_type = original.pathway_type
-        child.path = pieces[i] if pieces else None
+        child.geometry = pieces[i] if pieces else None
         if original.label:
             child.label = f"{original.label} ({i + 1}/{total})"
         if i == 0:
@@ -372,7 +372,7 @@ def _reroute_segments(pairs):
 def execute_split(plan):
     """Replace the planned pathway with per-hop children, atomically."""
     original = plan.pathway
-    pieces = _cut_line(original.path, [(c.chainage, c.structure.centroid) for c in plan.cuts])
+    pieces = _cut_line(original.geometry, [(c.chainage, c.structure.centroid) for c in plan.cuts])
     with transaction.atomic():
         children = _create_children(original, plan.cuts, pieces)
         cascaded = []

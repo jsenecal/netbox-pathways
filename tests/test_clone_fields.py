@@ -48,7 +48,7 @@ class TestAerialSpanClone:
         span = AerialSpan(
             label="CF-AS1",
             status="active",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
             tenant=tenant,
@@ -84,14 +84,14 @@ class TestAerialSpanClone:
         s1, s2 = endpoints
         span = AerialSpan(
             label="CF-AS2",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
         span.save()
         attrs = span.clone()
         assert "label" not in attrs
-        assert "path" not in attrs
+        assert "geometry" not in attrs
         assert "length" not in attrs
 
 
@@ -101,7 +101,7 @@ class TestDirectBuriedClone:
         s1, s2 = endpoints
         run = DirectBuried(
             label="CF-DB1",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
             burial_depth=1.2,
@@ -122,7 +122,7 @@ class TestConduitBankClone:
         s1, s2 = endpoints
         bank = ConduitBank(
             label="CF-BANK1",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
             start_face="north",
@@ -151,7 +151,7 @@ class TestConduitClone:
         s1, s2 = endpoints
         bank = ConduitBank(
             label="CF-BANK2",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
@@ -188,7 +188,7 @@ class TestInnerductClone:
         s1, s2 = endpoints
         parent = Conduit(
             label="CF-C2",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
@@ -249,7 +249,6 @@ ALL_CLONABLE_MODELS = [
 ]
 
 NEVER_CLONED = {
-    "path",
     "geometry",
     "location",
     "name",

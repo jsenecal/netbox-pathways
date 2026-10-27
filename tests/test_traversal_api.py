@@ -37,14 +37,14 @@ class TestCableTraceView:
             label="TRC-C1",
             start_structure=s[0],
             end_structure=s[1],
-            path=LineString((0, 0), (1, 1), srid=SRID),
+            geometry=LineString((0, 0), (1, 1), srid=SRID),
             length=10,
         )
         no_length = Conduit.objects.create(
             label="TRC-C2",
             start_structure=s[1],
             end_structure=s[2],
-            path=LineString((1, 1), (2, 2), srid=SRID),
+            geometry=LineString((1, 1), (2, 2), srid=SRID),
         )
         cable = Cable.objects.create(label="TRC-cable")
         CableSegment.objects.create(cable=cable, pathway=with_length, sequence=1)

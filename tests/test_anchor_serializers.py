@@ -31,5 +31,5 @@ def test_rest_serializer_nests_the_resolved_anchor(room_conduit):
 def test_geojson_properties_carry_anchor_ids(room_conduit):
     building, conduit = room_conduit
     # The geo viewsets annotate the WGS84 geometry; do the same here.
-    feature = Conduit.objects.annotate(geo_4326=Transform("path", 4326)).get(pk=conduit.pk)
+    feature = Conduit.objects.annotate(geo_4326=Transform("geometry", 4326)).get(pk=conduit.pk)
     assert ConduitGeoSerializer(feature).data["properties"]["start_anchor"] == building.pk

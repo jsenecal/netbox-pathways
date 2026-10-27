@@ -158,30 +158,29 @@ class PathwaysMapWidget(BaseGeometryWidget):
         return context
 
 
-class PathwayPathFallbackMixin:
-    """Derive a missing path from endpoint structures, or accept pathless indoor rows.
+class PathwayGeometryFallbackMixin:
+    """Derive missing geometry from endpoint structures, or accept indoor rows without it.
 
     Shared by the interactive pathway forms and the CSV import forms so both
     have the same semantics: structure-to-structure entries get a straight
     LineString between the structures, location-to-location (indoor) entries
-    need no geographic path at all. Contained pathways (conduits in banks,
-    innerducts) follow the parent's route and need no path.
+    need no geometry at all. Contained pathways (conduits in banks,
+    innerducts) follow the parent's route and need no geometry.
     """
 
     def clean(self):
         super().clean()
         cleaned = self.cleaned_data
-        path = cleaned.get("path")
-        if path:
+        if cleaned.get("geometry"):
             return cleaned
 
         # Contained pathways (a conduit in a bank, an innerduct) follow the
-        # parent's route; never synthesize a standalone path for them.
+        # parent's route; never synthesize standalone geometry for them.
         if cleaned.get("conduit_bank") or cleaned.get("parent_conduit"):
             return cleaned
-        # Models that derive their own path from the endpoints (aerial spans)
+        # Models that derive their own geometry from the endpoints (aerial spans)
         # build it in clean(); a synthesized centroid line would be wrong.
-        if getattr(self._meta.model, "derives_path", False):
+        if getattr(self._meta.model, "derives_geometry", False):
             return cleaned
 
         start_struct = cleaned.get("start_structure")
@@ -189,17 +188,17 @@ class PathwayPathFallbackMixin:
         start_loc = cleaned.get("start_location")
         end_loc = cleaned.get("end_location")
 
-        # Indoor pathway (both endpoints are locations): no geographic path exists
+        # Indoor pathway (both endpoints are locations): no geometry exists
         if start_loc and end_loc and not start_struct and not end_struct:
             return cleaned
 
-        # Auto-generate path from structures
+        # Auto-generate geometry from structures
         if start_struct and end_struct and start_struct.geometry and end_struct.geometry:
             start_geom = start_struct.geometry
             end_geom = end_struct.geometry
             start_pt = start_geom.centroid if start_geom.geom_type != "Point" else start_geom
             end_pt = end_geom.centroid if end_geom.geom_type != "Point" else end_geom
-            cleaned["path"] = LineString(
+            cleaned["geometry"] = LineString(
                 (start_pt.x, start_pt.y),
                 (end_pt.x, end_pt.y),
                 srid=get_srid(),
@@ -209,7 +208,7 @@ class PathwayPathFallbackMixin:
 
             raise ValidationError(
                 {
-                    "path": "Path is required unless both endpoints are structures "
+                    "geometry": "Geometry is required unless both endpoints are structures "
                     "(auto-generated) or both are locations (indoor)."
                 }
             )
@@ -217,25 +216,25 @@ class PathwayPathFallbackMixin:
         return cleaned
 
 
-class PathwayEndpointFormMixin(PathwayPathFallbackMixin):
-    """Mixin for pathway forms: auto-generates path from structures, injects geometry for widget."""
+class PathwayEndpointFormMixin(PathwayGeometryFallbackMixin):
+    """Mixin for pathway forms: auto-generates geometry from structures, injects it for the widget."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if "path" in self.fields:
-            self.fields["path"].required = False
+        if "geometry" in self.fields:
+            self.fields["geometry"].required = False
         self._inject_endpoint_geometry()
 
     def _inject_endpoint_geometry(self):
         """Serialize anchor structure geometry (and names, for labels) into the widget.
 
-        Models that derive a straight path (aerial spans) also ask the widget
+        Models that derive straight geometry (aerial spans) also ask the widget
         for straight mode, even before any endpoint is chosen.
         """
-        if "path" not in self.fields:
+        if "geometry" not in self.fields:
             return
         endpoint_data = {}
-        if getattr(self._meta.model, "derives_path", False):
+        if getattr(self._meta.model, "derives_geometry", False):
             endpoint_data["straight"] = True
         for side in ("start", "end"):
             structure = self.instance.anchor_structure(side)
@@ -243,7 +242,7 @@ class PathwayEndpointFormMixin(PathwayPathFallbackMixin):
                 geom_4326 = to_leaflet(structure.geometry)
                 endpoint_data[side] = json.loads(geom_4326.geojson)
                 endpoint_data[f"{side}_name"] = structure.name
-        widget = self.fields["path"].widget
+        widget = self.fields["geometry"].widget
         widget.endpoint_geojson = endpoint_data if endpoint_data else None
 
 
@@ -460,7 +459,7 @@ class PathwayForm(PathwayEndpointFormMixin, NetBoxModelForm):
         FieldSet("label", "status", "tenant", "length", name="Pathway"),
         FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
-        FieldSet("path", name="Geometry"),
+        FieldSet("geometry", name="Geometry"),
         FieldSet("tags", name="Details"),
     )
 
@@ -469,7 +468,7 @@ class PathwayForm(PathwayEndpointFormMixin, NetBoxModelForm):
         fields = [
             "label",
             "status",
-            "path",
+            "geometry",
             "start_structure",
             "end_structure",
             "start_location",
@@ -483,7 +482,7 @@ class PathwayForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "tags",
         ]
         widgets = {
-            "path": PathwaysMapWidget(),
+            "geometry": PathwaysMapWidget(),
         }
 
 
@@ -581,7 +580,7 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
         FieldSet("start_junction", "end_junction", name="Junctions"),
         FieldSet("inner_diameter", "outer_diameter", "depth", name="Dimensions"),
         FieldSet("conduit_bank", "bank_position", name="Conduit Bank"),
-        FieldSet("path", name="Geometry"),
+        FieldSet("geometry", name="Geometry"),
         FieldSet("tags", name="Details"),
     )
 
@@ -591,7 +590,7 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "label",
             "status",
             "material",
-            "path",
+            "geometry",
             "start_structure",
             "end_structure",
             "start_location",
@@ -614,11 +613,11 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "tags",
         ]
         widgets = {
-            "path": PathwaysMapWidget(),
+            "geometry": PathwaysMapWidget(),
         }
 
 
-class ConduitImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
+class ConduitImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
     status = _csv_status_field(PathwayStatusChoices)
     start_structure = _csv_structure_field("Starting")
     end_structure = _csv_structure_field("Ending")
@@ -644,7 +643,7 @@ class ConduitImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
     )
     tenant = _csv_tenant_field("Owner tenant name")
     installed_by = _csv_tenant_field("Installer tenant name")
-    path = ForgivingGeometryField(
+    geometry = ForgivingGeometryField(
         required=False,
         srid=get_srid(),
         geom_type="LINESTRING",
@@ -675,7 +674,7 @@ class ConduitImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
             "installed_by",
             "installation_date",
             "commissioned_date",
-            "path",
+            "geometry",
             "comments",
         ]
 
@@ -740,7 +739,7 @@ class AerialSpanForm(PathwayEndpointFormMixin, NetBoxModelForm):
         FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
         FieldSet("start_attachment_height", "end_attachment_height", "sag", "messenger_size", name="Physical"),
         FieldSet("wind_loading", "ice_loading", name="Loading"),
-        FieldSet("path", name="Geometry"),
+        FieldSet("geometry", name="Geometry"),
         FieldSet("tags", name="Details"),
     )
 
@@ -750,7 +749,7 @@ class AerialSpanForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "label",
             "status",
             "aerial_type",
-            "path",
+            "geometry",
             "start_structure",
             "end_structure",
             "start_location",
@@ -770,11 +769,11 @@ class AerialSpanForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "tags",
         ]
         widgets = {
-            "path": PathwaysMapWidget(),
+            "geometry": PathwaysMapWidget(),
         }
 
 
-class AerialSpanImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
+class AerialSpanImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
     status = _csv_status_field(PathwayStatusChoices)
     start_structure = _csv_structure_field("Starting")
     end_structure = _csv_structure_field("Ending")
@@ -783,7 +782,7 @@ class AerialSpanImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
     tenant = _csv_tenant_field("Owner tenant name")
     installed_by = _csv_tenant_field("Installer tenant name")
 
-    path = ForgivingGeometryField(
+    geometry = ForgivingGeometryField(
         required=False,
         srid=get_srid(),
         geom_type="LINESTRING",
@@ -811,7 +810,7 @@ class AerialSpanImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
             "installed_by",
             "installation_date",
             "commissioned_date",
-            "path",
+            "geometry",
             "comments",
         ]
 
@@ -893,7 +892,7 @@ class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
         FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
         FieldSet("burial_depth", "warning_tape", "tracer_wire", "armor_type", name="Physical"),
-        FieldSet("path", name="Geometry"),
+        FieldSet("geometry", name="Geometry"),
         FieldSet("tags", name="Details"),
     )
 
@@ -902,7 +901,7 @@ class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
         fields = [
             "label",
             "status",
-            "path",
+            "geometry",
             "start_structure",
             "end_structure",
             "start_location",
@@ -920,11 +919,11 @@ class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "tags",
         ]
         widgets = {
-            "path": PathwaysMapWidget(),
+            "geometry": PathwaysMapWidget(),
         }
 
 
-class DirectBuriedImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
+class DirectBuriedImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
     status = _csv_status_field(PathwayStatusChoices)
     start_structure = _csv_structure_field("Starting")
     end_structure = _csv_structure_field("Ending")
@@ -932,7 +931,7 @@ class DirectBuriedImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
     end_location = _csv_location_field("Ending")
     tenant = _csv_tenant_field("Owner tenant name")
     installed_by = _csv_tenant_field("Installer tenant name")
-    path = ForgivingGeometryField(
+    geometry = ForgivingGeometryField(
         required=False,
         srid=get_srid(),
         geom_type="LINESTRING",
@@ -957,7 +956,7 @@ class DirectBuriedImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
             "installed_by",
             "installation_date",
             "commissioned_date",
-            "path",
+            "geometry",
             "comments",
         ]
 
@@ -1042,7 +1041,7 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
         FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
         FieldSet("length", name="Physical"),
-        FieldSet("path", name="Geometry"),
+        FieldSet("geometry", name="Geometry"),
         FieldSet("tags", name="Details"),
     )
 
@@ -1055,7 +1054,7 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "size",
             "color",
             "position",
-            "path",
+            "geometry",
             "start_structure",
             "end_structure",
             "start_location",
@@ -1069,11 +1068,11 @@ class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "tags",
         ]
         widgets = {
-            "path": PathwaysMapWidget(),
+            "geometry": PathwaysMapWidget(),
         }
 
 
-class InnerductImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
+class InnerductImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
     status = _csv_status_field(PathwayStatusChoices)
     parent_conduit = CSVModelChoiceField(
         queryset=Conduit.objects.all(),
@@ -1090,7 +1089,7 @@ class InnerductImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
         max_length=16,
         help_text='Color name (e.g. "Blue") or hex code (e.g. "2196f3")',
     )
-    path = ForgivingGeometryField(
+    geometry = ForgivingGeometryField(
         required=False,
         srid=get_srid(),
         geom_type="LINESTRING",
@@ -1125,7 +1124,7 @@ class InnerductImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
             "installed_by",
             "installation_date",
             "commissioned_date",
-            "path",
+            "geometry",
             "comments",
         ]
 
@@ -1160,7 +1159,7 @@ class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
         FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
         FieldSet("start_structure", "start_face", "end_structure", "end_face", name="Endpoints"),
         FieldSet("configuration", "total_conduits", "height", "width", "encasement_type", name="Configuration"),
-        FieldSet("path", "length", "tags", name="Details"),
+        FieldSet("geometry", "length", "tags", name="Details"),
     )
 
     class Meta:
@@ -1179,7 +1178,7 @@ class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "height",
             "width",
             "encasement_type",
-            "path",
+            "geometry",
             "length",
             "installation_date",
             "commissioned_date",
@@ -1187,11 +1186,11 @@ class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
             "tags",
         ]
         widgets = {
-            "path": PathwaysMapWidget(),
+            "geometry": PathwaysMapWidget(),
         }
 
 
-class ConduitBankImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
+class ConduitBankImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
     status = _csv_status_field(PathwayStatusChoices)
     start_structure = _csv_structure_field("Start")
     end_structure = _csv_structure_field("End")
@@ -1200,7 +1199,7 @@ class ConduitBankImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
     tenant = _csv_tenant_field("Owner tenant name")
     installed_by = _csv_tenant_field("Installer tenant name")
 
-    path = ForgivingGeometryField(
+    geometry = ForgivingGeometryField(
         required=False,
         srid=get_srid(),
         geom_type="LINESTRING",
@@ -1228,7 +1227,7 @@ class ConduitBankImportForm(PathwayPathFallbackMixin, NetBoxModelImportForm):
             "installed_by",
             "installation_date",
             "commissioned_date",
-            "path",
+            "geometry",
             "comments",
         ]
 

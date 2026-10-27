@@ -1,7 +1,7 @@
 """Tests for `Pathway.geo_length` -- PostGIS-side ST_Length computation.
 
 These tests deliberately prove that the length is computed by PostGIS in SQL,
-not in Python. A naive `self.path.length` implementation would still pass
+not in Python. A naive `self.geometry.length` implementation would still pass
 "value matches" assertions because GeoDjango's LineString carries a Python-side
 length too -- so the contract is verified by inspecting the SQL that's
 emitted, not just the numeric value.
@@ -47,7 +47,7 @@ def conduit(structures, srid):
         label="GL-C1",
         start_structure=structures[0],
         end_structure=structures[1],
-        path=LineString((0.0, 0.0), (1000.0, 0.0), srid=srid),
+        geometry=LineString((0.0, 0.0), (1000.0, 0.0), srid=srid),
     )
 
 
@@ -129,7 +129,7 @@ class TestGeoLengthRounding:
             label="GL-diag",
             start_structure=structures[0],
             end_structure=structures[1],
-            path=LineString((0.0, 0.0), (1000.0, 1000.0), srid=srid),
+            geometry=LineString((0.0, 0.0), (1000.0, 1000.0), srid=srid),
         )
 
     def test_default_rounds_to_centimetres(self, diagonal_conduit):
@@ -161,7 +161,7 @@ class TestGeoLengthFilterSet:
             label=label,
             start_structure=structures[0],
             end_structure=structures[1],
-            path=LineString((0.0, 0.0), (length_m, 0.0), srid=srid),
+            geometry=LineString((0.0, 0.0), (length_m, 0.0), srid=srid),
         )
 
     def test_filter_gte_emits_st_length_sql(self, structures, srid):

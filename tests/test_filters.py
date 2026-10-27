@@ -73,7 +73,7 @@ def topology(db, _disable_routability_signal):
     pw = Pathway.objects.create(
         label="searchable-pathway",
         pathway_type="conduit",
-        path=LineString((0, 0), (100, 0), srid=SRID),
+        geometry=LineString((0, 0), (100, 0), srid=SRID),
         start_structure=s_start,
         end_structure=s_end,
         comments="pw-only-comment-text",
@@ -81,7 +81,7 @@ def topology(db, _disable_routability_signal):
 
     conduit = Conduit.objects.create(
         label="searchable-conduit",
-        path=LineString((0, 10), (100, 10), srid=SRID),
+        geometry=LineString((0, 10), (100, 10), srid=SRID),
         start_structure=s_start,
         end_structure=s_end,
         comments="conduit-only-comment-text",
@@ -89,7 +89,7 @@ def topology(db, _disable_routability_signal):
 
     aerial = AerialSpan.objects.create(
         label="searchable-aerial",
-        path=LineString((0, 20), (100, 20), srid=SRID),
+        geometry=LineString((0, 20), (100, 20), srid=SRID),
         start_structure=s_start,
         end_structure=s_end,
         comments="aerial-only-comment-text",
@@ -97,7 +97,7 @@ def topology(db, _disable_routability_signal):
 
     direct = DirectBuried.objects.create(
         label="searchable-direct",
-        path=LineString((0, 30), (100, 30), srid=SRID),
+        geometry=LineString((0, 30), (100, 30), srid=SRID),
         start_structure=s_start,
         end_structure=s_end,
         comments="direct-only-comment-text",
@@ -105,7 +105,7 @@ def topology(db, _disable_routability_signal):
 
     bank = ConduitBank.objects.create(
         label="searchable-bank",
-        path=LineString((0, 40), (100, 40), srid=SRID),
+        geometry=LineString((0, 40), (100, 40), srid=SRID),
         start_structure=s_start,
         end_structure=s_end,
         comments="bank-only-comment-text",
@@ -114,7 +114,7 @@ def topology(db, _disable_routability_signal):
     # Innerduct lives inside a parent Conduit.
     innerduct = Innerduct.objects.create(
         label="searchable-innerduct",
-        path=LineString((0, 10), (100, 10), srid=SRID),
+        geometry=LineString((0, 10), (100, 10), srid=SRID),
         parent_conduit=conduit,
         size="32mm",
         comments="innerduct-only-comment-text",
@@ -203,34 +203,38 @@ def occupancy(db, _disable_routability_signal):
     s_b = Structure.objects.create(name="occ-b", geometry=Point(100, 0, srid=SRID))
     line = LineString((0, 0), (100, 0), srid=SRID)
 
-    aerial = AerialSpan.objects.create(label="occ-aerial", path=line, start_structure=s_a, end_structure=s_b)
+    aerial = AerialSpan.objects.create(label="occ-aerial", geometry=line, start_structure=s_a, end_structure=s_b)
     aerial_empty = AerialSpan.objects.create(
-        label="occ-aerial-empty", path=line, start_structure=s_a, end_structure=s_b
+        label="occ-aerial-empty", geometry=line, start_structure=s_a, end_structure=s_b
     )
 
-    inner_bank = ConduitBank.objects.create(label="occ-inner-bank", path=line, start_structure=s_a, end_structure=s_b)
+    inner_bank = ConduitBank.objects.create(
+        label="occ-inner-bank", geometry=line, start_structure=s_a, end_structure=s_b
+    )
     conduit_host = Conduit.objects.create(
         label="occ-host",
-        path=line,
+        geometry=line,
         start_structure=s_a,
         end_structure=s_b,
         conduit_bank=inner_bank,
     )
-    innerduct = Innerduct.objects.create(label="occ-inner", path=line, parent_conduit=conduit_host, size="32mm")
+    innerduct = Innerduct.objects.create(label="occ-inner", geometry=line, parent_conduit=conduit_host, size="32mm")
     innerduct_empty = Innerduct.objects.create(
-        label="occ-inner-empty", path=line, parent_conduit=conduit_host, size="32mm"
+        label="occ-inner-empty", geometry=line, parent_conduit=conduit_host, size="32mm"
     )
 
-    bank = ConduitBank.objects.create(label="occ-bank", path=line, start_structure=s_a, end_structure=s_b)
+    bank = ConduitBank.objects.create(label="occ-bank", geometry=line, start_structure=s_a, end_structure=s_b)
     conduit_in_bank = Conduit.objects.create(
         label="occ-banked",
-        path=line,
+        geometry=line,
         start_structure=s_a,
         end_structure=s_b,
         conduit_bank=bank,
     )
-    conduit_empty = Conduit.objects.create(label="occ-empty", path=line, start_structure=s_a, end_structure=s_b)
-    bank_empty = ConduitBank.objects.create(label="occ-bank-empty", path=line, start_structure=s_a, end_structure=s_b)
+    conduit_empty = Conduit.objects.create(label="occ-empty", geometry=line, start_structure=s_a, end_structure=s_b)
+    bank_empty = ConduitBank.objects.create(
+        label="occ-bank-empty", geometry=line, start_structure=s_a, end_structure=s_b
+    )
 
     cable = Cable.objects.create(label="occ-cable")
     CableSegment.objects.create(cable=cable, pathway=aerial, sequence=1)

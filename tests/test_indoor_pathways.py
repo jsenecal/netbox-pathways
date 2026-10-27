@@ -44,7 +44,7 @@ class TestIndoorPathwayModelValidation:
         c.full_clean()
         c.save()
         assert c.pk is not None
-        assert c.path is None
+        assert c.geometry is None
 
     def test_structure_endpoint_without_path_raises(self, locations):
         _, loc_b = locations
@@ -52,20 +52,20 @@ class TestIndoorPathwayModelValidation:
         c = _make_conduit(start_structure=s1, end_location=loc_b)
         with pytest.raises(ValidationError) as exc:
             c.full_clean()
-        assert "path" in exc.value.message_dict
+        assert "geometry" in exc.value.message_dict
 
     def test_junction_endpoint_without_path_raises(self, locations):
         _, loc_b = locations
         s1 = _make_structure("IP2", Point(0, 0, srid=SRID))
         s2 = _make_structure("IP3", Point(1000, 0, srid=SRID))
         trunk = _make_conduit(
-            path=LineString((0, 0), (1000, 0), srid=SRID),
+            geometry=LineString((0, 0), (1000, 0), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
         trunk.save()
         branch = _make_conduit(
-            path=LineString((500, 100), (500, 500), srid=SRID),
+            geometry=LineString((500, 100), (500, 500), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
@@ -79,7 +79,7 @@ class TestIndoorPathwayModelValidation:
         c = _make_conduit(start_junction=junction, end_location=loc_b)
         with pytest.raises(ValidationError) as exc:
             c.full_clean()
-        assert "path" in exc.value.message_dict
+        assert "geometry" in exc.value.message_dict
 
 
 @pytest.mark.django_db
@@ -97,7 +97,7 @@ class TestIndoorPathwayForms:
         assert form.is_valid(), form.errors
         obj = form.save()
         assert obj.pk is not None
-        assert obj.path is None
+        assert obj.geometry is None
 
     def test_conduit_form_structure_and_location_without_path_errors(self, locations):
         _, loc_b = locations
@@ -110,7 +110,7 @@ class TestIndoorPathwayForms:
             }
         )
         assert not form.is_valid()
-        assert "path" in form.errors
+        assert "geometry" in form.errors
 
     def test_innerduct_form_inherits_indoor_parent_locations(self, locations):
         loc_a, loc_b = locations
@@ -126,7 +126,7 @@ class TestIndoorPathwayForms:
         )
         assert form.is_valid(), form.errors
         obj = form.save()
-        assert obj.path is None
+        assert obj.geometry is None
         assert obj.start_location == loc_a
         assert obj.end_location == loc_b
 

@@ -12,7 +12,7 @@ def _make_span(**kwargs):
     """Build an unsaved AerialSpan with a valid path; tests don't need to persist."""
     return AerialSpan(
         label=kwargs.pop("label", "test-span"),
-        path=LineString([(0.0, 0.0), (0.001, 0.001)], srid=get_srid()),
+        geometry=LineString([(0.0, 0.0), (0.001, 0.001)], srid=get_srid()),
         **kwargs,
     )
 
@@ -115,7 +115,7 @@ class TestAerialSpanStraightLine:
 
         span = AerialSpan(
             start_structure=make_pole("P1", 0, 0),
-            path=LineString((0, 0), (50, 0), srid=SRID),
+            geometry=LineString((0, 0), (50, 0), srid=SRID),
         )
         with pytest.raises(ValidationError) as exc:
             span.clean()
@@ -148,7 +148,7 @@ class TestAerialSpanStraightLine:
         span = AerialSpan(
             start_structure=make_pole("P1", 0, 0),
             end_structure=make_pole("P2", 40, 0),
-            path=LineString((0, 0), (10, 15), (30, -5), (40, 0), srid=SRID),
+            geometry=LineString((0, 0), (10, 15), (30, -5), (40, 0), srid=SRID),
         )
         span.clean()
         assert coords(span) == [(0.0, 0.0), (40.0, 0.0)]
@@ -157,7 +157,7 @@ class TestAerialSpanStraightLine:
         span = AerialSpan(
             start_structure=make_pole("P1", 0, 0),
             end_structure=make_pole("P2", 40, 0),
-            path=LineString((0, 0), (40, 50), srid=SRID),
+            geometry=LineString((0, 0), (40, 50), srid=SRID),
         )
         span.clean()
         assert coords(span)[-1] == (40.0, 0.0)
@@ -167,7 +167,7 @@ class TestAerialSpanStraightLine:
         span = AerialSpan(
             start_structure=make_pole("P1", 0, -40),
             end_structure=make_building("B1", 0, 0),
-            path=LineString((0, -40), (3, 0.4), srid=SRID),
+            geometry=LineString((0, -40), (3, 0.4), srid=SRID),
         )
         span.clean()
         assert coords(span)[-1] == (3.0, 0.0)
@@ -185,10 +185,10 @@ class TestAerialSpanStraightLine:
         span = AerialSpan(
             start_structure=make_pole("P1", 0, -40),
             end_structure=make_building("B1", 0, 0),
-            path=LineString((0, -40), (3, 0.4), srid=SRID).transform(4326, clone=True),
+            geometry=LineString((0, -40), (3, 0.4), srid=SRID).transform(4326, clone=True),
         )
         span.clean()
-        assert span.path.srid == SRID
+        assert span.geometry.srid == SRID
         assert coords(span)[-1] == pytest.approx((3.0, 0.0), abs=1e-3)
 
     def test_room_end_lands_on_the_outline_of_the_building_site(self):

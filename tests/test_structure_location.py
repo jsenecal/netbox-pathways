@@ -258,11 +258,11 @@ def test_pathway_snapping_reads_structure_geometry():
     s2 = Structure.objects.create(name="SNAP-2", geometry=Point(100, 100, srid=SRID))
     conduit = Conduit(
         label="SNAP-C",
-        path=LineString((0.2, 0.2), (99.8, 99.8), srid=SRID),
+        geometry=LineString((0.2, 0.2), (99.8, 99.8), srid=SRID),
         start_structure=s1,
         end_structure=s2,
     )
     conduit.pathway_type = "conduit"
     conduit.clean()
-    assert conduit.path.coords[0] == (0.0, 0.0)
-    assert conduit.path.coords[-1] == (100.0, 100.0)
+    assert conduit.geometry.coords[0] == (0.0, 0.0)
+    assert conduit.geometry.coords[-1] == (100.0, 100.0)

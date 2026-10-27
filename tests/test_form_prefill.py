@@ -26,7 +26,7 @@ def bank(db):
     installer = Tenant.objects.create(name="Installer Inc", slug="installer-inc")
     bank = ConduitBank(
         label="PF-BANK",
-        path=LineString((0, 0), (100, 100), srid=SRID),
+        geometry=LineString((0, 0), (100, 100), srid=SRID),
         start_structure=s1,
         end_structure=s2,
         start_face="north",
@@ -55,7 +55,7 @@ class TestConduitFormPrefill:
 
     def test_never_prefills_path_or_tenant(self, bank):
         form = ConduitForm(initial={"conduit_bank": str(bank.pk)})
-        assert "path" not in form.initial
+        assert "geometry" not in form.initial
         assert "tenant" not in form.initial
 
     def test_explicit_initial_wins(self, bank):
@@ -83,7 +83,7 @@ class TestInnerductFormPrefill:
     def test_prefills_endpoints_only(self, bank):
         parent = Conduit(
             label="PF-C2",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=bank.start_structure,
             end_structure=bank.end_structure,
             installed_by=bank.installed_by,

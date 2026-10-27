@@ -20,7 +20,7 @@ def aerial_route(db):
     s1 = Structure.objects.create(name="LASH-S1", geometry=Point(0, 0, srid=SRID))
     s2 = Structure.objects.create(name="LASH-S2", geometry=Point(100, 0, srid=SRID))
     span = AerialSpan(
-        path=LineString((0, 0), (100, 0), srid=SRID),
+        geometry=LineString((0, 0), (100, 0), srid=SRID),
         start_structure=s1,
         end_structure=s2,
     )

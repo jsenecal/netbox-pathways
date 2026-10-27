@@ -81,7 +81,7 @@ class TestRouteSegmentForm:
         pathway = Pathway.objects.create(
             label="RP-far",
             pathway_type="conduit",
-            path=LineString((0, 0), (10, 0), srid=SRID),
+            geometry=LineString((0, 0), (10, 0), srid=SRID),
             start_structure=structure,
         )
         form = forms.RouteSegmentForm(data={"pathway": pathway.pk}, connected_to=[("structure", 999999)])
@@ -103,7 +103,7 @@ class TestAddSegmentPicker:
         Pathway.objects.create(
             label="RP-P1",
             pathway_type="conduit",
-            path=LineString((100, 0), (200, 0), srid=SRID),
+            geometry=LineString((100, 0), (200, 0), srid=SRID),
             start_structure=b,
             end_structure=c,
         )
@@ -128,7 +128,7 @@ class TestAddSegmentPicker:
         Pathway.objects.create(
             label="RP-P2",
             pathway_type="conduit",
-            path=LineString((0, 0), (10, 0), srid=SRID),
+            geometry=LineString((0, 0), (10, 0), srid=SRID),
             start_structure=structure,
         )
         cable = build_cable_with_terminations(label="RP-cable-showall", site=site)
@@ -152,7 +152,7 @@ class TestAddSegmentPicker:
         pathway = Pathway.objects.create(
             label="RP-P3",
             pathway_type="conduit",
-            path=LineString((0, 0), (100, 0), srid=SRID),
+            geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=near,
             end_structure=far,
         )
@@ -178,13 +178,13 @@ class TestAddSegmentPicker:
         s2 = Structure.objects.create(name="RP-j2", site=site, geometry=Point(50, 50, srid=SRID))
         trunk = Conduit.objects.create(
             label="RP-trunk",
-            path=LineString((0, 0), (100, 0), srid=SRID),
+            geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=s0,
             end_structure=s1,
         )
         stub = Conduit.objects.create(
             label="RP-stub",
-            path=LineString((50, 50), (50, 50), srid=SRID),
+            geometry=LineString((50, 50), (50, 50), srid=SRID),
             start_structure=s2,
             end_structure=s2,
         )
@@ -197,7 +197,7 @@ class TestAddSegmentPicker:
         )
         branch = Conduit.objects.create(
             label="RP-branch",
-            path=LineString((50, 0), (50, 50), srid=SRID),
+            geometry=LineString((50, 0), (50, 50), srid=SRID),
             start_structure=s2,
             end_junction=junction,
         )

@@ -39,7 +39,7 @@ class TestReanchorPathwaysCommand:
         conduit = make_conduit([(0, 0), (50, 20), (100, 0)], start_structure=s1, end_structure=s2)
         p1, p2 = make_pole("P1", 0, 50), make_pole("P2", 40, 50)
         span = make_aerial_span(p1, p2)
-        Pathway.objects.filter(pk=span.pk).update(path=LineString((0, 50), (20, 60), (40, 50), srid=SRID))
+        Pathway.objects.filter(pk=span.pk).update(geometry=LineString((0, 50), (20, 60), (40, 50), srid=SRID))
         _bulk_move(s2, 100, 30)
 
         _run("--apply")
@@ -49,7 +49,7 @@ class TestReanchorPathwaysCommand:
 
     def test_detached_span_is_reported_and_left_alone(self):
         p1 = make_pole("P1", 0, 0)
-        span = AerialSpan(start_structure=p1, path=LineString((0, 0), (30, 0), srid=SRID))
+        span = AerialSpan(start_structure=p1, geometry=LineString((0, 0), (30, 0), srid=SRID))
         span.save()
 
         before = Pathway.objects.get(pk=span.pk).last_updated
@@ -74,7 +74,7 @@ class TestReanchorPathwaysCommand:
         building = make_building("B1", 0, 0)
         pole = make_pole("P1", 60, 5)
         make_conduit([(10, 5), (60, 5)], start_structure=building, end_structure=pole)
-        Pathway.objects.update(path=LineString((5, 5), (60, 5), srid=SRID))
+        Pathway.objects.update(geometry=LineString((5, 5), (60, 5), srid=SRID))
 
         assert "All pathway ends sit on their anchors." in _run()
 
@@ -127,7 +127,7 @@ class TestReanchorPathwaysCommand:
         room = Location.objects.create(name="TK-Room", slug="tk-room", site=site)
         s1, s2 = make_pole("TK-S1", 0, 0), make_pole("TK-S2", 100, 0)
         run = DirectBuried(
-            start_structure=s1, start_location=room, end_structure=s2, path=LineString((0, 0), (100, 0), srid=SRID)
+            start_structure=s1, start_location=room, end_structure=s2, geometry=LineString((0, 0), (100, 0), srid=SRID)
         )
         run.save()
 

@@ -47,7 +47,7 @@ class TestPathwayGraph:
                     label=f"C-{a}-{b}",
                     start_structure=structures[a],
                     end_structure=structures[b],
-                    path=LineString(
+                    geometry=LineString(
                         (a * 0.01, a * 0.01),
                         (b * 0.01, b * 0.01),
                         srid=srid,
@@ -174,7 +174,7 @@ class TestPathwayGraph:
             label="AS-self-loop",
             start_structure=s1,
             end_structure=s1,
-            path=LineString((0, 0), (0, 0), srid=srid),
+            geometry=LineString((0, 0), (0, 0), srid=srid),
             length=1,
         )
         graph = PathwayGraph.build()
@@ -245,7 +245,7 @@ class TestBuildTopology:
         Pathway.objects.create(
             label="ep-loc-only",
             pathway_type="conduit",
-            path=LineString((0, 0), (1, 1), srid=srid),
+            geometry=LineString((0, 0), (1, 1), srid=srid),
             start_location=loc_a,
             end_location=loc_b,
         )
@@ -259,14 +259,14 @@ class TestBuildTopology:
             label="ep-trunk",
             start_structure=s0,
             end_structure=s1,
-            path=LineString((0, 0), (0.02, 0.02), srid=srid),
+            geometry=LineString((0, 0), (0.02, 0.02), srid=srid),
             length=100,
         )
         stub = Conduit.objects.create(
             label="ep-stub",
             start_structure=s2,
             end_structure=s2,
-            path=LineString((0.03, 0.01), (0.03, 0.01), srid=srid),
+            geometry=LineString((0.03, 0.01), (0.03, 0.01), srid=srid),
             length=1,
         )
         junction = ConduitJunction.objects.create(
@@ -280,7 +280,7 @@ class TestBuildTopology:
             label="ep-branch",
             start_junction=junction,
             end_structure=s2,
-            path=LineString((0.01, 0.01), (0.03, 0.01), srid=srid),
+            geometry=LineString((0.01, 0.01), (0.03, 0.01), srid=srid),
             length=20,
         )
         # Second branch with junction as the END endpoint exercises the
@@ -289,7 +289,7 @@ class TestBuildTopology:
             label="ep-branch-end",
             start_structure=s2,
             end_junction=junction,
-            path=LineString((0.03, 0.01), (0.01, 0.01), srid=srid),
+            geometry=LineString((0.03, 0.01), (0.01, 0.01), srid=srid),
             length=21,
         )
 
@@ -313,14 +313,14 @@ class TestBuildTopology:
         Pathway.objects.create(
             label="bf-a-pw",
             pathway_type="conduit",
-            path=LineString((0, 0), (0.01, 0.01), srid=srid),
+            geometry=LineString((0, 0), (0.01, 0.01), srid=srid),
             start_structure=a1,
             end_structure=a2,
         )
         Pathway.objects.create(
             label="bf-b-pw",
             pathway_type="conduit",
-            path=LineString((1, 1), (1.01, 1.01), srid=srid),
+            geometry=LineString((1, 1), (1.01, 1.01), srid=srid),
             start_structure=b1,
             end_structure=b2,
         )
@@ -342,7 +342,7 @@ class TestBuildTopology:
         Pathway.objects.create(
             label="loc-only",
             pathway_type="conduit",
-            path=LineString((0, 0), (1, 1), srid=srid),
+            geometry=LineString((0, 0), (1, 1), srid=srid),
             start_location=loc_a,
             end_location=loc_b,
         )
@@ -357,7 +357,7 @@ class TestBuildTopology:
         Pathway.objects.create(
             label="self",
             pathway_type="conduit",
-            path=LineString((0, 0), (0, 0), srid=srid),
+            geometry=LineString((0, 0), (0, 0), srid=srid),
             start_structure=s,
             end_structure=s,
         )
@@ -380,7 +380,7 @@ class TestBuildTopology:
         pw = Pathway.objects.create(
             label="qs-pw",
             pathway_type="conduit",
-            path=LineString((0, 0), (0.01, 0.01), srid=srid),
+            geometry=LineString((0, 0), (0.01, 0.01), srid=srid),
             start_structure=s1,
             end_structure=s2,
             length=42,
@@ -408,14 +408,14 @@ class TestBuildTopology:
             label="J-trunk",
             start_structure=s0,
             end_structure=s1,
-            path=LineString((0, 0), (0.02, 0.02), srid=srid),
+            geometry=LineString((0, 0), (0.02, 0.02), srid=srid),
             length=100,
         )
         branch = Conduit.objects.create(
             label="J-branch-stub",
             start_structure=s2,
             end_structure=s2,  # placeholder; we'll repoint to a junction below
-            path=LineString((0.03, 0.01), (0.03, 0.01), srid=srid),
+            geometry=LineString((0.03, 0.01), (0.03, 0.01), srid=srid),
             length=1,
         )
         junction = ConduitJunction.objects.create(
@@ -431,7 +431,7 @@ class TestBuildTopology:
             start_structure=None,
             start_junction=junction,
             end_structure=s2,
-            path=LineString((0.01, 0.01), (0.03, 0.01), srid=srid),
+            geometry=LineString((0.01, 0.01), (0.03, 0.01), srid=srid),
             length=20,
         )
 
@@ -461,14 +461,14 @@ class TestPathwaysConnectedTo:
         pw_in = Pathway.objects.create(
             label="cpd-in",
             pathway_type="conduit",
-            path=LineString((0, 0), (0.01, 0.01), srid=srid),
+            geometry=LineString((0, 0), (0.01, 0.01), srid=srid),
             start_structure=s1,
             end_structure=s2,
         )
         pw_out = Pathway.objects.create(
             label="cpd-out",
             pathway_type="conduit",
-            path=LineString((0.01, 0.01), (0.02, 0.02), srid=srid),
+            geometry=LineString((0.01, 0.01), (0.02, 0.02), srid=srid),
             start_structure=s2,
             end_structure=s3,
         )
@@ -487,7 +487,7 @@ class TestPathwaysConnectedTo:
         pw = Pathway.objects.create(
             label="cpd-loc-pw",
             pathway_type="conduit",
-            path=LineString((0, 0), (0.01, 0.01), srid=srid),
+            geometry=LineString((0, 0), (0.01, 0.01), srid=srid),
             start_structure=s,
             end_location=loc,
         )
@@ -503,14 +503,14 @@ class TestPathwaysConnectedTo:
             label="cpd-trunk",
             start_structure=s0,
             end_structure=s1,
-            path=LineString((0, 0), (0.02, 0.02), srid=srid),
+            geometry=LineString((0, 0), (0.02, 0.02), srid=srid),
             length=50,
         )
         stub = Conduit.objects.create(
             label="cpd-stub",
             start_structure=s2,
             end_structure=s2,
-            path=LineString((0.03, 0.01), (0.03, 0.01), srid=srid),
+            geometry=LineString((0.03, 0.01), (0.03, 0.01), srid=srid),
             length=1,
         )
         junction = ConduitJunction.objects.create(
@@ -524,7 +524,7 @@ class TestPathwaysConnectedTo:
             label="cpd-branch",
             start_junction=junction,
             end_structure=s2,
-            path=LineString((0.01, 0.01), (0.03, 0.01), srid=srid),
+            geometry=LineString((0.01, 0.01), (0.03, 0.01), srid=srid),
             length=20,
         )
         result = list(pathways_connected_to([("junction", junction.pk)]))
@@ -559,7 +559,7 @@ class TestTraceCable:
         pw1 = Pathway.objects.create(
             label="tc-pw1",
             pathway_type="conduit",
-            path=LineString((0, 0), (0.01, 0.01), srid=srid),
+            geometry=LineString((0, 0), (0.01, 0.01), srid=srid),
             start_structure=s1,
             end_structure=s2,
             length=10,
@@ -567,7 +567,7 @@ class TestTraceCable:
         pw2 = Pathway.objects.create(
             label="tc-pw2",
             pathway_type="conduit",
-            path=LineString((0.01, 0.01), (0.02, 0.02), srid=srid),
+            geometry=LineString((0.01, 0.01), (0.02, 0.02), srid=srid),
             start_structure=s2,
             end_structure=s3,
             length=20,
@@ -596,7 +596,7 @@ class TestTraceCable:
         pw = Pathway.objects.create(
             label="tc-null-pw",
             pathway_type="conduit",
-            path=LineString((0, 0), (0.01, 0.01), srid=srid),
+            geometry=LineString((0, 0), (0.01, 0.01), srid=srid),
             start_structure=s1,
             end_structure=s2,
             length=10,

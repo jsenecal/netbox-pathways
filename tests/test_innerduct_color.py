@@ -117,7 +117,7 @@ class TestColorDataMigration:
     def test_names_become_hex_and_unknowns_are_cleared(self, db, capsys):
         conduit = models.Conduit.objects.create(
             label="color-migration-conduit",
-            path=LineString((0, 0), (100, 0), srid=SRID),
+            geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=models.Structure.objects.create(
                 name="color-migration-start",
                 geometry=Point(0, 0, srid=SRID),

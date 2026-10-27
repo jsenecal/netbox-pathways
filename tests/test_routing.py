@@ -39,7 +39,7 @@ class TestValidateCableRoute:
             label=label,
             start_structure=s_from,
             end_structure=s_to,
-            path=LineString((0, 0), (1, 1), srid=srid),
+            geometry=LineString((0, 0), (1, 1), srid=srid),
         )
 
     def test_no_segments(self, cable):
@@ -94,7 +94,7 @@ class TestRouteEndChecks:
         pathway = Pathway.objects.create(
             label="RE-P1",
             pathway_type="conduit",
-            path=LineString((0, 0), (100, 0), srid=SRID),
+            geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=a,
             end_structure=b,
         )
@@ -114,7 +114,7 @@ class TestRouteEndChecks:
         pathway = Pathway.objects.create(
             label="RE-P2",
             pathway_type="conduit",
-            path=LineString((500, 0), (600, 0), srid=SRID),
+            geometry=LineString((500, 0), (600, 0), srid=SRID),
             start_structure=far_a,
             end_structure=far_b,
         )
@@ -133,7 +133,7 @@ class TestRouteEndChecks:
         pathway = Pathway.objects.create(
             label="RE-P3",
             pathway_type="conduit",
-            path=LineString((0, 0), (100, 0), srid=SRID),
+            geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=a,
         )
         cable = build_cable_with_terminations(label="RE-cable-un", site=site)
@@ -151,7 +151,7 @@ class TestRouteEndChecks:
         pathway = Pathway.objects.create(
             label="RE-P4",
             pathway_type="conduit",
-            path=LineString((0, 0), (100, 0), srid=SRID),
+            geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=anchor,
         )
         cable = build_cable_with_terminations(label="RE-cable-mix", site=site_a, site_b=site_b)

@@ -90,7 +90,7 @@ def test_conduitbank_import_form_accepts_length(structures):
             "label": "CB import",
             "start_structure": s1.name,
             "end_structure": s2.name,
-            "path": "LINESTRING(-73.5 45.5, -73.501 45.5)",
+            "geometry": "LINESTRING(-73.5 45.5, -73.501 45.5)",
             "length": "123.4",
         }
     )

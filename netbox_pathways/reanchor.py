@@ -36,7 +36,7 @@ def _rewrite(pathway, placements):
 
     pathway.snapshot()
     for side, point in placements.items():
-        pathway.path = with_end(pathway.path, side, point)
+        pathway.geometry = with_end(pathway.geometry, side, point)
     if isinstance(pathway, AerialSpan):
         try:
             pathway.straighten()
@@ -49,7 +49,7 @@ def pathways_anchored_to(structure):
     """Pathways with a path whose start or end resolves to `structure`."""
     from .models import Pathway
 
-    return Pathway.objects.touching(structure).filter(path__isnull=False)
+    return Pathway.objects.touching(structure).filter(geometry__isnull=False)
 
 
 def concrete_pathways(pathways, with_path=True):
@@ -62,7 +62,7 @@ def concrete_pathways(pathways, with_path=True):
     from .models import PATHWAY_TYPE_MODELS, Conduit, Pathway
 
     if with_path:
-        pathways = pathways.filter(path__isnull=False)
+        pathways = pathways.filter(geometry__isnull=False)
     pks = pathways.values("pk")
     anchors = (
         "start_structure",
@@ -92,7 +92,7 @@ def reanchor_structure(structure, old_geom):
                     continue
                 # Indoor ends keep their place in the footprint; others follow the outline.
                 move = translate if pathway.is_indoor_end(side, old_geom) else relocate
-                placements[side] = move(old_geom, structure.geometry, end_point(pathway.path, side))
+                placements[side] = move(old_geom, structure.geometry, end_point(pathway.geometry, side))
             _rewrite(pathway, placements)
             moved.append(pathway)
         _cascade_junctions(moved)
@@ -114,7 +114,9 @@ def _cascade_junctions(moved):
             visited.add(junction.pk)
             junction.trunk_conduit = trunk
             target = junction.derived_geometry
-            branches = Conduit.objects.filter(Q(start_junction=junction) | Q(end_junction=junction), path__isnull=False)
+            branches = Conduit.objects.filter(
+                Q(start_junction=junction) | Q(end_junction=junction), geometry__isnull=False
+            )
             for branch in branches:
                 _rewrite(
                     branch, {side: target for side in SIDES if getattr(branch, f"{side}_junction_id") == junction.pk}
@@ -152,7 +154,7 @@ def find_drift(pathways):
             repairable = False
         if pathway.resolved_anchor_ids() != (pathway.start_anchor_id, pathway.end_anchor_id):
             problems.append("stored anchors are stale")
-        if pathway.path is None:
+        if pathway.geometry is None:
             if problems:
                 found.append(Drift(pathway, problems, repairable))
             continue
@@ -163,11 +165,11 @@ def find_drift(pathways):
                     problems.append(f"{side} vertex is not attached to a structure")
                     repairable = False
                 continue
-            end = end_point(pathway.path, side)
+            end = end_point(pathway.geometry, side)
             if not attaches(geom, end, ENDPOINT_TOLERANCE):
                 distance = landing_on(geom, end).distance(end)
                 problems.append(f"{side} vertex is {distance:.2f} from its anchor")
-        vertices = len(pathway.path.coords)
+        vertices = len(pathway.geometry.coords)
         if is_aerial and vertices > 2:
             problems.append(f"aerial span has {vertices} vertices, not 2")
         if problems:
@@ -184,14 +186,14 @@ def repair(pathway):
     """
     from .models import Pathway
 
-    if pathway.path is None:
+    if pathway.geometry is None:
         refresh_anchors(Pathway.objects.filter(pk=pathway.pk))
         return
     placements = {}
     for side in SIDES:
         geom, _kind = pathway.anchor_geometry(side)
         if geom is not None and not pathway.is_indoor_end(side, geom):
-            placements[side] = landing_on(geom, end_point(pathway.path, side))
+            placements[side] = landing_on(geom, end_point(pathway.geometry, side))
     # save() inside _rewrite() also stores fresh anchors.
     _rewrite(pathway, placements)
     _cascade_junctions([pathway])

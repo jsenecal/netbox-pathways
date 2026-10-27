@@ -53,7 +53,7 @@ def cable_route_geo(cable):
         elif route["valid"]:
             line["color"] = COMPLETE_COLOR
         data["lines"].append(line)
-        drawn[segment.pk] = segment.pathway.path
+        drawn[segment.pk] = segment.pathway.geometry
 
     for gap in route["gaps"]:
         after, before = drawn.get(gap["after_segment_id"]), drawn.get(gap["before_segment_id"])

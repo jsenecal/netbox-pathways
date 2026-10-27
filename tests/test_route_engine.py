@@ -68,21 +68,21 @@ class TestRouteEngine:
                 label="C-RE-01",
                 start_structure=structures[0],
                 end_structure=structures[1],
-                path=LineString((0, 0), (0.01, 0.01), srid=srid),
+                geometry=LineString((0, 0), (0.01, 0.01), srid=srid),
                 length=10,
             ),
             Conduit.objects.create(
                 label="C-RE-02",
                 start_structure=structures[1],
                 end_structure=structures[2],
-                path=LineString((0.01, 0.01), (0.02, 0.02), srid=srid),
+                geometry=LineString((0.01, 0.01), (0.02, 0.02), srid=srid),
                 length=20,
             ),
             Conduit.objects.create(
                 label="C-RE-04",
                 start_structure=structures[1],
                 end_structure=structures[3],
-                path=LineString((0.01, 0.01), (0.03, 0.03), srid=srid),
+                geometry=LineString((0.01, 0.01), (0.03, 0.03), srid=srid),
                 length=50,
             ),
         ]
@@ -90,7 +90,7 @@ class TestRouteEngine:
             label="A-RE-03",
             start_structure=structures[2],
             end_structure=structures[3],
-            path=LineString((0.02, 0.02), (0.03, 0.03), srid=srid),
+            geometry=LineString((0.02, 0.02), (0.03, 0.03), srid=srid),
             length=5,
         )
         return {"structures": structures, "conduits": conduits, "aerial": aerial}

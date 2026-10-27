@@ -57,7 +57,7 @@ class CircuitGeometryType(NetBoxObjectType):
     """GraphQL type for CircuitGeometry (geometry omitted; use the GeoJSON API)."""
 
 
-@strawberry_django.type(Pathway, exclude=["path"])
+@strawberry_django.type(Pathway, exclude=["geometry"])
 class PathwayType(NetBoxObjectType):
     """GraphQL type for Pathway (base; geometry omitted, use the GeoJSON API)."""
 
@@ -65,14 +65,14 @@ class PathwayType(NetBoxObjectType):
     cable_segments: list[Annotated["CableSegmentType", strawberry.lazy(".types")]]
 
 
-@strawberry_django.type(ConduitBank, exclude=["path"])
+@strawberry_django.type(ConduitBank, exclude=["geometry"])
 class ConduitBankType(NetBoxObjectType):
     """GraphQL type for ConduitBank."""
 
     conduits: list[Annotated["ConduitType", strawberry.lazy(".types")]]
 
 
-@strawberry_django.type(Conduit, exclude=["path"])
+@strawberry_django.type(Conduit, exclude=["geometry"])
 class ConduitType(NetBoxObjectType):
     """GraphQL type for Conduit."""
 
@@ -81,17 +81,17 @@ class ConduitType(NetBoxObjectType):
     junction_as_branch: list[Annotated["ConduitJunctionType", strawberry.lazy(".types")]]
 
 
-@strawberry_django.type(AerialSpan, exclude=["path"])
+@strawberry_django.type(AerialSpan, exclude=["geometry"])
 class AerialSpanType(NetBoxObjectType):
     """GraphQL type for AerialSpan."""
 
 
-@strawberry_django.type(DirectBuried, exclude=["path"])
+@strawberry_django.type(DirectBuried, exclude=["geometry"])
 class DirectBuriedType(NetBoxObjectType):
     """GraphQL type for DirectBuried."""
 
 
-@strawberry_django.type(Innerduct, exclude=["path"])
+@strawberry_django.type(Innerduct, exclude=["geometry"])
 class InnerductType(NetBoxObjectType):
     """GraphQL type for Innerduct."""
 

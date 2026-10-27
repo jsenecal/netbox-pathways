@@ -13,9 +13,9 @@ def _make_structure(name, geom):
     return Structure.objects.create(name=name, geometry=geom)
 
 
-def _make_pathway(path, start_structure=None, end_structure=None, **kwargs):
+def _make_pathway(geometry, start_structure=None, end_structure=None, **kwargs):
     pw = Pathway(
-        path=path,
+        geometry=geometry,
         start_structure=start_structure,
         end_structure=end_structure,
         **kwargs,
@@ -29,7 +29,7 @@ def _make_bank(prefix):
     s2 = _make_structure(f"{prefix}-S2", Point(100, 100, srid=SRID))
     bank = ConduitBank(
         label=f"BANK-{prefix}",
-        path=LineString((0, 0), (100, 100), srid=SRID),
+        geometry=LineString((0, 0), (100, 100), srid=SRID),
         start_structure=s1,
         end_structure=s2,
     )
@@ -44,7 +44,7 @@ class TestPathwayEndpointValidation:
         path = LineString((100.5, 200.5), (500, 500), srid=SRID)
         pw = _make_pathway(path, start_structure=struct)
         pw.clean()
-        assert pw.path.coords[0] == (100.0, 200.0)
+        assert pw.geometry.coords[0] == (100.0, 200.0)
 
     def test_point_structure_beyond_tolerance_raises(self):
         struct = _make_structure("S2", Point(100, 200, srid=SRID))
@@ -58,7 +58,7 @@ class TestPathwayEndpointValidation:
         path = LineString((0, 0), (500.3, 500.3), srid=SRID)
         pw = _make_pathway(path, end_structure=struct)
         pw.clean()
-        assert pw.path.coords[-1] == (500.0, 500.0)
+        assert pw.geometry.coords[-1] == (500.0, 500.0)
 
     def test_no_structure_skips_validation(self):
         path = LineString((0, 0), (500, 500), srid=SRID)
@@ -67,8 +67,8 @@ class TestPathwayEndpointValidation:
 
     def test_no_path_with_structure_endpoint_raises(self):
         struct = _make_structure("S4", Point(100, 200, srid=SRID))
-        pw = _make_pathway(path=None, start_structure=struct)
-        with pytest.raises(ValidationError, match="[Pp]ath"):
+        pw = _make_pathway(geometry=None, start_structure=struct)
+        with pytest.raises(ValidationError, match="[Gg]eometry"):
             pw.clean()
 
     def test_polygon_structure_inside_snaps_to_boundary(self):
@@ -77,7 +77,7 @@ class TestPathwayEndpointValidation:
         path = LineString((50, 50), (500, 500), srid=SRID)
         pw = _make_pathway(path, start_structure=struct)
         pw.clean()
-        snapped = Point(pw.path.coords[0][0], pw.path.coords[0][1], srid=SRID)
+        snapped = Point(pw.geometry.coords[0][0], pw.geometry.coords[0][1], srid=SRID)
         assert struct.geometry.boundary.distance(snapped) < 0.01
 
     def test_polygon_structure_on_boundary_snaps(self):
@@ -93,7 +93,7 @@ class TestPathwayEndpointValidation:
         path = LineString((50, -0.5), (500, 500), srid=SRID)
         pw = _make_pathway(path, start_structure=struct)
         pw.clean()
-        snapped = Point(pw.path.coords[0][0], pw.path.coords[0][1], srid=SRID)
+        snapped = Point(pw.geometry.coords[0][0], pw.geometry.coords[0][1], srid=SRID)
         assert struct.geometry.boundary.distance(snapped) < 0.01
 
     def test_polygon_structure_far_outside_raises(self):
@@ -110,9 +110,9 @@ class TestPathwayEndpointValidation:
         path = LineString((100.3, 200.4), (300, 400), (500.2, 600.1), srid=SRID)
         pw = _make_pathway(path, start_structure=s1, end_structure=s2)
         pw.clean()
-        assert pw.path.coords[0] == (100.0, 200.0)
-        assert pw.path.coords[-1] == (500.0, 600.0)
-        assert len(pw.path.coords) == 3
+        assert pw.geometry.coords[0] == (100.0, 200.0)
+        assert pw.geometry.coords[-1] == (500.0, 600.0)
+        assert len(pw.geometry.coords) == 3
 
 
 @pytest.mark.django_db
@@ -122,14 +122,14 @@ class TestConduitJunctionValidation:
         s1 = _make_structure("JS1", Point(0, 0, srid=SRID))
         s2 = _make_structure("JS2", Point(1000, 0, srid=SRID))
         trunk = Conduit(
-            path=LineString((0, 0), (1000, 0), srid=SRID),
+            geometry=LineString((0, 0), (1000, 0), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
         trunk.pathway_type = "conduit"
         trunk.save()
         branch = Conduit(
-            path=LineString((500, 100), (500, 500), srid=SRID),
+            geometry=LineString((500, 100), (500, 500), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
@@ -146,19 +146,19 @@ class TestConduitJunctionValidation:
     def test_junction_within_tolerance_snaps(self, trunk_setup):
         s1, s2, trunk, junction = trunk_setup
         c = Conduit(
-            path=LineString((500.5, 0.3), (1000, 0), srid=SRID),
+            geometry=LineString((500.5, 0.3), (1000, 0), srid=SRID),
             start_junction=junction,
             end_structure=s2,
         )
         c.pathway_type = "conduit"
         c.clean()
-        assert abs(c.path.coords[0][0] - 500.0) < 0.01
-        assert abs(c.path.coords[0][1] - 0.0) < 0.01
+        assert abs(c.geometry.coords[0][0] - 500.0) < 0.01
+        assert abs(c.geometry.coords[0][1] - 0.0) < 0.01
 
     def test_junction_beyond_tolerance_raises(self, trunk_setup):
         s1, s2, trunk, junction = trunk_setup
         c = Conduit(
-            path=LineString((510, 10), (1000, 0), srid=SRID),
+            geometry=LineString((510, 10), (1000, 0), srid=SRID),
             start_junction=junction,
             end_structure=s2,
         )
@@ -181,8 +181,8 @@ class TestPathAutoGeneration:
             }
         )
         assert form.is_valid(), form.errors
-        assert form.cleaned_data["path"] is not None
-        coords = form.cleaned_data["path"].coords
+        assert form.cleaned_data["geometry"] is not None
+        coords = form.cleaned_data["geometry"].coords
         assert len(coords) == 2
 
     def test_blank_path_with_polygon_structures_generates_centroid_line(self):
@@ -199,7 +199,7 @@ class TestPathAutoGeneration:
             }
         )
         assert form.is_valid(), form.errors
-        path = form.cleaned_data["path"]
+        path = form.cleaned_data["geometry"]
         assert path is not None
         assert len(path.coords) == 2
 
@@ -212,7 +212,7 @@ class TestPathAutoGeneration:
             }
         )
         assert not form.is_valid()
-        assert "path" in form.errors or "__all__" in form.errors
+        assert "geometry" in form.errors or "__all__" in form.errors
 
     def test_blank_path_no_structures_errors(self):
         form = PathwayForm(data={"tags": []})
@@ -228,12 +228,12 @@ class TestPathAutoGeneration:
                 "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
-                "path": path_4326.geojson,
+                "geometry": path_4326.geojson,
                 "tags": [],
             }
         )
         assert form.is_valid(), form.errors
-        assert len(form.cleaned_data["path"].coords) == 3
+        assert len(form.cleaned_data["geometry"].coords) == 3
 
 
 class TestWidgetEndpointRendering:
@@ -242,7 +242,7 @@ class TestWidgetEndpointRendering:
         widget.endpoint_geojson = {
             "start": {"type": "Point", "coordinates": [-73.5, 45.5]},
         }
-        html = widget.render("path", None, attrs={"id": "id_path"})
+        html = widget.render("geometry", None, attrs={"id": "id_path"})
         assert 'id="id_path-endpoints"' in html
         assert "application/json" in html
         assert "-73.5" in html
@@ -250,7 +250,7 @@ class TestWidgetEndpointRendering:
     def test_no_endpoint_data_no_script_tag(self):
         widget = PathwaysMapWidget()
         widget.endpoint_geojson = None
-        html = widget.render("path", None, attrs={"id": "id_path"})
+        html = widget.render("geometry", None, attrs={"id": "id_path"})
         assert "-endpoints" not in html
 
 
@@ -271,7 +271,7 @@ class TestLocationEndpointValidation:
         path = LineString((100.5, 200.5), (500, 500), srid=SRID)
         pw = _make_pathway(path, start_location=identity_location)
         pw.clean()
-        assert pw.path.coords[0] == (100.0, 200.0)
+        assert pw.geometry.coords[0] == (100.0, 200.0)
 
     def test_location_with_identity_structure_beyond_tolerance_raises(self, identity_location):
         path = LineString((110, 210), (500, 500), srid=SRID)
@@ -283,7 +283,7 @@ class TestLocationEndpointValidation:
         path = LineString((500, 500), (100.5, 200.5), srid=SRID)
         pw = _make_pathway(path, end_location=identity_location)
         pw.clean()
-        assert pw.path.coords[-1] == (100.0, 200.0)
+        assert pw.geometry.coords[-1] == (100.0, 200.0)
 
     def test_location_without_identity_structure_stays_documentary(self):
         from dcim.models import Location, Site
@@ -293,7 +293,7 @@ class TestLocationEndpointValidation:
         path = LineString((0, 0), (500, 500), srid=SRID)
         pw = _make_pathway(path, start_location=loc)
         pw.clean()
-        assert pw.path.coords[0] == (0.0, 0.0)
+        assert pw.geometry.coords[0] == (0.0, 0.0)
 
     def test_deleting_endpoint_location_is_protected(self):
         """start/end_location used SET_NULL, silently orphaning endpoints once
@@ -325,9 +325,9 @@ class TestEndToEndFormSave:
         assert form.is_valid(), form.errors
         obj = form.save()
         assert obj.pk is not None
-        assert obj.path is not None
-        assert obj.path.coords[0] == (100.0, 200.0)
-        assert obj.path.coords[-1] == (500.0, 600.0)
+        assert obj.geometry is not None
+        assert obj.geometry.coords[0] == (100.0, 200.0)
+        assert obj.geometry.coords[-1] == (500.0, 600.0)
 
     def test_form_with_drawn_path_snaps_on_save(self):
         s1 = _make_structure("E2E3", Point(100, 200, srid=SRID))
@@ -339,15 +339,15 @@ class TestEndToEndFormSave:
                 "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
-                "path": path_4326.geojson,
+                "geometry": path_4326.geojson,
                 "tags": [],
             }
         )
         assert form.is_valid(), form.errors
         obj = form.save()
-        assert obj.path.coords[0] == (100.0, 200.0)
-        assert obj.path.coords[-1] == (500.0, 600.0)
-        assert len(obj.path.coords) == 3
+        assert obj.geometry.coords[0] == (100.0, 200.0)
+        assert obj.geometry.coords[-1] == (500.0, 600.0)
+        assert len(obj.geometry.coords) == 3
 
 
 @pytest.mark.django_db
@@ -381,7 +381,7 @@ class TestContainedPathRequirement:
         bank, s1, s2 = self._bank()
         parent = Conduit(
             label="C-3",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
@@ -425,7 +425,7 @@ class TestConduitBankEndpointInheritance:
         bank, s1, s2 = self._bank()
         trunk = Conduit(
             label="TRUNK",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
@@ -446,7 +446,7 @@ class TestConduitBankEndpointInheritance:
 
     def test_bankless_blank_endpoints_still_invalid(self):
         path = LineString((0, 0), (100, 100), srid=SRID)
-        conduit = Conduit(label="C-14", path=path)
+        conduit = Conduit(label="C-14", geometry=path)
         with pytest.raises(ValidationError, match="start point"):
             conduit.clean()
 
@@ -467,7 +467,7 @@ class TestOneEndpointKindPerSide:
         s1 = _make_structure("OK-S1", Point(0, 0, srid=SRID))
         s2 = _make_structure("OK-S2", Point(100, 0, srid=SRID))
         run = DirectBuried(
-            path=LineString((0, 0), (100, 0), srid=SRID),
+            geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=s1,
             start_location=self._room(),
             end_structure=s2,
@@ -478,15 +478,15 @@ class TestOneEndpointKindPerSide:
 
     def test_conduit_side_naming_structure_and_junction_is_rejected(self):
         bank, s1, s2 = _make_bank("OK")
-        trunk = Conduit(path=LineString((0, 0), (100, 100), srid=SRID), start_structure=s1, end_structure=s2)
+        trunk = Conduit(geometry=LineString((0, 0), (100, 100), srid=SRID), start_structure=s1, end_structure=s2)
         trunk.save()
-        branch = Conduit(path=LineString((50, 50), (100, 100), srid=SRID), end_structure=s2)
+        branch = Conduit(geometry=LineString((50, 50), (100, 100), srid=SRID), end_structure=s2)
         branch.save()
         junction = ConduitJunction.objects.create(
             trunk_conduit=trunk, branch_conduit=branch, towards_structure=s2, position_on_trunk=0.5
         )
         conduit = Conduit(
-            path=LineString((50, 50), (100, 100), srid=SRID),
+            geometry=LineString((50, 50), (100, 100), srid=SRID),
             start_structure=s1,
             start_junction=junction,
             end_structure=s2,

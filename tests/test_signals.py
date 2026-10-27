@@ -27,7 +27,7 @@ def cable_and_pathway(db):
     pw = Pathway.objects.create(
         label="P1",
         pathway_type="conduit",
-        path=LineString((0, 0), (100, 0), srid=SRID),
+        geometry=LineString((0, 0), (100, 0), srid=SRID),
         start_structure=s1,
         end_structure=s2,
     )
@@ -42,7 +42,7 @@ def pathway(db):
     return Pathway.objects.create(
         label="P-sig",
         pathway_type="conduit",
-        path=LineString((0, 0), (100, 0), srid=SRID),
+        geometry=LineString((0, 0), (100, 0), srid=SRID),
         start_structure=s1,
         end_structure=s2,
     )

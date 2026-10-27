@@ -26,10 +26,19 @@ def _line():
 @pytest.mark.parametrize(
     "view, build",
     [
-        (StructureConduitBanksView, lambda a, b: ConduitBank(path=_line(), start_structure=a, end_structure=b).save()),
+        (
+            StructureConduitBanksView,
+            lambda a, b: ConduitBank(geometry=_line(), start_structure=a, end_structure=b).save(),
+        ),
         (StructureConduitsView, lambda a, b: make_conduit([(0, 0), (100, 0)], start_structure=a, end_structure=b)),
-        (StructureAerialSpansView, lambda a, b: AerialSpan(path=_line(), start_structure=a, end_structure=b).save()),
-        (StructureDirectBuriedView, lambda a, b: DirectBuried(path=_line(), start_structure=a, end_structure=b).save()),
+        (
+            StructureAerialSpansView,
+            lambda a, b: AerialSpan(geometry=_line(), start_structure=a, end_structure=b).save(),
+        ),
+        (
+            StructureDirectBuriedView,
+            lambda a, b: DirectBuried(geometry=_line(), start_structure=a, end_structure=b).save(),
+        ),
     ],
 )
 def test_tab_lists_and_counts_the_structures_pathways_of_that_type(poles, view, build):

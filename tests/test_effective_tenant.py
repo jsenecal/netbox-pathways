@@ -28,7 +28,7 @@ def bank(db, tenants):
     s2 = Structure.objects.create(name="ET-S2", geometry=Point(100, 100, srid=SRID))
     bank = ConduitBank(
         label="ET-BANK",
-        path=LineString((0, 0), (100, 100), srid=SRID),
+        geometry=LineString((0, 0), (100, 100), srid=SRID),
         start_structure=s1,
         end_structure=s2,
         tenant=owner,
@@ -57,7 +57,7 @@ class TestEffectiveTenant:
         s2 = Structure.objects.create(name="ET-S4", geometry=Point(1, 1, srid=SRID))
         conduit = Conduit(
             label="ET-C3",
-            path=LineString((0, 0), (1, 1), srid=SRID),
+            geometry=LineString((0, 0), (1, 1), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )

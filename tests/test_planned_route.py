@@ -28,7 +28,7 @@ class TestPlannedRoute:
                 label=f"C-PR-{i}",
                 start_structure=structures[i],
                 end_structure=structures[i + 1],
-                path=LineString(
+                geometry=LineString(
                     (i * 0.01, i * 0.01),
                     ((i + 1) * 0.01, (i + 1) * 0.01),
                     srid=srid,

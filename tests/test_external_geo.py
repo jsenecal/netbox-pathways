@@ -180,7 +180,7 @@ class TestExternalLayerGeoView:
             label="EXT-C1",
             start_structure=s1,
             end_structure=s2,
-            path=LineString((0, 0), (100, 100), srid=srid),
+            geometry=LineString((0, 0), (100, 100), srid=srid),
         )
 
     @pytest.fixture
@@ -258,13 +258,13 @@ class TestLocationGeometryResolution:
             label="LOC-C1",
             start_structure=anchor,
             end_location=loc_with,
-            path=LineString((0, 0), (10, 20), srid=srid),
+            geometry=LineString((0, 0), (10, 20), srid=srid),
         )
         c_without = Conduit.objects.create(
             label="LOC-C2",
             start_structure=anchor,
             end_location=loc_without,
-            path=LineString((0, 0), (5, 5), srid=srid),
+            geometry=LineString((0, 0), (5, 5), srid=srid),
         )
         return c_with, c_without, identity
 

@@ -204,7 +204,7 @@ class CoreModelMapExtension(PluginTemplateExtension):
             ).only(
                 "label",
                 "pathway_type",
-                "path",
+                "geometry",
             )[:500]
             for p in pathways:
                 line = pathway_line(p)
@@ -242,7 +242,7 @@ class CoreModelMapExtension(PluginTemplateExtension):
                 .only(
                     "label",
                     "pathway_type",
-                    "path",
+                    "geometry",
                     "start_structure_id",
                     "end_structure_id",
                     "start_structure__name",

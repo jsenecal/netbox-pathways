@@ -38,7 +38,7 @@ def _structure(name, x, y):
 
 def _span(start, end, path, **kwargs):
     return AerialSpan.objects.create(
-        path=path,
+        geometry=path,
         start_structure=start,
         end_structure=end,
         **kwargs,
@@ -63,8 +63,8 @@ class TestFindCandidates:
         assert candidates[1].chainage == pytest.approx(200.0)
 
     def test_pathway_without_path_raises(self):
-        span = AerialSpan(path=None)
-        with pytest.raises(SplitError, match="path"):
+        span = AerialSpan(geometry=None)
+        with pytest.raises(SplitError, match="geometry"):
             find_candidates(span, tolerance=1.0)
 
 
@@ -173,15 +173,15 @@ class TestPlanSplit:
             plan_split(span, [], tolerance=1.0)
 
     def test_indoor_pathway_refused(self):
-        pw = Pathway(path=None)
-        with pytest.raises(SplitError, match="path"):
+        pw = Pathway(geometry=None)
+        with pytest.raises(SplitError, match="geometry"):
             plan_split(pw, [], tolerance=1.0)
 
     def test_innerduct_refused(self):
         s1 = _structure("PS6-A", 0, 0)
         s2 = _structure("PS6-B", 100, 0)
         conduit = Conduit.objects.create(
-            path=LineString((0, 0), (100, 0), srid=SRID),
+            geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
@@ -193,7 +193,7 @@ class TestPlanSplit:
         s1 = _structure("PS7-A", 0, 0)
         s2 = _structure("PS7-B", 100, 0)
         bank = ConduitBank.objects.create(
-            path=LineString((0, 0), (100, 0), srid=SRID),
+            geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
@@ -205,13 +205,13 @@ class TestPlanSplit:
         s1 = _structure("PS8-A", 0, 0)
         s2 = _structure("PS8-B", 300, 0)
         trunk = Conduit.objects.create(
-            path=LineString((0, 0), (300, 0), srid=SRID),
+            geometry=LineString((0, 0), (300, 0), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
         s3 = _structure("PS8-C", 150, 100)
         branch = Conduit.objects.create(
-            path=LineString((150, 0), (150, 100), srid=SRID),
+            geometry=LineString((150, 0), (150, 100), srid=SRID),
             end_structure=s3,
         )
         junction = ConduitJunction(
@@ -264,8 +264,8 @@ class TestExecuteSplit:
         assert isinstance(first, AerialSpan) and isinstance(second, AerialSpan)
         assert (first.start_structure, first.end_structure) == (start, mid)
         assert (second.start_structure, second.end_structure) == (mid, end)
-        assert tuple(first.path.coords) == ((0.0, 0.0), (150.0, 10.0))
-        assert tuple(second.path.coords) == ((150.0, 10.0), (300.0, 0.0))
+        assert tuple(first.geometry.coords) == ((0.0, 0.0), (150.0, 10.0))
+        assert tuple(second.geometry.coords) == ((150.0, 10.0), (300.0, 0.0))
 
     def test_shared_fields_tags_and_labels_copied(self):
         start = _structure("EX2-A", 0, 0)
@@ -346,7 +346,7 @@ class TestExecuteSplit:
         start = _structure("EX6-A", 0, 0)
         end = _structure("EX6-B", 300, 0)
         span = Pathway(
-            path=LineString((0, 0), (300, 0), srid=SRID),
+            geometry=LineString((0, 0), (300, 0), srid=SRID),
             start_structure=start,
             end_structure=end,
         )
@@ -365,7 +365,7 @@ class TestCascade:
         s1 = _structure("CA1-A", 0, 0)
         s2 = _structure("CA1-B", 300, 0)
         bank = ConduitBank.objects.create(
-            path=LineString((0, 0), (300, 0), srid=SRID),
+            geometry=LineString((0, 0), (300, 0), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
@@ -389,7 +389,7 @@ class TestCascade:
         assert len(a_copies) == 2
         assert {c.conduit_bank_id for c in a_copies} == {b.pk for b in bank_children}
         assert all(c.material == "hdpe" for c in a_copies)
-        assert all(c.path is None for c in new_conduits)
+        assert all(c.geometry is None for c in new_conduits)
 
         # Innerducts cascade one level further, onto the per-hop conduits.
         new_ducts = Innerduct.objects.filter(parent_conduit__in=a_copies)
@@ -408,7 +408,7 @@ class TestCascade:
         s1 = _structure("CA2-A", 0, 0)
         s2 = _structure("CA2-B", 300, 0)
         conduit = Conduit.objects.create(
-            path=LineString((0, 0), (300, 0), srid=SRID),
+            geometry=LineString((0, 0), (300, 0), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
