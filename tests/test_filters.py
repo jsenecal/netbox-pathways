@@ -351,6 +351,15 @@ class TestPathwayHierarchyFilters:
         """Every pathway the innerduct runs inside, outermost included."""
         assert _labels({"descendant_id": [hierarchy["subduct"].pk]}) == {"h-bank", "h-conduit", "h-duct"}
 
+    @pytest.mark.parametrize("param", ["ancestor_id", "descendant_id"])
+    def test_null_token_is_a_no_op(self, hierarchy, param):
+        """NetBox's null token (`?ancestor_id=null`) leaves the queryset unchanged instead of a 500."""
+        everything = set(Pathway.objects.values_list("label", flat=True))
+        assert _labels({param: ["null"]}) == everything
+
+    def test_null_token_alongside_a_node_is_ignored(self, hierarchy):
+        assert _labels({"ancestor_id": ["null", hierarchy["duct"].pk]}) == {"h-subduct"}
+
 
 @pytest.mark.django_db
 def test_installed_by_filter_applies_to_every_type():

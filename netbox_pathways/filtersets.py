@@ -330,7 +330,13 @@ class PathwayFilterSet(OccupiedFilterMixin, TenancyFilterSet, NetBoxModelFilterS
 
     @staticmethod
     def _filter_ltree(queryset, lookup, nodes):
-        """OR one strict ltree lookup against each node's path."""
+        """OR one strict ltree lookup against each node's path.
+
+        NetBox's null token (`?ancestor_id=null`) arrives as the bare string
+        rather than a Pathway; it is skipped, as `connected_to` skips it, so
+        an unset param is a no-op instead of an error.
+        """
+        nodes = [node for node in nodes if isinstance(node, Pathway)]
         if not nodes:
             return queryset
         condition = Q()
