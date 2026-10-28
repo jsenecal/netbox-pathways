@@ -3,7 +3,7 @@ from dcim.models import Cable
 from django.contrib.gis.geos import LineString, Point
 
 from netbox_pathways.geo import get_srid
-from netbox_pathways.models import CableSegment, Conduit, Pathway, Structure
+from netbox_pathways.models import CableSegment, Pathway, Structure
 from netbox_pathways.routing import validate_cable_route
 from tests.conftest import build_cable_with_terminations
 
@@ -35,7 +35,8 @@ class TestValidateCableRoute:
         return Cable.objects.create(label="CABLE-R-001")
 
     def _make_conduit(self, label, s_from, s_to, srid):
-        return Conduit.objects.create(
+        return Pathway.objects.create(
+            pathway_type="conduit",
             label=label,
             start_structure=s_from,
             end_structure=s_to,

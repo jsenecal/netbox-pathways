@@ -5,7 +5,7 @@ from django.contrib.gis.geos import LineString
 from django.test import RequestFactory
 
 from netbox_pathways.geo import linestring_to_coords
-from netbox_pathways.models import CableSegment, Conduit
+from netbox_pathways.models import CableSegment, Pathway
 from netbox_pathways.route_map import cable_route_geo
 from netbox_pathways.views import CableRouteMapView
 from tests.conftest import build_cable_with_terminations
@@ -88,7 +88,7 @@ def test_a_segment_that_misses_its_cable_end_is_flagged(plant):
 def test_map_tab_is_hidden_without_drawable_segments(plant):
     assert CableRouteMapView.tab.badge(plant["cable"]) is None
 
-    indoor = Conduit(start_structure=plant["SA"], end_structure=plant["M"])
+    indoor = Pathway(pathway_type="conduit", start_structure=plant["SA"], end_structure=plant["M"])
     indoor.save()
     _route(plant["cable"], [indoor])
     assert CableRouteMapView.tab.badge(plant["cable"]) is None
@@ -143,7 +143,7 @@ def test_pull_sheet_lists_the_route_in_order(plant, client, admin_user):
 
 def test_segments_without_a_drawn_path_are_skipped_but_keep_the_numbering(plant):
     """Map labels must match the Route table's row numbers even past an indoor run."""
-    indoor = Conduit(start_structure=plant["SA"], end_structure=plant["M"])
+    indoor = Pathway(pathway_type="conduit", start_structure=plant["SA"], end_structure=plant["M"])
     indoor.save()
     segments = _route(plant["cable"], [indoor, plant["hops"][1]])
 

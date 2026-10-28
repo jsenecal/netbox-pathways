@@ -6,7 +6,7 @@ import pytest
 from django.contrib.gis.geos import LineString, Point
 from django.core.management import call_command
 
-from netbox_pathways.models import AerialSpan, Pathway, Structure
+from netbox_pathways.models import Pathway, Structure
 from tests.helpers import SRID, coords, make_aerial_span, make_building, make_conduit, make_pole
 
 
@@ -49,7 +49,7 @@ class TestReanchorPathwaysCommand:
 
     def test_detached_span_is_reported_and_left_alone(self):
         p1 = make_pole("P1", 0, 0)
-        span = AerialSpan(start_structure=p1, geometry=LineString((0, 0), (30, 0), srid=SRID))
+        span = Pathway(pathway_type="aerial", start_structure=p1, geometry=LineString((0, 0), (30, 0), srid=SRID))
         span.save()
 
         before = Pathway.objects.get(pk=span.pk).last_updated
@@ -101,14 +101,14 @@ class TestReanchorPathwaysCommand:
         """Anchors written around save() (here: update()) go stale; --apply recomputes them."""
         from dcim.models import Location, Site
 
-        from netbox_pathways.models import DirectBuried, SiteGeometry
+        from netbox_pathways.models import Pathway, SiteGeometry
 
         site = Site.objects.create(name="SA-Site", slug="sa-site")
         building = make_building("SA-B", 0, 0)
         SiteGeometry.objects.create(site=site, structure=building)
         room = Location.objects.create(name="SA-Room", slug="sa-room", site=site)
         office = Location.objects.create(name="SA-Office", slug="sa-office", site=site)
-        tray = DirectBuried(start_location=room, end_location=office)
+        tray = Pathway(pathway_type="direct_buried", start_location=room, end_location=office)
         tray.save()
         Pathway.objects.filter(pk=tray.pk).update(start_anchor=None, end_anchor=None)
 
@@ -121,13 +121,17 @@ class TestReanchorPathwaysCommand:
     def test_side_naming_two_endpoint_kinds_needs_attention(self):
         from dcim.models import Location, Site
 
-        from netbox_pathways.models import DirectBuried
+        from netbox_pathways.models import Pathway
 
         site = Site.objects.create(name="TK-Site", slug="tk-site")
         room = Location.objects.create(name="TK-Room", slug="tk-room", site=site)
         s1, s2 = make_pole("TK-S1", 0, 0), make_pole("TK-S2", 100, 0)
-        run = DirectBuried(
-            start_structure=s1, start_location=room, end_structure=s2, geometry=LineString((0, 0), (100, 0), srid=SRID)
+        run = Pathway(
+            pathway_type="direct_buried",
+            start_structure=s1,
+            start_location=room,
+            end_structure=s2,
+            geometry=LineString((0, 0), (100, 0), srid=SRID),
         )
         run.save()
 

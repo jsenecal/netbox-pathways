@@ -2,7 +2,7 @@ import pytest
 from django.contrib.gis.geos import LineString, Point
 
 from netbox_pathways.geo import get_srid
-from netbox_pathways.models import Conduit, PlannedRoute, Structure
+from netbox_pathways.models import Pathway, PlannedRoute, Structure
 
 
 @pytest.mark.django_db
@@ -24,7 +24,8 @@ class TestPlannedRoute:
     @pytest.fixture
     def conduits(self, structures, srid):
         return [
-            Conduit.objects.create(
+            Pathway.objects.create(
+                pathway_type="conduit",
                 label=f"C-PR-{i}",
                 start_structure=structures[i],
                 end_structure=structures[i + 1],

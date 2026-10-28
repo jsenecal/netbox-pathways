@@ -13,14 +13,7 @@ from dataclasses import dataclass, field
 from django.contrib.gis.geos import LineString
 from django.db import transaction
 
-from .models import (
-    CableSegment,
-    Conduit,
-    ConduitBank,
-    Innerduct,
-    PlannedRoute,
-    Structure,
-)
+from .models import CableSegment, Pathway, PlannedRoute, Structure
 
 # A pathway endpoint or a neighbouring cut closer than this (in SRID units)
 # collapses into one cut instead of producing a zero-length hop.
@@ -104,35 +97,42 @@ def _cut_line(line, cuts):
 
 @dataclass
 class SplitPlan:
-    """A validated split: concrete pathway, ordered cuts, prospective warnings."""
+    """A validated split: the pathway, ordered cuts, prospective warnings."""
 
     pathway: object
     cuts: list
     warnings: list = field(default_factory=list)
 
 
+def _children_of(pathway):
+    """The pathways directly inside `pathway`, in a stable order."""
+    return list(Pathway.objects.filter(parent_id=pathway.pk).order_by("pk"))
+
+
 def _contained(original):
-    """Dependent pathways that follow `original`'s route and cascade with it."""
+    """Every pathway inside `original`, at any depth, each after its parent.
+
+    They follow `original`'s route, so they cascade with it.
+    """
     contained = []
-    if isinstance(original, ConduitBank):
-        for conduit in Conduit.objects.filter(conduit_bank=original):
-            contained.append(conduit)
-            contained.extend(Innerduct.objects.filter(parent_conduit=conduit))
-    elif isinstance(original, Conduit):
-        contained.extend(Innerduct.objects.filter(parent_conduit=original))
+    queue = [original]
+    while queue:
+        children = _children_of(queue.pop(0))
+        contained.extend(children)
+        queue.extend(children)
     return contained
 
 
 def _check_splittable(original):
-    if isinstance(original, Innerduct):
-        raise SplitError("Innerducts follow their parent conduit; split the conduit instead.")
-    if isinstance(original, Conduit) and original.conduit_bank_id:
-        raise SplitError("This conduit is contained in a bank; split the conduit bank instead.")
+    if original.parent_id:
+        label = original.get_pathway_type_display()
+        container = original.parent.get_pathway_type_display()
+        raise SplitError(f"This {label} follows its parent's route; split the {container} {original.parent} instead.")
     if original.geometry is None:
         raise SplitError("Pathway has no geometry path; only pathways with a drawn path can be split.")
     involved = [original, *_contained(original)]
     for pathway in involved:
-        if not isinstance(pathway, Conduit):
+        if "junction" not in pathway.endpoint_kinds:
             continue
         has_junctions = (
             pathway.start_junction_id
@@ -177,7 +177,7 @@ def plan_split(pathway, structures, tolerance=DEFAULT_TOLERANCE):
     Shared by the dry-run preview and the apply path so both see exactly the
     same refusals and warnings.
     """
-    original = pathway.as_concrete()
+    original = pathway
     _check_splittable(original)
     warnings = []
     cuts = _resolve_cuts(original, structures, tolerance, warnings)
@@ -196,8 +196,8 @@ def plan_split(pathway, structures, tolerance=DEFAULT_TOLERANCE):
 
 # Fields never copied onto children: identity and audit columns, the
 # geometry and endpoints (set per hop), the manual as-built length (not
-# divisible across hops), the label (re-suffixed), and containment FKs
-# (set by the cascade).
+# divisible across hops), the label (re-suffixed), the containment FK (set
+# by the cascade) and the ltree path its trigger derives from it.
 _SKIP_FIELDS = {
     "id",
     "created",
@@ -205,9 +205,8 @@ _SKIP_FIELDS = {
     "geometry",
     "length",
     "label",
-    "pathway_type",
-    "conduit_bank",
-    "parent_conduit",
+    "parent",
+    "path",
 }
 
 
@@ -221,18 +220,16 @@ class SplitResult:
     warnings: list = field(default_factory=list)
 
 
-def _copyable_fields(cls):
-    """Concrete fields to copy onto children, split by sidedness.
+def _copyable_fields():
+    """Concrete Pathway fields to copy onto children, split by sidedness.
 
     Fields named start_*/end_* are per-side: the start value belongs to the
     first child only and the end value to the last child only (this covers
     the endpoint FKs, faces, and attachment heights uniformly).
     """
     shared, start_side, end_side = [], [], []
-    for f in cls._meta.concrete_fields:
+    for f in Pathway._meta.concrete_fields:
         if f.primary_key or f.name in _SKIP_FIELDS:
-            continue
-        if f.remote_field and getattr(f.remote_field, "parent_link", False):
             continue
         if f.name.startswith("start_"):
             start_side.append(f.attname)
@@ -243,26 +240,22 @@ def _copyable_fields(cls):
     return shared, start_side, end_side
 
 
-def _create_children(original, cuts, pieces, parents=None, parent_field=None):
+def _create_children(original, cuts, pieces, parents=None):
     """Create the per-hop copies of `original`, one per hop, in path order.
 
     `pieces` is the list of cut LineStrings for the pathway that owns the
-    geometry, or None for contained children (bank conduits, innerducts)
-    whose route is owned by their parent. `parents`/`parent_field` attach
-    each contained copy to the corresponding per-hop parent.
+    geometry, or None for contained pathways (bank conduits, innerducts)
+    whose route is owned by their parent. `parents` attaches each contained
+    copy to the corresponding per-hop parent.
     """
-    cls = type(original)
-    shared, start_side, end_side = _copyable_fields(cls)
+    shared, start_side, end_side = _copyable_fields()
     total = len(cuts) + 1
     tags = list(original.tags.all())
     children = []
     for i in range(total):
-        child = cls()
+        child = Pathway()
         for attname in shared:
             setattr(child, attname, getattr(original, attname))
-        # Subclass save() overwrites this; base-typed pathways (e.g.
-        # submarine) have no subclass to do it, so copy explicitly.
-        child.pathway_type = original.pathway_type
         child.geometry = pieces[i] if pieces else None
         if original.label:
             child.label = f"{original.label} ({i + 1}/{total})"
@@ -277,7 +270,7 @@ def _create_children(original, cuts, pieces, parents=None, parent_field=None):
         else:
             child.end_structure = cuts[i].structure
         if parents is not None:
-            setattr(child, parent_field, parents[i])
+            child.parent = parents[i]
         child.full_clean()
         child.save()
         child.tags.set(tags)
@@ -288,30 +281,24 @@ def _create_children(original, cuts, pieces, parents=None, parent_field=None):
 def _cascade(original, children, cuts, out):
     """Create per-hop copies of every contained pathway, recursively.
 
-    Bank conduits attach to the per-hop bank; innerducts attach to the
-    per-hop conduit. Contained copies carry no own path (the parent owns
-    the route).
+    Each pathway inside `original` gets one copy per hop, attached to the
+    per-hop copy of `original`. Contained copies carry no own geometry (the
+    parent owns the route).
     """
-    if isinstance(original, ConduitBank):
-        for conduit in Conduit.objects.filter(conduit_bank=original):
-            copies = _create_children(conduit, cuts, None, parents=children, parent_field="conduit_bank")
-            out.append((conduit, copies))
-            _cascade(conduit, copies, cuts, out)
-    elif isinstance(original, Conduit):
-        for innerduct in Innerduct.objects.filter(parent_conduit=original):
-            copies = _create_children(innerduct, cuts, None, parents=children, parent_field="parent_conduit")
-            out.append((innerduct, copies))
+    for contained in _children_of(original):
+        copies = _create_children(contained, cuts, None, parents=children)
+        out.append((contained, copies))
+        _cascade(contained, copies, cuts, out)
 
 
 def _delete_originals(original):
-    """Delete the split pathway and any contained pathways it carried.
+    """Delete the split pathway and every pathway it contained.
 
-    Conduit.conduit_bank is SET_NULL, so a bank's conduits must be deleted
-    explicitly (their innerducts cascade); a conduit's innerducts cascade
-    on their own.
+    `parent` is PROTECT, so the contained pathways go first, innermost
+    first.
     """
-    if isinstance(original, ConduitBank):
-        Conduit.objects.filter(conduit_bank=original).delete()
+    for contained in reversed(_contained(original)):
+        contained.delete()
     original.delete()
 
 

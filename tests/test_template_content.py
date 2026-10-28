@@ -12,7 +12,7 @@ from dcim.models import Location, Site
 from django.contrib.gis.geos import LineString, Point, Polygon
 
 from netbox_pathways.geo import get_srid
-from netbox_pathways.models import Conduit, Structure
+from netbox_pathways.models import Pathway, Structure
 from netbox_pathways.template_content import CoreModelMapExtension, PluginModelMapExtension
 
 SRID = get_srid()
@@ -38,7 +38,7 @@ def _structure(name, x, y, **kwargs):
 
 
 def _conduit(**kwargs):
-    c = Conduit(**kwargs)
+    c = Pathway(pathway_type="conduit", **kwargs)
     c.pathway_type = "conduit"
     c.save()
     return c
@@ -313,11 +313,12 @@ class TestPluginModelDetailMaps:
         assert colors == {"PW-A": "green", "PW-B": "red"}
 
     def test_conduit_bank_page_shows_line_and_orange_endpoints(self, site):
-        from netbox_pathways.models import ConduitBank
+        from netbox_pathways.models import Pathway
 
         s1 = _structure("CB-A", 0, 0, site=site)
         s2 = _structure("CB-B", 100, 100, site=site)
-        bank = ConduitBank.objects.create(
+        bank = Pathway.objects.create(
+            pathway_type="conduit_bank",
             label="CB-detail",
             geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,

@@ -21,9 +21,16 @@ from django.db.models import Q
 
 from .attachment import refresh_anchors
 from .landing import attaches, end_point, landing_on, relocate, translate, with_end
+from .pathway_types import PATHWAY_TYPES
 from .registry import LOCATION_IDENTITY_ACCESSOR
 
 SIDES = ("start", "end")
+
+
+def _derives_geometry(pathway):
+    """Whether the pathway's type rebuilds its geometry from its ends (aerial spans)."""
+    known = PATHWAY_TYPES.get(pathway.pathway_type)
+    return bool(known and known.derives_geometry)
 
 
 def _rewrite(pathway, placements):
@@ -32,12 +39,10 @@ def _rewrite(pathway, placements):
     A legacy aerial span with a detached end cannot be straightened; its
     anchored end still moves, which is the best that can be done for it.
     """
-    from .models import AerialSpan
-
     pathway.snapshot()
     for side, point in placements.items():
         pathway.geometry = with_end(pathway.geometry, side, point)
-    if isinstance(pathway, AerialSpan):
+    if _derives_geometry(pathway):
         try:
             pathway.straighten()
         except ValidationError:
@@ -52,40 +57,30 @@ def pathways_anchored_to(structure):
     return Pathway.objects.touching(structure).filter(geometry__isnull=False)
 
 
-def concrete_pathways(pathways, with_path=True):
-    """Pathways (with a path, unless `with_path` is False) as subclass instances, anchors preloaded.
+def with_anchors_loaded(pathways, with_path=True):
+    """`pathways` (with a geometry, unless `with_path` is False) in pk order, anchors preloaded.
 
-    One query per pathway type instead of several per pathway: the endpoint
-    structures, location identity structures and junction trunks that
-    anchor resolution walks are fetched with select_related.
+    One query instead of several per pathway: the endpoint structures,
+    location identity structures and junction trunks that anchor
+    resolution walks are fetched with select_related.
     """
-    from .models import PATHWAY_TYPE_MODELS, Conduit, Pathway
-
     if with_path:
         pathways = pathways.filter(geometry__isnull=False)
-    pks = pathways.values("pk")
-    anchors = (
+    return pathways.select_related(
         "start_structure",
         "end_structure",
         f"start_location__{LOCATION_IDENTITY_ACCESSOR}",
         f"end_location__{LOCATION_IDENTITY_ACCESSOR}",
-    )
-    junctions = ("start_junction__trunk_conduit", "end_junction__trunk_conduit")
-    querysets = [
-        model.objects.filter(pk__in=pks).select_related(*anchors, *(junctions if model is Conduit else ()))
-        for model in PATHWAY_TYPE_MODELS.values()
-    ]
-    querysets.append(
-        Pathway.objects.filter(pk__in=pks).exclude(pathway_type__in=PATHWAY_TYPE_MODELS).select_related(*anchors)
-    )
-    return sorted((pathway for queryset in querysets for pathway in queryset), key=lambda pathway: pathway.pk)
+        "start_junction__trunk_conduit",
+        "end_junction__trunk_conduit",
+    ).order_by("pk")
 
 
 def reanchor_structure(structure, old_geom):
     """Move every pathway end anchored to `structure` from `old_geom` to its geometry."""
     with transaction.atomic():
         moved = []
-        for pathway in concrete_pathways(pathways_anchored_to(structure)):
+        for pathway in with_anchors_loaded(pathways_anchored_to(structure)):
             placements = {}
             for side in SIDES:
                 if getattr(pathway.anchor_structure(side), "pk", None) != structure.pk:
@@ -104,18 +99,18 @@ def _cascade_junctions(moved):
     A branch that moves may itself be a trunk for further junctions, so the
     walk continues until no junction is left to visit.
     """
-    from .models import Conduit, ConduitJunction
+    from .models import ConduitJunction, Pathway
 
     visited = set()
-    queue = [pathway for pathway in moved if isinstance(pathway, Conduit)]
+    queue = [pathway for pathway in moved if pathway.pathway_type == "conduit"]
     while queue:
         trunk = queue.pop()
         for junction in ConduitJunction.objects.filter(trunk_conduit=trunk).exclude(pk__in=visited):
             visited.add(junction.pk)
             junction.trunk_conduit = trunk
             target = junction.derived_geometry
-            branches = Conduit.objects.filter(
-                Q(start_junction=junction) | Q(end_junction=junction), geometry__isnull=False
+            branches = Pathway.objects.filter(
+                Q(start_junction=junction) | Q(end_junction=junction), pathway_type="conduit", geometry__isnull=False
             )
             for branch in branches:
                 _rewrite(
@@ -139,11 +134,11 @@ class Drift:
 
 def find_drift(pathways):
     """Drift for each pathway in `pathways` that has a problem, in order."""
-    from .models import ENDPOINT_TOLERANCE, AerialSpan
+    from .models import ENDPOINT_TOLERANCE
 
     found = []
-    for pathway in concrete_pathways(pathways, with_path=False):
-        is_aerial = isinstance(pathway, AerialSpan)
+    for pathway in with_anchors_loaded(pathways, with_path=False):
+        is_aerial = _derives_geometry(pathway)
         problems = []
         repairable = True
         try:

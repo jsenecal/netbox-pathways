@@ -27,24 +27,25 @@ from django.db import connections
 from django.db import models as db_models
 
 from netbox_pathways.geo import get_srid
-from netbox_pathways.models import (
-    AerialSpan,
-    CircuitGeometry,
-    Conduit,
-    ConduitBank,
-    DirectBuried,
-    Innerduct,
-    Structure,
-)
+from netbox_pathways.models import CircuitGeometry, Pathway, Structure
 
+# Schema `model` keys and the field values each one fixes on every record it
+# creates: the pathway keys all create Pathways, told apart by pathway_type.
 MODEL_MAP = {
     "structure": Structure,
-    "conduit": Conduit,
-    "aerial_span": AerialSpan,
-    "direct_buried": DirectBuried,
-    "innerduct": Innerduct,
-    "conduit_bank": ConduitBank,
+    "conduit": Pathway,
+    "aerial_span": Pathway,
+    "direct_buried": Pathway,
+    "innerduct": Pathway,
+    "conduit_bank": Pathway,
     "circuit_geometry": CircuitGeometry,
+}
+MODEL_PRESETS = {
+    "conduit": {"pathway_type": "conduit"},
+    "aerial_span": {"pathway_type": "aerial"},
+    "direct_buried": {"pathway_type": "direct_buried"},
+    "innerduct": {"pathway_type": "innerduct"},
+    "conduit_bank": {"pathway_type": "conduit_bank"},
 }
 
 TRANSFORMS = {
@@ -125,7 +126,7 @@ def _save_batch(model_name, batch_rows, geom_field, children_specs=None):
                     child_name_tmpl = child_spec.get("name_template", "")
                     parent_fk_field = child_spec.get("parent_fk_field")
 
-                    child_kwargs = {}
+                    child_kwargs = dict(MODEL_PRESETS.get(child_spec["model"], {}))
                     # Inherit common fields from parent
                     for field in (
                         "tenant",
@@ -243,8 +244,9 @@ class Command(BaseCommand):
             if isinstance(spec, str):
                 field_specs[src] = {"to": spec}
 
-        # Resolve FK defaults
-        defaults = self._resolve_defaults(schema.get("defaults", {}), model_class)
+        # Resolve FK defaults; the model key's presets win over schema defaults.
+        presets = MODEL_PRESETS.get(model_name, {})
+        defaults = {**self._resolve_defaults(schema.get("defaults", {}), model_class), **presets}
 
         # Separate field specs into categories
         fk_specs = {}
@@ -309,8 +311,9 @@ class Command(BaseCommand):
         if children_specs:
             self._log(f"  Children: {', '.join(c['model'] for c in children_specs)}")
 
-        # Detect if bulk_create is available
-        use_bulk = not model_class._meta.parents and not children_specs
+        # bulk_create skips save(), which a Pathway needs: it derives the
+        # stored anchors and clears the fields its type does not use.
+        use_bulk = model_class is not Pathway and not children_specs
 
         # ── Phase 1: Read and transform all features ──
         limit = options.get("limit") or layer.num_feat
@@ -461,9 +464,11 @@ class Command(BaseCommand):
             for j, kwargs in enumerate(all_kwargs):
                 try:
                     lookup_val = kwargs.get(name_field, f"import-{j}")
-                    update_kwargs = {k: v for k, v in kwargs.items() if k != name_field}
+                    # Match within the model key's presets (a conduit import
+                    # updates conduits only, not a same-named aerial span).
+                    update_kwargs = {k: v for k, v in kwargs.items() if k != name_field and k not in presets}
                     _, was_created = model_class.objects.update_or_create(
-                        **{name_field: lookup_val},
+                        **{name_field: lookup_val, **presets},
                         defaults=update_kwargs,
                     )
                     if was_created:
@@ -495,7 +500,7 @@ class Command(BaseCommand):
                     self._log(f"  {created_count:,}/{total:,} ({rate:,.0f}/s)...")
 
         else:
-            # Multi-table inheritance — use multiprocessing for true parallelism
+            # One save() per record -- use multiprocessing for true parallelism
             workers = min(options["workers"], os.cpu_count() or 4)
             self._log(f"\n[Phase 2] Saving {total:,} records ({workers} worker processes)...")
 

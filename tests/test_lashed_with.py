@@ -10,7 +10,7 @@ from dcim.models import Cable
 from django.contrib.gis.geos import LineString, Point
 
 from netbox_pathways.geo import get_srid
-from netbox_pathways.models import AerialSpan, CableSegment, Structure
+from netbox_pathways.models import CableSegment, Pathway, Structure
 
 SRID = get_srid()
 
@@ -19,7 +19,8 @@ SRID = get_srid()
 def aerial_route(db):
     s1 = Structure.objects.create(name="LASH-S1", geometry=Point(0, 0, srid=SRID))
     s2 = Structure.objects.create(name="LASH-S2", geometry=Point(100, 0, srid=SRID))
-    span = AerialSpan(
+    span = Pathway(
+        pathway_type="aerial",
         geometry=LineString((0, 0), (100, 0), srid=SRID),
         start_structure=s1,
         end_structure=s2,

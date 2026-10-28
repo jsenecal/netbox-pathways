@@ -8,7 +8,7 @@ Edges: Pathway instances connecting endpoints, weighted by length.
 import math
 
 import networkx as nx
-from django.db.models import OuterRef, Q, Subquery
+from django.db.models import Q
 
 from . import models
 from .geo import linestring_to_coords, point_to_latlon
@@ -29,13 +29,11 @@ def _endpoint_nodes(pathway):
     elif pathway.end_location_id:
         end = ("location", pathway.end_location_id)
 
-    # Conduit junction endpoints (accessed via LEFT JOIN annotation)
-    start_junc = getattr(pathway, "_start_junction_id", None)
-    end_junc = getattr(pathway, "_end_junction_id", None)
-    if start_junc:
-        start = ("junction", start_junc)
-    if end_junc:
-        end = ("junction", end_junc)
+    # A junction end is more specific than the structure it is near.
+    if pathway.start_junction_id:
+        start = ("junction", pathway.start_junction_id)
+    if pathway.end_junction_id:
+        end = ("junction", pathway.end_junction_id)
 
     return start, end
 
@@ -129,10 +127,8 @@ class PathwayGraph:
             )
 
         # Add junction-based edges (conduits with junctions)
-        junction_rows = models.Conduit.objects.exclude(
-            start_junction__isnull=True, end_junction__isnull=True
-        ).values_list(
-            "pathway_ptr_id",
+        junction_rows = base_qs.exclude(start_junction__isnull=True, end_junction__isnull=True).values_list(
+            "pk",
             "length",
             "pathway_type",
             "start_structure_id",
@@ -186,19 +182,14 @@ class PathwayGraph:
                 "end_structure",
                 "start_location",
                 "end_location",
+                "start_junction",
+                "end_junction",
                 *(["geometry"] if include_metadata else []),
             )
         )
 
         if site_id:
             qs = qs.filter(Q(start_structure__site_id=site_id) | Q(end_structure__site_id=site_id))
-
-        # LEFT JOIN to conduit for junction fields
-        conduit_qs = models.Conduit.objects.filter(pathway_ptr_id=OuterRef("pk"))
-        qs = qs.annotate(
-            _start_junction_id=Subquery(conduit_qs.values("start_junction_id")[:1]),
-            _end_junction_id=Subquery(conduit_qs.values("end_junction_id")[:1]),
-        )
 
         for pw in qs.iterator():
             start, end = _endpoint_nodes(pw)
@@ -424,7 +415,7 @@ def pathways_connected_to(nodes):
         elif kind == "location":
             query |= Q(start_location_id=pk) | Q(end_location_id=pk)
         elif kind == "junction":
-            query |= Q(conduit__start_junction_id=pk) | Q(conduit__end_junction_id=pk)
+            query |= Q(start_junction_id=pk) | Q(end_junction_id=pk)
         else:
             continue
         usable = True

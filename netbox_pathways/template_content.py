@@ -64,16 +64,11 @@ class LeafletHeadExtension(PluginTemplateExtension):
 
 
 class PluginModelMapExtension(PluginTemplateExtension):
-    """Map panel on plugin model detail pages (Structure, Pathway subtypes, etc.)."""
+    """Map panel on plugin model detail pages (Structure, Pathway, ConduitJunction)."""
 
     models = [
         "netbox_pathways.structure",
         "netbox_pathways.pathway",
-        "netbox_pathways.conduit",
-        "netbox_pathways.aerialspan",
-        "netbox_pathways.directburied",
-        "netbox_pathways.innerduct",
-        "netbox_pathways.conduitbank",
         "netbox_pathways.conduitjunction",
     ]
 
@@ -99,14 +94,6 @@ class PluginModelMapExtension(PluginTemplateExtension):
         if isinstance(obj, models.Structure):
             add_structure(data, obj)
 
-        elif isinstance(obj, models.ConduitBank):
-            line = pathway_line(obj)
-            if line:
-                data["lines"].append(line)
-            for struct in (obj.start_structure, obj.end_structure):
-                if struct:
-                    add_structure(data, struct, color="orange")
-
         elif isinstance(obj, models.ConduitJunction):
             # Show the trunk conduit line for context
             if obj.trunk_conduit_id:
@@ -126,15 +113,15 @@ class PluginModelMapExtension(PluginTemplateExtension):
                 )
 
         elif isinstance(obj, models.Pathway):
-            # Pathway base or any MTI subtype (Conduit, AerialSpan, etc.)
             line = pathway_line(obj)
             if line:
                 data["lines"].append(line)
-            # Start/end structure markers
+            # Start/end structure markers; a bank marks both ends alike.
+            bank = obj.pathway_type == "conduit_bank"
             if obj.start_structure_id:
-                add_structure(data, obj.start_structure, color="green")
+                add_structure(data, obj.start_structure, color="orange" if bank else "green")
             if obj.end_structure_id:
-                add_structure(data, obj.end_structure, color="red")
+                add_structure(data, obj.end_structure, color="orange" if bank else "red")
 
         if not data["points"] and not data["lines"] and not data["polygons"]:
             return None

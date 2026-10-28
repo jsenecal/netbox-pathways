@@ -16,12 +16,8 @@ from django.core.management.base import CommandError
 
 from netbox_pathways.geo import get_srid
 from netbox_pathways.models import (
-    AerialSpan,
     CableSegment,
-    Conduit,
-    ConduitBank,
     ConduitJunction,
-    Innerduct,
     Pathway,
     PathwayLocation,
     PlannedRoute,
@@ -37,7 +33,8 @@ def _structure(name, x, y):
 
 
 def _span(start, end, path, **kwargs):
-    return AerialSpan.objects.create(
+    return Pathway.objects.create(
+        pathway_type="aerial",
         geometry=path,
         start_structure=start,
         end_structure=end,
@@ -63,7 +60,7 @@ class TestFindCandidates:
         assert candidates[1].chainage == pytest.approx(200.0)
 
     def test_pathway_without_path_raises(self):
-        span = AerialSpan(geometry=None)
+        span = Pathway(pathway_type="aerial", geometry=None)
         with pytest.raises(SplitError, match="geometry"):
             find_candidates(span, tolerance=1.0)
 
@@ -133,15 +130,13 @@ class TestPlanSplit:
         span = _span(start, end, LineString((0, 0), (length, 0), srid=SRID))
         return span, start, end
 
-    def test_orders_cuts_and_resolves_concrete_subclass(self):
+    def test_orders_cuts(self):
         span, _, _ = self._line_span("PS1")
         s2 = _structure("PS1-m2", 200, 0)
         s1 = _structure("PS1-m1", 100, 0)
-        base = Pathway.objects.get(pk=span.pk)  # command fetches the base row
+        plan = plan_split(span, [s2, s1], tolerance=1.0)
 
-        plan = plan_split(base, [s2, s1], tolerance=1.0)
-
-        assert isinstance(plan.pathway, AerialSpan)
+        assert plan.pathway == span
         assert [c.structure.pk for c in plan.cuts] == [s1.pk, s2.pk]
         assert plan.warnings == []
 
@@ -180,37 +175,41 @@ class TestPlanSplit:
     def test_innerduct_refused(self):
         s1 = _structure("PS6-A", 0, 0)
         s2 = _structure("PS6-B", 100, 0)
-        conduit = Conduit.objects.create(
+        conduit = Pathway.objects.create(
+            pathway_type="conduit",
             geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
-        duct = Innerduct.objects.create(parent_conduit=conduit, size="32mm")
-        with pytest.raises(SplitError, match="[Ii]nnerduct"):
+        duct = Pathway.objects.create(pathway_type="innerduct", parent=conduit, size="32mm")
+        with pytest.raises(SplitError, match="[Ii]nnerduct.*split the Conduit"):
             plan_split(duct, [], tolerance=1.0)
 
     def test_bank_contained_conduit_refused(self):
         s1 = _structure("PS7-A", 0, 0)
         s2 = _structure("PS7-B", 100, 0)
-        bank = ConduitBank.objects.create(
+        bank = Pathway.objects.create(
+            pathway_type="conduit_bank",
             geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
-        conduit = Conduit.objects.create(conduit_bank=bank)
-        with pytest.raises(SplitError, match="bank"):
+        conduit = Pathway.objects.create(pathway_type="conduit", parent=bank)
+        with pytest.raises(SplitError, match="split the Conduit Bank"):
             plan_split(conduit, [], tolerance=1.0)
 
     def test_conduit_with_junction_refused(self):
         s1 = _structure("PS8-A", 0, 0)
         s2 = _structure("PS8-B", 300, 0)
-        trunk = Conduit.objects.create(
+        trunk = Pathway.objects.create(
+            pathway_type="conduit",
             geometry=LineString((0, 0), (300, 0), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
         s3 = _structure("PS8-C", 150, 100)
-        branch = Conduit.objects.create(
+        branch = Pathway.objects.create(
+            pathway_type="conduit",
             geometry=LineString((150, 0), (150, 100), srid=SRID),
             end_structure=s3,
         )
@@ -261,7 +260,7 @@ class TestExecuteSplit:
         assert not Pathway.objects.filter(pk=span.pk).exists()
         assert len(result.children) == 2
         first, second = result.children
-        assert isinstance(first, AerialSpan) and isinstance(second, AerialSpan)
+        assert first.pathway_type == second.pathway_type == "aerial"
         assert (first.start_structure, first.end_structure) == (start, mid)
         assert (second.start_structure, second.end_structure) == (mid, end)
         assert tuple(first.geometry.coords) == ((0.0, 0.0), (150.0, 10.0))
@@ -333,16 +332,14 @@ class TestExecuteSplit:
         def boom(self):
             raise ValidationError("forced failure")
 
-        monkeypatch.setattr(AerialSpan, "full_clean", boom)
+        monkeypatch.setattr(Pathway, "full_clean", boom)
         with pytest.raises(ValidationError):
             execute_split(plan)
         assert Pathway.objects.filter(pk=span.pk).exists()
-        assert AerialSpan.objects.count() == 1
+        assert Pathway.objects.count() == 1
 
-    def test_base_typed_pathway_children_keep_pathway_type(self):
-        """Regression test: children of a base-typed pathway (no MTI subclass,
-        e.g. submarine) must inherit pathway_type; Pathway.save() only
-        auto-fills it for subclasses."""
+    def test_children_keep_pathway_type(self):
+        """Regression test: children of a submarine pathway stay submarine."""
         start = _structure("EX6-A", 0, 0)
         end = _structure("EX6-B", 300, 0)
         span = Pathway(
@@ -361,40 +358,46 @@ class TestExecuteSplit:
 
 @pytest.mark.django_db
 class TestCascade:
-    def test_bank_split_cascades_to_conduits_and_innerducts(self):
-        s1 = _structure("CA1-A", 0, 0)
-        s2 = _structure("CA1-B", 300, 0)
-        bank = ConduitBank.objects.create(
+    def _structures(self, prefix):
+        return _structure(f"{prefix}-A", 0, 0), _structure(f"{prefix}-B", 300, 0), _structure(f"{prefix}-mid", 150, 0)
+
+    def _routed(self, pathway_type, start, end, **kwargs):
+        return Pathway.objects.create(
+            pathway_type=pathway_type,
             geometry=LineString((0, 0), (300, 0), srid=SRID),
-            start_structure=s1,
-            end_structure=s2,
+            start_structure=start,
+            end_structure=end,
+            **kwargs,
         )
-        conduit_a = Conduit.objects.create(conduit_bank=bank, bank_position="A1", material="hdpe")
-        conduit_b = Conduit.objects.create(conduit_bank=bank, bank_position="B1")
-        duct = Innerduct.objects.create(parent_conduit=conduit_a, size="32mm", position="1")
-        mid = _structure("CA1-mid", 150, 0)
+
+    def test_bank_split_cascades_to_conduits_and_innerducts(self):
+        s1, s2, mid = self._structures("CA1")
+        bank = self._routed("conduit_bank", s1, s2)
+        conduit_a = Pathway.objects.create(pathway_type="conduit", parent=bank, position="A1", material="hdpe")
+        conduit_b = Pathway.objects.create(pathway_type="conduit", parent=bank, position="B1")
+        duct = Pathway.objects.create(pathway_type="innerduct", parent=conduit_a, size="32mm", position="1")
 
         result = execute_split(plan_split(bank, [mid], tolerance=1.0))
 
         # Bank children own the geometry.
         bank_children = result.children
         assert len(bank_children) == 2
-        assert all(isinstance(c, ConduitBank) for c in bank_children)
+        assert all(c.pathway_type == "conduit_bank" for c in bank_children)
 
         # Every contained conduit got one copy per hop, attached to the
-        # per-hop bank, keeping its bank_position and attributes.
-        new_conduits = Conduit.objects.filter(conduit_bank__in=bank_children).order_by("pk")
+        # per-hop bank, keeping its position and attributes.
+        new_conduits = Pathway.objects.filter(parent__in=bank_children).order_by("pk")
         assert new_conduits.count() == 4
-        a_copies = [c for c in new_conduits if c.bank_position == "A1"]
+        a_copies = [c for c in new_conduits if c.position == "A1"]
         assert len(a_copies) == 2
-        assert {c.conduit_bank_id for c in a_copies} == {b.pk for b in bank_children}
+        assert {c.parent_id for c in a_copies} == {b.pk for b in bank_children}
         assert all(c.material == "hdpe" for c in a_copies)
         assert all(c.geometry is None for c in new_conduits)
 
         # Innerducts cascade one level further, onto the per-hop conduits.
-        new_ducts = Innerduct.objects.filter(parent_conduit__in=a_copies)
+        new_ducts = Pathway.objects.filter(parent__in=a_copies)
         assert new_ducts.count() == 2
-        assert all(d.size == "32mm" and d.position == "1" for d in new_ducts)
+        assert all(d.pathway_type == "innerduct" and d.size == "32mm" and d.position == "1" for d in new_ducts)
 
         # Originals are gone.
         for pk in (bank.pk, conduit_a.pk, conduit_b.pk, duct.pk):
@@ -405,22 +408,36 @@ class TestCascade:
         assert cascaded_originals == {conduit_a.pk, conduit_b.pk, duct.pk}
 
     def test_conduit_split_cascades_to_innerducts(self):
-        s1 = _structure("CA2-A", 0, 0)
-        s2 = _structure("CA2-B", 300, 0)
-        conduit = Conduit.objects.create(
-            geometry=LineString((0, 0), (300, 0), srid=SRID),
-            start_structure=s1,
-            end_structure=s2,
-        )
-        duct = Innerduct.objects.create(parent_conduit=conduit, size="32mm")
-        mid = _structure("CA2-mid", 150, 0)
+        s1, s2, mid = self._structures("CA2")
+        conduit = self._routed("conduit", s1, s2)
+        duct = Pathway.objects.create(pathway_type="innerduct", parent=conduit, size="32mm")
 
         result = execute_split(plan_split(conduit, [mid], tolerance=1.0))
 
         assert len(result.children) == 2
-        new_ducts = Innerduct.objects.filter(parent_conduit__in=result.children)
+        new_ducts = Pathway.objects.filter(parent__in=result.children)
         assert new_ducts.count() == 2
         assert not Pathway.objects.filter(pk=duct.pk).exists()
+
+    def test_split_innerduct_in_direct_buried_follows_parent(self):
+        """Innerducts in a direct-buried pathway are re-parented onto each piece (#173)."""
+        s1, s2, mid = self._structures("CA3")
+        buried = self._routed("direct_buried", s1, s2)
+        duct = Pathway.objects.create(pathway_type="innerduct", parent=buried, size="12mm", color="ff0000")
+        nested = Pathway.objects.create(pathway_type="innerduct", parent=duct, size="5mm")
+
+        result = execute_split(plan_split(buried, [mid], tolerance=1.0))
+
+        pieces = result.children
+        assert [p.pathway_type for p in pieces] == ["direct_buried", "direct_buried"]
+        copies = list(Pathway.objects.filter(parent__in=pieces).order_by("pk"))
+        assert [c.parent_id for c in copies] == [p.pk for p in pieces]
+        assert all(c.size == "12mm" and c.color == "ff0000" for c in copies)
+        assert [(c.start_structure, c.end_structure) for c in copies] == [(s1, mid), (mid, s2)]
+        nested_copies = Pathway.objects.filter(parent__in=copies)
+        assert sorted(n.parent_id for n in nested_copies) == sorted(c.pk for c in copies)
+        assert not Pathway.objects.filter(pk__in=[buried.pk, duct.pk, nested.pk]).exists()
+        assert {orig.pk for orig, _ in result.cascaded} == {duct.pk, nested.pk}
 
 
 @pytest.mark.django_db
@@ -518,7 +535,7 @@ class TestCommandGating:
         out = StringIO()
         call_command("split_pathway", span.pk, "--apply", stdout=out)
         assert not Pathway.objects.filter(pk=span.pk).exists()
-        assert AerialSpan.objects.count() == 2
+        assert Pathway.objects.filter(pathway_type="aerial").count() == 2
 
     def test_user_option_writes_changelog_entries(self):
         """--user runs the apply inside event_tracking, so the deletion and
@@ -534,11 +551,8 @@ class TestCommandGating:
 
         changes = ObjectChange.objects.filter(user=user)
         assert changes.filter(action="create").count() == 2
-        # Deleting an MTI subclass instance cascades to its base Pathway row,
-        # and NetBox logs each content type separately -- assert on the
-        # subclass row and tolerate the base-row companion entry.
         deletes = changes.filter(action="delete")
-        assert deletes.filter(changed_object_type__model="aerialspan").count() == 1
+        assert list(deletes.values_list("changed_object_id", flat=True)) == [span.pk]
         assert len(set(changes.values_list("request_id", flat=True))) == 1
 
     def test_user_option_rejects_unknown_username(self):
