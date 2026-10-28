@@ -32,7 +32,6 @@ def test_touching_direct_counts_structure_fields_only(plant):
     assert set(Pathway.objects.touching(plant["B"], direct=True)) == {Pathway.objects.get(pk=plant["D"].pk)}
 
 
-@pytest.mark.xfail(reason="filtersets.py moves to the single pathway model in Task 8", strict=True)
 def test_has_pathways_counts_a_structure_anchored_only_through_a_location(plant):
     from netbox_pathways.filtersets import StructureFilterSet
 
@@ -41,7 +40,6 @@ def test_has_pathways_counts_a_structure_anchored_only_through_a_location(plant)
     assert plant["B"] in queryset
 
 
-@pytest.mark.xfail(reason="filtersets.py moves to the single pathway model in Task 8", strict=True)
 def test_occupied_counts_a_structure_anchored_only_through_a_location(plant, _disable_routability_signal):
     from netbox_pathways.filtersets import StructureFilterSet
 
@@ -52,7 +50,6 @@ def test_occupied_counts_a_structure_anchored_only_through_a_location(plant, _di
     assert plant["B"] in queryset
 
 
-@pytest.mark.xfail(reason="split.py moves to the single pathway model in Task 7", strict=True)
 def test_split_candidates_exclude_the_pathway_anchors(plant):
     from netbox_pathways.split import find_candidates
 

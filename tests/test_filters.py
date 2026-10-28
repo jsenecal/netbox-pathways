@@ -9,14 +9,9 @@ import pytest
 from django.contrib.gis.geos import LineString, Point
 
 from netbox_pathways.filtersets import (
-    AerialSpanFilterSet,
     CableSegmentFilterSet,
     CircuitGeometryFilterSet,
-    ConduitBankFilterSet,
-    ConduitFilterSet,
     ConduitJunctionFilterSet,
-    DirectBuriedFilterSet,
-    InnerductFilterSet,
     PathwayFilterSet,
     PathwayLocationFilterSet,
     PlannedRouteFilterSet,
@@ -25,20 +20,16 @@ from netbox_pathways.filtersets import (
 )
 from netbox_pathways.geo import get_srid
 from netbox_pathways.models import (
-    AerialSpan,
     CableSegment,
     CircuitGeometry,
-    Conduit,
-    ConduitBank,
     ConduitJunction,
-    DirectBuried,
-    Innerduct,
     Pathway,
     PathwayLocation,
     PlannedRoute,
     SiteGeometry,
     Structure,
 )
+from netbox_pathways.pathway_types import TYPE_SPECIFIC_FIELDS
 
 SRID = get_srid()
 
@@ -69,7 +60,6 @@ def topology(db, _disable_routability_signal):
         geometry=Point(500, 500, srid=SRID),
     )
 
-    # Generic Pathway (no subclass) - used for searchable label tests.
     pw = Pathway.objects.create(
         label="searchable-pathway",
         pathway_type="conduit",
@@ -78,44 +68,26 @@ def topology(db, _disable_routability_signal):
         end_structure=s_end,
         comments="pw-only-comment-text",
     )
-
-    conduit = Conduit.objects.create(
+    conduit = Pathway.objects.create(
         label="searchable-conduit",
+        pathway_type="conduit",
         geometry=LineString((0, 10), (100, 10), srid=SRID),
         start_structure=s_start,
         end_structure=s_end,
         comments="conduit-only-comment-text",
     )
-
-    aerial = AerialSpan.objects.create(
+    aerial = Pathway.objects.create(
         label="searchable-aerial",
+        pathway_type="aerial",
         geometry=LineString((0, 20), (100, 20), srid=SRID),
         start_structure=s_start,
         end_structure=s_end,
         comments="aerial-only-comment-text",
     )
-
-    direct = DirectBuried.objects.create(
-        label="searchable-direct",
-        geometry=LineString((0, 30), (100, 30), srid=SRID),
-        start_structure=s_start,
-        end_structure=s_end,
-        comments="direct-only-comment-text",
-    )
-
-    bank = ConduitBank.objects.create(
-        label="searchable-bank",
-        geometry=LineString((0, 40), (100, 40), srid=SRID),
-        start_structure=s_start,
-        end_structure=s_end,
-        comments="bank-only-comment-text",
-    )
-
-    # Innerduct lives inside a parent Conduit.
-    innerduct = Innerduct.objects.create(
+    innerduct = Pathway.objects.create(
         label="searchable-innerduct",
-        geometry=LineString((0, 10), (100, 10), srid=SRID),
-        parent_conduit=conduit,
+        pathway_type="innerduct",
+        parent=conduit,
         size="32mm",
         comments="innerduct-only-comment-text",
     )
@@ -174,8 +146,6 @@ def topology(db, _disable_routability_signal):
         "pw": pw,
         "conduit": conduit,
         "aerial": aerial,
-        "direct": direct,
-        "bank": bank,
         "innerduct": innerduct,
         "junction": junction,
         "cable": cable,
@@ -203,43 +173,38 @@ def occupancy(db, _disable_routability_signal):
     s_b = Structure.objects.create(name="occ-b", geometry=Point(100, 0, srid=SRID))
     line = LineString((0, 0), (100, 0), srid=SRID)
 
-    aerial = AerialSpan.objects.create(label="occ-aerial", geometry=line, start_structure=s_a, end_structure=s_b)
-    aerial_empty = AerialSpan.objects.create(
-        label="occ-aerial-empty", geometry=line, start_structure=s_a, end_structure=s_b
-    )
+    def make(label, pathway_type, parent=None):
+        geometry = None if parent else line
+        return Pathway.objects.create(
+            label=label,
+            pathway_type=pathway_type,
+            parent=parent,
+            geometry=geometry,
+            start_structure=s_a,
+            end_structure=s_b,
+        )
 
-    inner_bank = ConduitBank.objects.create(
-        label="occ-inner-bank", geometry=line, start_structure=s_a, end_structure=s_b
-    )
-    conduit_host = Conduit.objects.create(
-        label="occ-host",
-        geometry=line,
-        start_structure=s_a,
-        end_structure=s_b,
-        conduit_bank=inner_bank,
-    )
-    innerduct = Innerduct.objects.create(label="occ-inner", geometry=line, parent_conduit=conduit_host, size="32mm")
-    innerduct_empty = Innerduct.objects.create(
-        label="occ-inner-empty", geometry=line, parent_conduit=conduit_host, size="32mm"
-    )
+    aerial = make("occ-aerial", "aerial")
+    aerial_empty = make("occ-aerial-empty", "aerial")
 
-    bank = ConduitBank.objects.create(label="occ-bank", geometry=line, start_structure=s_a, end_structure=s_b)
-    conduit_in_bank = Conduit.objects.create(
-        label="occ-banked",
-        geometry=line,
-        start_structure=s_a,
-        end_structure=s_b,
-        conduit_bank=bank,
-    )
-    conduit_empty = Conduit.objects.create(label="occ-empty", geometry=line, start_structure=s_a, end_structure=s_b)
-    bank_empty = ConduitBank.objects.create(
-        label="occ-bank-empty", geometry=line, start_structure=s_a, end_structure=s_b
-    )
+    inner_bank = make("occ-inner-bank", "conduit_bank")
+    conduit_host = make("occ-host", "conduit", parent=inner_bank)
+    innerduct = make("occ-inner", "innerduct", parent=conduit_host)
+    innerduct_empty = make("occ-inner-empty", "innerduct", parent=conduit_host)
+
+    bank = make("occ-bank", "conduit_bank")
+    conduit_in_bank = make("occ-banked", "conduit", parent=bank)
+    conduit_empty = make("occ-empty", "conduit")
+    bank_empty = make("occ-bank-empty", "conduit_bank")
+
+    buried = make("occ-buried", "direct_buried")
+    buried_duct = make("occ-buried-duct", "innerduct", parent=buried)
 
     cable = Cable.objects.create(label="occ-cable")
     CableSegment.objects.create(cable=cable, pathway=aerial, sequence=1)
     CableSegment.objects.create(cable=cable, pathway=innerduct, sequence=2)
     CableSegment.objects.create(cable=cable, pathway=conduit_in_bank, sequence=3)
+    CableSegment.objects.create(cable=cable, pathway=buried_duct, sequence=4)
 
     return {
         "aerial": aerial,
@@ -252,6 +217,8 @@ def occupancy(db, _disable_routability_signal):
         "conduit_in_bank": conduit_in_bank,
         "conduit_empty": conduit_empty,
         "bank_empty": bank_empty,
+        "buried": buried,
+        "buried_duct": buried_duct,
     }
 
 
@@ -320,117 +287,109 @@ class TestStructureSearch:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
-class TestPathwayFilterOccupied:
-    def test_true_returns_only_pathways_with_cable_segments(self, topology):
-        fs = PathwayFilterSet({"occupied": True}, queryset=Pathway.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert topology["pw"].pk in pks
-        # Other pathways have no CableSegment rows.
-        assert topology["conduit"].pk not in pks
-        assert topology["aerial"].pk not in pks
-
-    def test_false_excludes_pathways_with_cable_segments(self, topology):
-        fs = PathwayFilterSet({"occupied": False}, queryset=Pathway.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert topology["pw"].pk not in pks
-        assert topology["conduit"].pk in pks
+def _occupied(value):
+    fs = PathwayFilterSet({"occupied": value}, queryset=Pathway.objects.all())
+    return set(fs.qs.values_list("pk", flat=True))
 
 
 @pytest.mark.django_db
 class TestPathwayFilterOccupiedContainment:
-    def test_true_includes_container_rows_occupied_via_members(self, occupancy):
-        fs = PathwayFilterSet({"occupied": True}, queryset=Pathway.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert occupancy["conduit_host"].pk in pks
-        assert occupancy["bank"].pk in pks
-        assert occupancy["inner_bank"].pk in pks
-        assert occupancy["conduit_empty"].pk not in pks
+    """A pathway is occupied when a cable runs through it or anything inside it."""
 
-
-@pytest.mark.django_db
-class TestConduitFilterOccupied:
-    def test_true_includes_conduit_with_direct_segment(self, occupancy):
-        fs = ConduitFilterSet({"occupied": True}, queryset=Conduit.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert occupancy["conduit_in_bank"].pk in pks
-        assert occupancy["conduit_empty"].pk not in pks
-
-    def test_true_includes_conduit_occupied_via_innerduct(self, occupancy):
-        fs = ConduitFilterSet({"occupied": True}, queryset=Conduit.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert occupancy["conduit_host"].pk in pks
-        assert occupancy["conduit_empty"].pk not in pks
-
-    def test_false_excludes_occupied_conduits(self, occupancy):
-        fs = ConduitFilterSet({"occupied": False}, queryset=Conduit.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert occupancy["conduit_empty"].pk in pks
-        assert occupancy["conduit_host"].pk not in pks
-        assert occupancy["conduit_in_bank"].pk not in pks
-
-
-@pytest.mark.django_db
-class TestInnerductFilterOccupied:
-    def test_true_returns_only_innerducts_with_segments(self, occupancy):
-        fs = InnerductFilterSet({"occupied": True}, queryset=Innerduct.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert occupancy["innerduct"].pk in pks
-        assert occupancy["innerduct_empty"].pk not in pks
-
-
-@pytest.mark.django_db
-class TestAerialSpanFilterOccupied:
-    def test_true_returns_only_spans_with_segments(self, occupancy):
-        fs = AerialSpanFilterSet({"occupied": True}, queryset=AerialSpan.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert occupancy["aerial"].pk in pks
-        assert occupancy["aerial_empty"].pk not in pks
-
-
-@pytest.mark.django_db
-class TestConduitBankFilterOccupied:
-    def test_true_includes_bank_with_occupied_member_conduit(self, occupancy):
-        fs = ConduitBankFilterSet({"occupied": True}, queryset=ConduitBank.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert occupancy["bank"].pk in pks
-        assert occupancy["bank_empty"].pk not in pks
-
-    def test_true_includes_bank_with_occupied_innerduct_two_levels_down(self, occupancy):
-        fs = ConduitBankFilterSet({"occupied": True}, queryset=ConduitBank.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert occupancy["inner_bank"].pk in pks
-        assert occupancy["bank_empty"].pk not in pks
-
-    def test_false_excludes_occupied_banks(self, occupancy):
-        fs = ConduitBankFilterSet({"occupied": False}, queryset=ConduitBank.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert occupancy["bank_empty"].pk in pks
-        assert occupancy["bank"].pk not in pks
-
-
-@pytest.mark.django_db
-class TestOccupiedFilterAvailability:
     @pytest.mark.parametrize(
-        "filterset_class",
-        [
-            PathwayFilterSet,
-            ConduitFilterSet,
-            AerialSpanFilterSet,
-            DirectBuriedFilterSet,
-            InnerductFilterSet,
-            ConduitBankFilterSet,
-        ],
+        "name",
+        ["aerial", "innerduct", "conduit_in_bank", "conduit_host", "bank", "inner_bank", "buried", "buried_duct"],
     )
-    def test_pathway_family_filtersets_expose_occupied(self, filterset_class):
-        assert "occupied" in filterset_class.get_filters()
+    def test_true_includes_rows_occupied_directly_or_via_descendants(self, occupancy, name):
+        assert occupancy[name].pk in _occupied(True)
+
+    @pytest.mark.parametrize("name", ["aerial_empty", "innerduct_empty", "conduit_empty", "bank_empty"])
+    def test_true_excludes_rows_with_no_cable_in_their_subtree(self, occupancy, name):
+        assert occupancy[name].pk not in _occupied(True)
+
+    def test_false_is_the_complement(self, occupancy):
+        assert _occupied(False) == set(Pathway.objects.values_list("pk", flat=True)) - _occupied(True)
+
+
+@pytest.fixture
+def hierarchy(db):
+    """Two banks; B holds conduit C, which holds innerduct I, which holds I2."""
+    line = LineString((0, 0), (100, 0), srid=SRID)
+    bank = Pathway.objects.create(label="h-bank", pathway_type="conduit_bank", geometry=line)
+    conduit = Pathway.objects.create(label="h-conduit", pathway_type="conduit", parent=bank)
+    duct = Pathway.objects.create(label="h-duct", pathway_type="innerduct", parent=conduit)
+    subduct = Pathway.objects.create(label="h-subduct", pathway_type="innerduct", parent=duct)
+    other_bank = Pathway.objects.create(label="h-other-bank", pathway_type="conduit_bank", geometry=line)
+    other_conduit = Pathway.objects.create(label="h-other-conduit", pathway_type="conduit", parent=other_bank)
+    return {
+        "bank": bank,
+        "conduit": conduit,
+        "duct": duct,
+        "subduct": subduct,
+        "other_bank": other_bank,
+        "other_conduit": other_conduit,
+    }
+
+
+def _labels(data):
+    fs = PathwayFilterSet(data, queryset=Pathway.objects.all())
+    assert fs.is_valid(), fs.errors
+    return set(fs.qs.values_list("label", flat=True))
+
+
+@pytest.mark.django_db
+class TestPathwayHierarchyFilters:
+    def test_ancestor_filter_returns_subtree(self, hierarchy):
+        """Everything inside the bank, at any depth, but not the bank itself."""
+        assert _labels({"ancestor_id": [hierarchy["bank"].pk]}) == {"h-conduit", "h-duct", "h-subduct"}
+
+    def test_ancestor_filter_ors_several_roots(self, hierarchy):
+        result = _labels({"ancestor_id": [hierarchy["duct"].pk, hierarchy["other_bank"].pk]})
+        assert result == {"h-subduct", "h-other-conduit"}
+
+    def test_descendant_filter_returns_containers(self, hierarchy):
+        """Every pathway the innerduct runs inside, outermost included."""
+        assert _labels({"descendant_id": [hierarchy["subduct"].pk]}) == {"h-bank", "h-conduit", "h-duct"}
+
+
+@pytest.mark.django_db
+def test_installed_by_filter_applies_to_every_type():
+    """Regression for #175: installed_by_id was missing from the subtype filtersets."""
+    from tenancy.models import Tenant
+
+    crew = Tenant.objects.create(name="install-crew", slug="install-crew")
+    line = LineString((0, 0), (100, 0), srid=SRID)
+    bank = Pathway.objects.create(pathway_type="conduit_bank", geometry=line, installed_by=crew)
+    conduit = Pathway.objects.create(pathway_type="conduit", parent=bank, installed_by=crew)
+    raceway = Pathway.objects.create(pathway_type="raceway", installed_by=crew)
+    expected = {
+        bank.pk,
+        conduit.pk,
+        raceway.pk,
+        Pathway.objects.create(pathway_type="innerduct", parent=conduit, installed_by=crew).pk,
+        Pathway.objects.create(pathway_type="tray", parent=raceway, installed_by=crew).pk,
+        Pathway.objects.create(pathway_type="aerial", geometry=line, installed_by=crew).pk,
+        Pathway.objects.create(pathway_type="direct_buried", geometry=line, installed_by=crew).pk,
+        Pathway.objects.create(pathway_type="submarine", geometry=line, installed_by=crew).pk,
+    }
+    Pathway.objects.create(pathway_type="submarine", geometry=line)
+
+    fs = PathwayFilterSet({"installed_by_id": [crew.pk]}, queryset=Pathway.objects.all())
+    assert set(fs.qs.values_list("pk", flat=True)) == expected
+
+
+def test_every_type_specific_field_has_a_filter():
+    """The filterset follows pathway_types.py: a new type field gets a filter."""
+    filters = PathwayFilterSet.get_filters()
+    expected = {f"{name}_id" if name.endswith("_junction") else name for name in TYPE_SPECIFIC_FIELDS}
+    assert expected <= set(filters)
 
 
 @pytest.mark.django_db
 class TestPathwayFilterStructure:
     def test_returns_pathways_with_structure_at_either_end(self, topology):
-        # Map queryset excludes innerducts; we expect the regular pathways but
-        # not the innerduct (and not bank-member conduits, but none exist here).
+        # Only map containers match: the innerduct inherits the conduit's
+        # endpoints but is shown through the conduit, not on its own.
         fs = PathwayFilterSet(
             {"structure_id": [topology["s_start"].pk]},
             queryset=Pathway.objects.all(),
@@ -463,106 +422,6 @@ class TestPathwaySearch:
     def test_search_whitespace_only_returns_full_queryset(self, topology):
         fs = PathwayFilterSet({"q": "  "}, queryset=Pathway.objects.all())
         assert fs.qs.count() == Pathway.objects.count()
-
-
-# ---------------------------------------------------------------------------
-# ConduitFilterSet
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestConduitSearch:
-    def test_search_by_label_substring(self, topology):
-        fs = ConduitFilterSet({"q": "searchable-conduit"}, queryset=Conduit.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert pks == {topology["conduit"].pk}
-
-    def test_search_by_comments_substring(self, topology):
-        fs = ConduitFilterSet({"q": "conduit-only-comment-text"}, queryset=Conduit.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert pks == {topology["conduit"].pk}
-
-    def test_search_whitespace_only_returns_full_queryset(self, topology):
-        fs = ConduitFilterSet({"q": "   "}, queryset=Conduit.objects.all())
-        assert fs.qs.count() == Conduit.objects.count()
-
-
-# ---------------------------------------------------------------------------
-# AerialSpanFilterSet
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestAerialSpanSearch:
-    def test_search_by_label_substring(self, topology):
-        fs = AerialSpanFilterSet({"q": "searchable-aerial"}, queryset=AerialSpan.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert pks == {topology["aerial"].pk}
-
-    def test_search_by_comments_substring(self, topology):
-        fs = AerialSpanFilterSet({"q": "aerial-only-comment-text"}, queryset=AerialSpan.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert pks == {topology["aerial"].pk}
-
-
-# ---------------------------------------------------------------------------
-# DirectBuriedFilterSet
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestDirectBuriedSearch:
-    def test_search_by_label_substring(self, topology):
-        fs = DirectBuriedFilterSet({"q": "searchable-direct"}, queryset=DirectBuried.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert pks == {topology["direct"].pk}
-
-    def test_search_by_comments_substring(self, topology):
-        fs = DirectBuriedFilterSet({"q": "direct-only-comment-text"}, queryset=DirectBuried.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert pks == {topology["direct"].pk}
-
-
-# ---------------------------------------------------------------------------
-# InnerductFilterSet
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestInnerductSearch:
-    def test_search_by_label_substring(self, topology):
-        fs = InnerductFilterSet({"q": "searchable-innerduct"}, queryset=Innerduct.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert pks == {topology["innerduct"].pk}
-
-    def test_search_by_comments_substring(self, topology):
-        fs = InnerductFilterSet(
-            {"q": "innerduct-only-comment-text"},
-            queryset=Innerduct.objects.all(),
-        )
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert pks == {topology["innerduct"].pk}
-
-
-# ---------------------------------------------------------------------------
-# ConduitBankFilterSet
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestConduitBankSearch:
-    def test_search_by_label_substring(self, topology):
-        fs = ConduitBankFilterSet({"q": "searchable-bank"}, queryset=ConduitBank.objects.all())
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert pks == {topology["bank"].pk}
-
-    def test_search_by_comments_substring(self, topology):
-        fs = ConduitBankFilterSet(
-            {"q": "bank-only-comment-text"},
-            queryset=ConduitBank.objects.all(),
-        )
-        pks = set(fs.qs.values_list("pk", flat=True))
-        assert pks == {topology["bank"].pk}
 
 
 # ---------------------------------------------------------------------------

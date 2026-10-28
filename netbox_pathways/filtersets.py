@@ -25,14 +25,9 @@ from .choices import (
 )
 from .graph import NODE_KINDS, pathways_connected_to
 from .models import (
-    AerialSpan,
     CableSegment,
     CircuitGeometry,
-    Conduit,
-    ConduitBank,
     ConduitJunction,
-    DirectBuried,
-    Innerduct,
     Pathway,
     PathwayLocation,
     PlannedRoute,
@@ -40,6 +35,7 @@ from .models import (
     Structure,
     touching_q,
 )
+from .pathway_types import TYPE_SPECIFIC_FIELDS
 
 NODE_REF_RE = re.compile(rf"^(?:{'|'.join(NODE_KINDS)}):[0-9]+$")
 CABLE_END_REF_RE = re.compile(r"^[0-9]+:[AB]$")
@@ -67,57 +63,16 @@ def validate_cable_end_ref(value):
         raise ValidationError("Enter a cable end as '<cable_pk>:A' or '<cable_pk>:B'.")
 
 
-class GeoLengthFilterMixin(django_filters.FilterSet):
-    """Adds `geo_length__gte` and `geo_length__lte` range filters that
-    apply `PathwayQuerySet.with_geo_length()` so filtering happens at the
-    PostGIS layer (`ST_Length`), not in Python.
-
-    Subclasses `django_filters.FilterSet` so django-filter's metaclass
-    collects the filter declarations into derived FilterSets' `base_filters`.
-    """
-
-    geo_length__gte = django_filters.NumberFilter(
-        method="filter_geo_length",
-        label="Geo length (m) >=",
-    )
-    geo_length__lte = django_filters.NumberFilter(
-        method="filter_geo_length",
-        label="Geo length (m) <=",
-    )
-
-    def filter_geo_length(self, queryset, name, value):
-        if value is None or not hasattr(queryset, "with_geo_length"):
-            return queryset
-        lookup = "_geo_length__gte" if name.endswith("__gte") else "_geo_length__lte"
-        return queryset.with_geo_length().filter(**{lookup: value})
-
-
-class PathwayStatusFilterMixin(django_filters.FilterSet):
-    """Adds the `status` filter shared by Pathway and all its subclasses."""
-
-    status = django_filters.MultipleChoiceFilter(
-        choices=PathwayStatusChoices,
-        distinct=False,
-        null_value=None,
-    )
-
-
 def occupied_pathways_q():
-    """Q matching pathway rows that carry a cable, directly or by containment.
+    """Q matching pathways that carry a cable, directly or by containment.
 
-    A row is occupied when a CableSegment routes through it, through an
-    innerduct it hosts (conduits), or through a member conduit or that
-    conduit's innerducts (banks). Subtypes share the base Pathway pk, so the
-    non-applicable arms simply never match and one expression serves the base
-    queryset and every subclass.
+    A pathway is occupied when a CableSegment routes through it or through
+    anything nested inside it, at any depth (a bank through its conduits and
+    their innerducts, a direct-buried run through its innerducts). The ltree
+    path makes "anything nested inside" one descendant-or-equal lookup.
     """
-    segments = CableSegment.objects
-    return (
-        Q(Exists(segments.filter(pathway_id=OuterRef("pk"))))
-        | Q(Exists(segments.filter(pathway__innerduct__parent_conduit_id=OuterRef("pk"))))
-        | Q(Exists(segments.filter(pathway__conduit__conduit_bank_id=OuterRef("pk"))))
-        | Q(Exists(segments.filter(pathway__innerduct__parent_conduit__conduit_bank_id=OuterRef("pk"))))
-    )
+    routed = CableSegment.objects.filter(pathway__path__descendant_or_equal=OuterRef("path"))
+    return Q(Exists(routed))
 
 
 def occupied_structures_q():
@@ -143,7 +98,7 @@ def apply_occupied(queryset, occupied):
         return queryset
     if queryset.model is Structure:
         condition = occupied_structures_q()
-    elif issubclass(queryset.model, Pathway):
+    elif queryset.model is Pathway:
         condition = occupied_pathways_q()
     else:
         return queryset
@@ -151,7 +106,7 @@ def apply_occupied(queryset, occupied):
 
 
 class OccupiedFilterMixin(django_filters.FilterSet):
-    """Adds the `occupied` filter shared by Structure, Pathway, and its subclasses."""
+    """Adds the `occupied` filter shared by Structure and Pathway."""
 
     occupied = django_filters.BooleanFilter(
         method="filter_occupied",
@@ -231,14 +186,33 @@ class StructureFilterSet(OccupiedFilterMixin, TenancyFilterSet, NetBoxModelFilte
         )
 
 
-class PathwayFilterSet(
-    OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet
-):
+class PathwayFilterSet(OccupiedFilterMixin, TenancyFilterSet, NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     pathway_type = django_filters.MultipleChoiceFilter(
         choices=PathwayTypeChoices,
         distinct=False,
         null_value=None,
+    )
+    status = django_filters.MultipleChoiceFilter(
+        choices=PathwayStatusChoices,
+        distinct=False,
+        null_value=None,
+    )
+    parent_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="parent",
+        queryset=Pathway.objects.all(),
+        distinct=False,
+        label="Parent (ID)",
+    )
+    ancestor_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Pathway.objects.all(),
+        method="filter_ancestor",
+        label="Inside pathway, at any depth (ID)",
+    )
+    descendant_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Pathway.objects.all(),
+        method="filter_descendant",
+        label="Contains pathway, at any depth (ID)",
     )
     structure_id = django_filters.ModelMultipleChoiceFilter(
         queryset=Structure.objects.all(),
@@ -301,10 +275,75 @@ class PathwayFilterSet(
         validators=[validate_cable_end_ref],
         label="Connected to a cable end (cable_pk:A|B)",
     )
+    geo_length__gte = django_filters.NumberFilter(method="filter_geo_length", label="Geo length (m) >=")
+    geo_length__lte = django_filters.NumberFilter(method="filter_geo_length", label="Geo length (m) <=")
+
+    # Type-specific fields. Plain columns are generated from Meta.fields
+    # below; these need a declaration of their own: choice columns take
+    # several values, and junction foreign keys take `_id` names.
+    start_face = django_filters.MultipleChoiceFilter(choices=BankFaceChoices, distinct=False, null_value=None)
+    end_face = django_filters.MultipleChoiceFilter(choices=BankFaceChoices, distinct=False, null_value=None)
+    configuration = django_filters.MultipleChoiceFilter(
+        choices=ConduitBankConfigChoices,
+        distinct=False,
+        null_value=None,
+    )
+    encasement_type = django_filters.MultipleChoiceFilter(
+        choices=EncasementTypeChoices,
+        distinct=False,
+        null_value=None,
+    )
+    material = django_filters.MultipleChoiceFilter(choices=ConduitMaterialChoices, distinct=False, null_value=None)
+    aerial_type = django_filters.MultipleChoiceFilter(choices=AerialTypeChoices, distinct=False, null_value=None)
+    start_junction_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="start_junction",
+        queryset=ConduitJunction.objects.all(),
+        distinct=False,
+        label="Start Junction (ID)",
+    )
+    end_junction_id = django_filters.ModelMultipleChoiceFilter(
+        field_name="end_junction",
+        queryset=ConduitJunction.objects.all(),
+        distinct=False,
+        label="End Junction (ID)",
+    )
 
     class Meta:
         model = Pathway
-        fields = ["id", "installation_date", "commissioned_date"]
+        # Every type-specific column is filterable, whatever type it belongs
+        # to; pathway_types.py is the list, so a new column gets a filter.
+        # Declared filters above take precedence over the generated ones.
+        fields = [
+            "id",
+            "installation_date",
+            "commissioned_date",
+            *sorted(TYPE_SPECIFIC_FIELDS - {"start_junction", "end_junction"}),
+        ]
+
+    def filter_ancestor(self, queryset, name, value):
+        """Pathways nested inside any of the given pathways, at any depth."""
+        return self._filter_ltree(queryset, "descendant", value)
+
+    def filter_descendant(self, queryset, name, value):
+        """Pathways that contain any of the given pathways, at any depth."""
+        return self._filter_ltree(queryset, "ancestor", value)
+
+    @staticmethod
+    def _filter_ltree(queryset, lookup, nodes):
+        """OR one strict ltree lookup against each node's path."""
+        if not nodes:
+            return queryset
+        condition = Q()
+        for node in nodes:
+            condition |= Q(**{f"path__{lookup}": node.path})
+        return queryset.filter(condition)
+
+    def filter_geo_length(self, queryset, name, value):
+        """Range-filter on PostGIS `ST_Length(geometry)`, not a Python-side length."""
+        if value is None:
+            return queryset
+        lookup = "_geo_length__gte" if name.endswith("__gte") else "_geo_length__lte"
+        return queryset.with_geo_length().filter(**{lookup: value})
 
     def filter_connected_to(self, queryset, name, value):
         """Restrict to pathways touching any of the given graph nodes.
@@ -358,236 +397,15 @@ class PathwayFilterSet(
         return queryset.filter(pk__in=pathways_connected_to(nodes).values("pk"))
 
     def filter_structure(self, queryset, name, value):
-        """Filter to pathways connected to a structure at either end.
+        """Filter to map containers connected to a structure at either end.
 
-        Uses Pathway.map_queryset() to exclude innerducts and bank-member
-        conduits — same visibility rules as the map.
+        Nested pathways inherit their container's endpoints, so they would
+        all match too; keeping to map containers gives the same rows the map
+        draws at that structure.
         """
         if not value:
             return queryset
-        return Pathway.map_queryset(queryset).filter(touching_q(value, lookup="__in"))
-
-    def search(self, queryset, name, value):
-        if not value.strip():
-            return queryset
-        return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
-
-
-class ConduitFilterSet(
-    OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet
-):
-    label = MultiValueCharFilter()
-    material = django_filters.MultipleChoiceFilter(
-        choices=ConduitMaterialChoices,
-        distinct=False,
-        null_value=None,
-    )
-    start_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="start_structure",
-        queryset=Structure.objects.all(),
-        distinct=False,
-        label="Start Structure (ID)",
-    )
-    end_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="end_structure",
-        queryset=Structure.objects.all(),
-        distinct=False,
-        label="End Structure (ID)",
-    )
-    start_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="start_location",
-        queryset=Location.objects.all(),
-        distinct=False,
-        label="Start Location (ID)",
-    )
-    end_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="end_location",
-        queryset=Location.objects.all(),
-        distinct=False,
-        label="End Location (ID)",
-    )
-    conduit_bank_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="conduit_bank",
-        queryset=ConduitBank.objects.all(),
-        distinct=False,
-        label="Conduit Bank (ID)",
-    )
-    inner_diameter = MultiValueNumberFilter()
-    outer_diameter = MultiValueNumberFilter()
-    depth = MultiValueNumberFilter()
-    length = MultiValueNumberFilter()
-
-    class Meta:
-        model = Conduit
-        fields = ["id", "installation_date", "commissioned_date"]
-
-    def search(self, queryset, name, value):
-        if not value.strip():
-            return queryset
-        return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
-
-
-class AerialSpanFilterSet(
-    OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet
-):
-    label = MultiValueCharFilter()
-    aerial_type = django_filters.MultipleChoiceFilter(
-        choices=AerialTypeChoices,
-        distinct=False,
-        null_value=None,
-    )
-    start_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="start_structure",
-        queryset=Structure.objects.all(),
-        distinct=False,
-        label="Start Structure (ID)",
-    )
-    end_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="end_structure",
-        queryset=Structure.objects.all(),
-        distinct=False,
-        label="End Structure (ID)",
-    )
-    start_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="start_location",
-        queryset=Location.objects.all(),
-        distinct=False,
-        label="Start Location (ID)",
-    )
-    end_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="end_location",
-        queryset=Location.objects.all(),
-        distinct=False,
-        label="End Location (ID)",
-    )
-    start_attachment_height = MultiValueNumberFilter()
-    end_attachment_height = MultiValueNumberFilter()
-    sag = MultiValueNumberFilter()
-    length = MultiValueNumberFilter()
-    messenger_size = MultiValueCharFilter()
-    wind_loading = MultiValueCharFilter()
-    ice_loading = MultiValueCharFilter()
-
-    class Meta:
-        model = AerialSpan
-        fields = ["id", "installation_date", "commissioned_date"]
-
-    def search(self, queryset, name, value):
-        if not value.strip():
-            return queryset
-        return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
-
-
-class DirectBuriedFilterSet(
-    OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet
-):
-    label = MultiValueCharFilter()
-    start_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="start_structure",
-        queryset=Structure.objects.all(),
-        distinct=False,
-        label="Start Structure (ID)",
-    )
-    end_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="end_structure",
-        queryset=Structure.objects.all(),
-        distinct=False,
-        label="End Structure (ID)",
-    )
-    start_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="start_location",
-        queryset=Location.objects.all(),
-        distinct=False,
-        label="Start Location (ID)",
-    )
-    end_location_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="end_location",
-        queryset=Location.objects.all(),
-        distinct=False,
-        label="End Location (ID)",
-    )
-    burial_depth = MultiValueNumberFilter()
-    warning_tape = django_filters.BooleanFilter()
-    tracer_wire = django_filters.BooleanFilter()
-    armor_type = MultiValueCharFilter()
-    length = MultiValueNumberFilter()
-
-    class Meta:
-        model = DirectBuried
-        fields = ["id", "installation_date", "commissioned_date"]
-
-    def search(self, queryset, name, value):
-        if not value.strip():
-            return queryset
-        return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
-
-
-class InnerductFilterSet(
-    OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet
-):
-    label = MultiValueCharFilter()
-    parent_conduit_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="parent_conduit",
-        queryset=Conduit.objects.all(),
-        distinct=False,
-        label="Parent Conduit (ID)",
-    )
-    size = MultiValueCharFilter()
-    color = MultiValueCharFilter()
-    position = MultiValueCharFilter()
-
-    class Meta:
-        model = Innerduct
-        fields = ["id", "installation_date", "commissioned_date"]
-
-    def search(self, queryset, name, value):
-        if not value.strip():
-            return queryset
-        return queryset.filter(Q(label__icontains=value) | Q(comments__icontains=value))
-
-
-class ConduitBankFilterSet(
-    OccupiedFilterMixin, PathwayStatusFilterMixin, GeoLengthFilterMixin, TenancyFilterSet, NetBoxModelFilterSet
-):
-    label = MultiValueCharFilter()
-    start_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="start_structure",
-        queryset=Structure.objects.all(),
-        distinct=False,
-        label="Start Structure (ID)",
-    )
-    end_structure_id = django_filters.ModelMultipleChoiceFilter(
-        field_name="end_structure",
-        queryset=Structure.objects.all(),
-        distinct=False,
-        label="End Structure (ID)",
-    )
-    start_face = django_filters.MultipleChoiceFilter(
-        choices=BankFaceChoices,
-        distinct=False,
-        null_value=None,
-    )
-    end_face = django_filters.MultipleChoiceFilter(
-        choices=BankFaceChoices,
-        distinct=False,
-        null_value=None,
-    )
-    configuration = django_filters.MultipleChoiceFilter(
-        choices=ConduitBankConfigChoices,
-        distinct=False,
-        null_value=None,
-    )
-    encasement_type = django_filters.MultipleChoiceFilter(
-        choices=EncasementTypeChoices,
-        distinct=False,
-        null_value=None,
-    )
-    total_conduits = MultiValueNumberFilter()
-    length = MultiValueNumberFilter()
-
-    class Meta:
-        model = ConduitBank
-        fields = ["id", "installation_date", "commissioned_date"]
+        return queryset.map_containers().filter(touching_q(value, lookup="__in"))
 
     def search(self, queryset, name, value):
         if not value.strip():
@@ -599,13 +417,13 @@ class ConduitJunctionFilterSet(NetBoxModelFilterSet):
     label = MultiValueCharFilter()
     trunk_conduit_id = django_filters.ModelMultipleChoiceFilter(
         field_name="trunk_conduit",
-        queryset=Conduit.objects.all(),
+        queryset=Pathway.objects.filter(pathway_type="conduit"),
         distinct=False,
         label="Trunk Conduit (ID)",
     )
     branch_conduit_id = django_filters.ModelMultipleChoiceFilter(
         field_name="branch_conduit",
-        queryset=Conduit.objects.all(),
+        queryset=Pathway.objects.filter(pathway_type="conduit"),
         distinct=False,
         label="Branch Conduit (ID)",
     )

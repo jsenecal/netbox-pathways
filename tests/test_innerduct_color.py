@@ -73,7 +73,21 @@ class TestColorToHex:
         assert color_to_hex(value) is None
 
 
-@pytest.mark.xfail(reason="forms, filter forms and tables move to the single model in Task 10", strict=True)
+class TestInnerductColorFilterForm:
+    def test_filter_form_uses_the_core_color_widget(self, db):
+        from netbox_pathways import filterforms
+
+        assert isinstance(filterforms.PathwayFilterForm().fields["color"].widget, ColorSelect)
+
+    def test_filter_form_exposes_every_innerduct_attribute_filter(self, db):
+        """The filterset has always accepted these; the form omitted them."""
+        from netbox_pathways import filterforms
+
+        rendered = {item for fieldset in filterforms.PathwayFilterForm.fieldsets for item in fieldset.items}
+        assert {"size", "color", "position"} <= rendered
+
+
+@pytest.mark.xfail(reason="forms and tables move to the single model in Task 10", strict=True)
 class TestInnerductColorWiring:
     def test_edit_form_uses_the_core_color_widget(self, db):
         from netbox_pathways import forms
@@ -85,25 +99,13 @@ class TestInnerductColorWiring:
 
         assert isinstance(forms.InnerductBulkEditForm().fields["color"].widget, ColorSelect)
 
-    def test_filter_form_uses_the_core_color_widget(self, db):
-        from netbox_pathways import filterforms
-
-        assert isinstance(filterforms.InnerductFilterForm().fields["color"].widget, ColorSelect)
-
-    def test_filter_form_exposes_every_innerduct_attribute_filter(self, db):
-        """The filterset has always accepted these; the form omitted them."""
-        from netbox_pathways import filterforms
-
-        rendered = {item for fieldset in filterforms.InnerductFilterForm.fieldsets for item in fieldset.items}
-        assert {"size", "color", "position"} <= rendered
-
     def test_table_renders_color_as_a_swatch(self):
         from netbox_pathways import tables
 
         assert isinstance(tables.InnerductTable.base_columns["color"], columns.ColorColumn)
 
 
-@pytest.mark.xfail(reason="forms, filter forms and tables move to the single model in Task 10", strict=True)
+@pytest.mark.xfail(reason="forms and tables move to the single model in Task 10", strict=True)
 class TestInnerductImportColor:
     """CSV import keeps accepting the color names it accepted before."""
 

@@ -36,14 +36,9 @@ from .coord_parser import ForgivingGeometryField
 # module even though they are defined in filterforms.py. Without this, the
 # object-selector modal 500s for every model.
 from .filterforms import (
-    AerialSpanFilterForm,  # noqa: F401
     CableSegmentFilterForm,  # noqa: F401
     CircuitGeometryFilterForm,  # noqa: F401
-    ConduitBankFilterForm,  # noqa: F401
-    ConduitFilterForm,  # noqa: F401
     ConduitJunctionFilterForm,  # noqa: F401
-    DirectBuriedFilterForm,  # noqa: F401
-    InnerductFilterForm,  # noqa: F401
     PathwayFilterForm,  # noqa: F401
     PathwayLocationFilterForm,  # noqa: F401
     PlannedRouteFilterForm,  # noqa: F401

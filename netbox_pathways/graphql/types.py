@@ -53,6 +53,7 @@ class PathwayType(NetBoxObjectType):
 
     # ColorField has no strawberry mapping; core declares it the same way.
     color: str
+    parent: Annotated["PathwayType", strawberry.lazy(".types")] | None
     children: list[Annotated["PathwayType", strawberry.lazy(".types")]]
     junctions_on_trunk: list[Annotated["ConduitJunctionType", strawberry.lazy(".types")]]
     junction_as_branch: list[Annotated["ConduitJunctionType", strawberry.lazy(".types")]]
