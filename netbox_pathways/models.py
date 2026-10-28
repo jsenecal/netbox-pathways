@@ -3,12 +3,14 @@ from dcim.models import Cable, Location, Site
 from django.conf import settings
 from django.contrib.gis.db import models
 from django.contrib.gis.db.models.functions import Length
+from django.contrib.postgres.indexes import GistIndex
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Subquery
 from django.urls import reverse
 from netbox.models import NetBoxModel
+from netbox.models.ltree import LtreeModel, LtreeQuerySet
 from tenancy.models import Tenant
 from utilities.fields import ColorField
 from utilities.querysets import RestrictedQuerySet
@@ -28,6 +30,14 @@ from .choices import (
 )
 from .geo import get_srid
 from .landing import attaches, end_point, is_area, landing_on, reference_point, with_end
+from .pathway_types import (
+    DRAWN_TYPES,
+    PATHWAY_TYPES,
+    TYPE_SPECIFIC_FIELDS,
+    allowed_child_types,
+    inapplicable_fields,
+)
+from .pathway_types import spec as type_spec
 
 ENDPOINT_TOLERANCE = 1.0
 
@@ -278,9 +288,6 @@ class CircuitGeometry(NetBoxModel):
         return reverse("plugins:netbox_pathways:circuitgeometry", args=[self.pk])
 
 
-# ConduitBank is defined after Pathway (it's a Pathway subclass).
-
-
 def _distance_to_m(value):
     """Coerce a GeoDjango Distance (or numeric) to rounded metres.
 
@@ -315,7 +322,7 @@ def touching_q(structure, direct=False, lookup="", prefix=""):
     return Q(**{f"{prefix}start_{field}{lookup}": structure}) | Q(**{f"{prefix}end_{field}{lookup}": structure})
 
 
-class PathwayQuerySet(RestrictedQuerySet):
+class PathwayQuerySet(LtreeQuerySet):
     def touching(self, structure, direct=False):
         """Pathways with an end attached to `structure`; see touching_q()."""
         return self.filter(touching_q(structure, direct=direct))
@@ -324,8 +331,30 @@ class PathwayQuerySet(RestrictedQuerySet):
         """Annotate each pathway with `_geo_length`: PostGIS `ST_Length(geometry)`."""
         return self.annotate(_geo_length=Length("geometry"))
 
+    def map_containers(self):
+        """Pathways drawn on the map: top-level pathways of a drawn type.
 
-class Pathway(NetBoxModel):
+        Anything else (innerducts, trays, raceways, any pathway with a
+        parent) is shown through its map_container instead.
+        """
+        return self.filter(pathway_type__in=DRAWN_TYPES, parent__isnull=True)
+
+
+# Pathway types that never have a parent, and those that always do. Sorted so
+# the database constraints built from them deconstruct identically every run.
+TOP_LEVEL_TYPES = sorted(t for t, s in PATHWAY_TYPES.items() if not s.parents)
+PARENTED_TYPES = sorted(t for t, s in PATHWAY_TYPES.items() if s.parent_required)
+
+
+class Pathway(LtreeModel, NetBoxModel):
+    """A physical pathway of any type, optionally contained in a parent pathway.
+
+    `pathway_type` selects which of the type-specific columns apply and what
+    the pathway may sit inside; pathway_types.py holds those rules. The
+    hierarchy is an ltree: `path` is maintained by database triggers from
+    `parent`, so ancestor and descendant lookups are single queries.
+    """
+
     prerequisite_models = ("netbox_pathways.Structure",)
 
     objects = PathwayQuerySet.as_manager()
@@ -336,7 +365,15 @@ class Pathway(NetBoxModel):
         choices=PathwayStatusChoices,
         default=PathwayStatusChoices.STATUS_ACTIVE,
     )
-    pathway_type = models.CharField(max_length=50, choices=PathwayTypeChoices, editable=False)
+    pathway_type = models.CharField(max_length=50, choices=PathwayTypeChoices)
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="children",
+        help_text="Pathway this one runs inside (e.g. the bank of a conduit, the conduit of an innerduct)",
+    )
     geometry = models.LineStringField(
         srid=get_srid(),
         null=True,
@@ -414,7 +451,100 @@ class Pathway(NetBoxModel):
     )
     comments = models.TextField(blank=True)
 
+    # Type-specific columns. Which apply to which type is pathway_types.py's
+    # call; save() clears the ones that do not apply to the current type.
+
+    # Conduit bank and conduit
+    start_face = models.CharField(
+        max_length=50,
+        choices=BankFaceChoices,
+        blank=True,
+        help_text="Which face/wall of the start structure",
+    )
+    end_face = models.CharField(
+        max_length=50,
+        choices=BankFaceChoices,
+        blank=True,
+        help_text="Which face/wall of the end structure",
+    )
+    # Conduit bank
+    configuration = models.CharField(
+        max_length=50,
+        choices=ConduitBankConfigChoices,
+        blank=True,
+        help_text="Layout configuration (e.g., 2x2, 3x3) -- leave blank if irregular",
+    )
+    total_conduits = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Designed conduit capacity of the bank (leave blank if unknown)",
+    )
+    height = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of duct rows (vertical count); leave blank if unknown",
+    )
+    width = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of duct columns (horizontal count); leave blank if unknown",
+    )
+    encasement_type = models.CharField(max_length=50, choices=EncasementTypeChoices, blank=True)
+    # Conduit
+    material = models.CharField(max_length=50, choices=ConduitMaterialChoices, blank=True)
+    inner_diameter = models.FloatField(null=True, blank=True, help_text="Inner diameter in millimeters")
+    outer_diameter = models.FloatField(null=True, blank=True, help_text="Outer diameter in millimeters")
+    depth = models.FloatField(null=True, blank=True, help_text="Burial depth in meters")
+    start_junction = models.ForeignKey(
+        "ConduitJunction",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="conduits_from",
+    )
+    end_junction = models.ForeignKey(
+        "ConduitJunction",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="conduits_to",
+    )
+    # Conduit and innerduct
+    position = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Position within the parent pathway (e.g., A1 in a bank)",
+    )
+    # Aerial span
+    aerial_type = models.CharField(max_length=50, choices=AerialTypeChoices, blank=True)
+    start_attachment_height = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Attachment height at the start endpoint, in meters",
+    )
+    end_attachment_height = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Attachment height at the end endpoint, in meters",
+    )
+    sag = models.FloatField(null=True, blank=True, help_text="Cable sag in meters")
+    messenger_size = models.CharField(max_length=50, blank=True, help_text="Messenger wire size/type")
+    wind_loading = models.CharField(max_length=50, blank=True, help_text="Wind loading zone/rating")
+    ice_loading = models.CharField(max_length=50, blank=True, help_text="Ice loading zone/rating")
+    # Direct buried
+    burial_depth = models.FloatField(null=True, blank=True, help_text="Burial depth in meters")
+    warning_tape = models.BooleanField(default=False, help_text="Warning tape installed above cable")
+    tracer_wire = models.BooleanField(default=False, help_text="Tracer wire installed with cable")
+    armor_type = models.CharField(max_length=100, blank=True, help_text="Cable armor type if applicable")
+    # Innerduct
+    size = models.CharField(max_length=50, blank=True, help_text='Innerduct size (e.g., 1.25", 32mm)')
+    color = ColorField(blank=True, help_text="Innerduct color for identification")
+
+    # Every type-specific field except position, which identifies a single
+    # slot in the parent and so is never copied.
     clone_fields = (
+        "pathway_type",
+        "parent",
         "status",
         "start_structure",
         "end_structure",
@@ -424,6 +554,7 @@ class Pathway(NetBoxModel):
         "installed_by",
         "installation_date",
         "commissioned_date",
+        *sorted(TYPE_SPECIFIC_FIELDS - {"position"}),
     )
 
     class Meta:
@@ -432,6 +563,29 @@ class Pathway(NetBoxModel):
             models.Index(fields=["pathway_type"]),
             models.Index(fields=["status"]),
             models.Index(fields=["start_structure", "end_structure"]),
+            models.Index(fields=["material"]),
+            models.Index(fields=["aerial_type"]),
+            GistIndex(fields=["path"], name="netbox_path_pathway_path_gist"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=~Q(pathway_type__in=PARENTED_TYPES) | Q(parent__isnull=False),
+                name="pathway_parent_required",
+                violation_error_message="This pathway type must have a parent.",
+            ),
+            models.CheckConstraint(
+                condition=~Q(pathway_type__in=TOP_LEVEL_TYPES) | Q(parent__isnull=True),
+                name="pathway_parent_forbidden",
+                violation_error_message="This pathway type cannot have a parent.",
+            ),
+            # A condition cannot see the parent's type, so this also covers
+            # conduits in a raceway, not only conduits in a bank.
+            models.UniqueConstraint(
+                fields=["parent", "position"],
+                condition=Q(pathway_type="conduit", parent__isnull=False, position__gt=""),
+                name="unique_conduit_position_in_parent",
+                violation_error_message="Another conduit already occupies this position in the parent.",
+            ),
         ]
 
     def __init__(self, *args, **kwargs):
@@ -441,12 +595,16 @@ class Pathway(NetBoxModel):
     def get_status_color(self):
         return PathwayStatusChoices.colors.get(self.status)
 
-    def as_concrete(self):
-        """This pathway as its multi-table subclass instance."""
-        cls = PATHWAY_TYPE_MODELS.get(self.pathway_type)
-        if cls is None or isinstance(self, cls):
-            return self
-        return cls.objects.get(pk=self.pk)
+    @property
+    def spec(self):
+        """This pathway's PathwayTypeSpec; KeyError for an unknown type."""
+        return type_spec(self.pathway_type)
+
+    @property
+    def endpoint_kinds(self):
+        """What one pathway side may name; exactly one of them per side."""
+        known = PATHWAY_TYPES.get(self.pathway_type)
+        return known.endpoint_kinds if known else ("structure", "location")
 
     @property
     def start_endpoint(self):
@@ -458,12 +616,17 @@ class Pathway(NetBoxModel):
 
     @property
     def is_indoor(self):
-        """Both endpoints are dcim.Locations, which carry no geometry."""
+        """Both endpoints are dcim.Locations, which carry no geometry.
+
+        Junction endpoints are geographic, so they preclude indoor status.
+        """
         return bool(
             self.start_location_id
             and self.end_location_id
             and not self.start_structure_id
             and not self.end_structure_id
+            and not self.start_junction_id
+            and not self.end_junction_id
         )
 
     @property
@@ -487,28 +650,141 @@ class Pathway(NetBoxModel):
     def requires_geometry(self):
         """Whether clean() demands a route geometry.
 
-        Indoor pathways (both endpoints are locations) carry no geographic
-        path. Subclasses contained in a parent pathway override this: the
-        parent owns the route geometry.
+        A pathway with a parent follows its parent's route, and an indoor
+        pathway (both endpoints are locations) has no geographic route.
         """
-        return not self.is_indoor
+        return not self.parent_id and not self.is_indoor
 
-    # What one pathway side may name; exactly one of them per side.
-    endpoint_kinds = ("structure", "location")
+    def _parent_and_ancestors(self):
+        """The parent and everything above it, outermost first.
+
+        Resolved from the parent's stored ltree path rather than this
+        instance's `path`, so an instance loaded before an ancestor moved
+        still sees the current hierarchy.
+        """
+        parent_path = Pathway.objects.filter(pk=self.parent_id).values("path")
+        return Pathway.objects.filter(path__ancestor_or_equal=Subquery(parent_path)).order_by("path")
+
+    @property
+    def map_container(self):
+        """The drawn map feature that stands for this pathway, or None.
+
+        The outermost pathway of this one's tree (itself when top-level),
+        when that is of a drawn type; None when nothing above it is drawn
+        (e.g. a conduit in a raceway).
+        """
+        if self.parent_id is None:
+            root = self
+        else:
+            root = self._parent_and_ancestors().filter(parent__isnull=True).first()
+        if root is None or root.pathway_type not in DRAWN_TYPES:
+            return None
+        return root
+
+    @property
+    def map_select_id(self):
+        """The feature id the map uses for `?select=`."""
+        return f"{self.pathway_type}-{self.pk}"
+
+    @property
+    def effective_tenant(self):
+        """Own tenant, or the nearest ancestor's when not set.
+
+        Display-layer fallback in the NetBox VRF/prefix style: the stored
+        field stays authoritative for filtering and the API.
+        """
+        if self.tenant_id:
+            return self.tenant
+        if self.parent_id is None:
+            return None
+        nearest = (
+            self._parent_and_ancestors().filter(tenant__isnull=False).select_related("tenant").order_by("-path").first()
+        )
+        return nearest.tenant if nearest else None
+
+    @property
+    def attachment_height(self):
+        """Mean of the two per-endpoint heights with None-tolerant fallback."""
+        a = self.start_attachment_height
+        b = self.end_attachment_height
+        if a is None and b is None:
+            return None
+        if a is None:
+            return b
+        if b is None:
+            return a
+        return (a + b) / 2
 
     def clean(self):
-        super().clean()
+        super().clean()  # LtreeModel rejects a parent that would create a cycle
+        if self.pathway_type not in PATHWAY_TYPES:
+            return  # clean_fields() already reports the invalid choice
+        self.check_containment()
+        # Inherit before validation so the endpoint checks and geometry
+        # snapping see the effective endpoints.
+        self._inherit_endpoints_from_parent()
+        if self.pathway_type == "conduit":
+            self.check_endpoints_present()
+        # Ambiguous sides first: straighten() would silently prefer the structure.
         self.check_one_endpoint_kind()
+        if self.spec.derives_geometry:
+            self.straighten()
         if not self.geometry:
             if self.requires_geometry:
                 raise ValidationError(
-                    {"geometry": "Geometry is required unless both endpoints are locations (indoor pathway)."}
+                    {
+                        "geometry": "Geometry is required unless the pathway has a parent "
+                        "or both endpoints are locations (indoor pathway)."
+                    }
                 )
             return
         for side in ("start", "end"):
             geom, kind = self.anchor_geometry(side)
             if geom is not None and not self.is_indoor_end(side, geom):
                 self._snap_geometry_end(side, geom, kind)
+
+    def check_containment(self):
+        """Enforce the containment rule from pathway_types.py.
+
+        The parent must be of a type this one may sit in (or absent when the
+        type cannot have one, present when it must), and existing children
+        must still be allowed under the current type -- so changing a
+        pathway's type cannot strand children it may no longer contain.
+        """
+        rules = self.spec
+        label = self.get_pathway_type_display()
+        errors = {}
+        if self.parent_id:
+            if not rules.parents:
+                errors["parent"] = f"A {label} cannot have a parent pathway."
+            elif self.parent.pathway_type not in rules.parents:
+                allowed = ", ".join(sorted(rules.parents))
+                errors["parent"] = (
+                    f"A {label} cannot be inside a {self.parent.get_pathway_type_display()} (allowed: {allowed})."
+                )
+        elif rules.parent_required:
+            errors["parent"] = f"A {label} must have a parent pathway."
+        if self.pk:
+            children = Pathway.objects.filter(parent_id=self.pk).exclude(
+                pathway_type__in=allowed_child_types(self.pathway_type)
+            )
+            stranded = sorted({child.get_pathway_type_display() for child in children})
+            if stranded:
+                errors["pathway_type"] = (
+                    f"A {label} cannot contain its existing children ({', '.join(stranded)}); "
+                    "move or remove them first."
+                )
+        if errors:
+            raise ValidationError(errors)
+
+    def check_endpoints_present(self):
+        """Require a start and an end (structure, location or junction)."""
+        for side in ("start", "end"):
+            if not any(getattr(self, f"{side}_{kind}_id") for kind in self.endpoint_kinds):
+                raise ValidationError(
+                    f"{self.get_pathway_type_display()} must have a {side} point "
+                    f"({', '.join(self.endpoint_kinds[:-1])}, or {self.endpoint_kinds[-1]})"
+                )
 
     def check_one_endpoint_kind(self):
         """Reject a side naming more than one of endpoint_kinds.
@@ -568,10 +844,19 @@ class Pathway(NetBoxModel):
         return tuple(ids)
 
     def anchor_geometry(self, side):
-        """Geometry one end must land on, and what it is: (geom, "structure") or (None, None)."""
+        """Geometry one end must land on, and what it is.
+
+        (geom, "structure"), (geom, "junction") for a type whose ends may
+        hang from a junction on a trunk conduit, or (None, None).
+        """
         structure = self.anchor_structure(side)
         if structure is not None and structure.geometry is not None:
             return structure.geometry, "structure"
+        if "junction" in self.endpoint_kinds:
+            junction = getattr(self, f"{side}_junction", None)
+            junction_geom = junction.derived_geometry if junction is not None else None
+            if junction_geom is not None:
+                return junction_geom, "junction"
         return None, None
 
     def _snap_geometry_end(self, side, geom, kind):
@@ -592,324 +877,14 @@ class Pathway(NetBoxModel):
             )
         self.geometry = with_end(self.geometry, side, landing_on(geom, endpoint))
 
-    def __str__(self):
-        return self.label or f"#{self.pk or self._pk}"
-
-    def get_absolute_url(self):
-        return reverse("plugins:netbox_pathways:pathway", args=[self.pk])
-
-    @property
-    def map_visible(self):
-        """Whether this pathway should be rendered as its own feature on the map.
-
-        Returns False for pathways that are children of a container which owns the
-        map representation (e.g. a conduit inside a bank, an innerduct inside a
-        conduit).  The container is the feature that gets drawn; children are
-        detail-level records shown in the sidebar / detail view.
-        """
-        return True
-
-    def _inherit_endpoints_from(self, parent, occupied_suffixes=("structure_id", "location_id")):
-        """Inherit endpoints from a parent pathway, per side, if not explicitly set.
-
-        A side counts as occupied when any of the given FK suffixes is set on it.
-        """
-        if parent is None:
-            return
-        for side in ("start", "end"):
-            if any(getattr(self, f"{side}_{sfx}") for sfx in occupied_suffixes):
-                continue
-            setattr(self, f"{side}_structure", getattr(parent, f"{side}_structure"))
-            setattr(self, f"{side}_location", getattr(parent, f"{side}_location"))
-
-    @classmethod
-    def map_queryset(cls, queryset=None):
-        """Return a queryset filtered to only map-visible pathways.
-
-        Excludes conduits that belong to a bank (the bank is drawn instead)
-        and innerducts (drawn as part of their parent conduit's detail view).
-        """
-        if queryset is None:
-            queryset = cls.objects.all()
-        return queryset.exclude(
-            pathway_type="innerduct",
-        ).exclude(
-            pathway_type="conduit",
-            conduit__conduit_bank__isnull=False,
-        )
-
-    def save(self, *args, **kwargs):
-        self.start_anchor_id, self.end_anchor_id = self.resolved_anchor_ids()
-        if not self.pathway_type:
-            if isinstance(self, ConduitBank):
-                self.pathway_type = "conduit_bank"
-            elif isinstance(self, Conduit):
-                self.pathway_type = "conduit"
-            elif isinstance(self, AerialSpan):
-                self.pathway_type = "aerial"
-            elif isinstance(self, DirectBuried):
-                self.pathway_type = "direct_buried"
-            elif isinstance(self, Innerduct):
-                self.pathway_type = "innerduct"
-        super().save(*args, **kwargs)
-        self._pk = self.pk
-
-
-class ConduitBank(Pathway):
-    """
-    An encased group of conduits sharing a physical route between two structures.
-    The bank is the map-visible feature; individual conduits inside are detail records.
-    """
-
-    start_face = models.CharField(
-        max_length=50,
-        choices=BankFaceChoices,
-        blank=True,
-        help_text="Which face/wall of the start structure",
-    )
-    end_face = models.CharField(
-        max_length=50,
-        choices=BankFaceChoices,
-        blank=True,
-        help_text="Which face/wall of the end structure",
-    )
-    configuration = models.CharField(
-        max_length=50,
-        choices=ConduitBankConfigChoices,
-        blank=True,
-        help_text="Layout configuration (e.g., 2x2, 3x3) — leave blank if irregular",
-    )
-    total_conduits = models.PositiveIntegerField(
-        null=True,
-        blank=True,
-        help_text="Designed conduit capacity of the bank (leave blank if unknown)",
-    )
-    height = models.PositiveIntegerField(
-        null=True,
-        blank=True,
-        help_text="Number of duct rows (vertical count); leave blank if unknown",
-    )
-    width = models.PositiveIntegerField(
-        null=True,
-        blank=True,
-        help_text="Number of duct columns (horizontal count); leave blank if unknown",
-    )
-    encasement_type = models.CharField(max_length=50, choices=EncasementTypeChoices, blank=True)
-
-    clone_fields = Pathway.clone_fields + (
-        "start_face",
-        "end_face",
-        "configuration",
-        "total_conduits",
-        "height",
-        "width",
-        "encasement_type",
-    )
-
-    class Meta:
-        verbose_name = "Conduit Bank"
-        verbose_name_plural = "Conduit Banks"
-
-    def get_absolute_url(self):
-        return reverse("plugins:netbox_pathways:conduitbank", args=[self.pk])
-
-    def save(self, *args, **kwargs):
-        self.pathway_type = "conduit_bank"
-        super().save(*args, **kwargs)
-
-
-class Conduit(Pathway):
-    def get_absolute_url(self):
-        return reverse("plugins:netbox_pathways:conduit", args=[self.pk])
-
-    start_face = models.CharField(
-        max_length=50,
-        choices=BankFaceChoices,
-        blank=True,
-        help_text="Which face/wall of the start structure (for standalone conduits)",
-    )
-    end_face = models.CharField(
-        max_length=50,
-        choices=BankFaceChoices,
-        blank=True,
-        help_text="Which face/wall of the end structure (for standalone conduits)",
-    )
-    material = models.CharField(max_length=50, choices=ConduitMaterialChoices, blank=True)
-    inner_diameter = models.FloatField(null=True, blank=True, help_text="Inner diameter in millimeters")
-    outer_diameter = models.FloatField(null=True, blank=True, help_text="Outer diameter in millimeters")
-    depth = models.FloatField(null=True, blank=True, help_text="Burial depth in meters")
-    conduit_bank = models.ForeignKey(
-        ConduitBank,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="conduits",
-    )
-    bank_position = models.CharField(
-        max_length=10,
-        blank=True,
-        help_text="Position in bank (e.g., A1, B2)",
-    )
-    start_junction = models.ForeignKey(
-        "ConduitJunction",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="conduits_from",
-    )
-    end_junction = models.ForeignKey(
-        "ConduitJunction",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="conduits_to",
-    )
-
-    @property
-    def map_visible(self):
-        return self.conduit_bank_id is None
-
-    @property
-    def effective_tenant(self):
-        """Own tenant, or the conduit bank's when not set.
-
-        Display-layer fallback in the NetBox VRF/prefix style: the stored
-        field stays authoritative for filtering and the API.
-        """
-        if self.tenant_id:
-            return self.tenant
-        if self.conduit_bank_id:
-            return self.conduit_bank.tenant
-        return None
-
-    @property
-    def requires_geometry(self):
-        """A conduit inside a bank follows the bank's route; no own geometry needed."""
-        if self.conduit_bank_id:
-            return False
-        return super().requires_geometry
-
-    @property
-    def is_indoor(self):
-        """Junction endpoints are geographic, so they also preclude indoor status."""
-        return super().is_indoor and not self.start_junction_id and not self.end_junction_id
-
-    clone_fields = Pathway.clone_fields + (
-        "start_face",
-        "end_face",
-        "material",
-        "inner_diameter",
-        "outer_diameter",
-        "depth",
-        "conduit_bank",
-        "start_junction",
-        "end_junction",
-    )
-
-    class Meta:
-        verbose_name = "Conduit"
-        verbose_name_plural = "Conduits"
-        indexes = [
-            models.Index(fields=["material"]),
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["conduit_bank", "bank_position"],
-                name="unique_position_per_bank",
-                condition=models.Q(conduit_bank__isnull=False, bank_position__gt=""),
-            ),
-        ]
-
-    def _inherit_bank_endpoints(self):
-        """Inherit endpoints from the conduit bank, per side, if not explicitly set."""
-        self._inherit_endpoints_from(
-            self.conduit_bank if self.conduit_bank_id else None,
-            ("structure_id", "location_id", "junction_id"),
-        )
-
-    def clean(self):
-        # Inherit before validation so the exactly-one-endpoint-per-side
-        # check and path snapping see the effective endpoints.
-        self._inherit_bank_endpoints()
-        super().clean()  # Pathway.clean() snaps structure and junction endpoints
-        # Pathway.clean() already rejected a side naming more than one kind.
-        if not any(getattr(self, f"start_{kind}_id") for kind in self.endpoint_kinds):
-            raise ValidationError("Conduit must have a start point (structure, location, or junction)")
-        if not any(getattr(self, f"end_{kind}_id") for kind in self.endpoint_kinds):
-            raise ValidationError("Conduit must have an end point (structure, location, or junction)")
-
-    endpoint_kinds = ("structure", "location", "junction")
-
-    def anchor_geometry(self, side):
-        """A conduit end may also hang from a junction on a trunk conduit."""
-        geom, kind = super().anchor_geometry(side)
-        if geom is None:
-            junction = getattr(self, f"{side}_junction", None)
-            junction_geom = junction.derived_geometry if junction is not None else None
-            if junction_geom is not None:
-                return junction_geom, "junction"
-        return geom, kind
-
-    def save(self, *args, **kwargs):
-        self.pathway_type = "conduit"
-        self._inherit_bank_endpoints()
-        super().save(*args, **kwargs)
-
-
-class AerialSpan(Pathway):
-    def get_absolute_url(self):
-        return reverse("plugins:netbox_pathways:aerialspan", args=[self.pk])
-
-    aerial_type = models.CharField(max_length=50, choices=AerialTypeChoices, blank=True)
-    start_attachment_height = models.FloatField(
-        null=True,
-        blank=True,
-        help_text="Attachment height at the start endpoint, in meters",
-    )
-    end_attachment_height = models.FloatField(
-        null=True,
-        blank=True,
-        help_text="Attachment height at the end endpoint, in meters",
-    )
-    sag = models.FloatField(null=True, blank=True, help_text="Cable sag in meters")
-    messenger_size = models.CharField(max_length=50, blank=True, help_text="Messenger wire size/type")
-    wind_loading = models.CharField(max_length=50, blank=True, help_text="Wind loading zone/rating")
-    ice_loading = models.CharField(max_length=50, blank=True, help_text="Ice loading zone/rating")
-
-    clone_fields = Pathway.clone_fields + (
-        "aerial_type",
-        "start_attachment_height",
-        "end_attachment_height",
-        "sag",
-        "messenger_size",
-        "wind_loading",
-        "ice_loading",
-    )
-
-    # An aerial span is a straight line between two supports: its path is
-    # derived from the endpoints in clean(), so forms must not synthesize one.
-    derives_geometry = True
-
-    class Meta:
-        verbose_name = "Aerial Span"
-        verbose_name_plural = "Aerial Spans"
-        indexes = [
-            models.Index(fields=["aerial_type"]),
-        ]
-
-    def clean(self):
-        # Ambiguous sides first: straighten() would silently prefer the structure.
-        self.check_one_endpoint_kind()
-        self.straighten()
-        super().clean()
-
     def straighten(self):
         """Rebuild geometry as the straight line between the two landings.
 
-        Both ends must hang from a structure with geometry -- a span cannot
-        float. A point structure pins its end; an area structure (building)
-        lands the end on its boundary nearest the submitted end, or nearest
-        the other support when no path was submitted.
+        For types whose geometry is derived from the endpoints (aerial
+        spans). Both ends must hang from a structure with geometry -- a span
+        cannot float. A point structure pins its end; an area structure
+        (building) lands the end on its boundary nearest the submitted end,
+        or nearest the other support when no path was submitted.
         """
         from django.contrib.gis.geos import LineString
 
@@ -936,126 +911,56 @@ class AerialSpan(Pathway):
             end = landing_on(end_geom, start)
         self.geometry = LineString((start.x, start.y), (end.x, end.y), srid=start_geom.srid)
 
-    def save(self, *args, **kwargs):
-        self.pathway_type = "aerial"
-        super().save(*args, **kwargs)
-
-    @property
-    def attachment_height(self):
-        """Mean of the two per-endpoint heights with None-tolerant fallback."""
-        a = self.start_attachment_height
-        b = self.end_attachment_height
-        if a is None and b is None:
-            return None
-        if a is None:
-            return b
-        if b is None:
-            return a
-        return (a + b) / 2
-
-
-class DirectBuried(Pathway):
-    def get_absolute_url(self):
-        return reverse("plugins:netbox_pathways:directburied", args=[self.pk])
-
-    burial_depth = models.FloatField(null=True, blank=True, help_text="Burial depth in meters")
-    warning_tape = models.BooleanField(default=False, help_text="Warning tape installed above cable")
-    tracer_wire = models.BooleanField(default=False, help_text="Tracer wire installed with cable")
-    armor_type = models.CharField(max_length=100, blank=True, help_text="Cable armor type if applicable")
-
-    clone_fields = Pathway.clone_fields + (
-        "burial_depth",
-        "warning_tape",
-        "tracer_wire",
-        "armor_type",
-    )
-
-    class Meta:
-        verbose_name = "Direct Buried"
-        verbose_name_plural = "Direct Buried Paths"
-
-    def save(self, *args, **kwargs):
-        self.pathway_type = "direct_buried"
-        super().save(*args, **kwargs)
-
-
-class Innerduct(Pathway):
-    prerequisite_models = ("netbox_pathways.Conduit",)
+    def __str__(self):
+        return self.label or f"#{self.pk or self._pk}"
 
     def get_absolute_url(self):
-        return reverse("plugins:netbox_pathways:innerduct", args=[self.pk])
+        return reverse("plugins:netbox_pathways:pathway", args=[self.pk])
 
-    parent_conduit = models.ForeignKey(Conduit, on_delete=models.CASCADE, related_name="innerducts")
+    def _inherit_endpoints_from_parent(self):
+        """Fill each side left unset from the parent pathway's same side.
 
-    @property
-    def map_visible(self):
-        return False
+        A side counts as set when it names any of this type's endpoint
+        kinds; only the parent's structure and location are copied.
+        """
+        if not self.parent_id:
+            return
+        parent = self.parent
+        for side in ("start", "end"):
+            if any(getattr(self, f"{side}_{kind}_id", None) for kind in self.endpoint_kinds):
+                continue
+            setattr(self, f"{side}_structure", getattr(parent, f"{side}_structure"))
+            setattr(self, f"{side}_location", getattr(parent, f"{side}_location"))
 
-    @property
-    def effective_tenant(self):
-        """Own tenant, or the parent chain's (conduit, then bank) when not set."""
-        if self.tenant_id:
-            return self.tenant
-        if self.parent_conduit_id:
-            return self.parent_conduit.effective_tenant
-        return None
-
-    @property
-    def requires_geometry(self):
-        """An innerduct follows its parent conduit's geometry."""
-        return False
-
-    size = models.CharField(max_length=50, help_text='Innerduct size (e.g., 1.25", 32mm)')
-    color = ColorField(blank=True, help_text="Innerduct color for identification")
-    position = models.CharField(max_length=50, blank=True, help_text="Position within parent conduit")
-
-    clone_fields = Pathway.clone_fields + (
-        "parent_conduit",
-        "size",
-        "color",
-    )
-
-    class Meta:
-        verbose_name = "Innerduct"
-        verbose_name_plural = "Innerducts"
-
-    def _inherit_parent_endpoints(self):
-        """Inherit endpoints from the parent conduit, per side, if not explicitly set."""
-        self._inherit_endpoints_from(self.parent_conduit if self.parent_conduit_id else None)
-
-    def clean(self):
-        # Inherit before validation so the path-required check sees the
-        # effective endpoints, not just the explicitly set ones.
-        self._inherit_parent_endpoints()
-        super().clean()
+    def _clear_inapplicable_fields(self):
+        """Reset the type-specific fields that do not apply to this type."""
+        for name in inapplicable_fields(self.pathway_type):
+            field = self._meta.get_field(name)
+            setattr(self, field.attname, None if field.is_relation else field.get_default())
 
     def save(self, *args, **kwargs):
-        self.pathway_type = "innerduct"
-        self._inherit_parent_endpoints()
+        if self.pathway_type in PATHWAY_TYPES:
+            self._clear_inapplicable_fields()
+            self._inherit_endpoints_from_parent()
+        self.start_anchor_id, self.end_anchor_id = self.resolved_anchor_ids()
         super().save(*args, **kwargs)
-
-
-PATHWAY_TYPE_MODELS = {
-    "conduit_bank": ConduitBank,
-    "conduit": Conduit,
-    "aerial": AerialSpan,
-    "direct_buried": DirectBuried,
-    "innerduct": Innerduct,
-}
+        self._pk = self.pk
 
 
 class ConduitJunction(NetBoxModel):
-    prerequisite_models = ("netbox_pathways.Conduit",)
+    prerequisite_models = ("netbox_pathways.Pathway",)
 
     label = models.CharField(max_length=100, blank=True)
     trunk_conduit = models.ForeignKey(
-        Conduit,
+        Pathway,
         on_delete=models.CASCADE,
+        limit_choices_to={"pathway_type": "conduit"},
         related_name="junctions_on_trunk",
     )
     branch_conduit = models.ForeignKey(
-        Conduit,
+        Pathway,
         on_delete=models.CASCADE,
+        limit_choices_to={"pathway_type": "conduit"},
         related_name="junction_as_branch",
     )
     towards_structure = models.ForeignKey(

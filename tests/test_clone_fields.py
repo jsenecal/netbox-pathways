@@ -11,15 +11,7 @@ from django.contrib.gis.geos import LineString, Point
 from tenancy.models import Tenant
 
 from netbox_pathways.geo import get_srid
-from netbox_pathways.models import (
-    AerialSpan,
-    Conduit,
-    ConduitBank,
-    DirectBuried,
-    Innerduct,
-    Pathway,
-    Structure,
-)
+from netbox_pathways.models import Pathway, Structure
 
 SRID = get_srid()
 
@@ -45,7 +37,8 @@ def installer(db):
 class TestAerialSpanClone:
     def test_clone_carries_base_and_span_attributes(self, endpoints, tenant, installer):
         s1, s2 = endpoints
-        span = AerialSpan(
+        span = Pathway(
+            pathway_type="aerial",
             label="CF-AS1",
             status="active",
             geometry=LineString((0, 0), (100, 100), srid=SRID),
@@ -82,7 +75,8 @@ class TestAerialSpanClone:
 
     def test_clone_never_carries_identity_or_geometry(self, endpoints):
         s1, s2 = endpoints
-        span = AerialSpan(
+        span = Pathway(
+            pathway_type="aerial",
             label="CF-AS2",
             geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
@@ -99,7 +93,8 @@ class TestAerialSpanClone:
 class TestDirectBuriedClone:
     def test_clone_carries_burial_attributes(self, endpoints):
         s1, s2 = endpoints
-        run = DirectBuried(
+        run = Pathway(
+            pathway_type="direct_buried",
             label="CF-DB1",
             geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
@@ -120,7 +115,8 @@ class TestDirectBuriedClone:
 class TestConduitBankClone:
     def test_clone_carries_bank_attributes(self, endpoints):
         s1, s2 = endpoints
-        bank = ConduitBank(
+        bank = Pathway(
+            pathway_type="conduit_bank",
             label="CF-BANK1",
             geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
@@ -149,17 +145,19 @@ class TestConduitBankClone:
 class TestConduitClone:
     def test_clone_carries_bank_membership_and_attributes(self, endpoints):
         s1, s2 = endpoints
-        bank = ConduitBank(
+        bank = Pathway(
+            pathway_type="conduit_bank",
             label="CF-BANK2",
             geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
         bank.save()
-        conduit = Conduit(
+        conduit = Pathway(
+            pathway_type="conduit",
             label="CF-C1",
-            conduit_bank=bank,
-            bank_position="A1",
+            parent=bank,
+            position="A1",
             start_face="east",
             end_face="west",
             material="hdpe",
@@ -169,7 +167,8 @@ class TestConduitClone:
         )
         conduit.save()
         attrs = conduit.clone()
-        assert attrs["conduit_bank"] == bank.pk
+        assert attrs["parent"] == bank.pk
+        assert attrs["pathway_type"] == "conduit"
         assert attrs["start_face"] == "east"
         assert attrs["end_face"] == "west"
         assert attrs["material"] == "hdpe"
@@ -178,31 +177,33 @@ class TestConduitClone:
         assert attrs["depth"] == 1.1
 
     def test_junction_endpoints_are_clonable(self):
-        assert "start_junction" in Conduit.clone_fields
-        assert "end_junction" in Conduit.clone_fields
+        assert "start_junction" in Pathway.clone_fields
+        assert "end_junction" in Pathway.clone_fields
 
 
 @pytest.mark.django_db
 class TestInnerductClone:
     def test_clone_carries_parent_size_and_color(self, endpoints):
         s1, s2 = endpoints
-        parent = Conduit(
+        parent = Pathway(
+            pathway_type="conduit",
             label="CF-C2",
             geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
         parent.save()
-        duct = Innerduct(
+        duct = Pathway(
+            pathway_type="innerduct",
             label="CF-ID1",
-            parent_conduit=parent,
+            parent=parent,
             size="32mm",
             color="ff9800",
             position="1",
         )
         duct.save()
         attrs = duct.clone()
-        assert attrs["parent_conduit"] == parent.pk
+        assert attrs["parent"] == parent.pk
         assert attrs["size"] == "32mm"
         assert attrs["color"] == "ff9800"
 
@@ -238,22 +239,13 @@ class TestStructureClone:
         assert attrs["depth"] == 0.9
 
 
-ALL_CLONABLE_MODELS = [
-    Structure,
-    Pathway,
-    ConduitBank,
-    Conduit,
-    AerialSpan,
-    DirectBuried,
-    Innerduct,
-]
+ALL_CLONABLE_MODELS = [Structure, Pathway]
 
 NEVER_CLONED = {
     "geometry",
     "location",
     "name",
     "label",
-    "bank_position",
     "position",
     "elevation",
 }
@@ -268,9 +260,3 @@ def test_identity_and_geometry_fields_never_cloned(model):
 def test_clone_field_names_resolve(model):
     for name in model.clone_fields:
         model._meta.get_field(name)
-
-
-def test_pathway_subclasses_inherit_base_clone_fields():
-    base = set(Pathway.clone_fields)
-    for model in (ConduitBank, Conduit, AerialSpan, DirectBuried, Innerduct):
-        assert base <= set(model.clone_fields)

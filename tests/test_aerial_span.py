@@ -4,13 +4,14 @@ import pytest
 from django.contrib.gis.geos import LineString
 
 from netbox_pathways.geo import get_srid
-from netbox_pathways.models import AerialSpan
+from netbox_pathways.models import Pathway
 from tests.helpers import SRID, coords, make_building, make_pole
 
 
 def _make_span(**kwargs):
     """Build an unsaved AerialSpan with a valid path; tests don't need to persist."""
-    return AerialSpan(
+    return Pathway(
+        pathway_type="aerial",
         label=kwargs.pop("label", "test-span"),
         geometry=LineString([(0.0, 0.0), (0.001, 0.001)], srid=get_srid()),
         **kwargs,
@@ -113,7 +114,8 @@ class TestAerialSpanStraightLine:
     def test_detached_end_is_rejected(self):
         from django.core.exceptions import ValidationError
 
-        span = AerialSpan(
+        span = Pathway(
+            pathway_type="aerial",
             start_structure=make_pole("P1", 0, 0),
             geometry=LineString((0, 0), (50, 0), srid=SRID),
         )
@@ -127,7 +129,7 @@ class TestAerialSpanStraightLine:
 
         site = Site.objects.create(name="AS-Site", slug="as-site")
         loc = Location.objects.create(name="AS-Loc", slug="as-loc", site=site)
-        span = AerialSpan(start_structure=make_pole("P1", 0, 0), end_location=loc)
+        span = Pathway(pathway_type="aerial", start_structure=make_pole("P1", 0, 0), end_location=loc)
         with pytest.raises(ValidationError) as exc:
             span.clean()
         assert "end_structure" in exc.value.message_dict
@@ -140,12 +142,13 @@ class TestAerialSpanStraightLine:
         pole = make_pole("P2", 40, 0)
         pole.location = loc
         pole.save()
-        span = AerialSpan(start_structure=make_pole("P1", 0, 0), end_location=loc)
+        span = Pathway(pathway_type="aerial", start_structure=make_pole("P1", 0, 0), end_location=loc)
         span.clean()
         assert coords(span) == [(0.0, 0.0), (40.0, 0.0)]
 
     def test_intermediate_vertices_are_dropped(self):
-        span = AerialSpan(
+        span = Pathway(
+            pathway_type="aerial",
             start_structure=make_pole("P1", 0, 0),
             end_structure=make_pole("P2", 40, 0),
             geometry=LineString((0, 0), (10, 15), (30, -5), (40, 0), srid=SRID),
@@ -154,7 +157,8 @@ class TestAerialSpanStraightLine:
         assert coords(span) == [(0.0, 0.0), (40.0, 0.0)]
 
     def test_pole_end_is_pinned_even_when_submitted_far_away(self):
-        span = AerialSpan(
+        span = Pathway(
+            pathway_type="aerial",
             start_structure=make_pole("P1", 0, 0),
             end_structure=make_pole("P2", 40, 0),
             geometry=LineString((0, 0), (40, 50), srid=SRID),
@@ -164,7 +168,8 @@ class TestAerialSpanStraightLine:
 
     def test_building_end_lands_on_boundary_near_submitted_point(self):
         # Submitted landing on the south wall, 3 m from the corner.
-        span = AerialSpan(
+        span = Pathway(
+            pathway_type="aerial",
             start_structure=make_pole("P1", 0, -40),
             end_structure=make_building("B1", 0, 0),
             geometry=LineString((0, -40), (3, 0.4), srid=SRID),
@@ -173,7 +178,8 @@ class TestAerialSpanStraightLine:
         assert coords(span)[-1] == (3.0, 0.0)
 
     def test_missing_path_lands_on_the_wall_facing_the_other_end(self):
-        span = AerialSpan(
+        span = Pathway(
+            pathway_type="aerial",
             start_structure=make_building("B1", 0, 0),
             end_structure=make_pole("P1", 60, 5),
         )
@@ -182,7 +188,8 @@ class TestAerialSpanStraightLine:
 
     def test_path_in_another_srid_lands_on_the_building(self):
         """API paths arrive as EPSG:4326; landings must be computed in the plugin SRID."""
-        span = AerialSpan(
+        span = Pathway(
+            pathway_type="aerial",
             start_structure=make_pole("P1", 0, -40),
             end_structure=make_building("B1", 0, 0),
             geometry=LineString((0, -40), (3, 0.4), srid=SRID).transform(4326, clone=True),
@@ -200,7 +207,7 @@ class TestAerialSpanStraightLine:
         site = Site.objects.create(name="Bldg", slug="bldg")
         SiteGeometry.objects.create(site=site, structure=make_building("B1", 0, 0))
         room = Location.objects.create(name="Room 101", slug="room-101", site=site)
-        span = AerialSpan(start_location=room, end_structure=make_pole("P1", 60, 5))
+        span = Pathway(pathway_type="aerial", start_location=room, end_structure=make_pole("P1", 60, 5))
         span.clean()
         assert coords(span) == [(10.0, 5.0), (60.0, 5.0)]
 
@@ -208,6 +215,6 @@ class TestAerialSpanStraightLine:
         from django.core.exceptions import ValidationError
 
         pole = make_pole("P1", 0, 0)
-        span = AerialSpan(start_structure=pole, end_structure=pole)
+        span = Pathway(pathway_type="aerial", start_structure=pole, end_structure=pole)
         with pytest.raises(ValidationError, match="two different supports"):
             span.clean()

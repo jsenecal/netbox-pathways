@@ -3,14 +3,9 @@
 import strawberry_django
 
 from ..models import (
-    AerialSpan,
     CableSegment,
     CircuitGeometry,
-    Conduit,
-    ConduitBank,
     ConduitJunction,
-    DirectBuried,
-    Innerduct,
     Pathway,
     PathwayLocation,
     PlannedRoute,
@@ -22,12 +17,7 @@ __all__ = (
     "StructureFilter",
     "SiteGeometryFilter",
     "CircuitGeometryFilter",
-    "ConduitBankFilter",
     "PathwayFilter",
-    "ConduitFilter",
-    "AerialSpanFilter",
-    "DirectBuriedFilter",
-    "InnerductFilter",
     "ConduitJunctionFilter",
     "PathwayLocationFilter",
     "CableSegmentFilter",
@@ -73,60 +63,18 @@ class PathwayFilter:
     label: str | None
     status: str | None
     pathway_type: str | None
+    parent_id: int | None
     start_structure_id: int | None
     end_structure_id: int | None
     start_location_id: int | None
     end_location_id: int | None
     tenant_id: int | None
-
-
-@strawberry_django.filter_type(ConduitBank)
-class ConduitBankFilter:
-    """GraphQL filter for ConduitBank."""
-
-    id: int | None
-    label: str | None
-    status: str | None
     configuration: str | None
     encasement_type: str | None
-
-
-@strawberry_django.filter_type(Conduit)
-class ConduitFilter:
-    """GraphQL filter for Conduit."""
-
-    id: int | None
-    status: str | None
     material: str | None
-    conduit_bank_id: int | None
-
-
-@strawberry_django.filter_type(AerialSpan)
-class AerialSpanFilter:
-    """GraphQL filter for AerialSpan."""
-
-    id: int | None
-    status: str | None
     aerial_type: str | None
-
-
-@strawberry_django.filter_type(DirectBuried)
-class DirectBuriedFilter:
-    """GraphQL filter for DirectBuried."""
-
-    id: int | None
-    status: str | None
     warning_tape: bool | None
     tracer_wire: bool | None
-
-
-@strawberry_django.filter_type(Innerduct)
-class InnerductFilter:
-    """GraphQL filter for Innerduct."""
-
-    id: int | None
-    status: str | None
-    parent_conduit_id: int | None
     size: str | None
     color: str | None
 

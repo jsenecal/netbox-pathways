@@ -16,63 +16,20 @@ class StructureIndex(SearchIndex):
 
 
 @register_search
-class ConduitIndex(SearchIndex):
-    model = models.Conduit
-    fields = (
-        ("label", 100),
-        ("material", 200),
-        ("bank_position", 300),
-        ("comments", 5000),
-    )
-    display_attrs = ("status", "material", "start_structure", "end_structure")
-
-
-@register_search
-class AerialSpanIndex(SearchIndex):
-    model = models.AerialSpan
-    fields = (
-        ("label", 100),
-        ("aerial_type", 200),
-        ("messenger_size", 300),
-        ("comments", 5000),
-    )
-    display_attrs = ("status", "aerial_type", "start_structure", "end_structure")
-
-
-@register_search
-class DirectBuriedIndex(SearchIndex):
-    model = models.DirectBuried
-    fields = (
-        ("label", 100),
-        ("armor_type", 200),
-        ("comments", 5000),
-    )
-    display_attrs = ("status", "start_structure", "end_structure")
-
-
-@register_search
-class InnerductIndex(SearchIndex):
-    model = models.Innerduct
+class PathwayIndex(SearchIndex):
+    model = models.Pathway
     fields = (
         ("label", 100),
         ("size", 200),
+        ("material", 200),
+        ("aerial_type", 200),
+        ("armor_type", 200),
+        ("messenger_size", 300),
         ("position", 300),
         ("comments", 5000),
     )
     # Color is stored as a hex code -- not worth indexing or displaying as text.
-    display_attrs = ("status", "parent_conduit", "size")
-
-
-@register_search
-class ConduitBankIndex(SearchIndex):
-    model = models.ConduitBank
-    fields = (
-        ("label", 100),
-        ("configuration", 200),
-        ("encasement_type", 300),
-        ("comments", 5000),
-    )
-    display_attrs = ("status", "start_structure", "end_structure", "configuration", "total_conduits")
+    display_attrs = ("pathway_type", "status", "parent", "start_structure", "end_structure")
 
 
 @register_search

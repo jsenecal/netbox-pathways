@@ -2,9 +2,8 @@ import pytest
 from django.contrib.gis.geos import LineString, Point, Polygon
 from django.core.exceptions import ValidationError
 
-from netbox_pathways.forms import ConduitBankForm, PathwayForm, PathwaysMapWidget
 from netbox_pathways.geo import get_srid, to_leaflet
-from netbox_pathways.models import Conduit, ConduitBank, ConduitJunction, Innerduct, Pathway, Structure
+from netbox_pathways.models import ConduitJunction, Pathway, Structure
 
 SRID = get_srid()
 
@@ -14,20 +13,21 @@ def _make_structure(name, geom):
 
 
 def _make_pathway(geometry, start_structure=None, end_structure=None, **kwargs):
-    pw = Pathway(
+    # A type with no endpoint requirements, so each test sets only the side it checks.
+    return Pathway(
+        pathway_type="direct_buried",
         geometry=geometry,
         start_structure=start_structure,
         end_structure=end_structure,
         **kwargs,
     )
-    pw.pathway_type = "conduit"
-    return pw
 
 
 def _make_bank(prefix):
     s1 = _make_structure(f"{prefix}-S1", Point(0, 0, srid=SRID))
     s2 = _make_structure(f"{prefix}-S2", Point(100, 100, srid=SRID))
-    bank = ConduitBank(
+    bank = Pathway(
+        pathway_type="conduit_bank",
         label=f"BANK-{prefix}",
         geometry=LineString((0, 0), (100, 100), srid=SRID),
         start_structure=s1,
@@ -121,19 +121,19 @@ class TestConduitJunctionValidation:
     def trunk_setup(self):
         s1 = _make_structure("JS1", Point(0, 0, srid=SRID))
         s2 = _make_structure("JS2", Point(1000, 0, srid=SRID))
-        trunk = Conduit(
+        trunk = Pathway(
+            pathway_type="conduit",
             geometry=LineString((0, 0), (1000, 0), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
-        trunk.pathway_type = "conduit"
         trunk.save()
-        branch = Conduit(
+        branch = Pathway(
+            pathway_type="conduit",
             geometry=LineString((500, 100), (500, 500), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
-        branch.pathway_type = "conduit"
         branch.save()
         junction = ConduitJunction.objects.create(
             trunk_conduit=trunk,
@@ -145,33 +145,36 @@ class TestConduitJunctionValidation:
 
     def test_junction_within_tolerance_snaps(self, trunk_setup):
         s1, s2, trunk, junction = trunk_setup
-        c = Conduit(
+        c = Pathway(
+            pathway_type="conduit",
             geometry=LineString((500.5, 0.3), (1000, 0), srid=SRID),
             start_junction=junction,
             end_structure=s2,
         )
-        c.pathway_type = "conduit"
         c.clean()
         assert abs(c.geometry.coords[0][0] - 500.0) < 0.01
         assert abs(c.geometry.coords[0][1] - 0.0) < 0.01
 
     def test_junction_beyond_tolerance_raises(self, trunk_setup):
         s1, s2, trunk, junction = trunk_setup
-        c = Conduit(
+        c = Pathway(
+            pathway_type="conduit",
             geometry=LineString((510, 10), (1000, 0), srid=SRID),
             start_junction=junction,
             end_structure=s2,
         )
-        c.pathway_type = "conduit"
         with pytest.raises(ValidationError, match="start.*junction"):
             c.clean()
 
 
+@pytest.mark.xfail(reason="forms.py moves to the single pathway model in Task 10", strict=True)
 @pytest.mark.django_db
 class TestPathAutoGeneration:
     def test_blank_path_with_two_point_structures_generates_line(self):
         s1 = _make_structure("AG1", Point(100, 200, srid=SRID))
         s2 = _make_structure("AG2", Point(500, 600, srid=SRID))
+        from netbox_pathways.forms import PathwayForm
+
         form = PathwayForm(
             data={
                 "status": "active",
@@ -190,6 +193,8 @@ class TestPathAutoGeneration:
         poly2 = Polygon(((100, 100), (110, 100), (110, 110), (100, 110), (100, 100)), srid=SRID)
         s1 = _make_structure("AG3", poly1)
         s2 = _make_structure("AG4", poly2)
+        from netbox_pathways.forms import PathwayForm
+
         form = PathwayForm(
             data={
                 "status": "active",
@@ -205,6 +210,8 @@ class TestPathAutoGeneration:
 
     def test_blank_path_with_only_one_structure_errors(self):
         s1 = _make_structure("AG5", Point(100, 200, srid=SRID))
+        from netbox_pathways.forms import PathwayForm
+
         form = PathwayForm(
             data={
                 "start_structure": s1.pk,
@@ -215,6 +222,8 @@ class TestPathAutoGeneration:
         assert "geometry" in form.errors or "__all__" in form.errors
 
     def test_blank_path_no_structures_errors(self):
+        from netbox_pathways.forms import PathwayForm
+
         form = PathwayForm(data={"tags": []})
         assert not form.is_valid()
 
@@ -223,6 +232,8 @@ class TestPathAutoGeneration:
         s2 = _make_structure("AG7", Point(500, 600, srid=SRID))
         path = LineString((100, 200), (300, 400), (500, 600), srid=SRID)
         path_4326 = to_leaflet(path)
+        from netbox_pathways.forms import PathwayForm
+
         form = PathwayForm(
             data={
                 "status": "active",
@@ -236,8 +247,11 @@ class TestPathAutoGeneration:
         assert len(form.cleaned_data["geometry"].coords) == 3
 
 
+@pytest.mark.xfail(reason="forms.py moves to the single pathway model in Task 10", strict=True)
 class TestWidgetEndpointRendering:
     def test_renders_endpoint_script_tag(self):
+        from netbox_pathways.forms import PathwaysMapWidget
+
         widget = PathwaysMapWidget()
         widget.endpoint_geojson = {
             "start": {"type": "Point", "coordinates": [-73.5, 45.5]},
@@ -248,6 +262,8 @@ class TestWidgetEndpointRendering:
         assert "-73.5" in html
 
     def test_no_endpoint_data_no_script_tag(self):
+        from netbox_pathways.forms import PathwaysMapWidget
+
         widget = PathwaysMapWidget()
         widget.endpoint_geojson = None
         html = widget.render("geometry", None, attrs={"id": "id_path"})
@@ -309,11 +325,14 @@ class TestLocationEndpointValidation:
             loc.delete()
 
 
+@pytest.mark.xfail(reason="forms.py moves to the single pathway model in Task 10", strict=True)
 @pytest.mark.django_db
 class TestEndToEndFormSave:
     def test_conduit_bank_form_generates_and_snaps(self):
         s1 = _make_structure("E2E1", Point(100, 200, srid=SRID))
         s2 = _make_structure("E2E2", Point(500, 600, srid=SRID))
+        from netbox_pathways.forms import ConduitBankForm
+
         form = ConduitBankForm(
             data={
                 "status": "active",
@@ -334,6 +353,8 @@ class TestEndToEndFormSave:
         s2 = _make_structure("E2E4", Point(500, 600, srid=SRID))
         path = LineString((100.3, 200.4), (300, 400), (500.2, 600.1), srid=SRID)
         path_4326 = to_leaflet(path)
+        from netbox_pathways.forms import PathwayForm
+
         form = PathwayForm(
             data={
                 "status": "active",
@@ -362,9 +383,10 @@ class TestContainedPathRequirement:
 
     def test_bank_conduit_without_path_is_valid(self):
         bank, s1, s2 = self._bank()
-        conduit = Conduit(
+        conduit = Pathway(
+            pathway_type="conduit",
             label="C-1",
-            conduit_bank=bank,
+            parent=bank,
             start_structure=s1,
             end_structure=s2,
         )
@@ -373,20 +395,21 @@ class TestContainedPathRequirement:
     def test_standalone_conduit_without_path_raises(self):
         s1 = _make_structure("SA-S1", Point(0, 0, srid=SRID))
         s2 = _make_structure("SA-S2", Point(100, 100, srid=SRID))
-        conduit = Conduit(label="C-2", start_structure=s1, end_structure=s2)
+        conduit = Pathway(pathway_type="conduit", label="C-2", start_structure=s1, end_structure=s2)
         with pytest.raises(ValidationError, match="[Pp]ath"):
             conduit.clean()
 
     def test_innerduct_without_path_is_valid(self):
         bank, s1, s2 = self._bank()
-        parent = Conduit(
+        parent = Pathway(
+            pathway_type="conduit",
             label="C-3",
             geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
         parent.save()
-        duct = Innerduct(label="ID-1", parent_conduit=parent, size="32mm")
+        duct = Pathway(pathway_type="innerduct", label="ID-1", parent=parent, size="32mm")
         duct.clean()  # inherits endpoints from parent; must not raise
 
 
@@ -400,14 +423,14 @@ class TestConduitBankEndpointInheritance:
 
     def test_blank_endpoints_inherit_from_bank_on_clean(self):
         bank, s1, s2 = self._bank()
-        conduit = Conduit(label="C-10", conduit_bank=bank)
+        conduit = Pathway(pathway_type="conduit", label="C-10", parent=bank)
         conduit.clean()
         assert conduit.start_structure == s1
         assert conduit.end_structure == s2
 
     def test_save_persists_inherited_endpoints(self):
         bank, s1, s2 = self._bank()
-        conduit = Conduit(label="C-11", conduit_bank=bank)
+        conduit = Pathway(pathway_type="conduit", label="C-11", parent=bank)
         conduit.save()
         conduit.refresh_from_db()
         assert conduit.start_structure == s1
@@ -416,21 +439,22 @@ class TestConduitBankEndpointInheritance:
     def test_explicit_endpoint_side_is_not_overridden(self):
         bank, s1, s2 = self._bank()
         other = _make_structure("BI-S3", Point(0, 0.5, srid=SRID))
-        conduit = Conduit(label="C-12", conduit_bank=bank, start_structure=other)
+        conduit = Pathway(pathway_type="conduit", label="C-12", parent=bank, start_structure=other)
         conduit.clean()
         assert conduit.start_structure == other
         assert conduit.end_structure == s2
 
     def test_junction_side_is_not_touched(self):
         bank, s1, s2 = self._bank()
-        trunk = Conduit(
+        trunk = Pathway(
+            pathway_type="conduit",
             label="TRUNK",
             geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
         trunk.save()
-        branch = Conduit(label="BRANCH", conduit_bank=bank)
+        branch = Pathway(pathway_type="conduit", label="BRANCH", parent=bank)
         branch.save()
         junction = ConduitJunction.objects.create(
             trunk_conduit=trunk,
@@ -438,7 +462,7 @@ class TestConduitBankEndpointInheritance:
             towards_structure=s2,
             position_on_trunk=0.5,
         )
-        conduit = Conduit(label="C-13", conduit_bank=bank, start_junction=junction)
+        conduit = Pathway(pathway_type="conduit", label="C-13", parent=bank, start_junction=junction)
         conduit.clean()
         assert conduit.start_structure is None
         assert conduit.start_location is None
@@ -446,7 +470,7 @@ class TestConduitBankEndpointInheritance:
 
     def test_bankless_blank_endpoints_still_invalid(self):
         path = LineString((0, 0), (100, 100), srid=SRID)
-        conduit = Conduit(label="C-14", geometry=path)
+        conduit = Pathway(pathway_type="conduit", label="C-14", geometry=path)
         with pytest.raises(ValidationError, match="start point"):
             conduit.clean()
 
@@ -462,11 +486,10 @@ class TestOneEndpointKindPerSide:
         return Location.objects.create(name="OK-Room", slug="ok-room", site=site)
 
     def test_direct_buried_side_naming_structure_and_location_is_rejected(self):
-        from netbox_pathways.models import DirectBuried
-
         s1 = _make_structure("OK-S1", Point(0, 0, srid=SRID))
         s2 = _make_structure("OK-S2", Point(100, 0, srid=SRID))
-        run = DirectBuried(
+        run = Pathway(
+            pathway_type="direct_buried",
             geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=s1,
             start_location=self._room(),
@@ -478,14 +501,20 @@ class TestOneEndpointKindPerSide:
 
     def test_conduit_side_naming_structure_and_junction_is_rejected(self):
         bank, s1, s2 = _make_bank("OK")
-        trunk = Conduit(geometry=LineString((0, 0), (100, 100), srid=SRID), start_structure=s1, end_structure=s2)
+        trunk = Pathway(
+            pathway_type="conduit",
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
+            start_structure=s1,
+            end_structure=s2,
+        )
         trunk.save()
-        branch = Conduit(geometry=LineString((50, 50), (100, 100), srid=SRID), end_structure=s2)
+        branch = Pathway(pathway_type="conduit", geometry=LineString((50, 50), (100, 100), srid=SRID), end_structure=s2)
         branch.save()
         junction = ConduitJunction.objects.create(
             trunk_conduit=trunk, branch_conduit=branch, towards_structure=s2, position_on_trunk=0.5
         )
-        conduit = Conduit(
+        conduit = Pathway(
+            pathway_type="conduit",
             geometry=LineString((50, 50), (100, 100), srid=SRID),
             start_structure=s1,
             start_junction=junction,

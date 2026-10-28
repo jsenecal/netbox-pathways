@@ -7,15 +7,15 @@ values (and legacy CSV imports) working.
 """
 
 import importlib
+from types import SimpleNamespace
 
 import pytest
-from django.apps import apps as global_apps
 from django.contrib.gis.geos import LineString, Point
 from netbox.choices import ColorChoices
 from netbox.tables import columns
 from utilities.forms.widgets import ColorSelect
 
-from netbox_pathways import filterforms, forms, models, tables
+from netbox_pathways import models
 from netbox_pathways.colors import color_to_hex
 from netbox_pathways.geo import get_srid
 
@@ -73,39 +73,57 @@ class TestColorToHex:
         assert color_to_hex(value) is None
 
 
+@pytest.mark.xfail(reason="forms, filter forms and tables move to the single model in Task 10", strict=True)
 class TestInnerductColorWiring:
     def test_edit_form_uses_the_core_color_widget(self, db):
+        from netbox_pathways import forms
+
         assert isinstance(forms.InnerductForm().fields["color"].widget, ColorSelect)
 
     def test_bulk_edit_form_uses_the_core_color_widget(self, db):
+        from netbox_pathways import forms
+
         assert isinstance(forms.InnerductBulkEditForm().fields["color"].widget, ColorSelect)
 
     def test_filter_form_uses_the_core_color_widget(self, db):
+        from netbox_pathways import filterforms
+
         assert isinstance(filterforms.InnerductFilterForm().fields["color"].widget, ColorSelect)
 
     def test_filter_form_exposes_every_innerduct_attribute_filter(self, db):
         """The filterset has always accepted these; the form omitted them."""
+        from netbox_pathways import filterforms
+
         rendered = {item for fieldset in filterforms.InnerductFilterForm.fieldsets for item in fieldset.items}
         assert {"size", "color", "position"} <= rendered
 
     def test_table_renders_color_as_a_swatch(self):
+        from netbox_pathways import tables
+
         assert isinstance(tables.InnerductTable.base_columns["color"], columns.ColorColumn)
 
 
+@pytest.mark.xfail(reason="forms, filter forms and tables move to the single model in Task 10", strict=True)
 class TestInnerductImportColor:
     """CSV import keeps accepting the color names it accepted before."""
 
     def test_a_color_name_is_stored_as_hex(self, db):
+        from netbox_pathways import forms
+
         form = forms.InnerductImportForm(data={"color": "Blue"})
         form.is_valid()  # other required fields are missing; only color matters here
         assert form.cleaned_data["color"] == ColorChoices.COLOR_BLUE
 
     def test_a_hex_code_is_accepted(self, db):
+        from netbox_pathways import forms
+
         form = forms.InnerductImportForm(data={"color": "2196f3"})
         form.is_valid()
         assert form.cleaned_data["color"] == ColorChoices.COLOR_BLUE
 
     def test_an_unrecognized_color_is_rejected(self, db):
+        from netbox_pathways import forms
+
         form = forms.InnerductImportForm(data={"color": "mauve"})
         form.is_valid()
         assert "color" in form.errors
@@ -115,7 +133,8 @@ class TestColorDataMigration:
     """Migration 0022 rewrites the free-text colors already in the table."""
 
     def test_names_become_hex_and_unknowns_are_cleared(self, db, capsys):
-        conduit = models.Conduit.objects.create(
+        conduit = models.Pathway.objects.create(
+            pathway_type="conduit",
             label="color-migration-conduit",
             geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=models.Structure.objects.create(
@@ -129,17 +148,21 @@ class TestColorDataMigration:
         )
         # Values must fit the post-migration column, so keep them short.
         for index, color in enumerate(["orange", "blue", "mauve"]):
-            models.Innerduct.objects.create(
+            models.Pathway.objects.create(
+                pathway_type="innerduct",
                 label=f"color-migration-{index}",
-                parent_conduit=conduit,
+                parent=conduit,
                 size="32mm",
                 color=color,
             )
 
         migration = importlib.import_module("netbox_pathways.migrations.0022_innerduct_color_hex")
-        migration.color_names_to_hex(global_apps, None)
+        # The innerduct table it ran against is now the innerduct rows of Pathway.
+        innerducts = models.Pathway.objects.filter(pathway_type="innerduct")
+        historical = SimpleNamespace(get_model=lambda app_label, name: SimpleNamespace(objects=innerducts))
+        migration.color_names_to_hex(historical, None)
 
-        colors = dict(models.Innerduct.objects.values_list("label", "color"))
+        colors = dict(innerducts.values_list("label", "color"))
         assert colors["color-migration-0"] == ColorChoices.COLOR_ORANGE
         assert colors["color-migration-1"] == ColorChoices.COLOR_BLUE
         assert colors["color-migration-2"] == ""

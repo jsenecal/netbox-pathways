@@ -4,7 +4,7 @@ import pytest
 from dcim.models import Location, Site
 from django.contrib.gis.geos import LineString
 
-from netbox_pathways.models import Conduit, ConduitBank, DirectBuried, SiteGeometry
+from netbox_pathways.models import Pathway, SiteGeometry
 from tests.helpers import SRID, make_building, make_conduit, make_pole
 
 
@@ -33,7 +33,7 @@ def test_save_stores_the_structure_enclosing_a_location_end(building_site):
 
 def test_indoor_pathway_gets_anchors_and_still_needs_no_path(building_site):
     building, room, office = building_site
-    tray = DirectBuried(start_location=room, end_location=office)
+    tray = Pathway(pathway_type="direct_buried", start_location=room, end_location=office)
     tray.full_clean()
     tray.save()
     assert tray.geometry is None
@@ -42,9 +42,14 @@ def test_indoor_pathway_gets_anchors_and_still_needs_no_path(building_site):
 
 def test_bank_conduit_anchors_follow_the_inherited_bank_endpoints(db):
     s1, s2 = make_pole("S1", 0, 0), make_pole("S2", 100, 0)
-    bank = ConduitBank(geometry=LineString((0, 0), (100, 0), srid=SRID), start_structure=s1, end_structure=s2)
+    bank = Pathway(
+        pathway_type="conduit_bank",
+        geometry=LineString((0, 0), (100, 0), srid=SRID),
+        start_structure=s1,
+        end_structure=s2,
+    )
     bank.save()
-    conduit = Conduit(label="C1", conduit_bank=bank)
+    conduit = Pathway(pathway_type="conduit", label="C1", parent=bank)
     conduit.save()
     assert (conduit.start_anchor, conduit.end_anchor) == (s1, s2)
 

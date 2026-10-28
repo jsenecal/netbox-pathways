@@ -19,8 +19,9 @@ class TestAbandonedStatus:
 def test_pathway_geometry_field_named_geometry():
     """The pathway geometry is `geometry`, freeing `path` for the ltree column (#177)."""
     from django.contrib.gis.db.models import LineStringField
+    from netbox.models.ltree import LtreeField
 
     from netbox_pathways.models import Pathway
 
     assert isinstance(Pathway._meta.get_field("geometry"), LineStringField)
-    assert "path" not in {f.name for f in Pathway._meta.fields}
+    assert isinstance(Pathway._meta.get_field("path"), LtreeField)

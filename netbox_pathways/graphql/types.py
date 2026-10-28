@@ -7,14 +7,9 @@ import strawberry_django
 from netbox.graphql.types import NetBoxObjectType
 
 from ..models import (
-    AerialSpan,
     CableSegment,
     CircuitGeometry,
-    Conduit,
-    ConduitBank,
     ConduitJunction,
-    DirectBuried,
-    Innerduct,
     Pathway,
     PathwayLocation,
     PlannedRoute,
@@ -26,12 +21,7 @@ __all__ = (
     "StructureType",
     "SiteGeometryType",
     "CircuitGeometryType",
-    "ConduitBankType",
     "PathwayType",
-    "ConduitType",
-    "AerialSpanType",
-    "DirectBuriedType",
-    "InnerductType",
     "ConduitJunctionType",
     "PathwayLocationType",
     "CableSegmentType",
@@ -57,46 +47,17 @@ class CircuitGeometryType(NetBoxObjectType):
     """GraphQL type for CircuitGeometry (geometry omitted; use the GeoJSON API)."""
 
 
-@strawberry_django.type(Pathway, exclude=["geometry"])
+@strawberry_django.type(Pathway, exclude=["geometry", "path"])
 class PathwayType(NetBoxObjectType):
-    """GraphQL type for Pathway (base; geometry omitted, use the GeoJSON API)."""
-
-    waypoints: list[Annotated["PathwayLocationType", strawberry.lazy(".types")]]
-    cable_segments: list[Annotated["CableSegmentType", strawberry.lazy(".types")]]
-
-
-@strawberry_django.type(ConduitBank, exclude=["geometry"])
-class ConduitBankType(NetBoxObjectType):
-    """GraphQL type for ConduitBank."""
-
-    conduits: list[Annotated["ConduitType", strawberry.lazy(".types")]]
-
-
-@strawberry_django.type(Conduit, exclude=["geometry"])
-class ConduitType(NetBoxObjectType):
-    """GraphQL type for Conduit."""
-
-    innerducts: list[Annotated["InnerductType", strawberry.lazy(".types")]]
-    junctions_on_trunk: list[Annotated["ConduitJunctionType", strawberry.lazy(".types")]]
-    junction_as_branch: list[Annotated["ConduitJunctionType", strawberry.lazy(".types")]]
-
-
-@strawberry_django.type(AerialSpan, exclude=["geometry"])
-class AerialSpanType(NetBoxObjectType):
-    """GraphQL type for AerialSpan."""
-
-
-@strawberry_django.type(DirectBuried, exclude=["geometry"])
-class DirectBuriedType(NetBoxObjectType):
-    """GraphQL type for DirectBuried."""
-
-
-@strawberry_django.type(Innerduct, exclude=["geometry"])
-class InnerductType(NetBoxObjectType):
-    """GraphQL type for Innerduct."""
+    """GraphQL type for Pathway (geometry omitted, use the GeoJSON API)."""
 
     # ColorField has no strawberry mapping; core declares it the same way.
     color: str
+    children: list[Annotated["PathwayType", strawberry.lazy(".types")]]
+    junctions_on_trunk: list[Annotated["ConduitJunctionType", strawberry.lazy(".types")]]
+    junction_as_branch: list[Annotated["ConduitJunctionType", strawberry.lazy(".types")]]
+    waypoints: list[Annotated["PathwayLocationType", strawberry.lazy(".types")]]
+    cable_segments: list[Annotated["CableSegmentType", strawberry.lazy(".types")]]
 
 
 @strawberry_django.type(ConduitJunction, fields="__all__")
