@@ -384,15 +384,19 @@ function _detailPageUrl(entry: FeatureEntry): string {
             ? extCfg.detail.urlTemplate.replace('{id}', String(id))
             : '';
     }
-    const base = '/plugins/pathways/';
-    switch (entry.featureType) {
-        case 'structure':     return base + 'structures/' + id + '/';
-        case 'conduit_bank':  return base + 'conduit-banks/' + id + '/';
-        case 'conduit':       return base + 'conduits/' + id + '/';
-        case 'aerial':        return base + 'aerial-spans/' + id + '/';
-        case 'direct_buried': return base + 'direct-buried/' + id + '/';
-        case 'circuit':       return base + 'circuit-geometries/' + id + '/';
-        default:              return base + 'pathways/' + id + '/';
+    return '/plugins/pathways/' + _nativeResourcePath(entry.featureType, id);
+}
+
+/**
+ * Path of a native feature's resource below the plugin root, shared by the
+ * UI page and the REST detail URL. Every pathway type, whatever its feature
+ * type on the map, lives under the single ``pathways/`` resource.
+ */
+function _nativeResourcePath(featureType: string, id: unknown): string {
+    switch (featureType) {
+        case 'structure': return 'structures/' + id + '/';
+        case 'circuit':   return 'circuit-geometries/' + id + '/';
+        default:          return 'pathways/' + id + '/';
     }
 }
 
@@ -404,23 +408,7 @@ function _apiUrlForFeature(entry: FeatureEntry): string {
 
     // Native types use the pathways API
     if (_isNativeType(entry.featureType)) {
-        const base = API_BASE.replace(/geo\/?$/, '');
-        switch (entry.featureType) {
-            case 'structure':
-                return base + 'structures/' + id + '/';
-            case 'conduit_bank':
-                return base + 'conduit-banks/' + id + '/';
-            case 'conduit':
-                return base + 'conduits/' + id + '/';
-            case 'aerial':
-                return base + 'aerial-spans/' + id + '/';
-            case 'direct_buried':
-                return base + 'direct-buried/' + id + '/';
-            case 'circuit':
-                return base + 'circuit-geometries/' + id + '/';
-            default:
-                return base + 'pathways/' + id + '/';
-        }
+        return API_BASE.replace(/geo\/?$/, '') + _nativeResourcePath(entry.featureType, id);
     }
 
     // External features only enrich via an explicit `url` property (handled

@@ -324,8 +324,13 @@ import { lineStyle } from './line-style';
 
     // --- Dynamic GeoJSON Loading ---
 
-    function _fetchGeoJSON(endpoint: string, callback: (data: GeoJSON.FeatureCollection) => void): void {
-        const url: string = API_BASE + endpoint + '?format=json&limit=1000';
+    function _fetchGeoJSON(
+        endpoint: string,
+        callback: (data: GeoJSON.FeatureCollection) => void,
+        params: Record<string, string> = {},
+    ): void {
+        const query = new URLSearchParams({ ...params, format: 'json', limit: '1000' });
+        const url: string = API_BASE + endpoint + '?' + query.toString();
         const xhr = new XMLHttpRequest();
         xhr.open('GET', url);
         xhr.setRequestHeader('Accept', 'application/json');
@@ -345,6 +350,12 @@ import { lineStyle } from './line-style';
         xhr.send();
     }
 
+    const PATHWAY_TYPE_OVERLAYS: { pathwayType: string; label: string; color: string }[] = [
+        { pathwayType: 'conduit', label: 'Conduits', color: 'brown' },
+        { pathwayType: 'aerial', label: 'Aerial Spans', color: 'blue' },
+        { pathwayType: 'direct_buried', label: 'Direct Buried', color: 'gray' },
+    ];
+
     function loadDynamicLayers(map: L.Map, layerControl: L.Control.Layers): void {
         _fetchGeoJSON('structures/', function (data: GeoJSON.FeatureCollection) {
             const layer: L.GeoJSON = L.geoJSON(data, {
@@ -363,28 +374,15 @@ import { lineStyle } from './line-style';
             layerControl.addOverlay(layer, 'Pathways (all)');
         });
 
-        _fetchGeoJSON('conduits/', function (data: GeoJSON.FeatureCollection) {
-            const layer: L.GeoJSON = L.geoJSON(data, {
-                style: function (): L.PathOptions { return { color: 'brown', weight: 3, opacity: 0.7 }; },
-                onEachFeature: _pathwayPopup,
-            });
-            layerControl.addOverlay(layer, 'Conduits');
-        });
-
-        _fetchGeoJSON('aerial-spans/', function (data: GeoJSON.FeatureCollection) {
-            const layer: L.GeoJSON = L.geoJSON(data, {
-                style: function (): L.PathOptions { return { color: 'blue', weight: 3, opacity: 0.7 }; },
-                onEachFeature: _pathwayPopup,
-            });
-            layerControl.addOverlay(layer, 'Aerial Spans');
-        });
-
-        _fetchGeoJSON('direct-buried/', function (data: GeoJSON.FeatureCollection) {
-            const layer: L.GeoJSON = L.geoJSON(data, {
-                style: function (): L.PathOptions { return { color: 'gray', weight: 3, opacity: 0.7 }; },
-                onEachFeature: _pathwayPopup,
-            });
-            layerControl.addOverlay(layer, 'Direct Buried');
+        // Per-type overlays all come from the single pathways endpoint.
+        PATHWAY_TYPE_OVERLAYS.forEach(function (overlay) {
+            _fetchGeoJSON('pathways/', function (data: GeoJSON.FeatureCollection) {
+                const layer: L.GeoJSON = L.geoJSON(data, {
+                    style: function (): L.PathOptions { return { color: overlay.color, weight: 3, opacity: 0.7 }; },
+                    onEachFeature: _pathwayPopup,
+                });
+                layerControl.addOverlay(layer, overlay.label);
+            }, { pathway_type: overlay.pathwayType });
         });
     }
 

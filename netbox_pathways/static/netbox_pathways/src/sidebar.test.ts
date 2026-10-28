@@ -549,3 +549,37 @@ describe('Polygon structure features', () => {
         expect(map.flyTo).toHaveBeenCalled();
     });
 });
+
+// ---------------------------------------------------------------------------
+// Every pathway type is served by the single pathways resource; the per-type
+// REST and UI URLs are gone (refs #177).
+// ---------------------------------------------------------------------------
+
+describe('Pathway detail URLs', () => {
+    beforeEach(() => {
+        buildDOM(false);
+        mockDeps();
+        Sidebar.init(createMockMap() as any, false);
+    });
+
+    it.each(['conduit_bank', 'conduit', 'aerial', 'direct_buried'])(
+        'fetches and links %s features through pathways/<id>/',
+        async (featureType) => {
+            const fetchMock = vi.fn(async (_url: string) => ({
+                ok: true,
+                status: 200,
+                headers: { get: () => '' },
+                json: async () => ({ id: 42, label: 'P42' }),
+            }));
+            vi.stubGlobal('fetch', fetchMock);
+
+            Sidebar.showDetail(makeEntry({ featureType: featureType as any, props: { id: 42, name: 'P42' } }));
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(fetchMock.mock.calls[0][0]).toBe('/api/plugins/pathways/pathways/42/');
+            const link = document.querySelector('#pw-detail-body a.btn') as HTMLAnchorElement | null;
+            expect(link!.getAttribute('href')).toBe('/plugins/pathways/pathways/42/');
+        },
+    );
+});
