@@ -16,6 +16,10 @@ from netbox_pathways.models import ConduitJunction, Pathway, Structure
 
 SRID = get_srid()
 
+# Binding a form reverses the plugin's URLs, which import the UI views that
+# only move to the single pathway model in Task 11.
+NEEDS_UI_URLS = pytest.mark.xfail(reason="the UI views move to the single model in Task 11", strict=True)
+
 
 @pytest.fixture
 def locations(db):
@@ -79,15 +83,16 @@ class TestIndoorPathwayModelValidation:
         assert "geometry" in exc.value.message_dict
 
 
-@pytest.mark.xfail(reason="forms.py moves to the single pathway model in Task 10", strict=True)
+@NEEDS_UI_URLS
 @pytest.mark.django_db
 class TestIndoorPathwayForms:
     def test_conduit_form_between_two_locations_is_valid(self, locations):
         loc_a, loc_b = locations
-        from netbox_pathways.forms import ConduitForm
+        from netbox_pathways.forms import PathwayForm
 
-        form = ConduitForm(
+        form = PathwayForm(
             data={
+                "pathway_type": "conduit",
                 "status": "active",
                 "start_location": loc_a.pk,
                 "end_location": loc_b.pk,
@@ -102,10 +107,11 @@ class TestIndoorPathwayForms:
     def test_conduit_form_structure_and_location_without_path_errors(self, locations):
         _, loc_b = locations
         s1 = _make_structure("IPF1", Point(0, 0, srid=SRID))
-        from netbox_pathways.forms import ConduitForm
+        from netbox_pathways.forms import PathwayForm
 
-        form = ConduitForm(
+        form = PathwayForm(
             data={
+                "pathway_type": "conduit",
                 "start_structure": s1.pk,
                 "end_location": loc_b.pk,
                 "tags": [],
@@ -118,12 +124,13 @@ class TestIndoorPathwayForms:
         loc_a, loc_b = locations
         parent = _make_conduit(start_location=loc_a, end_location=loc_b)
         parent.save()
-        from netbox_pathways.forms import InnerductForm
+        from netbox_pathways.forms import PathwayForm
 
-        form = InnerductForm(
+        form = PathwayForm(
             data={
+                "pathway_type": "innerduct",
                 "status": "active",
-                "parent_conduit": parent.pk,
+                "parent": parent.pk,
                 "size": "32mm",
                 "tags": [],
             }

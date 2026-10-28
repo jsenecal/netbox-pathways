@@ -87,46 +87,48 @@ class TestInnerductColorFilterForm:
         assert {"size", "color", "position"} <= rendered
 
 
-@pytest.mark.xfail(reason="forms and tables move to the single model in Task 10", strict=True)
 class TestInnerductColorWiring:
     def test_edit_form_uses_the_core_color_widget(self, db):
         from netbox_pathways import forms
 
-        assert isinstance(forms.InnerductForm().fields["color"].widget, ColorSelect)
+        form = forms.PathwayForm(initial={"pathway_type": "innerduct"})
+        assert isinstance(form.fields["color"].widget, ColorSelect)
 
     def test_bulk_edit_form_uses_the_core_color_widget(self, db):
         from netbox_pathways import forms
 
-        assert isinstance(forms.InnerductBulkEditForm().fields["color"].widget, ColorSelect)
+        assert isinstance(forms.PathwayBulkEditForm().fields["color"].widget, ColorSelect)
 
+
+@pytest.mark.xfail(reason="tables move to the single model in Task 11", strict=True)
+class TestInnerductColorTable:
     def test_table_renders_color_as_a_swatch(self):
         from netbox_pathways import tables
 
         assert isinstance(tables.InnerductTable.base_columns["color"], columns.ColorColumn)
 
 
-@pytest.mark.xfail(reason="forms and tables move to the single model in Task 10", strict=True)
 class TestInnerductImportColor:
     """CSV import keeps accepting the color names it accepted before."""
 
     def test_a_color_name_is_stored_as_hex(self, db):
         from netbox_pathways import forms
 
-        form = forms.InnerductImportForm(data={"color": "Blue"})
+        form = forms.PathwayImportForm(data={"pathway_type": "innerduct", "color": "Blue"})
         form.is_valid()  # other required fields are missing; only color matters here
         assert form.cleaned_data["color"] == ColorChoices.COLOR_BLUE
 
     def test_a_hex_code_is_accepted(self, db):
         from netbox_pathways import forms
 
-        form = forms.InnerductImportForm(data={"color": "2196f3"})
+        form = forms.PathwayImportForm(data={"pathway_type": "innerduct", "color": "2196f3"})
         form.is_valid()
         assert form.cleaned_data["color"] == ColorChoices.COLOR_BLUE
 
     def test_an_unrecognized_color_is_rejected(self, db):
         from netbox_pathways import forms
 
-        form = forms.InnerductImportForm(data={"color": "mauve"})
+        form = forms.PathwayImportForm(data={"pathway_type": "innerduct", "color": "mauve"})
         form.is_valid()
         assert "color" in form.errors
 

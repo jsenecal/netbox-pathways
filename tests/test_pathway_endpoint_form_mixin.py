@@ -4,17 +4,22 @@ import pytest
 from dcim.models import Location, Site
 from django.contrib.gis.geos import LineString, Point, Polygon
 
-from netbox_pathways.forms import AerialSpanForm, ConduitForm, InnerductForm
+from netbox_pathways.forms import PathwayForm
 from netbox_pathways.geo import get_srid, to_leaflet
-from netbox_pathways.models import Conduit, ConduitBank, Structure
+from netbox_pathways.models import Pathway, Structure
 
 SRID = get_srid()
+
+# Binding a form reverses the plugin's URLs, which import the UI views that
+# only move to the single pathway model in Task 11.
+NEEDS_UI_URLS = pytest.mark.xfail(reason="the UI views move to the single model in Task 11", strict=True)
 
 
 def _make_structure(name, geom):
     return Structure.objects.create(name=name, geometry=geom)
 
 
+@NEEDS_UI_URLS
 @pytest.mark.django_db
 class TestPathwayEndpointFormMixinClean:
     def test_provided_path_is_kept(self):
@@ -22,8 +27,9 @@ class TestPathwayEndpointFormMixinClean:
         s1 = _make_structure("S1", Point(0, 0, srid=SRID))
         s2 = _make_structure("S2", Point(100, 100, srid=SRID))
         explicit_path = LineString((0, 0), (50, 50), (100, 100), srid=SRID)
-        form = ConduitForm(
+        form = PathwayForm(
             data={
+                "pathway_type": "conduit",
                 "status": "active",
                 "geometry": to_leaflet(explicit_path).geojson,
                 "start_structure": s1.pk,
@@ -39,8 +45,14 @@ class TestPathwayEndpointFormMixinClean:
         """Aerial spans derive their own path; the mixin must not synthesize a centroid line."""
         building = _make_structure("AF-B", Polygon(((0, 0), (10, 0), (10, 10), (0, 10), (0, 0)), srid=SRID))
         pole = _make_structure("AF-P", Point(60, 3, srid=SRID))
-        form = AerialSpanForm(
-            data={"status": "active", "start_structure": building.pk, "end_structure": pole.pk, "tags": []}
+        form = PathwayForm(
+            data={
+                "pathway_type": "aerial",
+                "status": "active",
+                "start_structure": building.pk,
+                "end_structure": pole.pk,
+                "tags": [],
+            }
         )
         assert form.is_valid(), form.errors
         assert [(round(x, 6), round(y, 6)) for x, y in form.instance.geometry.coords] == [(10.0, 3.0), (60.0, 3.0)]
@@ -50,8 +62,9 @@ class TestPathwayEndpointFormMixinClean:
         must construct a straight LineString between the two points."""
         s1 = _make_structure("S1", Point(0, 0, srid=SRID))
         s2 = _make_structure("S2", Point(100, 100, srid=SRID))
-        form = ConduitForm(
+        form = PathwayForm(
             data={
+                "pathway_type": "conduit",
                 "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
@@ -67,8 +80,9 @@ class TestPathwayEndpointFormMixinClean:
         poly = Polygon(((0, 0), (10, 0), (10, 10), (0, 10), (0, 0)), srid=SRID)
         s1 = _make_structure("S1", poly)
         s2 = _make_structure("S2", Point(100, 100, srid=SRID))
-        form = ConduitForm(
+        form = PathwayForm(
             data={
+                "pathway_type": "conduit",
                 "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
@@ -86,18 +100,19 @@ class TestPathwayEndpointFormMixinClean:
         parent's structures. Behavior change for issue #77."""
         s1 = _make_structure("S1", Point(0, 0, srid=SRID))
         s2 = _make_structure("S2", Point(100, 100, srid=SRID))
-        parent = Conduit(
+        parent = Pathway(
+            pathway_type="conduit",
             label="C1",
             geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
-        parent.pathway_type = "conduit"
         parent.save()
-        form = InnerductForm(
+        form = PathwayForm(
             data={
+                "pathway_type": "innerduct",
                 "status": "active",
-                "parent_conduit": parent.pk,
+                "parent": parent.pk,
                 "size": "32mm",
                 "tags": [],
             }
@@ -110,17 +125,19 @@ class TestPathwayEndpointFormMixinClean:
         route geometry. Behavior change for issue #77."""
         s1 = _make_structure("S1", Point(0, 0, srid=SRID))
         s2 = _make_structure("S2", Point(100, 100, srid=SRID))
-        bank = ConduitBank(
+        bank = Pathway(
+            pathway_type="conduit_bank",
             label="BANK-1",
             geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
         bank.save()
-        form = ConduitForm(
+        form = PathwayForm(
             data={
+                "pathway_type": "conduit",
                 "status": "active",
-                "conduit_bank": bank.pk,
+                "parent": bank.pk,
                 "tags": [],
             }
         )
@@ -129,7 +146,7 @@ class TestPathwayEndpointFormMixinClean:
 
     def test_no_path_no_structures_raises_validation_error(self):
         """Without a path and without structures, the mixin must reject."""
-        form = ConduitForm(data={"tags": []})
+        form = PathwayForm(data={"pathway_type": "conduit", "tags": []})
         assert not form.is_valid()
         assert "geometry" in form.errors
 
@@ -141,16 +158,16 @@ class TestInjectEndpointGeometry:
         label the locked markers like it labels reference structures."""
         s1 = _make_structure("MH-100", Point(0, 0, srid=SRID))
         s2 = _make_structure("MH-200", Point(100, 100, srid=SRID))
-        conduit = Conduit(
+        conduit = Pathway(
+            pathway_type="conduit",
             label="C1",
             geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
-        conduit.pathway_type = "conduit"
         conduit.save()
 
-        form = ConduitForm(instance=conduit)
+        form = PathwayForm(instance=conduit)
         data = form.fields["geometry"].widget.endpoint_geojson
         assert data["start"]["type"] == "Point"
         assert data["end"]["type"] == "Point"
@@ -158,20 +175,20 @@ class TestInjectEndpointGeometry:
         assert data["end_name"] == "MH-200"
 
     def test_no_endpoints_injects_nothing(self):
-        form = ConduitForm()
+        form = PathwayForm(initial={"pathway_type": "conduit"})
         assert form.fields["geometry"].widget.endpoint_geojson is None
 
     def test_aerial_span_form_requests_straight_mode(self):
-        form = AerialSpanForm()
+        form = PathwayForm(initial={"pathway_type": "aerial"})
         assert form.fields["geometry"].widget.endpoint_geojson == {"straight": True}
 
     def test_location_identity_structure_is_injected(self):
         site = Site.objects.create(name="Inj-Site", slug="inj-site")
         loc = Location.objects.create(name="Inj-Loc", slug="inj-loc", site=site)
         Structure.objects.create(name="Vault-9", geometry=Point(0, 0, srid=SRID), location=loc)
-        conduit = Conduit(start_location=loc, geometry=LineString((0, 0), (10, 0), srid=SRID))
+        conduit = Pathway(pathway_type="conduit", start_location=loc, geometry=LineString((0, 0), (10, 0), srid=SRID))
 
-        form = ConduitForm(instance=conduit)
+        form = PathwayForm(instance=conduit)
 
         data = form.fields["geometry"].widget.endpoint_geojson
         assert data["start_name"] == "Vault-9"

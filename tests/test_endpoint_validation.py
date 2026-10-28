@@ -7,6 +7,10 @@ from netbox_pathways.models import ConduitJunction, Pathway, Structure
 
 SRID = get_srid()
 
+# Binding a form reverses the plugin's URLs, which import the UI views that
+# only move to the single pathway model in Task 11.
+NEEDS_UI_URLS = pytest.mark.xfail(reason="the UI views move to the single model in Task 11", strict=True)
+
 
 def _make_structure(name, geom):
     return Structure.objects.create(name=name, geometry=geom)
@@ -167,7 +171,7 @@ class TestConduitJunctionValidation:
             c.clean()
 
 
-@pytest.mark.xfail(reason="forms.py moves to the single pathway model in Task 10", strict=True)
+@NEEDS_UI_URLS
 @pytest.mark.django_db
 class TestPathAutoGeneration:
     def test_blank_path_with_two_point_structures_generates_line(self):
@@ -177,6 +181,7 @@ class TestPathAutoGeneration:
 
         form = PathwayForm(
             data={
+                "pathway_type": "direct_buried",
                 "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
@@ -197,6 +202,7 @@ class TestPathAutoGeneration:
 
         form = PathwayForm(
             data={
+                "pathway_type": "direct_buried",
                 "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
@@ -214,6 +220,7 @@ class TestPathAutoGeneration:
 
         form = PathwayForm(
             data={
+                "pathway_type": "direct_buried",
                 "start_structure": s1.pk,
                 "tags": [],
             }
@@ -224,7 +231,7 @@ class TestPathAutoGeneration:
     def test_blank_path_no_structures_errors(self):
         from netbox_pathways.forms import PathwayForm
 
-        form = PathwayForm(data={"tags": []})
+        form = PathwayForm(data={"pathway_type": "direct_buried", "tags": []})
         assert not form.is_valid()
 
     def test_provided_path_not_overwritten(self):
@@ -236,6 +243,7 @@ class TestPathAutoGeneration:
 
         form = PathwayForm(
             data={
+                "pathway_type": "direct_buried",
                 "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
@@ -247,7 +255,6 @@ class TestPathAutoGeneration:
         assert len(form.cleaned_data["geometry"].coords) == 3
 
 
-@pytest.mark.xfail(reason="forms.py moves to the single pathway model in Task 10", strict=True)
 class TestWidgetEndpointRendering:
     def test_renders_endpoint_script_tag(self):
         from netbox_pathways.forms import PathwaysMapWidget
@@ -325,16 +332,17 @@ class TestLocationEndpointValidation:
             loc.delete()
 
 
-@pytest.mark.xfail(reason="forms.py moves to the single pathway model in Task 10", strict=True)
+@NEEDS_UI_URLS
 @pytest.mark.django_db
 class TestEndToEndFormSave:
     def test_conduit_bank_form_generates_and_snaps(self):
         s1 = _make_structure("E2E1", Point(100, 200, srid=SRID))
         s2 = _make_structure("E2E2", Point(500, 600, srid=SRID))
-        from netbox_pathways.forms import ConduitBankForm
+        from netbox_pathways.forms import PathwayForm
 
-        form = ConduitBankForm(
+        form = PathwayForm(
             data={
+                "pathway_type": "conduit_bank",
                 "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,
@@ -357,6 +365,7 @@ class TestEndToEndFormSave:
 
         form = PathwayForm(
             data={
+                "pathway_type": "direct_buried",
                 "status": "active",
                 "start_structure": s1.pk,
                 "end_structure": s2.pk,

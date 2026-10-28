@@ -16,6 +16,8 @@ from utilities.forms.fields import (
     DynamicModelMultipleChoiceField,
 )
 from utilities.forms.rendering import FieldSet
+from utilities.forms.utils import add_blank_choice, get_field_value
+from utilities.forms.widgets import HTMXSelect
 
 from .choices import (
     AerialTypeChoices,
@@ -24,6 +26,7 @@ from .choices import (
     ConduitMaterialChoices,
     EncasementTypeChoices,
     PathwayStatusChoices,
+    PathwayTypeChoices,
     PlannedRouteStatusChoices,
     StructureStatusChoices,
     StructureTypeChoices,
@@ -47,20 +50,16 @@ from .filterforms import (
 )
 from .geo import get_srid, to_leaflet
 from .models import (
-    AerialSpan,
     CableSegment,
     CircuitGeometry,
-    Conduit,
-    ConduitBank,
     ConduitJunction,
-    DirectBuried,
-    Innerduct,
     Pathway,
     PathwayLocation,
     PlannedRoute,
     SiteGeometry,
     Structure,
 )
+from .pathway_types import PATHWAY_TYPES, TYPE_SPECIFIC_FIELDS, inapplicable_fields
 
 _IMPORT_GEOMETRY_HELP = (
     "GeoJSON, WKT (POINT/LINESTRING), DMS (hemisphere letters optional; lat-first "
@@ -159,9 +158,22 @@ class PathwayGeometryFallbackMixin:
     Shared by the interactive pathway forms and the CSV import forms so both
     have the same semantics: structure-to-structure entries get a straight
     LineString between the structures, location-to-location (indoor) entries
-    need no geometry at all. Contained pathways (conduits in banks,
+    need no geometry at all. Pathways with a parent (conduits in banks,
     innerducts) follow the parent's route and need no geometry.
     """
+
+    def selected_pathway_type(self):
+        """The pathway type this form is for: cleaned, submitted or initial value, else the instance's."""
+        cleaned = getattr(self, "cleaned_data", None) or {}
+        if cleaned.get("pathway_type"):
+            return cleaned["pathway_type"]
+        if "pathway_type" in self.fields and (chosen := get_field_value(self, "pathway_type")):
+            return chosen
+        return self.instance.pathway_type
+
+    def _derives_geometry(self):
+        rules = PATHWAY_TYPES.get(self.selected_pathway_type())
+        return bool(rules and rules.derives_geometry)
 
     def clean(self):
         super().clean()
@@ -169,13 +181,13 @@ class PathwayGeometryFallbackMixin:
         if cleaned.get("geometry"):
             return cleaned
 
-        # Contained pathways (a conduit in a bank, an innerduct) follow the
-        # parent's route; never synthesize standalone geometry for them.
-        if cleaned.get("conduit_bank") or cleaned.get("parent_conduit"):
+        # Pathways with a parent (a conduit in a bank, an innerduct) follow
+        # the parent's route; never synthesize standalone geometry for them.
+        if cleaned.get("parent"):
             return cleaned
-        # Models that derive their own geometry from the endpoints (aerial spans)
-        # build it in clean(); a synthesized centroid line would be wrong.
-        if getattr(self._meta.model, "derives_geometry", False):
+        # Types that derive their own geometry from the endpoints (aerial spans)
+        # build it in Pathway.clean(); a synthesized centroid line would be wrong.
+        if self._derives_geometry():
             return cleaned
 
         start_struct = cleaned.get("start_structure")
@@ -223,13 +235,13 @@ class PathwayEndpointFormMixin(PathwayGeometryFallbackMixin):
     def _inject_endpoint_geometry(self):
         """Serialize anchor structure geometry (and names, for labels) into the widget.
 
-        Models that derive straight geometry (aerial spans) also ask the widget
+        Types that derive straight geometry (aerial spans) also ask the widget
         for straight mode, even before any endpoint is chosen.
         """
         if "geometry" not in self.fields:
             return
         endpoint_data = {}
-        if getattr(self._meta.model, "derives_geometry", False):
+        if self._derives_geometry():
             endpoint_data["straight"] = True
         for side in ("start", "end"):
             structure = self.instance.anchor_structure(side)
@@ -413,10 +425,90 @@ class StructureBulkEditForm(NetBoxModelBulkEditForm):
     nullable_fields = ("site", "location", "tenant", "installed_by", "commissioned_date", "access_notes")
 
 
-# --- Pathway (base) ---
+# --- Pathway ---
+
+# Columns every pathway has, whatever its type. `parent` is here too: it is
+# hidden for types that cannot have one, not cleared.
+_COMMON_PATHWAY_FIELDS = (
+    "pathway_type",
+    "parent",
+    "label",
+    "status",
+    "geometry",
+    "start_structure",
+    "end_structure",
+    "start_location",
+    "end_location",
+    "tenant",
+    "installed_by",
+    "length",
+    "installation_date",
+    "commissioned_date",
+    "comments",
+)
+_ENDPOINT_FIELDS = ("start_structure", "end_structure", "start_location", "end_location")
+_LIFECYCLE_FIELDS = ("installed_by", "installation_date", "commissioned_date")
+# Every type-specific column once, in pathway_types.py order.
+_TYPE_FIELDS = tuple(dict.fromkeys(name for rules in PATHWAY_TYPES.values() for name in rules.fields))
+# Type-specific columns shown in a shared fieldset rather than the type's own.
+_SHARED_FIELDSET_FIELDS = frozenset({"position", "start_face", "end_face", "start_junction", "end_junction"})
+# An innerduct is pulled into a duct that is already there, so it does not
+# take its parent's installer and dates; anything else is built with its parent.
+_NO_LIFECYCLE_PREFILL = frozenset({"innerduct"})
+_TYPE_LABELS = dict(PathwayTypeChoices)
+
+
+def _type_fieldsets(names):
+    """One fieldset per pathway type, holding that type's fields from `names`.
+
+    A field shared by several types is shown once, under the first type in
+    pathway_types.py that has it.
+    """
+    placed = set()
+    fieldsets = []
+    for pathway_type, rules in PATHWAY_TYPES.items():
+        own = [name for name in rules.fields if name in names and name not in placed]
+        placed.update(own)
+        if own:
+            fieldsets.append(FieldSet(*own, name=_TYPE_LABELS[pathway_type]))
+    return fieldsets
+
+
+def _pathway_fieldsets(pathway_type, fields):
+    """Fieldsets for a pathway form showing `fields` of `pathway_type`."""
+
+    def present(*names):
+        return [name for name in names if name in fields]
+
+    fieldsets = [FieldSet("pathway_type", "label", "status", "tenant", "length", name="Pathway")]
+    if hierarchy := present("parent", "position"):
+        fieldsets.append(FieldSet(*hierarchy, name="Parent"))
+    fieldsets.append(FieldSet(*_LIFECYCLE_FIELDS, name="Lifecycle"))
+    fieldsets.append(FieldSet(*_ENDPOINT_FIELDS, *present("start_face", "end_face"), name="Endpoints"))
+    if junctions := present("start_junction", "end_junction"):
+        fieldsets.append(FieldSet(*junctions, name="Junctions"))
+    rules = PATHWAY_TYPES.get(pathway_type)
+    if rules and (attributes := [name for name in rules.fields if name not in _SHARED_FIELDSET_FIELDS]):
+        fieldsets.append(FieldSet(*attributes, name=_TYPE_LABELS[pathway_type]))
+    fieldsets.append(FieldSet("geometry", name="Geometry"))
+    fieldsets.append(FieldSet("tags", name="Details"))
+    return tuple(fieldsets)
 
 
 class PathwayForm(PathwayEndpointFormMixin, NetBoxModelForm):
+    """Add/edit form for every pathway type.
+
+    The chosen type decides which fields the form has: changing it
+    re-renders the form (HTMXSelect), and the type comes from the submitted
+    data, the initial data (`?pathway_type=`) or the instance, in that order.
+    """
+
+    parent = DynamicModelChoiceField(
+        queryset=Pathway.objects.all(),
+        required=False,
+        selector=True,
+        help_text="Pathway this one runs inside",
+    )
     start_structure = DynamicModelChoiceField(
         queryset=Structure.objects.all(),
         required=False,
@@ -437,82 +529,6 @@ class PathwayForm(PathwayEndpointFormMixin, NetBoxModelForm):
     )
     end_location = DynamicModelChoiceField(
         queryset=Location.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
-    installed_by = DynamicModelChoiceField(
-        queryset=Tenant.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-        label="Installed by",
-    )
-
-    fieldsets = (
-        FieldSet("label", "status", "tenant", "length", name="Pathway"),
-        FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
-        FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
-        FieldSet("geometry", name="Geometry"),
-        FieldSet("tags", name="Details"),
-    )
-
-    class Meta:
-        model = Pathway
-        fields = [
-            "label",
-            "status",
-            "geometry",
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "tenant",
-            "installed_by",
-            "length",
-            "installation_date",
-            "commissioned_date",
-            "comments",
-            "tags",
-        ]
-        widgets = {
-            "geometry": PathwaysMapWidget(),
-        }
-
-
-# --- Conduit ---
-
-
-class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
-    start_structure = DynamicModelChoiceField(
-        queryset=Structure.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    end_structure = DynamicModelChoiceField(
-        queryset=Structure.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    start_location = DynamicModelChoiceField(
-        queryset=Location.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    end_location = DynamicModelChoiceField(
-        queryset=Location.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    start_face = forms.ChoiceField(choices=BankFaceChoices, required=False)
-    end_face = forms.ChoiceField(choices=BankFaceChoices, required=False)
-    conduit_bank = DynamicModelChoiceField(
-        queryset=ConduitBank.objects.all(),
         required=False,
         selector=True,
         quick_add=True,
@@ -521,17 +537,13 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
         queryset=ConduitJunction.objects.all(),
         required=False,
         selector=True,
-        quick_add=True,
     )
     end_junction = DynamicModelChoiceField(
         queryset=ConduitJunction.objects.all(),
         required=False,
         selector=True,
-        quick_add=True,
     )
-
     tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
-
     installed_by = DynamicModelChoiceField(
         queryset=Tenant.objects.all(),
         required=False,
@@ -540,90 +552,59 @@ class ConduitForm(PathwayEndpointFormMixin, NetBoxModelForm):
         label="Installed by",
     )
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        bank = _resolve_initial_parent(self, "conduit_bank")
-        if bank:
-            _prefill_initial_from_parent(
-                self,
-                bank,
-                [
-                    "start_structure",
-                    "end_structure",
-                    "start_location",
-                    "end_location",
-                    "start_face",
-                    "end_face",
-                    "installed_by",
-                    "installation_date",
-                    "commissioned_date",
-                ],
-            )
-
-    fieldsets = (
-        FieldSet("label", "status", "tenant", "material", "length", name="Conduit"),
-        FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
-        FieldSet(
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "start_face",
-            "end_face",
-            name="Endpoints",
-        ),
-        FieldSet("start_junction", "end_junction", name="Junctions"),
-        FieldSet("inner_diameter", "outer_diameter", "depth", name="Dimensions"),
-        FieldSet("conduit_bank", "bank_position", name="Conduit Bank"),
-        FieldSet("geometry", name="Geometry"),
-        FieldSet("tags", name="Details"),
-    )
-
     class Meta:
-        model = Conduit
-        fields = [
-            "label",
-            "status",
-            "material",
-            "geometry",
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "start_face",
-            "end_face",
-            "start_junction",
-            "end_junction",
-            "inner_diameter",
-            "outer_diameter",
-            "depth",
-            "conduit_bank",
-            "bank_position",
-            "length",
-            "tenant",
-            "installed_by",
-            "installation_date",
-            "commissioned_date",
-            "comments",
-            "tags",
-        ]
+        model = Pathway
+        fields = [*_COMMON_PATHWAY_FIELDS, *_TYPE_FIELDS, "tags"]
         widgets = {
+            "pathway_type": HTMXSelect(),
             "geometry": PathwaysMapWidget(),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        pathway_type = self.selected_pathway_type()
+        rules = PATHWAY_TYPES.get(pathway_type)
+        hidden = set(inapplicable_fields(pathway_type)) if rules else set(TYPE_SPECIFIC_FIELDS)
+        if rules is None or not rules.parents:
+            hidden.add("parent")
+        for name in hidden:
+            del self.fields[name]
+        if "parent" in self.fields:
+            self.fields["parent"].required = rules.parent_required
+            self.fields["parent"].widget.add_query_params({"pathway_type": sorted(rules.parents)})
+            self._prefill_from_parent(pathway_type)
+        self.fieldsets = _pathway_fieldsets(pathway_type, self.fields)
 
-class ConduitImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
+    def _prefill_from_parent(self, pathway_type):
+        """Fill a new pathway's blank fields from the parent named in the initial data.
+
+        The endpoints, the type-specific fields both types have (except the
+        slot, `position`) and, unless excluded above, the lifecycle fields.
+        Tenant and geometry are never copied.
+        """
+        parent = _resolve_initial_parent(self, "parent")
+        if parent is None:
+            return
+        parent_rules = PATHWAY_TYPES.get(parent.pathway_type)
+        shared = [name for name in parent_rules.fields if name in self.fields] if parent_rules else []
+        names = [*_ENDPOINT_FIELDS, *(name for name in shared if name != "position")]
+        if pathway_type not in _NO_LIFECYCLE_PREFILL:
+            names += _LIFECYCLE_FIELDS
+        _prefill_initial_from_parent(self, parent, names)
+
+
+class PathwayImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
+    pathway_type = CSVChoiceField(choices=PathwayTypeChoices, help_text="Pathway type")
     status = _csv_status_field(PathwayStatusChoices)
+    parent = CSVModelChoiceField(
+        queryset=Pathway.objects.all(),
+        required=False,
+        help_text="Parent pathway ID (numeric)",
+    )
     start_structure = _csv_structure_field("Starting")
     end_structure = _csv_structure_field("Ending")
     start_location = _csv_location_field("Starting")
     end_location = _csv_location_field("Ending")
-    conduit_bank = CSVModelChoiceField(
-        queryset=ConduitBank.objects.all(),
-        to_field_name="label",
-        required=False,
-        help_text="Parent conduit bank label",
-    )
     start_junction = CSVModelChoiceField(
         queryset=ConduitJunction.objects.all(),
         to_field_name="label",
@@ -636,447 +617,6 @@ class ConduitImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
         required=False,
         help_text="Ending junction label",
     )
-    tenant = _csv_tenant_field("Owner tenant name")
-    installed_by = _csv_tenant_field("Installer tenant name")
-    geometry = ForgivingGeometryField(
-        required=False,
-        srid=get_srid(),
-        geom_type="LINESTRING",
-        help_text=_IMPORT_GEOMETRY_HELP,
-    )
-
-    class Meta:
-        model = Conduit
-        fields = [
-            "label",
-            "status",
-            "material",
-            "start_structure",
-            "start_face",
-            "end_structure",
-            "end_face",
-            "start_location",
-            "end_location",
-            "start_junction",
-            "end_junction",
-            "conduit_bank",
-            "bank_position",
-            "inner_diameter",
-            "outer_diameter",
-            "depth",
-            "length",
-            "tenant",
-            "installed_by",
-            "installation_date",
-            "commissioned_date",
-            "geometry",
-            "comments",
-        ]
-
-
-class ConduitBulkEditForm(NetBoxModelBulkEditForm):
-    status = forms.ChoiceField(choices=PathwayStatusChoices, required=False)
-    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
-    material = forms.ChoiceField(choices=ConduitMaterialChoices, required=False)
-    installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
-    commissioned_date = forms.DateField(required=False)
-
-    model = Conduit
-    fieldsets = (
-        FieldSet("status", "tenant", "material", name="Conduit"),
-        FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
-    )
-    nullable_fields = ("tenant", "material", "installed_by", "commissioned_date")
-
-
-# --- Aerial Span ---
-
-
-class AerialSpanForm(PathwayEndpointFormMixin, NetBoxModelForm):
-    start_structure = DynamicModelChoiceField(
-        queryset=Structure.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    end_structure = DynamicModelChoiceField(
-        queryset=Structure.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    start_location = DynamicModelChoiceField(
-        queryset=Location.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    end_location = DynamicModelChoiceField(
-        queryset=Location.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-
-    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
-
-    installed_by = DynamicModelChoiceField(
-        queryset=Tenant.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-        label="Installed by",
-    )
-
-    fieldsets = (
-        FieldSet("label", "status", "tenant", "aerial_type", "length", name="Aerial Span"),
-        FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
-        FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
-        FieldSet("start_attachment_height", "end_attachment_height", "sag", "messenger_size", name="Physical"),
-        FieldSet("wind_loading", "ice_loading", name="Loading"),
-        FieldSet("geometry", name="Geometry"),
-        FieldSet("tags", name="Details"),
-    )
-
-    class Meta:
-        model = AerialSpan
-        fields = [
-            "label",
-            "status",
-            "aerial_type",
-            "geometry",
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "start_attachment_height",
-            "end_attachment_height",
-            "sag",
-            "messenger_size",
-            "wind_loading",
-            "ice_loading",
-            "length",
-            "tenant",
-            "installed_by",
-            "installation_date",
-            "commissioned_date",
-            "comments",
-            "tags",
-        ]
-        widgets = {
-            "geometry": PathwaysMapWidget(),
-        }
-
-
-class AerialSpanImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
-    status = _csv_status_field(PathwayStatusChoices)
-    start_structure = _csv_structure_field("Starting")
-    end_structure = _csv_structure_field("Ending")
-    start_location = _csv_location_field("Starting")
-    end_location = _csv_location_field("Ending")
-    tenant = _csv_tenant_field("Owner tenant name")
-    installed_by = _csv_tenant_field("Installer tenant name")
-
-    geometry = ForgivingGeometryField(
-        required=False,
-        srid=get_srid(),
-        geom_type="LINESTRING",
-        help_text=_IMPORT_GEOMETRY_HELP,
-    )
-
-    class Meta:
-        model = AerialSpan
-        fields = [
-            "label",
-            "status",
-            "aerial_type",
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "start_attachment_height",
-            "end_attachment_height",
-            "sag",
-            "messenger_size",
-            "wind_loading",
-            "ice_loading",
-            "length",
-            "tenant",
-            "installed_by",
-            "installation_date",
-            "commissioned_date",
-            "geometry",
-            "comments",
-        ]
-
-
-class AerialSpanBulkEditForm(NetBoxModelBulkEditForm):
-    status = forms.ChoiceField(choices=PathwayStatusChoices, required=False)
-    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
-    aerial_type = forms.ChoiceField(choices=AerialTypeChoices, required=False)
-    messenger_size = forms.CharField(max_length=50, required=False)
-    installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
-    commissioned_date = forms.DateField(required=False)
-
-    model = AerialSpan
-    fieldsets = (
-        FieldSet("status", "tenant", "aerial_type", "messenger_size", name="Aerial Span"),
-        FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
-    )
-    nullable_fields = ("tenant", "messenger_size", "wind_loading", "ice_loading", "installed_by", "commissioned_date")
-
-
-# --- Direct Buried ---
-
-
-class DirectBuriedBulkEditForm(NetBoxModelBulkEditForm):
-    status = forms.ChoiceField(choices=PathwayStatusChoices, required=False)
-    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
-    warning_tape = forms.NullBooleanField(required=False)
-    tracer_wire = forms.NullBooleanField(required=False)
-    armor_type = forms.CharField(max_length=100, required=False)
-    installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
-    commissioned_date = forms.DateField(required=False)
-
-    model = DirectBuried
-    fieldsets = (
-        FieldSet("status", "tenant", "warning_tape", "tracer_wire", "armor_type", name="Direct Buried"),
-        FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
-    )
-    nullable_fields = ("tenant", "armor_type", "installed_by", "commissioned_date")
-
-
-class DirectBuriedForm(PathwayEndpointFormMixin, NetBoxModelForm):
-    start_structure = DynamicModelChoiceField(
-        queryset=Structure.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    end_structure = DynamicModelChoiceField(
-        queryset=Structure.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    start_location = DynamicModelChoiceField(
-        queryset=Location.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    end_location = DynamicModelChoiceField(
-        queryset=Location.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-
-    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
-
-    installed_by = DynamicModelChoiceField(
-        queryset=Tenant.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-        label="Installed by",
-    )
-
-    fieldsets = (
-        FieldSet("label", "status", "tenant", "length", name="Direct Buried"),
-        FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
-        FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
-        FieldSet("burial_depth", "warning_tape", "tracer_wire", "armor_type", name="Physical"),
-        FieldSet("geometry", name="Geometry"),
-        FieldSet("tags", name="Details"),
-    )
-
-    class Meta:
-        model = DirectBuried
-        fields = [
-            "label",
-            "status",
-            "geometry",
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "burial_depth",
-            "warning_tape",
-            "tracer_wire",
-            "armor_type",
-            "length",
-            "tenant",
-            "installed_by",
-            "installation_date",
-            "commissioned_date",
-            "comments",
-            "tags",
-        ]
-        widgets = {
-            "geometry": PathwaysMapWidget(),
-        }
-
-
-class DirectBuriedImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
-    status = _csv_status_field(PathwayStatusChoices)
-    start_structure = _csv_structure_field("Starting")
-    end_structure = _csv_structure_field("Ending")
-    start_location = _csv_location_field("Starting")
-    end_location = _csv_location_field("Ending")
-    tenant = _csv_tenant_field("Owner tenant name")
-    installed_by = _csv_tenant_field("Installer tenant name")
-    geometry = ForgivingGeometryField(
-        required=False,
-        srid=get_srid(),
-        geom_type="LINESTRING",
-        help_text=_IMPORT_GEOMETRY_HELP,
-    )
-
-    class Meta:
-        model = DirectBuried
-        fields = [
-            "label",
-            "status",
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "burial_depth",
-            "warning_tape",
-            "tracer_wire",
-            "armor_type",
-            "length",
-            "tenant",
-            "installed_by",
-            "installation_date",
-            "commissioned_date",
-            "geometry",
-            "comments",
-        ]
-
-
-# --- Innerduct ---
-
-
-class InnerductBulkEditForm(NetBoxModelBulkEditForm):
-    parent_conduit = DynamicModelChoiceField(
-        queryset=Conduit.objects.all(),
-        required=False,
-        selector=True,
-    )
-    status = forms.ChoiceField(choices=PathwayStatusChoices, required=False)
-    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
-    color = ColorField(required=False)
-    size = forms.CharField(max_length=50, required=False)
-    installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
-    commissioned_date = forms.DateField(required=False)
-
-    model = Innerduct
-    fieldsets = (
-        FieldSet("status", "tenant", "parent_conduit", "size", "color", name="Innerduct"),
-        FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
-    )
-    nullable_fields = ("tenant", "color", "installed_by", "commissioned_date")
-
-
-class InnerductForm(PathwayEndpointFormMixin, NetBoxModelForm):
-    parent_conduit = DynamicModelChoiceField(
-        queryset=Conduit.objects.all(),
-        selector=True,
-        quick_add=True,
-    )
-    start_structure = DynamicModelChoiceField(
-        queryset=Structure.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    end_structure = DynamicModelChoiceField(
-        queryset=Structure.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    start_location = DynamicModelChoiceField(
-        queryset=Location.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    end_location = DynamicModelChoiceField(
-        queryset=Location.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-
-    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
-
-    installed_by = DynamicModelChoiceField(
-        queryset=Tenant.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-        label="Installed by",
-    )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        parent = _resolve_initial_parent(self, "parent_conduit")
-        if parent:
-            _prefill_initial_from_parent(
-                self,
-                parent,
-                ["start_structure", "end_structure", "start_location", "end_location"],
-            )
-
-    fieldsets = (
-        FieldSet("label", "status", "tenant", "parent_conduit", "size", "color", "position", name="Innerduct"),
-        FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
-        FieldSet("start_structure", "end_structure", "start_location", "end_location", name="Endpoints"),
-        FieldSet("length", name="Physical"),
-        FieldSet("geometry", name="Geometry"),
-        FieldSet("tags", name="Details"),
-    )
-
-    class Meta:
-        model = Innerduct
-        fields = [
-            "label",
-            "status",
-            "parent_conduit",
-            "size",
-            "color",
-            "position",
-            "geometry",
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "length",
-            "tenant",
-            "installed_by",
-            "installation_date",
-            "commissioned_date",
-            "comments",
-            "tags",
-        ]
-        widgets = {
-            "geometry": PathwaysMapWidget(),
-        }
-
-
-class InnerductImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
-    status = _csv_status_field(PathwayStatusChoices)
-    parent_conduit = CSVModelChoiceField(
-        queryset=Conduit.objects.all(),
-        help_text="Parent conduit ID (numeric)",
-    )
-    start_structure = _csv_structure_field("Starting")
-    end_structure = _csv_structure_field("Ending")
-    start_location = _csv_location_field("Starting")
-    end_location = _csv_location_field("Ending")
     tenant = _csv_tenant_field("Owner tenant name")
     installed_by = _csv_tenant_field("Installer tenant name")
     color = forms.CharField(
@@ -1102,173 +642,99 @@ class InnerductImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
         return hex_code
 
     class Meta:
-        model = Innerduct
-        fields = [
-            "label",
-            "status",
-            "parent_conduit",
-            "size",
-            "color",
-            "position",
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "length",
-            "tenant",
-            "installed_by",
-            "installation_date",
-            "commissioned_date",
-            "geometry",
-            "comments",
-        ]
+        model = Pathway
+        fields = [*_COMMON_PATHWAY_FIELDS, *_TYPE_FIELDS]
 
 
-# --- Conduit Bank ---
-
-
-class ConduitBankForm(PathwayEndpointFormMixin, NetBoxModelForm):
-    start_structure = DynamicModelChoiceField(
-        queryset=Structure.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    end_structure = DynamicModelChoiceField(
-        queryset=Structure.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-    )
-    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True, quick_add=True)
-    installed_by = DynamicModelChoiceField(
-        queryset=Tenant.objects.all(),
-        required=False,
-        selector=True,
-        quick_add=True,
-        label="Installed by",
-    )
-
-    fieldsets = (
-        FieldSet("label", "status", "tenant", name="Conduit Bank"),
-        FieldSet("installed_by", "installation_date", "commissioned_date", name="Lifecycle"),
-        FieldSet("start_structure", "start_face", "end_structure", "end_face", name="Endpoints"),
-        FieldSet("configuration", "total_conduits", "height", "width", "encasement_type", name="Configuration"),
-        FieldSet("geometry", "length", "tags", name="Details"),
-    )
-
-    class Meta:
-        model = ConduitBank
-        fields = [
-            "label",
-            "status",
-            "tenant",
-            "installed_by",
-            "start_structure",
-            "start_face",
-            "end_structure",
-            "end_face",
-            "configuration",
-            "total_conduits",
-            "height",
-            "width",
-            "encasement_type",
-            "geometry",
-            "length",
-            "installation_date",
-            "commissioned_date",
-            "comments",
-            "tags",
-        ]
-        widgets = {
-            "geometry": PathwaysMapWidget(),
-        }
-
-
-class ConduitBankImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
-    status = _csv_status_field(PathwayStatusChoices)
-    start_structure = _csv_structure_field("Start")
-    end_structure = _csv_structure_field("End")
-    start_location = _csv_location_field("Start")
-    end_location = _csv_location_field("End")
-    tenant = _csv_tenant_field("Owner tenant name")
-    installed_by = _csv_tenant_field("Installer tenant name")
-
-    geometry = ForgivingGeometryField(
-        required=False,
-        srid=get_srid(),
-        geom_type="LINESTRING",
-        help_text=_IMPORT_GEOMETRY_HELP,
-    )
-
-    class Meta:
-        model = ConduitBank
-        fields = [
-            "label",
-            "status",
-            "start_structure",
-            "start_face",
-            "end_structure",
-            "end_face",
-            "start_location",
-            "end_location",
-            "configuration",
-            "total_conduits",
-            "height",
-            "width",
-            "encasement_type",
-            "length",
-            "tenant",
-            "installed_by",
-            "installation_date",
-            "commissioned_date",
-            "geometry",
-            "comments",
-        ]
-
-
-class ConduitBankBulkEditForm(NetBoxModelBulkEditForm):
-    status = forms.ChoiceField(choices=PathwayStatusChoices, required=False)
-    start_face = forms.ChoiceField(choices=BankFaceChoices, required=False)
-    end_face = forms.ChoiceField(choices=BankFaceChoices, required=False)
-    configuration = forms.ChoiceField(choices=ConduitBankConfigChoices, required=False)
-    encasement_type = forms.ChoiceField(choices=EncasementTypeChoices, required=False)
-    height = forms.IntegerField(required=False, min_value=1)
-    width = forms.IntegerField(required=False, min_value=1)
+class PathwayBulkEditForm(NetBoxModelBulkEditForm):
+    parent = DynamicModelChoiceField(queryset=Pathway.objects.all(), required=False, selector=True)
+    status = forms.ChoiceField(choices=add_blank_choice(PathwayStatusChoices), required=False)
+    tenant = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
     installed_by = DynamicModelChoiceField(queryset=Tenant.objects.all(), required=False, selector=True)
     commissioned_date = forms.DateField(required=False)
+    start_face = forms.ChoiceField(choices=add_blank_choice(BankFaceChoices), required=False)
+    end_face = forms.ChoiceField(choices=add_blank_choice(BankFaceChoices), required=False)
+    configuration = forms.ChoiceField(choices=add_blank_choice(ConduitBankConfigChoices), required=False)
+    encasement_type = forms.ChoiceField(choices=add_blank_choice(EncasementTypeChoices), required=False)
+    height = forms.IntegerField(required=False, min_value=1)
+    width = forms.IntegerField(required=False, min_value=1)
+    material = forms.ChoiceField(choices=add_blank_choice(ConduitMaterialChoices), required=False)
+    aerial_type = forms.ChoiceField(choices=add_blank_choice(AerialTypeChoices), required=False)
+    messenger_size = forms.CharField(max_length=50, required=False)
+    wind_loading = forms.CharField(max_length=50, required=False)
+    ice_loading = forms.CharField(max_length=50, required=False)
+    warning_tape = forms.NullBooleanField(required=False)
+    tracer_wire = forms.NullBooleanField(required=False)
+    armor_type = forms.CharField(max_length=100, required=False)
+    size = forms.CharField(max_length=50, required=False)
+    color = ColorField(required=False)
 
-    model = ConduitBank
+    model = Pathway
+    # Type-specific values only stick on pathways of a type they apply to;
+    # Pathway.save() clears them on the others.
     fieldsets = (
-        FieldSet("status", "start_face", "end_face"),
-        FieldSet("configuration", "encasement_type"),
-        FieldSet("height", "width", name="Dimensions"),
+        FieldSet("status", "tenant", "parent", name="Pathway"),
         FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
+        *_type_fieldsets(
+            {
+                "start_face",
+                "end_face",
+                "configuration",
+                "encasement_type",
+                "height",
+                "width",
+                "material",
+                "aerial_type",
+                "messenger_size",
+                "wind_loading",
+                "ice_loading",
+                "warning_tape",
+                "tracer_wire",
+                "armor_type",
+                "size",
+                "color",
+            }
+        ),
     )
     nullable_fields = (
+        "parent",
+        "tenant",
+        "installed_by",
+        "commissioned_date",
         "start_face",
         "end_face",
+        "configuration",
         "encasement_type",
         "height",
         "width",
-        "installed_by",
-        "commissioned_date",
+        "material",
+        "aerial_type",
+        "messenger_size",
+        "wind_loading",
+        "ice_loading",
+        "armor_type",
+        "size",
+        "color",
     )
 
 
 # --- Conduit Junction ---
 
 
+# Only conduits may be a junction's trunk or branch (the model checks it too).
+_JUNCTION_CONDUITS = Pathway.objects.filter(pathway_type="conduit")
+
+
 class ConduitJunctionForm(NetBoxModelForm):
     trunk_conduit = DynamicModelChoiceField(
-        queryset=Conduit.objects.all(),
+        queryset=_JUNCTION_CONDUITS,
         selector=True,
-        quick_add=True,
+        query_params={"pathway_type": "conduit"},
     )
     branch_conduit = DynamicModelChoiceField(
-        queryset=Conduit.objects.all(),
+        queryset=_JUNCTION_CONDUITS,
         selector=True,
-        quick_add=True,
+        query_params={"pathway_type": "conduit"},
     )
     towards_structure = DynamicModelChoiceField(
         queryset=Structure.objects.all(),
@@ -1297,11 +763,11 @@ class ConduitJunctionForm(NetBoxModelForm):
 
 class ConduitJunctionImportForm(NetBoxModelImportForm):
     trunk_conduit = CSVModelChoiceField(
-        queryset=Conduit.objects.all(),
+        queryset=_JUNCTION_CONDUITS,
         help_text="Trunk conduit ID (numeric)",
     )
     branch_conduit = CSVModelChoiceField(
-        queryset=Conduit.objects.all(),
+        queryset=_JUNCTION_CONDUITS,
         help_text="Branch conduit ID (numeric)",
     )
     towards_structure = CSVModelChoiceField(

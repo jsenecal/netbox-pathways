@@ -14,7 +14,6 @@ from django.utils.module_loading import import_string
 PLUGIN_MODELS = sorted(model.__name__ for model in apps.get_app_config("netbox_pathways").get_models())
 
 
-@pytest.mark.xfail(reason="forms.py moves to the single model in Task 10", strict=True)
 @pytest.mark.parametrize("model_name", PLUGIN_MODELS)
 def test_filter_form_is_importable_from_forms(model_name):
     import_string(f"netbox_pathways.forms.{model_name}FilterForm")

@@ -20,13 +20,13 @@ from netbox_pathways.navigation import menu
 
 SRID = get_srid()
 
+# Import buttons and menu links reverse the UI URLs, whose views only move
+# to the single pathway model in Task 11.
+NEEDS_UI_URLS = pytest.mark.xfail(reason="the UI views move to the single model in Task 11", strict=True)
+
 IMPORTABLE_MODELS = [
     models.Structure,
-    models.Conduit,
-    models.AerialSpan,
-    models.DirectBuried,
-    models.Innerduct,
-    models.ConduitBank,
+    models.Pathway,
     models.ConduitJunction,
     models.CableSegment,
     models.PlannedRoute,
@@ -35,6 +35,7 @@ IMPORTABLE_MODELS = [
 ]
 
 
+@NEEDS_UI_URLS
 @pytest.mark.parametrize("model", IMPORTABLE_MODELS, ids=lambda m: m._meta.model_name)
 def test_bulk_import_url_resolves(model):
     """Each importable model registers the URL name the Import button reverses."""
@@ -42,6 +43,7 @@ def test_bulk_import_url_resolves(model):
     assert url.endswith("/import/")
 
 
+@NEEDS_UI_URLS
 def test_navigation_button_links_resolve():
     """Every menu item and button in the plugin menu points at a real URL name."""
     for group in menu.groups:
@@ -51,6 +53,7 @@ def test_navigation_button_links_resolve():
                 reverse(button.link)
 
 
+@NEEDS_UI_URLS
 def test_navigation_has_import_button_per_importable_model():
     """Each importable model's menu item carries an Import button."""
     buttons = set()
@@ -85,8 +88,9 @@ def structures(db):
 def test_conduitbank_import_form_accepts_length(structures):
     """`length` is importable on conduit banks, matching the GUI add form."""
     s1, s2 = structures
-    form = forms.ConduitBankImportForm(
+    form = forms.PathwayImportForm(
         data={
+            "pathway_type": "conduit_bank",
             "label": "CB import",
             "start_structure": s1.name,
             "end_structure": s2.name,
@@ -104,8 +108,9 @@ def test_directburied_import_form_accepts_location_endpoints():
     site = Site.objects.create(name="Import Site", slug="import-site")
     loc_a = Location.objects.create(site=site, name="Import Room A", slug="import-room-a")
     loc_b = Location.objects.create(site=site, name="Import Room B", slug="import-room-b")
-    form = forms.DirectBuriedImportForm(
+    form = forms.PathwayImportForm(
         data={
+            "pathway_type": "direct_buried",
             "label": "DB import",
             "start_location": loc_a.name,
             "end_location": loc_b.name,
@@ -169,19 +174,38 @@ def test_import_form_covers_all_editable_model_fields(form_cls):
 
 
 @pytest.mark.django_db
-def test_conduit_import_form_accepts_bank_and_position(structures):
-    """Conduit rows can carry bank membership by bank label (issue #58 follow-up)."""
+def test_conduit_import_form_accepts_parent_and_position(structures):
+    """Conduit rows can carry bank membership by parent ID (issue #58 follow-up)."""
     s1, s2 = structures
-    bank = models.ConduitBank.objects.create(label="CB58", start_structure=s1, end_structure=s2)
-    form = forms.ConduitImportForm(
+    bank = models.Pathway(pathway_type="conduit_bank", label="CB58", start_structure=s1, end_structure=s2)
+    bank.save()
+    form = forms.PathwayImportForm(
         data={
+            "pathway_type": "conduit",
             "label": "C58",
             "start_structure": s1.name,
             "end_structure": s2.name,
-            "conduit_bank": bank.label,
-            "bank_position": "A1",
+            "parent": bank.pk,
+            "position": "A1",
         }
     )
     assert form.is_valid(), form.errors
-    assert form.instance.conduit_bank == bank
-    assert form.instance.bank_position == "A1"
+    assert form.instance.parent == bank
+    assert form.instance.position == "A1"
+
+
+@pytest.mark.django_db
+def test_import_form_takes_every_pathway_type(structures):
+    """One import form creates any type, including those that had no import before (#172)."""
+    s1, s2 = structures
+    form = forms.PathwayImportForm(
+        data={
+            "pathway_type": "submarine",
+            "label": "SUB import",
+            "start_structure": s1.name,
+            "end_structure": s2.name,
+            "geometry": "LINESTRING(-73.5 45.5, -73.501 45.5)",
+        }
+    )
+    assert form.is_valid(), form.errors
+    assert form.save().pathway_type == "submarine"
