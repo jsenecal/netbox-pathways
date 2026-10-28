@@ -565,7 +565,10 @@ class PathwayForm(PathwayEndpointFormMixin, NetBoxModelForm):
         pathway_type = self.selected_pathway_type()
         rules = PATHWAY_TYPES.get(pathway_type)
         hidden = set(inapplicable_fields(pathway_type)) if rules else set(TYPE_SPECIFIC_FIELDS)
-        if rules is None or not rules.parents:
+        # A pathway retyped to a type that cannot have a parent keeps the
+        # field while it still has one, so the containment error has a field
+        # to land on and the user can clear the parent there.
+        if rules is None or not (rules.parents or self.instance.parent_id):
             hidden.add("parent")
         for name in hidden:
             del self.fields[name]
