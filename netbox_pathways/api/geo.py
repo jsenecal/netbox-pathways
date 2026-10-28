@@ -169,47 +169,6 @@ class PathwayGeoSerializer(GeoFeatureModelSerializer):
         fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor"]
 
 
-class ConduitBankGeoSerializer(GeoFeatureModelSerializer):
-    geometry = GeometryField(source="geo_4326", read_only=True)
-    conduit_count = drf_serializers.IntegerField(read_only=True)
-    geo_length = drf_serializers.FloatField(read_only=True)
-
-    class Meta:
-        model = models.ConduitBank
-        geo_field = "geometry"
-        fields = ["id", "label", "pathway_type", "configuration", "conduit_count", "geo_length"]
-
-
-class ConduitGeoSerializer(GeoFeatureModelSerializer):
-    geometry = GeometryField(source="geo_4326", read_only=True)
-    geo_length = drf_serializers.FloatField(read_only=True)
-
-    class Meta:
-        model = models.Conduit
-        geo_field = "geometry"
-        fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor"]
-
-
-class AerialSpanGeoSerializer(GeoFeatureModelSerializer):
-    geometry = GeometryField(source="geo_4326", read_only=True)
-    geo_length = drf_serializers.FloatField(read_only=True)
-
-    class Meta:
-        model = models.AerialSpan
-        geo_field = "geometry"
-        fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor"]
-
-
-class DirectBuriedGeoSerializer(GeoFeatureModelSerializer):
-    geometry = GeometryField(source="geo_4326", read_only=True)
-    geo_length = drf_serializers.FloatField(read_only=True)
-
-    class Meta:
-        model = models.DirectBuried
-        geo_field = "geometry"
-        fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor"]
-
-
 class CircuitGeoSerializer(GeoFeatureModelSerializer):
     path = GeometryField(source="geo_4326", read_only=True)
     cid = drf_serializers.CharField(source="circuit.cid", read_only=True)
@@ -389,86 +348,6 @@ class PathwayGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     pagination_class = None
 
 
-class ConduitBankGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
-    queryset = (
-        models.ConduitBank.objects.filter(geometry__isnull=False)
-        .annotate(
-            conduit_count=Count("conduits"),
-            _geo_length=Length("geometry"),
-        )
-        .only(
-            "id",
-            "label",
-            "pathway_type",
-            "geometry",
-            "configuration",
-        )
-        .order_by("pk")
-    )
-    serializer_class = ConduitBankGeoSerializer
-    filterset_class = filtersets.ConduitBankFilterSet
-    bbox_geo_field = "geometry"
-    pagination_class = None
-
-
-class ConduitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
-    # Exclude conduits that belong to a bank -- those are represented by the bank line
-    queryset = (
-        models.Conduit.objects.filter(
-            conduit_bank__isnull=True,
-            geometry__isnull=False,
-        )
-        .annotate(_geo_length=Length("geometry"))
-        .only(
-            "id",
-            "label",
-            "pathway_type",
-            "geometry",
-        )
-        .order_by("pk")
-    )
-    serializer_class = ConduitGeoSerializer
-    filterset_class = filtersets.ConduitFilterSet
-    bbox_geo_field = "geometry"
-    pagination_class = None
-
-
-class AerialSpanGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
-    queryset = (
-        models.AerialSpan.objects.filter(geometry__isnull=False)
-        .only(
-            "id",
-            "label",
-            "pathway_type",
-            "geometry",
-        )
-        .annotate(_geo_length=Length("geometry"))
-        .order_by("pk")
-    )
-    serializer_class = AerialSpanGeoSerializer
-    filterset_class = filtersets.AerialSpanFilterSet
-    bbox_geo_field = "geometry"
-    pagination_class = None
-
-
-class DirectBuriedGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
-    queryset = (
-        models.DirectBuried.objects.filter(geometry__isnull=False)
-        .only(
-            "id",
-            "label",
-            "pathway_type",
-            "geometry",
-        )
-        .annotate(_geo_length=Length("geometry"))
-        .order_by("pk")
-    )
-    serializer_class = DirectBuriedGeoSerializer
-    filterset_class = filtersets.DirectBuriedFilterSet
-    bbox_geo_field = "geometry"
-    pagination_class = None
-
-
 class CircuitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
     queryset = models.CircuitGeometry.objects.select_related(
         "circuit",
@@ -486,14 +365,14 @@ class CircuitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 
 # Layers reported by /info. Each entry: (response_key, model, geo_field, extra_filter).
 # ``extra_filter`` is an optional Q-style filter dict applied before counting,
-# mirroring the corresponding GeoJSON viewset's queryset constraints (so e.g.
-# banked conduits aren't double-counted between "conduits" and "conduit_banks").
+# selecting the pathway type a layer draws; only top-level pathways are drawn,
+# so a banked conduit is not double-counted with its bank.
 _INFO_LAYERS = (
     ("structures", models.Structure, "geometry", None),
-    ("conduit_banks", models.ConduitBank, "geometry", None),
-    ("conduits", models.Conduit, "geometry", {"conduit_bank__isnull": True}),
-    ("aerial_spans", models.AerialSpan, "geometry", None),
-    ("direct_buried", models.DirectBuried, "geometry", None),
+    ("conduit_banks", models.Pathway, "geometry", {"pathway_type": "conduit_bank", "parent__isnull": True}),
+    ("conduits", models.Pathway, "geometry", {"pathway_type": "conduit", "parent__isnull": True}),
+    ("aerial_spans", models.Pathway, "geometry", {"pathway_type": "aerial", "parent__isnull": True}),
+    ("direct_buried", models.Pathway, "geometry", {"pathway_type": "direct_buried", "parent__isnull": True}),
     ("circuits", models.CircuitGeometry, "path", None),
 )
 

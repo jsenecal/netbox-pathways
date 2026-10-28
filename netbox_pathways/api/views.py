@@ -13,92 +13,22 @@ class StructureViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.StructureFilterSet
 
 
-class ConduitBankViewSet(NetBoxModelViewSet):
-    queryset = models.ConduitBank.objects.select_related(
-        "start_structure",
-        "end_structure",
-        "start_location",
-        "end_location",
-        "tenant",
-    )
-    serializer_class = serializers.ConduitBankSerializer
-    filterset_class = filtersets.ConduitBankFilterSet
-
-
 class PathwayViewSet(NetBoxModelViewSet):
     queryset = models.Pathway.objects.select_related(
+        "parent",
         "start_structure",
         "end_structure",
         "start_location",
         "end_location",
         "start_anchor",
         "end_anchor",
-        "tenant",
-    ).annotate(cables_routed=Count("cable_segments"))
-    serializer_class = serializers.PathwaySerializer
-    filterset_class = filtersets.PathwayFilterSet
-
-
-class ConduitViewSet(NetBoxModelViewSet):
-    queryset = models.Conduit.objects.select_related(
-        "start_structure",
-        "end_structure",
-        "start_location",
-        "end_location",
-        "start_anchor",
-        "end_anchor",
-        "conduit_bank",
         "start_junction",
         "end_junction",
         "tenant",
+        "installed_by",
     ).annotate(cables_routed=Count("cable_segments"))
-    serializer_class = serializers.ConduitSerializer
-    filterset_class = filtersets.ConduitFilterSet
-
-
-class AerialSpanViewSet(NetBoxModelViewSet):
-    queryset = models.AerialSpan.objects.select_related(
-        "start_structure",
-        "end_structure",
-        "start_location",
-        "end_location",
-        "start_anchor",
-        "end_anchor",
-        "tenant",
-    ).annotate(cables_routed=Count("cable_segments"))
-    serializer_class = serializers.AerialSpanSerializer
-    filterset_class = filtersets.AerialSpanFilterSet
-
-
-class DirectBuriedViewSet(NetBoxModelViewSet):
-    queryset = models.DirectBuried.objects.select_related(
-        "start_structure",
-        "end_structure",
-        "start_location",
-        "end_location",
-        "start_anchor",
-        "end_anchor",
-        "tenant",
-    ).annotate(cables_routed=Count("cable_segments"))
-    serializer_class = serializers.DirectBuriedSerializer
-    filterset_class = filtersets.DirectBuriedFilterSet
-
-
-class InnerductViewSet(NetBoxModelViewSet):
-    queryset = models.Innerduct.objects.select_related(
-        "parent_conduit",
-        "start_structure",
-        "end_structure",
-        "start_location",
-        "end_location",
-        "start_anchor",
-        "end_anchor",
-        "tenant",
-    ).annotate(
-        cables_routed=Count("cable_segments"),
-    )
-    serializer_class = serializers.InnerductSerializer
-    filterset_class = filtersets.InnerductFilterSet
+    serializer_class = serializers.PathwaySerializer
+    filterset_class = filtersets.PathwayFilterSet
 
 
 class ConduitJunctionViewSet(NetBoxModelViewSet):

@@ -14,13 +14,5 @@ def test_geo_serializers_build_openapi_schema():
     schema = SchemaGenerator(patterns=patterns).get_schema(request=None, public=True)
 
     components = schema["components"]["schemas"]
-    for name in (
-        "StructureGeo",
-        "PathwayGeo",
-        "ConduitBankGeo",
-        "ConduitGeo",
-        "AerialSpanGeo",
-        "DirectBuriedGeo",
-        "CircuitGeo",
-    ):
+    for name in ("StructureGeo", "PathwayGeo", "CircuitGeo"):
         assert "geometry" in components[name]["properties"], name
