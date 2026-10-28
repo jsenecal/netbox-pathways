@@ -193,6 +193,12 @@ CONSTRAINT_RENAMES: dict[str, str] = {
 # it (`pathway_ptr__label`) is a field of the pathway.
 PARENT_LINK_NAMES = ("pathway_ptr", "pathway_ptr_id")
 
+# The base pathway's reverse accessors onto each former subtype row.
+# `conduit__material="pvc"` meant "a conduit whose material is pvc": a type
+# test and a field test that no rename of the key expresses, so a constraint
+# through one of them is refused rather than guessed at.
+CHILD_ACCESSOR_NAMES = frozenset(LEGACY_SUBTYPES)
+
 CONTENT_TYPE_MODELS = frozenset({"contenttypes.contenttype", "core.objecttype"})
 
 # Content-type references the generic repoint leaves alone: object
@@ -222,20 +228,29 @@ def _get_field(model, name):
         return None
 
 
-def _rewrite_key(key, pathway_model):
+def _rewrite_key(key, start_model, *, strict=True):
     """Rename the legacy segments of one constraint lookup and check it resolves.
 
     Every segment until the first non-relation field must be a field (or
     `pk`) of the model reached so far; renames apply wherever that model is
     the pathway. After a field, one lookup or transform it supports ends the
     check, and what follows is kept as written.
+
+    With `strict=False` only the part from the first pathway on must
+    resolve: a key that fails before reaching a pathway is returned as it
+    is, since the flatten did not change what it means.
     """
     segments = key.split("__")
     out = []
-    model, field = pathway_model, None
+    model, field = start_model, None
+    reached = False
     index = 0
     while index < len(segments):
         segment = segments[index]
+        if model is not None and _is_pathway(model):
+            reached = True
+            if segment in CHILD_ACCESSOR_NAMES:
+                raise UntranslatableConstraint(f"{key!r} goes through the removed {segment!r} subtype accessor")
         if model is not None:
             if _is_pathway(model) and segment in PARENT_LINK_NAMES:
                 following = segments[index + 1] if index + 1 < len(segments) else None
@@ -254,8 +269,17 @@ def _rewrite_key(key, pathway_model):
                 continue
         if field is not None and (field.get_lookup(segment) or field.get_transform(segment)):
             return "__".join([*out, *segments[index:]])
+        if not (strict or reached):
+            return key
         raise UntranslatableConstraint(f"{key!r} does not resolve on the flattened pathway")
     return "__".join(out)
+
+
+def _rewrite_keys(constraints, model):
+    """`constraints` (a dict, a list of dicts or None) with every key rewritten from `model`."""
+    if isinstance(constraints, list):
+        return [_rewrite_keys(alternative, model) for alternative in constraints]
+    return {_rewrite_key(key, model, strict=False): value for key, value in (constraints or {}).items()}
 
 
 def _scope_to_types(alternative, pathway_types, pathway_model):
@@ -313,20 +337,8 @@ def _legacy_types_by_ct(apps, legacy_ct_ids):
     return {pk: LEGACY_SUBTYPES[name] for pk, name in sorted(names.items(), key=lambda item: order.index(item[1]))}
 
 
-def convert_object_permissions(apps, legacy_ct_ids, pathway_ct_id):
-    """Give every permission on a subtype content type an equivalent on `pathway`.
-
-    The original permission's constraints may also govern its other object
-    types, so the pathway content type is not added to it. Instead a new
-    permission named "<name> (pathways)" carries the same actions, users,
-    groups and enabled flag, the pathway content type only, and the
-    original constraints rewritten and scoped to the pathway types it
-    covered. The subtype content types are then removed from the original,
-    which is deleted if nothing remains on it.
-
-    Every constraint is translated before anything is written; any that
-    cannot be raise one UntranslatableConstraint naming each permission.
-    """
+def _plan_conversions(apps, legacy_ct_ids, errors):
+    """[(permission, scoped constraints)] for every permission on a subtype content type."""
     ObjectPermission = apps.get_model("users", "ObjectPermission")
     Pathway = apps.get_model("netbox_pathways", "Pathway")
     field = ObjectPermission._meta.get_field("object_types")
@@ -334,7 +346,7 @@ def convert_object_permissions(apps, legacy_ct_ids, pathway_ct_id):
     owner_col, type_col = _m2m_columns(field)
     legacy_types = _legacy_types_by_ct(apps, legacy_ct_ids)
 
-    planned, errors = [], []
+    planned = []
     for perm in ObjectPermission.objects.filter(object_types__in=legacy_ct_ids).distinct().order_by("pk"):
         covered = set(
             through.objects.filter(**{owner_col: perm.pk, f"{type_col}__in": legacy_ct_ids}).values_list(
@@ -346,14 +358,86 @@ def convert_object_permissions(apps, legacy_ct_ids, pathway_ct_id):
             planned.append((perm, rewrite_constraints(perm.constraints, types, pathway_model=Pathway)))
         except UntranslatableConstraint as exc:
             errors.append(f"{perm.name!r} (id {perm.pk}): {exc}")
+    return planned
+
+
+def _plan_in_place_rewrites(apps, legacy_ct_ids, errors):
+    """[(permission pk, rewritten constraints)] for constraints that reach a pathway.
+
+    Covers the object types a permission keeps (everything but the
+    subtypes): `pathway` itself and any model with a relation to it, such
+    as cable segments. Each key is rewritten from every such model; when
+    they disagree (`path` is the geometry on a pathway but may be another
+    field elsewhere) one in-place rewrite cannot serve them all, which is
+    an error like any untranslatable key.
+    """
+    ObjectPermission = apps.get_model("users", "ObjectPermission")
+    ContentType = apps.get_model("contenttypes", "ContentType")
+    field = ObjectPermission._meta.get_field("object_types")
+    through = field.remote_field.through
+    owner_col, type_col = _m2m_columns(field)
+
+    planned = []
+    for perm in ObjectPermission.objects.filter(constraints__isnull=False).order_by("pk"):
+        type_ids = through.objects.filter(**{owner_col: perm.pk}).exclude(**{f"{type_col}__in": legacy_ct_ids})
+        rewrites = []
+        for app_label, model_name in ContentType.objects.filter(
+            pk__in=type_ids.values_list(type_col, flat=True)
+        ).values_list("app_label", "model"):
+            try:
+                model = apps.get_model(app_label, model_name)
+            except LookupError:
+                continue
+            try:
+                rewrites.append(_rewrite_keys(perm.constraints, model))
+            except UntranslatableConstraint as exc:
+                errors.append(f"{perm.name!r} (id {perm.pk}), on {app_label}.{model_name}: {exc}")
+                break
+        else:
+            if any(rewrite != rewrites[0] for rewrite in rewrites):
+                errors.append(f"{perm.name!r} (id {perm.pk}): its object types need different rewrites; split it")
+            elif rewrites and rewrites[0] != perm.constraints:
+                planned.append((perm.pk, rewrites[0]))
+    return planned
+
+
+def convert_object_permissions(apps, legacy_ct_ids, pathway_ct_id):
+    """Carry every object permission that touches a pathway over to the flattened model.
+
+    A permission on a subtype content type gets an equivalent on `pathway`.
+    Its constraints may also govern its other object types, so the pathway
+    content type is not added to it. Instead a new permission named
+    "<name> (pathways)" carries the same actions, users, groups and enabled
+    flag, the pathway content type only, and the original constraints
+    rewritten and scoped to the pathway types it covered. The subtype
+    content types are then removed from the original, which is deleted if
+    nothing remains on it.
+
+    Constraints on the object types a permission keeps are rewritten in
+    place where they reach a pathway: `path` was renamed `geometry` and now
+    names the ltree column, so `{"path__isnull": False}` on `pathway` (or
+    `pathway__path__isnull` on a cable segment) would otherwise match every
+    pathway, and keys through the removed subtype accessors would raise in
+    every permission check.
+
+    Every constraint is translated before anything is written; any that
+    cannot be raise one UntranslatableConstraint naming each permission.
+    """
+    errors = []
+    conversions = _plan_conversions(apps, legacy_ct_ids, errors)
+    rewrites = _plan_in_place_rewrites(apps, legacy_ct_ids, errors)
     if errors:
         raise UntranslatableConstraint(
-            "These object permissions cannot be moved onto the pathway model; "
+            "These object permissions cannot be carried over to the flattened pathway model; "
             "fix or remove their constraints and run the migration again:\n  " + "\n  ".join(errors)
         )
 
+    ObjectPermission = apps.get_model("users", "ObjectPermission")
+    field = ObjectPermission._meta.get_field("object_types")
+    through = field.remote_field.through
+    owner_col, type_col = _m2m_columns(field)
     name_length = ObjectPermission._meta.get_field("name").max_length - len(PERMISSION_SUFFIX)
-    for perm, constraints in planned:
+    for perm, constraints in conversions:
         converted = ObjectPermission.objects.create(
             name=f"{perm.name[:name_length]}{PERMISSION_SUFFIX}",
             description=perm.description,
@@ -367,6 +451,8 @@ def convert_object_permissions(apps, legacy_ct_ids, pathway_ct_id):
         through.objects.filter(**{owner_col: perm.pk, f"{type_col}__in": legacy_ct_ids}).delete()
         if not through.objects.filter(**{owner_col: perm.pk}).exists():
             perm.delete()
+    for pk, constraints in rewrites:
+        ObjectPermission.objects.filter(pk=pk).update(constraints=constraints)
 
 
 def _repoint_fk(model, field, legacy_ct_ids, pathway_ct_id):

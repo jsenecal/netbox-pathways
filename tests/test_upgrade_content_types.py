@@ -274,3 +274,75 @@ def test_retire_without_legacy_types_is_a_no_op(pathway_ct):
     ContentType.objects.clear_cache()
     retire_subtype_content_types(APPS, None)
     assert ContentType.objects.filter(pk=pathway_ct.pk).exists()
+
+
+@pytest.mark.django_db
+def test_pathway_permission_on_old_geometry_name_is_rewritten(legacy, pathway_ct, pathways):
+    """`path` meant the geometry in 0.4.x; left alone it would match the never-null ltree path."""
+    conduit, _ = pathways
+    user = get_user_model().objects.create_user(username="ct-geometry-viewer")
+    perm = _permission("Mapped pathways", [pathway_ct], constraints={"path__isnull": False})
+    perm.users.add(user)
+    segment_ct = ContentType.objects.get(app_label="netbox_pathways", model="cablesegment")
+    segment_perm = _permission("Mapped segments", [segment_ct], constraints=[{"pathway__path__isnull": False}])
+
+    convert_object_permissions(APPS, _ids(legacy), pathway_ct.pk)
+
+    perm.refresh_from_db()
+    segment_perm.refresh_from_db()
+    assert perm.constraints == {"geometry__isnull": False}
+    assert segment_perm.constraints == [{"pathway__geometry__isnull": False}]
+    user = get_user_model().objects.get(pk=user.pk)
+    assert conduit.pk not in set(Pathway.objects.restrict(user, "view").values_list("pk", flat=True))
+
+
+@pytest.mark.parametrize(
+    ("model", "constraints"),
+    [
+        ("pathway", {"conduit__material": "pvc"}),
+        ("pathway", [{"label": "x"}, {"innerduct__parent_conduit": 1}]),
+        ("cablesegment", {"pathway__aerialspan__sag__gt": 1}),
+        ("cablesegment", {"pathway__nonexistent": 1}),
+    ],
+)
+@pytest.mark.django_db
+def test_pathway_permission_through_a_removed_accessor_aborts(legacy, pathway_ct, model, constraints):
+    """The subtype accessors are gone; such a constraint would raise FieldError in every restrict()."""
+    object_type = ContentType.objects.get(app_label="netbox_pathways", model=model)
+    perm = _permission("Through subtype", [object_type], constraints=constraints)
+    conduits = _permission("Conduits", [legacy["conduit"]])
+
+    with pytest.raises(UntranslatableConstraint, match="Through subtype"):
+        convert_object_permissions(APPS, _ids(legacy), pathway_ct.pk)
+
+    perm.refresh_from_db()
+    assert perm.constraints == constraints
+    assert _pks(conduits.object_types) == [legacy["conduit"].pk]
+
+
+@pytest.mark.django_db
+def test_permission_needing_different_rewrites_per_type_aborts(legacy, pathway_ct):
+    """`path` is the geometry on pathway but not on site, so one in-place rewrite cannot serve both."""
+    site_ct = ContentType.objects.get(app_label="dcim", model="site")
+    _permission("Pathways and sites", [pathway_ct, site_ct], constraints={"path__isnull": False})
+
+    with pytest.raises(UntranslatableConstraint, match="Pathways and sites"):
+        convert_object_permissions(APPS, _ids(legacy), pathway_ct.pk)
+
+
+@pytest.mark.django_db
+def test_permission_not_reaching_pathways_is_left_alone(legacy, pathway_ct):
+    site_ct = ContentType.objects.get(app_label="dcim", model="site")
+    scoped = _permission("Tenant sites", [site_ct], constraints={"tenant__slug": "t1"})
+    broken = _permission("Broken sites", [site_ct], constraints={"bogus": 1})
+    # An uninstalled plugin leaves content types with no model behind.
+    stale_ct = ContentType.objects.create(app_label="ct_uninstalled", model="widget")
+    stale = _permission("Stale widgets", [stale_ct], constraints={"path__isnull": False})
+
+    convert_object_permissions(APPS, _ids(legacy), pathway_ct.pk)
+
+    for perm in (scoped, broken, stale):
+        perm.refresh_from_db()
+    assert scoped.constraints == {"tenant__slug": "t1"}
+    assert broken.constraints == {"bogus": 1}
+    assert stale.constraints == {"path__isnull": False}
