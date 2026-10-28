@@ -1,6 +1,6 @@
 # QGIS Integration
 
-NetBox Pathways provides a GeoJSON REST API and QGIS tooling for full GIS client integration. No direct database access is required — all spatial data is served through authenticated API endpoints that respect NetBox permissions.
+NetBox Pathways provides a GeoJSON REST API and QGIS tooling for full GIS client integration. No direct database access is required -- all spatial data is served through authenticated API endpoints that respect NetBox permissions.
 
 ## Quick Start
 
@@ -22,9 +22,15 @@ The generated project includes these GeoJSON layers:
 |-------|----------|----------|
 | Structures | Point | `/api/plugins/pathways/geo/structures/` |
 | Pathways (All) | LineString | `/api/plugins/pathways/geo/pathways/` |
-| Conduits | LineString | `/api/plugins/pathways/geo/conduits/` |
-| Aerial Spans | LineString | `/api/plugins/pathways/geo/aerial-spans/` |
-| Direct Buried | LineString | `/api/plugins/pathways/geo/direct-buried/` |
+| Conduit Bank | LineString | `/api/plugins/pathways/geo/pathways/?pathway_type=conduit_bank&containers=true` |
+| Conduit | LineString | `/api/plugins/pathways/geo/pathways/?pathway_type=conduit&containers=true` |
+| Aerial Span | LineString | `/api/plugins/pathways/geo/pathways/?pathway_type=aerial&containers=true` |
+| Direct Buried | LineString | `/api/plugins/pathways/geo/pathways/?pathway_type=direct_buried&containers=true` |
+| Submarine | LineString | `/api/plugins/pathways/geo/pathways/?pathway_type=submarine&containers=true` |
+
+Like the web map, the per-type layers hold map containers only (top-level
+pathways of a drawn type), so a conduit in a bank is drawn once, as its bank.
+"Pathways (All)" holds every pathway that has its own geometry.
 
 ## Layer Symbology
 
@@ -51,6 +57,7 @@ The generated project includes these GeoJSON layers:
 | Innerduct | Solid | Orange |
 | Cable Tray | Solid | Green |
 | Raceway | Solid | Indigo |
+| Other (conduit bank, submarine, blank) | Dashed (thin) | Gray |
 
 ## Style Files
 
@@ -88,7 +95,7 @@ All GeoJSON endpoints support query parameter filtering:
 /api/plugins/pathways/geo/structures/?site_id=1
 
 # Conduits of a specific material
-/api/plugins/pathways/geo/conduits/?material=pvc
+/api/plugins/pathways/geo/pathways/?pathway_type=conduit&material=pvc
 
 # Features within a bounding box
 /api/plugins/pathways/geo/structures/?bbox=-74,40,-73,41

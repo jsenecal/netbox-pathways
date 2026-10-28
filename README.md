@@ -22,7 +22,8 @@
 ## Features
 
 - **Structures** -- poles, manholes, cabinets, equipment rooms, and more with PostGIS geometry (point or polygon), optionally anchored to a NetBox site and location.
-- **Pathways** -- conduits, aerial spans, direct buried, innerducts, cable trays with PostGIS line geometry; a computed `geo_length` (PostGIS `ST_Length`) sits alongside the manual as-built `length` so the drawn-versus-field distinction is always visible and sortable.
+- **Pathways** -- conduit banks, conduits, aerial spans, direct buried, innerducts, cable trays, raceways and submarine routes in one model with PostGIS line geometry; a computed `geo_length` (PostGIS `ST_Length`) sits alongside the manual as-built `length` so the drawn-versus-field distinction is always visible and sortable.
+- **Pathway Hierarchy** -- conduits in banks or raceways, innerducts in conduits, trays, direct buried runs or other innerducts, under one containment rule enforced by the model and stored as an ltree; containers with children are protected from deletion.
 - **Conduit Banks and Junctions** -- model conduit bank configurations and mid-span Y-tees.
 - **Cable Routing** -- track which NetBox cables traverse which pathways, in sequence, and see the route, its gaps and the cable's ends on a map.
 - **Attached Endpoints** -- every pathway end belongs to a structure, including ends that name a room or floor inside a building site; aerial spans are straight lines hung between two structures (pinned on poles, landing anywhere on a building outline), and moving a structure drags every attached pathway end with it; `manage.py reanchor_pathways` repairs ends left behind by bulk writes.
@@ -31,7 +32,7 @@
 - **GeoJSON API** -- standard GeoJSON endpoints for QGIS and other GIS clients.
 - **QGIS Integration** -- style files, project generator, and documentation.
 - **Geometry Editing** -- draw and edit geometries directly in NetBox forms via Leaflet map widgets, or paste GeoJSON / WKT / DMS / decimal `lat,lon` in the Coordinates tab. "Use my location" (mobile GPS) and "Paste lat/lon..." helpers place a marker on Point widgets or append a vertex on LineString widgets. A toggleable read-only layer shows the structures already recorded nearby for context while drawing.
-- **Interactive Map** -- built-in Leaflet map for quick visualization.
+- **Interactive Map** -- built-in Leaflet map for quick visualization; it draws only top-level containers, and the Map button, `?select=` and search resolve anything inside one to its container.
 - **Indoor / Outdoor** -- pathways can terminate at structures (outdoor) or NetBox locations (indoor).
 
 ## Compatibility
@@ -40,7 +41,8 @@
 |-----------------|-------------------------------|-----------|----------------------|
 | 0.1.x -- 0.2.1  | 4.5.3 -- 4.5.x                | 3.12-3.14 | 16+ with PostGIS 3.4+|
 | 0.2.2 -- 0.3.0  | 4.5.3+ (incl. 4.6.x, 4.7.x)   | 3.12-3.14 | 16+ with PostGIS 3.4+|
-| 0.4.0+          | 4.7.0+                        | 3.12-3.14 | 16+ with PostGIS 3.4+|
+| 0.4.0           | 4.7.0+                        | 3.12-3.14 | 16+ with PostGIS 3.4+|
+| 0.5.0+          | 4.7.0+                        | 3.12-3.14 | 16+ with PostGIS 3.4+|
 
 > NetBox 4.6 ships Django 6.0. Plugin versions 0.2.1 and earlier do not render
 > the geometry map widget on NetBox 4.6 (issue #52); upgrade to 0.2.2 or later
@@ -48,6 +50,10 @@
 >
 > Plugin 0.4.0 requires NetBox 4.7.0 or later. On NetBox 4.5 or 4.6, stay on
 > plugin 0.3.0.
+>
+> Plugin 0.5.0 replaces the per-type pathway models, URLs and API endpoints
+> with a single pathway model. Read the Upgrading section of the
+> [CHANGELOG](CHANGELOG.md) before upgrading from 0.4.x.
 
 ## Installation
 
@@ -151,7 +157,7 @@ All resources are exposed under `/api/plugins/pathways/`. GeoJSON variants live 
 
 ## GraphQL
 
-Every Pathways model is exposed on NetBox's `/graphql/` endpoint (single and `_list` queries: `structure`, `structure_list`, `pathway`, `pathway_list`, `conduit`, `conduit_list`, etc.). Geometry fields are intentionally omitted -- query the GeoJSON REST endpoints for spatial data.
+Every Pathways model is exposed on NetBox's `/graphql/` endpoint (single and `_list` queries: `structure`, `structure_list`, `pathway`, `pathway_list`, `conduit_junction`, `conduit_junction_list`, etc.; every pathway type is a `pathway`). Geometry fields are intentionally omitted -- query the GeoJSON REST endpoints for spatial data.
 
 ## Documentation
 

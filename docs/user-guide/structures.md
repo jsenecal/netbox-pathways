@@ -100,7 +100,7 @@ The structure list supports filtering by:
 
 ## Conduit Banks
 
-Each structure can have one or more conduit banks. A conduit bank represents a wall or face of the structure with conduit openings. See [Cable Routing](cable-routing.md) for details on bank configuration and conduit positioning.
+Conduit banks start and end at structures like any other pathway, and appear on the structure's Pathways tab (filter by type to list only banks). See [Conduit Banks](conduit-banks.md) for bank configuration and conduit positions.
 
 ## Bulk Operations
 

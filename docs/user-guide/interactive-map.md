@@ -12,31 +12,59 @@ Navigate to **Plugins > Pathways > Map** or visit `/plugins/pathways/map/`.
 
 Structures appear as SVG markers with shapes and colors specific to their type:
 
-- **Circles** — Poles, manholes, handholes
-- **Squares** — Cabinets, vaults, pedestals, equipment rooms, building entrances
-- **Diamonds** — Telecom closets, riser rooms
-- **Triangles** — Roof mounts
-- **Crosshairs** — Towers
+- **Circles** -- Poles, manholes, handholes
+- **Squares** -- Cabinets, vaults, pedestals, equipment rooms, building entrances
+- **Diamonds** -- Telecom closets, riser rooms
+- **Triangles** -- Roof mounts
+- **Crosshairs** -- Towers
 
 Markers cluster when zoomed out and expand as you zoom in.
 
-### Pathway Lines
+### What the map draws
 
-Pathways render as colored lines connecting structures:
+The map draws only **containers**: pathways of a drawn type that have no
+parent. Each drawn type has its own layer and line style:
 
-- **Conduit** — Solid brown line
-- **Aerial Span** — Dashed blue line
-- **Direct Buried** — Dotted gray line
-- **Innerduct** — Solid thin orange line
+| Type | Line style | Color |
+|------|------------|-------|
+| Conduit Bank | Solid, wide | Magenta (`#ad1457`) |
+| Conduit (top-level only) | Dashed `5 5` | Orange (`#f57c00`) |
+| Aerial Span | Dashed `10 5` | Blue (`#1565c0`) |
+| Direct Buried | Dotted `2 4` | Gray (`#616161`) |
+| Submarine | Dash-dot `6 2 2 2` | Navy (`#1a237e`) |
+
+Innerducts, cable trays, raceways and any pathway with a parent (a conduit in
+a bank or a raceway) are never drawn. The legend lists exactly the drawn
+types.
+
+A pathway that is not drawn is represented by its **map container**: the
+outermost drawn pathway among itself and its ancestors. An innerduct in a
+conduit in a bank resolves to the bank; an innerduct in a top-level
+direct buried pathway resolves to that pathway. A pathway with no drawn
+ancestor-or-self (a conduit or tray in a raceway) has no map container.
+
+- The **Map** button on a pathway's detail page and in pathway tables opens
+  the map on its container; when there is none, the map opens with nothing
+  selected.
+- `?select=<type>-<id>` (for example `?select=innerduct-42`) selects the
+  container. Nothing is selected when there is no container, or when the user
+  may not view the pathway or its container.
+- **Map search** matches a container when it or anything inside it matches.
+  A container found through a child is listed as `Bank A (via Duct 3)`. Only
+  children the user may view are searched, so the search never reveals a
+  pathway the user cannot see.
 
 ### Layer Toggles
 
 Icon pill toggle buttons at the top of the map control which feature types are visible:
 
 - **Structures** -- Toggle structure markers
-- **Conduits** -- Toggle conduit lines
+- **Conduit Banks** -- Toggle conduit bank lines
+- **Conduits** -- Toggle top-level conduit lines
 - **Aerial Spans** -- Toggle aerial span lines
 - **Direct Buried** -- Toggle direct buried lines
+- **Submarine** -- Toggle submarine lines
+- **Circuit Routes** -- Toggle circuit routes
 
 External plugin layers (if registered) also appear as toggle buttons.
 
@@ -75,7 +103,7 @@ Defaults (override in `PLUGINS_CONFIG['netbox_pathways']['map_thresholds']`):
 | --- | --- | --- | --- |
 | Structures (`cluster: 200`, `hide: 5000`) | individual markers | client-side clusters | server-side clusters; all support layers hidden |
 | Conduit Banks (`hide: 500`) | rendered | -- | hidden, count shown on toggle |
-| Conduits / Aerial Spans / Direct Buried / Circuits (`hide: 500`) | rendered | -- | hidden, count shown on toggle |
+| Conduits / Aerial Spans / Direct Buried / Submarine / Circuits (`hide: 500`) | rendered | -- | hidden, count shown on toggle |
 
 When the structures layer crosses either threshold (client cluster or server cluster), the supporting infrastructure layers are suppressed regardless of their own counts: at that density a single highlighted line cannot be matched back to a clustered structure marker, so the whole set is hidden until you zoom in. Reference-mode external layers participate in the same gating, using their `max_features` registration value (default 500).
 
@@ -137,6 +165,7 @@ Override default map position via URL:
 | `lon` | `?lon=-74.0060` | Center longitude |
 | `zoom` | `?zoom=15` | Zoom level |
 | `bbox` | `?bbox=-74,40,-73,41` | Bounding box (W,S,E,N) |
+| `select` | `?select=conduit-17` | Select a feature (`structure-<id>` or `<pathway_type>-<id>`); a pathway selects its map container |
 
 ## Map Panels on Detail Pages
 
@@ -145,7 +174,7 @@ pages so infrastructure is visible in context:
 
 | Page | What the panel shows |
 |------|----------------------|
-| Structure, Pathway (and subtypes), Conduit Bank, Conduit Junction | The object's own geometry, plus endpoint structures for pathways |
+| Structure, Pathway (every type), Conduit Junction | The object's own geometry, plus endpoint structures for pathways |
 | Site | The site boundary from [Site Geometry](site-geometry.md), every structure assigned to the site, and pathways with an endpoint structure at the site |
 | Location | Every structure in the location, plus pathways starting or ending at it with their far-end structures |
 

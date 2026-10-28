@@ -7,18 +7,12 @@ This page explains the core data model and how the different components of NetBo
 ```mermaid
 erDiagram
     Structure ||--o{ Pathway : "start/end"
-    Structure ||--o{ ConduitBank : contains
     Structure ||--o{ ConduitJunction : "towards"
+    Pathway ||--o{ Pathway : "parent of"
     Pathway ||--o{ CableSegment : routes
     Pathway ||--|{ PathwayLocation : "passes through"
     Cable ||--o{ CableSegment : "routed via"
-    ConduitBank ||--o{ Conduit : positions
-    Conduit ||--o{ Innerduct : contains
-    Conduit ||--o{ ConduitJunction : "branches at"
-    Pathway <|-- Conduit : extends
-    Pathway <|-- AerialSpan : extends
-    Pathway <|-- DirectBuried : extends
-    Pathway <|-- Innerduct : extends
+    Pathway ||--o{ ConduitJunction : "trunk / branch (conduits)"
 ```
 
 ## Structures
@@ -30,7 +24,7 @@ A **Structure** is any physical location where cables can enter, exit, or transi
 | **Outdoor** | Pole, Manhole, Handhole, Cabinet, Vault, Pedestal, Tower, Roof |
 | **Indoor** | Equipment Room, Telecom Closet, Riser Room, Building Entrance |
 
-Structures serve as endpoints for Pathways and anchor points for Conduit Banks.
+Structures serve as endpoints for Pathways, including conduit banks.
 
 A structure is a *container*. Equipment that lives inside one -- a splice
 closure, for instance -- is a `dcim.Device` assigned to the same site and
@@ -40,42 +34,48 @@ location, not a structure in its own right.
 
 A **Pathway** is a physical route between two endpoints. It has a LineString geometry (the geographic path) and connects structures, locations, or junctions.
 
-Pathways use multi-table inheritance with four subtypes:
+Every pathway is one record of the `Pathway` model; its `pathway_type`
+decides its type-specific fields:
 
-| Subtype | Description | Key Fields |
-|---------|-------------|------------|
-| **Conduit** | Pipe or duct | Material, diameter, depth, bank position |
+| Type | Description | Key Fields |
+|------|-------------|------------|
+| **Conduit Bank** | Encased group of conduits on one route | Configuration, total conduits, encasement |
+| **Conduit** | Pipe or duct | Material, diameter, depth, position in its bank or raceway |
 | **Aerial Span** | Overhead route | Attachment height, sag, messenger, wind/ice loading |
 | **Direct Buried** | Underground without conduit | Burial depth, warning tape, tracer wire, armor |
-| **Innerduct** | Smaller duct inside a conduit | Parent conduit, size, color, position |
+| **Innerduct** | Smaller duct inside another pathway | Size, color, position |
+| **Cable Tray** / **Raceway** / **Submarine** | Tray, enclosed channel, underwater route | Common fields only |
+
+A pathway may sit inside another one through its `parent`: conduits in a bank
+or raceway, innerducts in a conduit, tray, direct buried pathway or another
+innerduct. The [containment rule](pathways.md#containment-rule) decides which
+types may contain which. Only top-level conduit banks, conduits, aerial spans,
+direct buried and submarine pathways are drawn on the map.
 
 ### Endpoint Flexibility
 
 Pathways support flexible endpoints to model both outdoor and indoor infrastructure:
 
-- **Structure** — A pole, manhole, or other physical structure
-- **Location** — A NetBox `dcim.Location` (room, floor, wing)
-- **Junction** — A conduit junction (Y-tee) for conduit subtypes only
+- **Structure** -- A pole, manhole, or other physical structure
+- **Location** -- A NetBox `dcim.Location` (room, floor, wing)
+- **Junction** -- A conduit junction (Y-tee), for conduits only
 
 Each pathway has exactly one start endpoint and one end endpoint. These can be different types (e.g., a conduit starting at a manhole and ending at a building location). A location endpoint still belongs to a structure -- the nearest one enclosing it; see [How Pathway Ends Attach to Structures](attachment.md).
 
 ## Conduit Banks
 
-A **Conduit Bank** represents a group of conduit openings on one side of a structure — typically a wall in a manhole or handhole. Banks have a configuration (e.g., 2x3 for 2 rows by 3 columns) and track the total number of openings.
+A **Conduit Bank** is a pathway of type `conduit_bank`: an encased group of conduits sharing one route between two structures. Banks have a configuration (e.g., 2x3 for 2 rows by 3 columns) and track the total number of openings.
 
-Individual Conduits are assigned to a bank with a **Bank Position** (e.g., `A1`, `B2`). Each position within a bank is unique.
-
-!!! note
-    A Conduit Bank belongs to a single structure. The conduits that pass through a bank each have their own start and end points — they are not constrained to connect the same pair of structures.
+Conduits are placed in a bank by setting their `parent` to the bank, with a **Position** (e.g., `A1`, `B2`). Each position within a bank is unique. A conduit in a bank inherits the bank's endpoints and route when it has none of its own. See [Conduit Banks](conduit-banks.md).
 
 ## Conduit Junctions
 
 A **Conduit Junction** models a Y-tee where a branch conduit meets a trunk conduit at a point along its span. Key attributes:
 
-- **Trunk Conduit** — The main conduit being tapped
-- **Branch Conduit** — The conduit branching off
-- **Towards Structure** — Which end of the trunk the junction faces
-- **Position on Trunk** — Normalized position (0.0 to 1.0) along the trunk
+- **Trunk Conduit** -- The main conduit being tapped
+- **Branch Conduit** -- The conduit branching off
+- **Towards Structure** -- Which end of the trunk the junction faces
+- **Position on Trunk** -- Normalized position (0.0 to 1.0) along the trunk
 
 The junction's geographic location is interpolated from the trunk conduit's path geometry.
 
@@ -110,4 +110,4 @@ NetBox Pathways integrates with several core NetBox models:
 | `dcim.Site` | Structures belong to Sites; PathwayLocations reference Sites |
 | `dcim.Location` | Pathway endpoints can be Locations (indoor routing) |
 | `dcim.Cable` | CableSegments link Cables to Pathways |
-| `tenancy.Tenant` | Structures, Pathways, and Conduit Banks support tenant assignment |
+| `tenancy.Tenant` | Structures and Pathways support tenant assignment; a pathway without one shows its nearest ancestor's |

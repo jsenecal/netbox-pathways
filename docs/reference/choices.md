@@ -34,16 +34,24 @@ Same states as structures (see the Structures user guide). Applies to every path
 
 ## PathwayTypeChoices
 
-| Value | Label | Color |
-|-------|-------|-------|
-| `conduit` | Conduit | Brown |
-| `aerial` | Aerial | Blue |
-| `direct_buried` | Direct Buried | Gray |
-| `innerduct` | Innerduct | Orange |
-| `microduct` | Microduct | Purple |
-| `tray` | Cable Tray | Green |
-| `raceway` | Raceway | Cyan |
-| `submarine` | Submarine | Navy |
+Required on every pathway. The type decides the type-specific fields, the
+allowed parents and whether the map draws the pathway; see
+[Pathways](../user-guide/pathways.md#hierarchy) for the containment rule.
+
+| Value | Label | Color | Drawn on the map (top-level only) |
+|-------|-------|-------|-----------------------------------|
+| `conduit_bank` | Conduit Bank | Dark Brown | Yes |
+| `conduit` | Conduit | Brown | Yes |
+| `aerial` | Aerial Span | Blue | Yes |
+| `direct_buried` | Direct Buried | Gray | Yes |
+| `innerduct` | Innerduct | Orange | No |
+| `tray` | Cable Tray | Green | No |
+| `raceway` | Raceway | Cyan | No |
+| `submarine` | Submarine | Navy | Yes |
+
+The former `microduct` type is retired: a microduct is an innerduct
+(distinguished by `size`), and a stand-alone microduct bundle is a direct
+buried pathway with innerduct children.
 
 ## ConduitMaterialChoices
 
