@@ -92,7 +92,10 @@ PATHWAY_TYPES: dict[str, PathwayTypeSpec] = {
 
 TYPE_SPECIFIC_FIELDS: frozenset[str] = frozenset(f for s in PATHWAY_TYPES.values() for f in s.fields)
 
-DRAWN_TYPES: frozenset[str] = frozenset(t for t, s in PATHWAY_TYPES.items() if s.drawn)
+# The drawn types in a stable display order, for the map legend and layers.
+DRAWN_TYPES_ORDERED: tuple[str, ...] = tuple(t for t, s in PATHWAY_TYPES.items() if s.drawn)
+
+DRAWN_TYPES: frozenset[str] = frozenset(DRAWN_TYPES_ORDERED)
 
 
 def spec(pathway_type: str) -> PathwayTypeSpec:

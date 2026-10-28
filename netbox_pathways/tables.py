@@ -16,9 +16,8 @@ from .models import (
 _LINKED_RECORD = '<a href="{{ record.get_absolute_url }}">{{ record }}</a>'
 
 _MAP_BUTTON = (
-    "<a href=\"{% url 'plugins:netbox_pathways:map' %}?select="
-    "{% if record.pathway_type %}{{ record.pathway_type }}{% else %}structure{% endif %}"
-    '-{{ record.pk }}" class="btn btn-sm btn-primary me-1" title="Show on Map">'
+    "<a href=\"{% url 'plugins:netbox_pathways:map' %}?select={{ record.map_select_id }}\" "
+    'class="btn btn-sm btn-primary me-1" title="Show on Map">'
     '<i class="mdi mdi-map-marker-radius"></i></a>'
 )
 

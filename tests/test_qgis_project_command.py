@@ -55,7 +55,9 @@ def test_every_qgis_layer_resolves_to_a_geo_endpoint(tmp_path):
         assert resolve("/" + api_path, urlconf="netbox_pathways.api.urls").url_name.startswith("geo-"), url
         query = parse_qs(parts.query)
         assert query["format"] == ["json"], url
-        layer_types.update(query.get("pathway_type", []))
+        if "pathway_type" in query:
+            layer_types.update(query["pathway_type"])
+            assert query["containers"] == ["true"], url
 
     # One per-type layer for each type the map draws, and no others.
     assert layer_types == DRAWN_TYPES

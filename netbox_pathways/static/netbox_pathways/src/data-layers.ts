@@ -59,6 +59,7 @@ export interface MapInfo {
         conduits: number;
         aerial_spans: number;
         direct_buried: number;
+        submarine: number;
         circuits: number;
         external?: Record<string, number>;
     };
@@ -68,6 +69,7 @@ export interface MapInfo {
         conduits: LayerThresholds;
         aerial_spans: LayerThresholds;
         direct_buried: LayerThresholds;
+        submarine: LayerThresholds;
         circuits: LayerThresholds;
         external?: Record<string, LayerThresholds>;
     };
@@ -111,7 +113,7 @@ export function decideLayerRendering(info: MapInfo, enabled: Set<string>): Rende
     }
 
     const nativeKeys: (keyof MapInfo['counts'])[] = [
-        'conduit_banks', 'conduits', 'aerial_spans', 'direct_buried', 'circuits',
+        'conduit_banks', 'conduits', 'aerial_spans', 'direct_buried', 'submarine', 'circuits',
     ];
     for (const key of nativeKeys) {
         if (!enabled.has(key)) continue;
@@ -245,7 +247,8 @@ export async function fetchGeoJSON(
         _inflightControllers[endpoint].abort();
     }
 
-    let url = API_BASE + endpoint + '?format=json&bbox=' + bbox;
+    // A pathway layer's endpoint already carries its own filters.
+    let url = API_BASE + endpoint + (endpoint.indexOf('?') === -1 ? '?' : '&') + 'format=json&bbox=' + bbox;
     if (extraParams) {
         for (const key in extraParams) {
             url += '&' + key + '=' + encodeURIComponent(String(extraParams[key]));
@@ -300,21 +303,21 @@ export async function serverSearch(
     const csrfToken = _getCookie('csrftoken');
     if (csrfToken) headers['X-CSRFToken'] = csrfToken;
 
-    // Search all layer endpoints in parallel, without bbox
-    const endpoints: [string, FeatureType, string][] = [
-        ['structures/', 'structure', 'structure_type'],
-        ['conduit-banks/', 'conduit_bank', 'pathway_type'],
-        ['conduits/', 'conduit', 'pathway_type'],
-        ['aerial-spans/', 'aerial', 'pathway_type'],
-        ['direct-buried/', 'direct_buried', 'pathway_type'],
-        ['circuits/', 'circuit', 'pathway_type'],
+    // Search all layer endpoints in parallel, without bbox. Pathways are
+    // searched as map containers: a match on an undrawn child returns its
+    // container, carrying the child's label as ``search_match``. A null
+    // feature type means "the feature's own pathway_type".
+    const endpoints: [string, FeatureType | null, string][] = [
+        ['structures/?', 'structure', 'structure_type'],
+        ['pathways/?containers=true&', null, 'pathway_type'],
+        ['circuits/?', 'circuit', 'pathway_type'],
     ];
 
     const results: ServerSearchResult[] = [];
 
     const fetches = endpoints.map(function (cfg) {
-        const [endpoint, featureType, typeField] = cfg;
-        const url = API_BASE + endpoint + '?format=json&q=' + encodeURIComponent(query);
+        const [endpoint, fixedType, typeField] = cfg;
+        const url = API_BASE + endpoint + 'format=json&q=' + encodeURIComponent(query);
         return fetch(url, { headers, signal: controller.signal })
             .then(function (resp) { return resp.ok ? resp.json() : null; })
             .then(function (data: GeoJSON.FeatureCollection | null) {
@@ -333,12 +336,14 @@ export async function serverSearch(
                     } else {
                         return;
                     }
+                    const featureType = fixedType || (props[typeField] as string);
                     results.push({
-                        name: props.name || props.cid || 'Unnamed',
+                        name: props.name || props.label || props.cid || 'Unnamed',
                         featureType: featureType,
                         typeKey: (props[typeField] as string) || featureType,
                         latlng: latlng,
                         url: props.url as string | undefined,
+                        matchedChild: (props.search_match as string | null) || undefined,
                     });
                 });
             })
@@ -407,6 +412,7 @@ export interface DataLayerGroups {
     conduits: L.LayerGroup;
     aerialSpans: L.LayerGroup;
     directBuried: L.LayerGroup;
+    submarine: L.LayerGroup;
     circuits: L.LayerGroup;
 }
 
@@ -417,6 +423,7 @@ export function createDataLayers(): DataLayerGroups {
         conduits: L.layerGroup(),
         aerialSpans: L.layerGroup(),
         directBuried: L.layerGroup(),
+        submarine: L.layerGroup(),
         circuits: L.layerGroup(),
     };
 }
@@ -427,14 +434,16 @@ export function createDataLayers(): DataLayerGroups {
 
 /** Pathway layer descriptor.
  *
- * - ``endpoint``  -- GeoJSON endpoint path relative to API_BASE
+ * - ``endpoint``  -- GeoJSON endpoint path relative to API_BASE; pathway
+ *                    layers include their query (see ``containerEndpoint``)
  * - ``layerKey``  -- key into DataLayerGroups
  * - ``featureType`` -- canonical type label used by the sidebar/popover
  * - ``style``     -- Leaflet polyline style
  * - ``infoKey``   -- corresponding key in MapInfo.counts/thresholds; this is
  *                    what the gating decision uses
  */
-export type PathwayInfoKey = 'conduit_banks' | 'conduits' | 'aerial_spans' | 'direct_buried' | 'circuits';
+export type PathwayInfoKey =
+    'conduit_banks' | 'conduits' | 'aerial_spans' | 'direct_buried' | 'submarine' | 'circuits';
 
 export interface PathwayConfig {
     endpoint: string;
@@ -444,16 +453,28 @@ export interface PathwayConfig {
     infoKey: PathwayInfoKey;
 }
 
+/**
+ * Endpoint for one drawn pathway type's layer: its map containers only, so a
+ * conduit in a bank or an innerduct is never drawn on its own. Each type gets
+ * its own endpoint string, which keeps the viewport cache and in-flight
+ * request tracking per layer.
+ */
+export function containerEndpoint(pathwayType: string): string {
+    return 'pathways/?pathway_type=' + pathwayType + '&containers=true';
+}
+
 export const PATHWAY_CONFIGS: PathwayConfig[] = [
-    { endpoint: 'conduit-banks/', layerKey: 'conduitBanks', featureType: 'conduit_bank',
+    { endpoint: containerEndpoint('conduit_bank'), layerKey: 'conduitBanks', featureType: 'conduit_bank',
       style: { color: '#ad1457', weight: 5, opacity: 0.8, dashArray: '' }, infoKey: 'conduit_banks' },
-    { endpoint: 'conduits/',      layerKey: 'conduits',     featureType: 'conduit',
+    { endpoint: containerEndpoint('conduit'), layerKey: 'conduits', featureType: 'conduit',
       style: { color: '#f57c00', weight: 3, opacity: 0.7, dashArray: '5 5' }, infoKey: 'conduits' },
-    { endpoint: 'aerial-spans/',  layerKey: 'aerialSpans',  featureType: 'aerial',
+    { endpoint: containerEndpoint('aerial'), layerKey: 'aerialSpans', featureType: 'aerial',
       style: { color: '#1565c0', weight: 3, opacity: 0.7, dashArray: '10 5' }, infoKey: 'aerial_spans' },
-    { endpoint: 'direct-buried/', layerKey: 'directBuried', featureType: 'direct_buried',
+    { endpoint: containerEndpoint('direct_buried'), layerKey: 'directBuried', featureType: 'direct_buried',
       style: { color: '#616161', weight: 3, opacity: 0.7, dashArray: '2 4' }, infoKey: 'direct_buried' },
-    { endpoint: 'circuits/',      layerKey: 'circuits',     featureType: 'circuit',
+    { endpoint: containerEndpoint('submarine'), layerKey: 'submarine', featureType: 'submarine',
+      style: { color: '#1a237e', weight: 3, opacity: 0.7, dashArray: '6 2 2 2' }, infoKey: 'submarine' },
+    { endpoint: 'circuits/', layerKey: 'circuits', featureType: 'circuit',
       style: { color: '#d32f2f', weight: 3, opacity: 0.8, dashArray: '8 6' }, infoKey: 'circuits' },
 ];
 
@@ -727,11 +748,7 @@ export function loadDataLayers(
 
     if (zoom < MIN_DATA_ZOOM || decision == null) {
         dataLayers.structures.clearLayers();
-        dataLayers.conduitBanks.clearLayers();
-        dataLayers.conduits.clearLayers();
-        dataLayers.aerialSpans.clearLayers();
-        dataLayers.directBuried.clearLayers();
-        dataLayers.circuits.clearLayers();
+        PATHWAY_CONFIGS.forEach(function (cfg) { dataLayers[cfg.layerKey].clearLayers(); });
         if (zoomHint) zoomHint.style.display = zoom < MIN_DATA_ZOOM ? '' : 'none';
         if (callbacks.onAllLoaded) callbacks.onAllLoaded([]);
         return;

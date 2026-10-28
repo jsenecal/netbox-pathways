@@ -13,11 +13,12 @@ reducing payload size at low zoom levels.
 import hashlib
 import logging
 
+import django_filters
 from django.contrib.gis.db.models import Collect
 from django.contrib.gis.db.models.functions import Centroid, Length, SnapToGrid, Transform
 from django.contrib.gis.geos import Polygon
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models import Count, F, Max
+from django.db.models import Case, CharField, Count, F, Max, OuterRef, Q, Subquery, Value, When
 from rest_framework import serializers as drf_serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -29,6 +30,7 @@ from rest_framework_gis.serializers import GeoFeatureModelSerializer
 from .. import filtersets, models
 from ..choices import PathwayStatusChoices, StructureStatusChoices
 from ..geo import LEAFLET_SRID, get_srid
+from ..pathway_types import DRAWN_TYPES_ORDERED
 
 logger = logging.getLogger(__name__)
 
@@ -162,11 +164,14 @@ class StructureGeoSerializer(GeoFeatureModelSerializer):
 class PathwayGeoSerializer(GeoFeatureModelSerializer):
     geometry = GeometryField(source="geo_4326", read_only=True)
     geo_length = drf_serializers.FloatField(read_only=True)
+    # Label of the descendant a ``?q=`` search matched, when the pathway was
+    # found through one rather than on its own fields.
+    search_match = drf_serializers.CharField(read_only=True, default=None)
 
     class Meta:
         model = models.Pathway
         geo_field = "geometry"
-        fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor"]
+        fields = ["id", "label", "pathway_type", "geo_length", "start_anchor", "end_anchor", "search_match"]
 
 
 class CircuitGeoSerializer(GeoFeatureModelSerializer):
@@ -231,6 +236,41 @@ class BboxFilterMixin:
         response = Response(serializer.data)
         response["ETag"] = etag
         return response
+
+
+# --- Map filterset ---
+
+
+class PathwayGeoFilterSet(filtersets.PathwayFilterSet):
+    """The pathway filters, plus what the map needs to draw containers only.
+
+    ``?containers=true`` keeps the pathways the map draws (see
+    ``PathwayQuerySet.map_containers``); ``false`` keeps everything else.
+    ``?q=`` also matches a pathway through any descendant that matches,
+    since a search for an undrawn child must land on its container.
+    """
+
+    containers = django_filters.BooleanFilter(method="filter_containers", label="Map containers only")
+
+    class Meta(filtersets.PathwayFilterSet.Meta):
+        pass
+
+    def filter_containers(self, queryset, name, value):
+        containers = queryset.map_containers()
+        return containers if value else queryset.exclude(pk__in=containers.values("pk"))
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        own = super().search(queryset, name, value).values("pk")
+        # Restricted, so a search cannot probe labels the user may not view
+        children = super().search(models.Pathway.objects.restrict(self.request.user, "view"), name, value)
+        child_match = Subquery(
+            children.filter(path__descendant=OuterRef("path")).order_by("label", "pk").values("label")[:1]
+        )
+        return queryset.annotate(
+            search_match=Case(When(pk__in=own, then=Value(None)), default=child_match, output_field=CharField())
+        ).filter(Q(pk__in=own) | Q(search_match__isnull=False))
 
 
 # --- GeoJSON ViewSets (read-only, unpaginated) ---
@@ -343,7 +383,7 @@ class PathwayGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
         .order_by("pk")
     )
     serializer_class = PathwayGeoSerializer
-    filterset_class = filtersets.PathwayFilterSet
+    filterset_class = PathwayGeoFilterSet
     bbox_geo_field = "geometry"
     pagination_class = None
 
@@ -363,18 +403,30 @@ class CircuitGeoViewSet(BboxFilterMixin, ReadOnlyModelViewSet):
 # --- /info endpoint ---
 
 
-# Layers reported by /info. Each entry: (response_key, model, geo_field, extra_filter).
-# ``extra_filter`` is an optional Q-style filter dict applied before counting,
-# selecting the pathway type a layer draws; only top-level pathways are drawn,
-# so a banked conduit is not double-counted with its bank.
-_INFO_LAYERS = (
-    ("structures", models.Structure, "geometry", None),
-    ("conduit_banks", models.Pathway, "geometry", {"pathway_type": "conduit_bank", "parent__isnull": True}),
-    ("conduits", models.Pathway, "geometry", {"pathway_type": "conduit", "parent__isnull": True}),
-    ("aerial_spans", models.Pathway, "geometry", {"pathway_type": "aerial", "parent__isnull": True}),
-    ("direct_buried", models.Pathway, "geometry", {"pathway_type": "direct_buried", "parent__isnull": True}),
-    ("circuits", models.CircuitGeometry, "path", None),
-)
+# The /info key of each drawn pathway type's map layer.
+PATHWAY_LAYER_KEYS = {
+    "conduit_bank": "conduit_banks",
+    "conduit": "conduits",
+    "aerial": "aerial_spans",
+    "direct_buried": "direct_buried",
+    "submarine": "submarine",
+}
+
+
+def _info_layers(user):
+    """Layers reported by /info as ``(response_key, queryset, geo_field)``.
+
+    Restricted with the same object permissions the layer endpoints apply,
+    so counts never disclose rows the user cannot see. A pathway layer counts
+    only map containers of its type, so a banked conduit is not counted with
+    its bank.
+    """
+    pathways = models.Pathway.objects.restrict(user, "view").map_containers()
+    return (
+        ("structures", models.Structure.objects.restrict(user, "view"), "geometry"),
+        *((PATHWAY_LAYER_KEYS[t], pathways.filter(pathway_type=t), "geometry") for t in DRAWN_TYPES_ORDERED),
+        ("circuits", models.CircuitGeometry.objects.restrict(user, "view"), "path"),
+    )
 
 
 # Per-layer thresholds the frontend uses to gate rendering. ``cluster`` (when
@@ -388,6 +440,7 @@ DEFAULT_MAP_THRESHOLDS = {
     "conduits": {"hide": 500},
     "aerial_spans": {"hide": 500},
     "direct_buried": {"hide": 500},
+    "submarine": {"hide": 500},
     "circuits": {"hide": 500},
 }
 
@@ -446,12 +499,7 @@ class MapInfoView(APIView):
                 max_updated = t
             return c
 
-        for key, model, geo_field, extra_filter in _INFO_LAYERS:
-            # Same object-permission restriction the layer endpoints apply,
-            # so counts never disclose rows the user cannot see.
-            qs = model.objects.restrict(request.user, "view")
-            if extra_filter:
-                qs = qs.filter(**extra_filter)
+        for key, qs, geo_field in _info_layers(request.user):
             qs = _exclude_status(qs, excluded_statuses)
             qs = filtersets.apply_occupied(qs, occupied)
             counts[key] = _count(qs, F(geo_field))

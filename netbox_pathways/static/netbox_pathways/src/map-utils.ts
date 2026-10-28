@@ -35,13 +35,13 @@ export const STRUCTURE_SHAPES: Record<string, string> = {
 
 export const PATHWAY_COLORS: Record<string, string> = {
     'conduit': '#f57c00', 'conduit_bank': '#ad1457', 'aerial': '#1565c0',
-    'direct_buried': '#616161', 'innerduct': '#e65100', 'microduct': '#6a1b9a',
+    'direct_buried': '#616161', 'innerduct': '#e65100',
     'tray': '#2e7d32', 'raceway': '#00838f', 'submarine': '#1a237e',
 };
 
 export const PATHWAY_DASH: Record<string, string> = {
     'conduit': '5,5', 'conduit_bank': '', 'aerial': '10,5',
-    'direct_buried': '2,4', 'innerduct': '8,3', 'microduct': '1,3',
+    'direct_buried': '2,4', 'innerduct': '8,3',
     'tray': '', 'raceway': '12,4', 'submarine': '6,2,2,2',
 };
 

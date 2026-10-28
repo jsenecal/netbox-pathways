@@ -269,6 +269,29 @@ describe('Sidebar (normal mode)', () => {
         });
     });
 
+    describe('setServerResults', () => {
+        function serverLabels() {
+            return Array.from(document.querySelectorAll('.pw-server-result .pw-list-label'))
+                .map(el => el.textContent);
+        }
+
+        it('names the undrawn child a container was found through', () => {
+            Sidebar.setServerResults([{
+                name: 'Bank 1', featureType: 'conduit_bank', typeKey: 'conduit_bank',
+                latlng: { lat: 45.5, lng: -73.5 } as any, matchedChild: 'Duct 7',
+            }]);
+            expect(serverLabels()).toEqual(['Bank 1 (via Duct 7)']);
+        });
+
+        it('shows a direct match by its own name', () => {
+            Sidebar.setServerResults([{
+                name: 'Bank 1', featureType: 'conduit_bank', typeKey: 'conduit_bank',
+                latlng: { lat: 45.5, lng: -73.5 } as any,
+            }]);
+            expect(serverLabels()).toEqual(['Bank 1']);
+        });
+    });
+
     describe('Escape key', () => {
         it('returns from detail to list', () => {
             Sidebar.showDetail(makeEntry());
@@ -562,7 +585,7 @@ describe('Pathway detail URLs', () => {
         Sidebar.init(createMockMap() as any, false);
     });
 
-    it.each(['conduit_bank', 'conduit', 'aerial', 'direct_buried'])(
+    it.each(['conduit_bank', 'conduit', 'aerial', 'direct_buried', 'submarine'])(
         'fetches and links %s features through pathways/<id>/',
         async (featureType) => {
             const fetchMock = vi.fn(async (_url: string) => ({

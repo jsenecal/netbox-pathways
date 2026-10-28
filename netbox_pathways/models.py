@@ -185,6 +185,16 @@ class Structure(NetBoxModel):
     def get_absolute_url(self):
         return reverse("plugins:netbox_pathways:structure", args=[self.pk])
 
+    @property
+    def map_container(self):
+        """The drawn map feature that stands for this structure: itself."""
+        return self
+
+    @property
+    def map_select_id(self):
+        """The feature id the map uses for `?select=`."""
+        return f"structure-{self.pk}"
+
 
 class SiteGeometry(NetBoxModel):
     """

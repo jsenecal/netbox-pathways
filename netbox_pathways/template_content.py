@@ -5,6 +5,7 @@ from netbox.plugins.templates import PluginTemplateExtension
 
 from . import models
 from .map_data import add_structure, pathway_line
+from .pathway_types import DRAWN_TYPES_ORDERED
 
 
 def _leaflet_head():
@@ -56,6 +57,7 @@ class LeafletHeadExtension(PluginTemplateExtension):
             "skipInfoZoom": plugin_cfg.get("map_skip_info_zoom", 17),
             "apiBase": f"{api_base}geo/",
             "overlays": plugin_cfg.get("map_overlays", []),
+            "drawnTypes": list(DRAWN_TYPES_ORDERED),
         }
 
         detail_js = static("netbox_pathways/dist/detail-map.min.js")

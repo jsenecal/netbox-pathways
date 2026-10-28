@@ -32,12 +32,14 @@ GEO_LAYERS = [
         "geometry": "LineString",
     },
     # One layer per type the map draws, in choice order; every type is served
-    # by the single pathways endpoint filtered on pathway_type.
+    # by the single pathways endpoint filtered on pathway_type. Like the web
+    # map, each layer holds map containers only, so a conduit in a bank is
+    # drawn once, as its bank.
     *(
         {
             "name": label,
             "endpoint": f"{GEO_API}pathways/",
-            "params": {"pathway_type": value},
+            "params": {"pathway_type": value, "containers": "true"},
             "geometry": "LineString",
         }
         for value, label in PathwayTypeChoices

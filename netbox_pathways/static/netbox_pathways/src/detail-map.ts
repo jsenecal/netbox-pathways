@@ -350,11 +350,19 @@ import { lineStyle } from './line-style';
         xhr.send();
     }
 
-    const PATHWAY_TYPE_OVERLAYS: { pathwayType: string; label: string; color: string }[] = [
-        { pathwayType: 'conduit', label: 'Conduits', color: 'brown' },
-        { pathwayType: 'aerial', label: 'Aerial Spans', color: 'blue' },
-        { pathwayType: 'direct_buried', label: 'Direct Buried', color: 'gray' },
-    ];
+    // Overlay label and line color per drawn type; the server's drawnTypes
+    // decides which of them exist.
+    const PATHWAY_TYPE_OVERLAY_STYLES: Record<string, { label: string; color: string }> = {
+        conduit_bank: { label: 'Conduit Banks', color: 'purple' },
+        conduit: { label: 'Conduits', color: 'brown' },
+        aerial: { label: 'Aerial Spans', color: 'blue' },
+        direct_buried: { label: 'Direct Buried', color: 'gray' },
+        submarine: { label: 'Submarine', color: 'navy' },
+    };
+    const PATHWAY_TYPE_OVERLAYS = (CFG.drawnTypes || []).map(function (pathwayType: string) {
+        const style = PATHWAY_TYPE_OVERLAY_STYLES[pathwayType] || { label: pathwayType, color: 'gray' };
+        return { pathwayType, ...style };
+    });
 
     function loadDynamicLayers(map: L.Map, layerControl: L.Control.Layers): void {
         _fetchGeoJSON('structures/', function (data: GeoJSON.FeatureCollection) {
@@ -374,7 +382,8 @@ import { lineStyle } from './line-style';
             layerControl.addOverlay(layer, 'Pathways (all)');
         });
 
-        // Per-type overlays all come from the single pathways endpoint.
+        // Per-type overlays all come from the single pathways endpoint, and
+        // hold map containers only, as on the full map.
         PATHWAY_TYPE_OVERLAYS.forEach(function (overlay) {
             _fetchGeoJSON('pathways/', function (data: GeoJSON.FeatureCollection) {
                 const layer: L.GeoJSON = L.geoJSON(data, {
@@ -382,7 +391,7 @@ import { lineStyle } from './line-style';
                     onEachFeature: _pathwayPopup,
                 });
                 layerControl.addOverlay(layer, overlay.label);
-            }, { pathway_type: overlay.pathwayType });
+            }, { pathway_type: overlay.pathwayType, containers: 'true' });
         });
     }
 

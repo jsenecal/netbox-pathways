@@ -26,6 +26,8 @@ declare global {
     overlays?: OverlayConfig[];
     baseLayers?: BaseLayerConfig[];
     externalLayers?: import('./external').ExternalLayerConfig[];
+    /** Pathway types the map draws (map containers), in legend order. */
+    drawnTypes?: string[];
     /** Available lifecycle status choices for the hide-inactive panel. */
     statuses?: import('../status-prefs').StatusChoice[];
   }

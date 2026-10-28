@@ -8,6 +8,7 @@ NetBox pages (template_content.py) and the cable Map tab (route_map.py).
 from .geo import linestring_to_coords, point_to_latlon, to_leaflet
 
 PATHWAY_COLORS = {
+    "conduit_bank": "purple",
     "conduit": "brown",
     "aerial": "blue",
     "direct_buried": "gray",
