@@ -749,7 +749,9 @@ class Pathway(LtreeModel, NetBoxModel):
         The parent must be of a type this one may sit in (or absent when the
         type cannot have one, present when it must), and existing children
         must still be allowed under the current type -- so changing a
-        pathway's type cannot strand children it may no longer contain.
+        pathway's type cannot strand children it may no longer contain. The
+        same goes for conduit junctions: a pathway that is a junction's trunk
+        or branch keeps a type whose ends may hang from a junction.
         """
         rules = self.spec
         label = self.get_pathway_type_display()
@@ -764,6 +766,15 @@ class Pathway(LtreeModel, NetBoxModel):
                 )
         elif rules.parent_required:
             errors["parent"] = f"A {label} must have a parent pathway."
+        if self.pk and "junction" not in rules.endpoint_kinds:
+            # A junction's trunk and branch must be pathways whose type can
+            # hang from a junction; ConduitJunction only checks that when the
+            # junction itself is validated, not when its conduit is retyped.
+            if ConduitJunction.objects.filter(Q(trunk_conduit_id=self.pk) | Q(branch_conduit_id=self.pk)).exists():
+                errors["pathway_type"] = (
+                    f"A {label} cannot be the trunk or branch of a conduit junction; "
+                    "remove the junctions on this pathway first."
+                )
         if self.pk:
             children = Pathway.objects.filter(parent_id=self.pk).exclude(
                 pathway_type__in=allowed_child_types(self.pathway_type)

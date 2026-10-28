@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
 from tenancy.models import Tenant
 
-from netbox_pathways.models import Pathway
+from netbox_pathways.models import ConduitJunction, Pathway
 from tests.helpers import SRID, make_pole
 
 
@@ -96,6 +96,22 @@ def test_type_change_rejected_when_children_disallowed(ends):
     conduit.pathway_type = "aerial"
     with pytest.raises(ValidationError) as excinfo:
         conduit.full_clean()
+    assert "pathway_type" in excinfo.value.message_dict
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("role", ["trunk_conduit", "branch_conduit"])
+def test_type_change_rejected_when_conduit_holds_a_junction(ends, role):
+    """A junction's trunk and branch must stay conduits; retyping either is refused."""
+    trunk = build("conduit", ends, label="JT")
+    branch = build("conduit", ends, label="JB")
+    ConduitJunction.objects.create(
+        trunk_conduit=trunk, branch_conduit=branch, towards_structure=ends[1], position_on_trunk=0.5
+    )
+    pathway = {"trunk_conduit": trunk, "branch_conduit": branch}[role]
+    pathway.pathway_type = "direct_buried"
+    with pytest.raises(ValidationError) as excinfo:
+        pathway.full_clean()
     assert "pathway_type" in excinfo.value.message_dict
 
 

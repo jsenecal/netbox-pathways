@@ -47,12 +47,12 @@ def _legacy_models(executor):
     state = executor.loader.project_state([("netbox_pathways", BEFORE_FLATTEN)])
     return {
         name: state.apps.get_model("netbox_pathways", name)
-        for name in ("structure", "conduitjunction", *LEGACY_SUBTYPES)
+        for name in ("structure", "conduitjunction", "pathway", *LEGACY_SUBTYPES)
     }
 
 
 @pytest.mark.django_db(transaction=True)
-def test_copy_subtype_rows(migrate_to):
+def test_copy_subtype_rows(migrate_to, capsys):
     executor = migrate_to(BEFORE_FLATTEN)
     old = _legacy_models(executor)
     pole = old["structure"].objects.create(name="UF-P1", geometry=Point(0, 0, srid=SRID))
@@ -79,9 +79,16 @@ def test_copy_subtype_rows(migrate_to):
         pathway_type="direct_buried", label="UF-D", burial_depth=1.2, warning_tape=True
     )
 
+    # Base rows with no child row, as the 0.4.x generic endpoint stored them.
+    orphan = old["pathway"].objects.create(pathway_type="innerduct", label="UF-OI")
+    untyped = old["pathway"].objects.create(pathway_type="", label="UF-UT")
+
     executor.loader.build_graph()
     executor.migrate(executor.loader.graph.leaf_nodes("netbox_pathways"))
 
+    # An unparented innerduct and a blank-typed row fit no flattened row.
+    assert not Pathway.objects.filter(pk__in=[orphan.pk, untyped.pk]).exists()
+    assert "1 innerduct pathway(s) with no parent and 1 pathway(s) with no type" in capsys.readouterr().out
     flat_bank = Pathway.objects.get(pk=bank.pk)
     assert (flat_bank.configuration, flat_bank.total_conduits, flat_bank.start_face) == ("2x2", 4, "north")
     assert flat_bank.parent_id is None
