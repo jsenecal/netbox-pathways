@@ -101,8 +101,12 @@ def spec(pathway_type: str) -> PathwayTypeSpec:
 
 
 def allowed_child_types(pathway_type: str) -> frozenset[str]:
-    """Return the pathway types that may have ``pathway_type`` as their parent."""
-    spec(pathway_type)
+    """Return the pathway types that may have ``pathway_type`` as their parent.
+
+    An unknown or blank type contains nothing rather than raising: the upgrade
+    leaves some pathways untyped for the operator to retype, and their detail
+    page asks this question before they have been fixed.
+    """
     return frozenset(t for t, s in PATHWAY_TYPES.items() if pathway_type in s.parents)
 
 

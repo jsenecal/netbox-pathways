@@ -30,6 +30,7 @@ def test_types_match_choices():
         ("direct_buried", {"innerduct"}),
         ("aerial", set()),
         ("submarine", set()),
+        ("", set()),
     ],
 )
 def test_containment_rule(parent, expected):

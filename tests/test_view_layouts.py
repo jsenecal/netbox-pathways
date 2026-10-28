@@ -31,7 +31,14 @@ def test_children_panel_swaps_parent_column_for_position():
 
 @pytest.mark.parametrize(
     "pathway_type, expected",
-    [("conduit_bank", True), ("conduit", True), ("raceway", True), ("aerial", False), ("submarine", False)],
+    [
+        ("conduit_bank", True),
+        ("conduit", True),
+        ("raceway", True),
+        ("aerial", False),
+        ("submarine", False),
+        ("", False),
+    ],
 )
 def test_children_panel_only_on_types_that_contain_others(pathway_type, expected):
     context = {"object": Pathway(pathway_type=pathway_type), "request": None}
@@ -40,7 +47,7 @@ def test_children_panel_only_on_types_that_contain_others(pathway_type, expected
 
 @pytest.mark.parametrize(
     "pathway_type, add_preset",
-    [("conduit_bank", "conduit"), ("conduit", "innerduct"), ("raceway", "")],
+    [("conduit_bank", "conduit"), ("conduit", "innerduct"), ("raceway", ""), ("", "")],
 )
 def test_add_child_presets_the_only_type_the_parent_may_contain(pathway_type, add_preset):
     assert views._only_child_type(Pathway(pathway_type=pathway_type)) == add_preset
