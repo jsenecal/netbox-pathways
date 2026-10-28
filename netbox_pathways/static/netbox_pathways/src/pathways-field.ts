@@ -42,6 +42,9 @@ function initWidget(container: HTMLElement): void {
   const geomType = container.dataset.geomType || 'Line String';
   const input = document.getElementById(fieldId) as HTMLInputElement | null;
   if (!input) return;
+  // Leaflet refuses to bind a second map to a container.
+  if (container.dataset.pathwaysInit) return;
+  container.dataset.pathwaysInit = '1';
 
   const config: Partial<PathwaysConfig> = window.PATHWAYS_CONFIG || {};
   const center: [number, number] = (config.center as [number, number]) || [45.5, -73.5];
@@ -291,13 +294,23 @@ function enableDrawButtons(pm: any, geomType: string): void {
   });
 }
 
-// Initialize all widgets when DOM is ready
-function initAll(): void {
-  document.querySelectorAll<HTMLElement>('.pathways-map-widget').forEach(initWidget);
+/**
+ * Initialise the widgets on the page now (or once the DOM is ready), and
+ * again whenever htmx swaps in new markup: NetBox re-renders the whole form
+ * through htmx when a field such as the pathway type changes, and the new
+ * widget markup arrives long after DOMContentLoaded. initWidget skips a
+ * container it has already claimed, so widgets outside the swap keep their map.
+ */
+function bootWidgets(): void {
+  const run = (): void => {
+    document.querySelectorAll<HTMLElement>('.pathways-map-widget').forEach(initWidget);
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run);
+  } else {
+    run();
+  }
+  document.addEventListener('htmx:afterSettle', run);
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initAll);
-} else {
-  initAll();
-}
+bootWidgets();

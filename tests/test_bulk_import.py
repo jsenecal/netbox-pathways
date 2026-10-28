@@ -10,7 +10,7 @@ the ``length`` field.
 
 import pytest
 from dcim.models import Location, Site
-from django.contrib.gis.geos import Point
+from django.contrib.gis.geos import LineString, Point
 from django.urls import reverse
 from utilities.views import get_viewname
 
@@ -209,3 +209,53 @@ def test_import_form_takes_every_pathway_type(structures):
     )
     assert form.is_valid(), form.errors
     assert form.save().pathway_type == "submarine"
+
+
+def _update_form(instance, record):
+    """An update row built the way NetBox's bulk import builds one.
+
+    The view drops every form field the CSV has no column for, so only the
+    columns in `record` are validated and saved.
+    """
+    form = forms.PathwayImportForm(data=record, instance=instance)
+    for name in [name for name in form.fields if name not in record]:
+        del form.fields[name]
+    return form
+
+
+@pytest.fixture
+def banked_conduit(structures):
+    s1, s2 = structures
+    bank = models.Pathway(
+        pathway_type="conduit_bank",
+        label="CB-UPD",
+        start_structure=s1,
+        end_structure=s2,
+        geometry=LineString(s1.geometry.coords, s2.geometry.coords, srid=SRID),
+    )
+    bank.save()
+    conduit = models.Pathway(pathway_type="conduit", label="C-UPD", parent=bank, start_structure=s1, end_structure=s2)
+    conduit.save()
+    return conduit
+
+
+@pytest.mark.django_db
+class TestUpdateWithoutGeometryColumn:
+    """Update rows that leave out the geometry column (a 500 before)."""
+
+    def test_unrelated_column_validates(self, banked_conduit):
+        form = _update_form(banked_conduit, {"label": "renamed"})
+        assert form.is_valid(), form.errors
+        assert form.save().label == "renamed"
+
+    def test_unparenting_derives_geometry_from_stored_endpoints(self, banked_conduit):
+        form = _update_form(banked_conduit, {"parent": ""})
+        assert form.is_valid(), form.errors
+        saved = form.save()
+        assert saved.parent is None
+        assert saved.geometry is not None
+
+    def test_retype_error_on_an_omitted_column_is_reported_on_the_row(self, banked_conduit):
+        form = _update_form(banked_conduit, {"pathway_type": "direct_buried"})
+        assert not form.is_valid()
+        assert any("parent" in message for message in form.non_field_errors())

@@ -5,6 +5,7 @@ from dcim.models import Cable, Location, Site
 from django import forms
 from django.contrib.gis.forms.widgets import BaseGeometryWidget
 from django.contrib.gis.geos import LineString
+from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.utils.safestring import mark_safe
 from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelForm, NetBoxModelImportForm
 from tenancy.models import Tenant
@@ -175,25 +176,36 @@ class PathwayGeometryFallbackMixin:
         rules = PATHWAY_TYPES.get(self.selected_pathway_type())
         return bool(rules and rules.derives_geometry)
 
+    def _effective(self, name):
+        """The value `name` will hold once this form is saved.
+
+        The cleaned value when the form has the field, otherwise the
+        instance's: NetBox's bulk import drops every field a CSV update row
+        has no column for, and those keep their stored values.
+        """
+        if name in self.fields:
+            return self.cleaned_data.get(name)
+        return getattr(self.instance, name, None)
+
     def clean(self):
         super().clean()
         cleaned = self.cleaned_data
-        if cleaned.get("geometry"):
+        if self._effective("geometry"):
             return cleaned
 
         # Pathways with a parent (a conduit in a bank, an innerduct) follow
         # the parent's route; never synthesize standalone geometry for them.
-        if cleaned.get("parent"):
+        if self._effective("parent"):
             return cleaned
         # Types that derive their own geometry from the endpoints (aerial spans)
         # build it in Pathway.clean(); a synthesized centroid line would be wrong.
         if self._derives_geometry():
             return cleaned
 
-        start_struct = cleaned.get("start_structure")
-        end_struct = cleaned.get("end_structure")
-        start_loc = cleaned.get("start_location")
-        end_loc = cleaned.get("end_location")
+        start_struct = self._effective("start_structure")
+        end_struct = self._effective("end_structure")
+        start_loc = self._effective("start_location")
+        end_loc = self._effective("end_location")
 
         # Indoor pathway (both endpoints are locations): no geometry exists
         if start_loc and end_loc and not start_struct and not end_struct:
@@ -205,21 +217,19 @@ class PathwayGeometryFallbackMixin:
             end_geom = end_struct.geometry
             start_pt = start_geom.centroid if start_geom.geom_type != "Point" else start_geom
             end_pt = end_geom.centroid if end_geom.geom_type != "Point" else end_geom
-            cleaned["geometry"] = LineString(
-                (start_pt.x, start_pt.y),
-                (end_pt.x, end_pt.y),
-                srid=get_srid(),
-            )
-        else:
-            from django.core.exceptions import ValidationError
-
+            line = LineString((start_pt.x, start_pt.y), (end_pt.x, end_pt.y), srid=get_srid())
+            if "geometry" in self.fields:
+                cleaned["geometry"] = line
+            else:
+                self.instance.geometry = line
+        elif "geometry" in self.fields:
             raise ValidationError(
                 {
                     "geometry": "Geometry is required unless both endpoints are structures "
                     "(auto-generated) or both are locations (indoor)."
                 }
             )
-
+        # Without a geometry field, Pathway.clean() reports the missing route.
         return cleaned
 
 
@@ -575,15 +585,27 @@ class PathwayForm(PathwayEndpointFormMixin, NetBoxModelForm):
         if "parent" in self.fields:
             self.fields["parent"].required = rules.parent_required
             self.fields["parent"].widget.add_query_params({"pathway_type": sorted(rules.parents)})
-            self._prefill_from_parent(pathway_type)
+        self._parent_prefilled = "parent" not in self.fields
         self.fieldsets = _pathway_fieldsets(pathway_type, self.fields)
+
+    def get_initial_for_field(self, field, field_name):
+        # The parent is read when the form first renders, not in __init__:
+        # the edit view narrows the parent field to the pathways the user
+        # may view only after building the form, and reading it earlier
+        # would copy values from a parent the user cannot see. (__init__
+        # itself reads the chosen type through here, before the flag exists.)
+        if not getattr(self, "_parent_prefilled", True):
+            self._parent_prefilled = True
+            self._prefill_from_parent(self.selected_pathway_type())
+        return super().get_initial_for_field(field, field_name)
 
     def _prefill_from_parent(self, pathway_type):
         """Fill a new pathway's blank fields from the parent named in the initial data.
 
         The endpoints, the type-specific fields both types have (except the
         slot, `position`) and, unless excluded above, the lifecycle fields.
-        Tenant and geometry are never copied.
+        Tenant and geometry are never copied. The parent is looked up in the
+        parent field's queryset, so only a pathway the user may view is read.
         """
         parent = _resolve_initial_parent(self, "parent")
         if parent is None:
@@ -643,6 +665,26 @@ class PathwayImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
         if hex_code is None:
             raise forms.ValidationError(f'"{color}" is not a known color name or hex code')
         return hex_code
+
+    def add_error(self, field, error):
+        """Report an error on a column this row does not carry against the row.
+
+        On an update NetBox's bulk import drops the fields the CSV has no
+        column for, but Pathway.clean() still names the field at fault (a
+        retype that leaves a parent the new type cannot have faults
+        `parent`). Django refuses an error on a field the form lacks.
+        """
+        if field is None and hasattr(error, "error_dict"):
+            errors = {}
+            for name, messages in error.error_dict.items():
+                if name == NON_FIELD_ERRORS or name in self.fields:
+                    errors.setdefault(name, []).extend(messages)
+                else:
+                    errors.setdefault(NON_FIELD_ERRORS, []).extend(
+                        ValidationError(f"{name}: {text}") for message in messages for text in message.messages
+                    )
+            error = ValidationError(errors)
+        super().add_error(field, error)
 
     class Meta:
         model = Pathway
