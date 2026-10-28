@@ -11,7 +11,7 @@ import pytest
 from dcim.models import Location, Site
 from django.contrib.gis.geos import LineString, Point, Polygon
 
-from netbox_pathways.geo import get_srid
+from netbox_pathways.geo import get_srid, linestring_to_coords
 from netbox_pathways.models import Pathway, Structure
 from netbox_pathways.template_content import CoreModelMapExtension, PluginModelMapExtension
 
@@ -311,6 +311,18 @@ class TestPluginModelDetailMaps:
         assert len(data["lines"]) == 1
         colors = {p["name"]: p["color"] for p in data["points"]}
         assert colors == {"PW-A": "green", "PW-B": "red"}
+
+    def test_innerduct_page_draws_the_line_of_its_container(self, site):
+        bank = Pathway.objects.create(
+            pathway_type="conduit_bank", label="CB-host", geometry=LineString((0, 0), (100, 100), srid=SRID)
+        )
+        conduit = Pathway.objects.create(pathway_type="conduit", label="C-banked", parent=bank)
+        duct = Pathway.objects.create(pathway_type="innerduct", label="I-banked", parent=conduit)
+
+        data = self._plugin_ext()._get_geo_data(duct)
+
+        assert [line["coords"] for line in data["lines"]] == [linestring_to_coords(bank.geometry)]
+        assert data["lines"][0]["url"] == duct.get_absolute_url()
 
     def test_conduit_bank_page_shows_line_and_orange_endpoints(self, site):
         from netbox_pathways.models import Pathway

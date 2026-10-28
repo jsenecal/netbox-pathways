@@ -1716,7 +1716,12 @@ class CableRouteMapView(generic.ObjectView):
     template_name = "netbox_pathways/cable_route_map_tab.html"
     tab = ViewTab(
         label="Map",
-        badge=lambda obj: obj.pathway_segments.filter(pathway__geometry__isnull=False).count() or None,
+        badge=lambda obj: (
+            obj.pathway_segments.filter(
+                pathway__in=models.Pathway.objects.with_route_geometry().filter(_route_geometry__isnull=False)
+            ).count()
+            or None
+        ),
         hide_if_empty=True,
     )
 

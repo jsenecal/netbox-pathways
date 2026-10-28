@@ -115,7 +115,7 @@ class PluginModelMapExtension(PluginTemplateExtension):
                 )
 
         elif isinstance(obj, models.Pathway):
-            line = pathway_line(obj)
+            line = pathway_line(obj, obj.route_geometry)
             if line:
                 data["lines"].append(line)
             # Start/end structure markers; a bank marks both ends alike.

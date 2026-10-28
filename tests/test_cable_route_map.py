@@ -85,6 +85,21 @@ def test_a_segment_that_misses_its_cable_end_is_flagged(plant):
     assert colors[f"segment-{segments[1].pk}"] != "orange"
 
 
+def test_a_segment_through_a_child_pathway_draws_its_containers_line(plant):
+    first, middle, last = plant["hops"]
+    duct = Pathway(pathway_type="innerduct", parent=first, label="RM-I")
+    duct.save()
+    _route(plant["cable"], [duct])
+    assert CableRouteMapView.tab.badge(plant["cable"]) == 1
+    CableSegment.objects.create(cable=plant["cable"], pathway=middle, sequence=2)
+    CableSegment.objects.create(cable=plant["cable"], pathway=last, sequence=3)
+
+    geo = cable_route_geo(plant["cable"])
+
+    assert [line["coords"] for line in _lines(geo)] == [linestring_to_coords(p.geometry) for p in plant["hops"]]
+    assert _lines(geo, dashed=True) == []
+
+
 def test_map_tab_is_hidden_without_drawable_segments(plant):
     assert CableRouteMapView.tab.badge(plant["cable"]) is None
 

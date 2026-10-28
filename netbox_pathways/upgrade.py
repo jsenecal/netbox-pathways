@@ -68,10 +68,6 @@ LEGACY_MOVED_FIELDS: dict[str, dict[str, str]] = {
 # The only parent each former subtype could have, by pathway type.
 LEGACY_PARENT_TYPES: dict[str, str] = {"conduit": "conduit_bank", "innerduct": "conduit"}
 
-# Types migration 0030 constrains to always have a parent (frozen here, like
-# the constraint itself, so later rule changes do not alter this upgrade).
-PARENT_REQUIRED_TYPES: tuple[str, ...] = ("innerduct",)
-
 BATCH_SIZE = 1000
 
 
@@ -146,28 +142,37 @@ def delete_microducts(apps, schema_editor):
     return count
 
 
-def untype_parentless_rows(apps, schema_editor):
-    """Clear the type of pathways that would break the parent constraint; return their pks.
+def untype_bare_subtype_rows(apps, schema_editor):
+    """Clear the type of pathways that claim a subtype they have no row for; return their pks.
 
-    The 0.4.x generic pathway endpoint stored a bare pathway row with no
-    subtype row and accepted any `pathway_type`. Such a row typed
-    `innerduct` has no parent conduit to copy, so it would fail the
-    `pathway_parent_required` constraint added next and abort the upgrade.
+    Runs after copy_subtype_rows(), while the child tables still exist. The
+    0.4.x generic pathway endpoint stored a bare pathway row with no subtype
+    row and accepted any `pathway_type`, so a bare row could be typed
+    `conduit` (or any other former subtype) without being a conduit. Only
+    unscoped pathway permissions reached such a row; a permission on the
+    conduit content type did not. Keeping the type would let the converted
+    `pathway_type__in` permission reach it, widening access, and a bare
+    `innerduct` has no parent conduit to copy, so it would also fail the
+    `pathway_parent_required` constraint added next.
+
     The row is kept, with its waypoints and cable segments, and only its
-    type is cleared: a blank type satisfies every constraint and fails
-    full_clean() on the next edit, so the user picks a type then. The pks
-    are printed so the operator can find and retype them.
-
-    Rows that already had a blank type are left alone for the same reason.
+    type is cleared: a blank type satisfies every constraint, matches no
+    converted permission, and fails full_clean() on the next edit, so the
+    user picks a type then. The pks are printed so the operator can find
+    and retype them. Rows that already had a blank type are left alone.
     """
     Pathway = apps.get_model("netbox_pathways", "Pathway")
-    orphans = Pathway.objects.filter(pathway_type__in=PARENT_REQUIRED_TYPES, parent__isnull=True)
-    pks = list(orphans.order_by("pk").values_list("pk", flat=True))
+    pks = []
+    for model_name, pathway_type in LEGACY_SUBTYPES.items():
+        legacy = apps.get_model("netbox_pathways", model_name)
+        bare = Pathway.objects.filter(pathway_type=pathway_type).exclude(pk__in=legacy.objects.values("pk"))
+        pks.extend(bare.values_list("pk", flat=True))
+    pks.sort()
     if pks:
         Pathway.objects.filter(pk__in=pks).update(pathway_type="")
         print(
-            f"\n  netbox_pathways: cleared the type of {len(pks)} {'/'.join(PARENT_REQUIRED_TYPES)} "
-            f"pathway(s) with no parent; set a type on each: {', '.join(map(str, pks))}."
+            f"\n  netbox_pathways: cleared the type of {len(pks)} pathway(s) with no subtype row; "
+            f"set a type on each: {', '.join(map(str, pks))}."
         )
     return pks
 

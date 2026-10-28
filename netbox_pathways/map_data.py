@@ -34,12 +34,17 @@ STRUCTURE_COLORS = {
 }
 
 
-def pathway_line(pathway):
-    """Build a line dict from a Pathway instance."""
-    if not pathway.geometry:
+def pathway_line(pathway, geometry=None):
+    """Build a line dict from a Pathway instance.
+
+    `geometry` overrides the pathway's own, e.g. its route_geometry for a
+    pathway that runs along its container.
+    """
+    geometry = geometry or pathway.geometry
+    if not geometry:
         return None
     return {
-        "coords": linestring_to_coords(pathway.geometry),
+        "coords": linestring_to_coords(geometry),
         "name": str(pathway),
         "color": PATHWAY_COLORS.get(pathway.pathway_type, "gray"),
         "url": pathway.get_absolute_url(),

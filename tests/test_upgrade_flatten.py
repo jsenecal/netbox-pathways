@@ -7,8 +7,11 @@ migration chain changes.
 
 import django.apps
 import pytest
+from core.models import ObjectType
 from dcim.models import Cable
+from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
+from users.models import ObjectPermission
 
 from netbox_pathways.models import CableSegment, ConduitJunction, Pathway
 from netbox_pathways.upgrade import LEGACY_SUBTYPES, delete_microducts
@@ -81,17 +84,31 @@ def test_copy_subtype_rows(migrate_to, capsys):
 
     # Base rows with no child row, as the 0.4.x generic endpoint stored them.
     orphan = old["pathway"].objects.create(pathway_type="innerduct", label="UF-OI")
+    bare_conduit = old["pathway"].objects.create(pathway_type="conduit", label="UF-BC")
     untyped = old["pathway"].objects.create(pathway_type="", label="UF-UT")
+    # Before the upgrade this permission reached only rows of the conduit table.
+    viewer = get_user_model().objects.create_user(username="uf-conduit-viewer")
+    perm = ObjectPermission.objects.create(name="UF view conduits", actions=["view"])
+    perm.object_types.set([ObjectType.objects.get_or_create(app_label="netbox_pathways", model="conduit")[0]])
+    perm.users.add(viewer)
 
     executor.loader.build_graph()
     executor.migrate(executor.loader.graph.leaf_nodes("netbox_pathways"))
 
-    # Neither is deleted: the unparented innerduct loses only its type, so the
-    # parent constraint holds, and the blank-typed row already satisfies it.
-    survivors = dict(Pathway.objects.filter(pk__in=[orphan.pk, untyped.pk]).values_list("label", "pathway_type"))
-    assert survivors == {"UF-OI": "", "UF-UT": ""}
+    # None is deleted: the bare innerduct and conduit lose only their type, so
+    # the parent constraint holds and the converted conduit permission does
+    # not widen to them; the blank-typed row already satisfies both.
+    bare = [orphan.pk, bare_conduit.pk, untyped.pk]
+    survivors = dict(Pathway.objects.filter(pk__in=bare).values_list("label", "pathway_type"))
+    assert survivors == {"UF-OI": "", "UF-BC": "", "UF-UT": ""}
     out = capsys.readouterr().out
-    assert f"cleared the type of 1 innerduct pathway(s) with no parent; set a type on each: {orphan.pk}." in out
+    assert (
+        f"cleared the type of 2 pathway(s) with no subtype row; set a type on each: {orphan.pk}, {bare_conduit.pk}."
+        in out
+    )
+    viewer = get_user_model().objects.get(pk=viewer.pk)
+    visible = set(Pathway.objects.restrict(viewer, "view").values_list("pk", flat=True))
+    assert visible == {conduit.pk, lateral.pk}
     flat_bank = Pathway.objects.get(pk=bank.pk)
     assert (flat_bank.configuration, flat_bank.total_conduits, flat_bank.start_face) == ("2x2", 4, "north")
     assert flat_bank.parent_id is None

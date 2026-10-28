@@ -257,3 +257,36 @@ def test_innerduct_position_not_unique(ends):
     build("innerduct", ends, parent=conduit, position="1")
     build("innerduct", ends, parent=conduit, position="1")
     assert conduit.children.count() == 2
+
+
+@pytest.mark.django_db
+def test_route_geometry_falls_back_to_the_nearest_ancestor(ends, django_assert_num_queries):
+    """A pathway with no geometry of its own follows the nearest ancestor that has one."""
+    bank = build("conduit_bank", ends)
+    banked = build("conduit", ends, parent=bank)
+    duct = build("innerduct", ends, parent=banked)
+    own = LineString((0, 0), (50, 10), (100, 0), srid=SRID)
+    routed = build("conduit", ends, parent=bank, geometry=own)
+    duct_in_routed = build("innerduct", ends, parent=routed)
+
+    assert bank.route_geometry.equals(bank.geometry)
+    assert duct.route_geometry.equals(bank.geometry)
+    assert duct_in_routed.route_geometry.equals(own)
+
+    annotated = {p.pk: p for p in Pathway.objects.with_route_geometry()}
+    with django_assert_num_queries(0):
+        resolved = {pk: p.route_geometry for pk, p in annotated.items()}
+    assert resolved[banked.pk].equals(bank.geometry)
+    assert resolved[duct.pk].equals(bank.geometry)
+    assert resolved[duct_in_routed.pk].equals(own)
+
+
+@pytest.mark.django_db
+def test_route_geometry_is_none_when_no_ancestor_has_one(db):
+    tray = Pathway(pathway_type="tray")
+    tray.save()
+    duct = Pathway(pathway_type="innerduct", parent=tray)
+    duct.save()
+
+    assert duct.route_geometry is None
+    assert Pathway.objects.with_route_geometry().get(pk=duct.pk).route_geometry is None

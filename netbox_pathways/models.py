@@ -7,7 +7,7 @@ from django.contrib.postgres.indexes import GistIndex
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import transaction
-from django.db.models import Q, Subquery
+from django.db.models import OuterRef, Q, Subquery
 from django.urls import reverse
 from netbox.models import NetBoxModel
 from netbox.models.ltree import LtreeModel, LtreeQuerySet
@@ -341,6 +341,15 @@ class PathwayQuerySet(LtreeQuerySet):
         """Annotate each pathway with `_geo_length`: PostGIS `ST_Length(geometry)`."""
         return self.annotate(_geo_length=Length("geometry"))
 
+    def with_route_geometry(self):
+        """Annotate each pathway with `_route_geometry`; see Pathway.route_geometry."""
+        nearest = (
+            Pathway.objects.filter(path__ancestor_or_equal=OuterRef("path"), geometry__isnull=False)
+            .order_by("-path")
+            .values("geometry")[:1]
+        )
+        return self.annotate(_route_geometry=Subquery(nearest, output_field=models.LineStringField()))
+
     def map_containers(self):
         """Pathways drawn on the map: top-level pathways of a drawn type.
 
@@ -664,6 +673,33 @@ class Pathway(LtreeModel, NetBoxModel):
         pathway (both endpoints are locations) has no geographic route.
         """
         return not self.parent_id and not self.is_indoor
+
+    @property
+    def route_geometry(self):
+        """Own geometry, or the nearest ancestor's when this pathway has none.
+
+        A pathway with a parent needs no geometry of its own (see
+        requires_geometry): it runs along its container. Reuses
+        `_route_geometry` when the instance was loaded via
+        `Pathway.objects.with_route_geometry()`; otherwise one ancestor
+        query, whose answer is kept while the parent is unchanged.
+        """
+        if "_route_geometry" in self.__dict__:
+            return self.__dict__["_route_geometry"]
+        if self.geometry is not None or self.parent_id is None:
+            return self.geometry
+        cached = self.__dict__.get("_ancestor_geometry")
+        if cached is not None and cached[0] == self.parent_id:
+            return cached[1]
+        geometry = (
+            self._parent_and_ancestors()
+            .filter(geometry__isnull=False)
+            .order_by("-path")
+            .values_list("geometry", flat=True)
+            .first()
+        )
+        self.__dict__["_ancestor_geometry"] = (self.parent_id, geometry)
+        return geometry
 
     def _parent_and_ancestors(self):
         """The parent and everything above it, outermost first.
