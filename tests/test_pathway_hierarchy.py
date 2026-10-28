@@ -214,6 +214,27 @@ def test_effective_tenant_walks_ancestors(ends):
 
 
 @pytest.mark.django_db
+def test_effective_tenant_of_a_list_costs_no_queries_per_access(ends, django_assert_num_queries):
+    """Tables read effective_tenant several times per row; no read may re-query."""
+    owner = Tenant.objects.create(name="PH Bank Owner", slug="ph-bank-owner")
+    bank = build("conduit_bank", ends, tenant=owner)
+    raceway = build("raceway", ends, tenant=owner)
+    tray = build("tray", ends, parent=raceway)
+    for n in range(3):
+        build("conduit", ends, parent=bank, position=str(n))
+        build("innerduct", ends, parent=tray)
+
+    children = list(Pathway.objects.filter(parent=bank).select_related("parent__tenant"))
+    with django_assert_num_queries(0):
+        assert [c.effective_tenant for c in children for _ in range(3)] == [owner] * 9
+
+    # A chain deeper than what was loaded reads the rest once per row.
+    ducts = list(Pathway.objects.filter(parent=tray))
+    with django_assert_num_queries(3):
+        assert [d.effective_tenant for d in ducts for _ in range(3)] == [owner] * 9
+
+
+@pytest.mark.django_db
 def test_inapplicable_fields_cleared_on_save(ends):
     conduit = build("conduit", ends)
     duct = Pathway(pathway_type="innerduct", parent=conduit, material="pvc", sag=1.5, warning_tape=True)

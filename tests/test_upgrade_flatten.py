@@ -86,9 +86,12 @@ def test_copy_subtype_rows(migrate_to, capsys):
     executor.loader.build_graph()
     executor.migrate(executor.loader.graph.leaf_nodes("netbox_pathways"))
 
-    # An unparented innerduct and a blank-typed row fit no flattened row.
-    assert not Pathway.objects.filter(pk__in=[orphan.pk, untyped.pk]).exists()
-    assert "1 innerduct pathway(s) with no parent and 1 pathway(s) with no type" in capsys.readouterr().out
+    # Neither is deleted: the unparented innerduct loses only its type, so the
+    # parent constraint holds, and the blank-typed row already satisfies it.
+    survivors = dict(Pathway.objects.filter(pk__in=[orphan.pk, untyped.pk]).values_list("label", "pathway_type"))
+    assert survivors == {"UF-OI": "", "UF-UT": ""}
+    out = capsys.readouterr().out
+    assert f"cleared the type of 1 innerduct pathway(s) with no parent; set a type on each: {orphan.pk}." in out
     flat_bank = Pathway.objects.get(pk=bank.pk)
     assert (flat_bank.configuration, flat_bank.total_conduits, flat_bank.start_face) == ("2x2", 4, "north")
     assert flat_bank.parent_id is None

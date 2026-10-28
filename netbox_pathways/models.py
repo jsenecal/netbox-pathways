@@ -692,15 +692,34 @@ class Pathway(LtreeModel, NetBoxModel):
 
         Display-layer fallback in the NetBox VRF/prefix style: the stored
         field stays authoritative for filtering and the API.
+
+        Walks the parents already loaded in memory first, so a list fetched
+        with `select_related("parent__tenant")` (deeper for nested chains)
+        costs no queries. Only the part of the chain that is not loaded is
+        read, with one ancestor query whose answer is kept on that instance
+        while its parent is unchanged, because tables read this several
+        times per row.
         """
-        if self.tenant_id:
-            return self.tenant
-        if self.parent_id is None:
-            return None
+        node = self
+        while node.tenant_id is None:
+            if node.parent_id is None:
+                return None
+            if not Pathway.parent.is_cached(node):
+                return node._unloaded_ancestor_tenant()
+            node = node.parent
+        return node.tenant
+
+    def _unloaded_ancestor_tenant(self):
+        """The nearest tenant above this pathway, read from the database once."""
+        cached = self.__dict__.get("_ancestor_tenant")
+        if cached is not None and cached[0] == self.parent_id:
+            return cached[1]
         nearest = (
             self._parent_and_ancestors().filter(tenant__isnull=False).select_related("tenant").order_by("-path").first()
         )
-        return nearest.tenant if nearest else None
+        tenant = nearest.tenant if nearest else None
+        self.__dict__["_ancestor_tenant"] = (self.parent_id, tenant)
+        return tenant
 
     @property
     def attachment_height(self):

@@ -141,27 +141,27 @@ def delete_microducts(apps, schema_editor):
     return count
 
 
-def delete_unrepresentable_rows(apps, schema_editor):
-    """Delete base-only pathways the flattened table cannot hold; return how many.
+def untype_parentless_rows(apps, schema_editor):
+    """Clear the type of pathways that would break the parent constraint; return their pks.
 
     The 0.4.x generic pathway endpoint stored a bare pathway row with no
-    subtype row and accepted any `pathway_type`, blank included. Such a row
-    typed `innerduct` has no parent conduit to copy, so it would fail the
-    `pathway_parent_required` constraint added next and abort the upgrade;
-    a blank-typed row has no type the plugin knows. Both were only reachable
-    through the API, like microducts, and are removed the same way, with the
-    counts printed in the migrate output.
+    subtype row and accepted any `pathway_type`. Such a row typed
+    `innerduct` has no parent conduit to copy, so it would fail the
+    `pathway_parent_required` constraint added next and abort the upgrade.
+    The row is kept, with its waypoints and cable segments, and only its
+    type is cleared: a blank type satisfies every constraint and fails
+    full_clean() on the next edit, so the user picks a type then. The pks
+    are printed so the operator can find and retype them.
+
+    Rows that already had a blank type are left alone for the same reason.
     """
     Pathway = apps.get_model("netbox_pathways", "Pathway")
     orphans = Pathway.objects.filter(pathway_type__in=PARENT_REQUIRED_TYPES, parent__isnull=True)
-    untyped = Pathway.objects.filter(pathway_type="")
-    orphan_count, untyped_count = orphans.count(), untyped.count()
-    if orphan_count:
-        orphans.delete()
-    if untyped_count:
-        untyped.delete()
-    print(
-        f"\n  netbox_pathways: deleted {orphan_count} {'/'.join(PARENT_REQUIRED_TYPES)} pathway(s) "
-        f"with no parent and {untyped_count} pathway(s) with no type."
-    )
-    return orphan_count + untyped_count
+    pks = list(orphans.order_by("pk").values_list("pk", flat=True))
+    if pks:
+        Pathway.objects.filter(pk__in=pks).update(pathway_type="")
+        print(
+            f"\n  netbox_pathways: cleared the type of {len(pks)} {'/'.join(PARENT_REQUIRED_TYPES)} "
+            f"pathway(s) with no parent; set a type on each: {', '.join(map(str, pks))}."
+        )
+    return pks

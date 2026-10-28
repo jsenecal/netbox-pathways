@@ -1,10 +1,13 @@
-"""Copy the subtype rows onto Pathway; delete rows the new table cannot hold.
+"""Copy the subtype rows onto Pathway; fix up rows the new rules reject.
 
-Those are retired microduct rows, and base-only rows the old generic API
-created as an innerduct with no parent or with no type at all.
+Retired microduct rows are deleted. Base-only rows the old generic API
+created as an innerduct with no parent keep everything but their type,
+which is cleared so the parent constraint added next does not abort the
+upgrade.
 
 The work is done by tested helpers in netbox_pathways.upgrade. Deleting
-rows cannot be reversed; reversing the copy rebuilds the child rows.
+microducts and clearing types cannot be reversed; reversing the copy
+rebuilds the child rows.
 """
 
 from django.db import migrations
@@ -12,8 +15,8 @@ from django.db import migrations
 from netbox_pathways.upgrade import (
     copy_subtype_rows,
     delete_microducts,
-    delete_unrepresentable_rows,
     uncopy_subtype_rows,
+    untype_parentless_rows,
 )
 
 
@@ -25,5 +28,5 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(copy_subtype_rows, uncopy_subtype_rows),
         migrations.RunPython(delete_microducts, migrations.RunPython.noop),
-        migrations.RunPython(delete_unrepresentable_rows, migrations.RunPython.noop),
+        migrations.RunPython(untype_parentless_rows, migrations.RunPython.noop),
     ]
