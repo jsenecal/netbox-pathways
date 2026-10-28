@@ -100,12 +100,11 @@ class TestInnerductColorWiring:
         assert isinstance(forms.PathwayBulkEditForm().fields["color"].widget, ColorSelect)
 
 
-@pytest.mark.xfail(reason="tables move to the single model in Task 11", strict=True)
 class TestInnerductColorTable:
     def test_table_renders_color_as_a_swatch(self):
         from netbox_pathways import tables
 
-        assert isinstance(tables.InnerductTable.base_columns["color"], columns.ColorColumn)
+        assert isinstance(tables.PathwayTable.base_columns["color"], columns.ColorColumn)
 
 
 class TestInnerductImportColor:

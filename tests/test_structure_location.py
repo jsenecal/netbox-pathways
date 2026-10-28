@@ -252,17 +252,17 @@ def test_identity_migration_fails_loudly_on_shared_locations(migrate_to):
 def test_pathway_snapping_reads_structure_geometry():
     """Pathway endpoint snapping reads the structure geometry; after
     the rename it must not read the Location FK."""
-    from netbox_pathways.models import Conduit
+    from netbox_pathways.models import Pathway
 
     s1 = Structure.objects.create(name="SNAP-1", geometry=Point(0, 0, srid=SRID))
     s2 = Structure.objects.create(name="SNAP-2", geometry=Point(100, 100, srid=SRID))
-    conduit = Conduit(
+    conduit = Pathway(
+        pathway_type="conduit",
         label="SNAP-C",
         geometry=LineString((0.2, 0.2), (99.8, 99.8), srid=SRID),
         start_structure=s1,
         end_structure=s2,
     )
-    conduit.pathway_type = "conduit"
     conduit.clean()
     assert conduit.geometry.coords[0] == (0.0, 0.0)
     assert conduit.geometry.coords[-1] == (100.0, 100.0)

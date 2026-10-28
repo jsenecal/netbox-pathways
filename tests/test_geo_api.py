@@ -13,7 +13,7 @@ from netbox_pathways.geo import (
     point_to_lonlat,
     to_leaflet,
 )
-from netbox_pathways.models import AerialSpan, CableSegment, Conduit, ConduitBank, DirectBuried, Structure
+from netbox_pathways.models import CableSegment, Pathway, Structure
 
 # ---------------------------------------------------------------------------
 # geo.py utility functions
@@ -105,7 +105,8 @@ def structures(srid, site):
 @pytest.fixture
 def conduits(structures, srid):
     return [
-        Conduit.objects.create(
+        Pathway.objects.create(
+            pathway_type="conduit",
             label=f"Geo-C{i}",
             start_structure=structures[i],
             end_structure=structures[i + 1],
@@ -122,7 +123,8 @@ def conduits(structures, srid):
 
 @pytest.fixture
 def aerial_span(structures, srid):
-    return AerialSpan.objects.create(
+    return Pathway.objects.create(
+        pathway_type="aerial",
         label="Geo-A1",
         start_structure=structures[0],
         end_structure=structures[1],
@@ -133,7 +135,8 @@ def aerial_span(structures, srid):
 
 @pytest.fixture
 def direct_buried(structures, srid):
-    return DirectBuried.objects.create(
+    return Pathway.objects.create(
+        pathway_type="direct_buried",
         label="Geo-DB1",
         start_structure=structures[1],
         end_structure=structures[2],
@@ -144,7 +147,8 @@ def direct_buried(structures, srid):
 
 @pytest.fixture
 def conduit_bank(structures, srid):
-    return ConduitBank.objects.create(
+    return Pathway.objects.create(
+        pathway_type="conduit_bank",
         label="Geo-CB1",
         start_structure=structures[0],
         end_structure=structures[2],
@@ -318,7 +322,7 @@ class TestExcludeStatus:
         conduits[1].status = "abandoned"
         conduits[1].save()
         resp = api_client.get(
-            "/api/plugins/pathways/geo/conduits/?exclude_status=retired&exclude_status=abandoned",
+            "/api/plugins/pathways/geo/pathways/?pathway_type=conduit&exclude_status=retired&exclude_status=abandoned",
             format="json",
         )
         assert resp.json()["features"] == []
@@ -330,7 +334,7 @@ class TestExcludeStatus:
         conduits[1].status = "abandoned"
         conduits[1].save()
         resp = api_client.get(
-            "/api/plugins/pathways/geo/conduits/?exclude_status=retired,abandoned",
+            "/api/plugins/pathways/geo/pathways/?pathway_type=conduit&exclude_status=retired,abandoned",
             format="json",
         )
         assert resp.json()["features"] == []
@@ -338,9 +342,9 @@ class TestExcludeStatus:
     def test_exclude_status_changes_etag(self, api_client, conduits):
         conduits[0].status = "retired"
         conduits[0].save()
-        plain = api_client.get("/api/plugins/pathways/geo/conduits/", format="json")
+        plain = api_client.get("/api/plugins/pathways/geo/pathways/?pathway_type=conduit", format="json")
         excluded = api_client.get(
-            "/api/plugins/pathways/geo/conduits/?exclude_status=retired",
+            "/api/plugins/pathways/geo/pathways/?pathway_type=conduit&exclude_status=retired",
             format="json",
         )
         assert plain["ETag"] != excluded["ETag"]
@@ -480,10 +484,11 @@ class TestMapInfoAPI:
 
     def test_excludes_banked_conduits(self, api_client, conduit_bank, srid):
         # A conduit that lives inside a bank should not be counted in "conduits"
-        Conduit.objects.create(
+        Pathway.objects.create(
+            pathway_type="conduit",
             label="In-bank",
-            conduit_bank=conduit_bank,
-            bank_position="A1",
+            parent=conduit_bank,
+            position="A1",
             geometry=LineString((100, 100), (300, 300), srid=srid),
             length=200,
         )
@@ -525,7 +530,6 @@ class TestMapInfoAPI:
         assert t["conduits"] == {"hide": 500}
 
     def test_external_reference_layer_counted(self, api_client, conduits):
-        from netbox_pathways.models import Conduit
         from netbox_pathways.registry import LayerStyle, MapLayerRegistration, registry
 
         # Reference-mode layer: queryset of Conduits, geometry via start_structure FK
@@ -535,7 +539,7 @@ class TestMapInfoAPI:
                 label="External Ref",
                 geometry_type="Point",
                 source="reference",
-                queryset=lambda r: Conduit.objects.all(),
+                queryset=lambda r: Pathway.objects.filter(pathway_type="conduit"),
                 geometry_field="start_structure",
                 style=LayerStyle(color="#000"),
                 max_features=42,
@@ -558,7 +562,7 @@ class TestMapInfoAPI:
         from django.contrib.gis.geos import LineString, Point
 
         from netbox_pathways.geo import get_srid, to_leaflet
-        from netbox_pathways.models import Conduit, Structure
+        from netbox_pathways.models import Structure
         from netbox_pathways.registry import LayerStyle, MapLayerRegistration, registry
 
         srid = get_srid()
@@ -566,7 +570,8 @@ class TestMapInfoAPI:
         loc = Location.objects.create(name="Info-HH", slug="info-hh", site=site)
         anchor = Structure.objects.create(name="INFO-S0", geometry=Point(0, 0, srid=srid))
         identity = Structure.objects.create(name="INFO-HH", geometry=Point(10, 20, srid=srid), site=site, location=loc)
-        Conduit.objects.create(
+        Pathway.objects.create(
+            pathway_type="conduit",
             label="INFO-C1",
             start_structure=anchor,
             end_location=loc,
@@ -579,7 +584,7 @@ class TestMapInfoAPI:
                 label="External Tuple",
                 geometry_type="Point",
                 source="reference",
-                queryset=lambda r: Conduit.objects.filter(label="INFO-C1"),
+                queryset=lambda r: Pathway.objects.filter(label="INFO-C1"),
                 geometry_field=("end_location", "start_structure"),
                 style=LayerStyle(color="#000"),
             )

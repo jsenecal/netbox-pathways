@@ -1,5 +1,12 @@
+from django.urls import reverse_lazy
+from django.utils.text import format_lazy
 from netbox.choices import ButtonColorChoices
 from netbox.plugins import PluginMenu, PluginMenuButton, PluginMenuItem
+
+from .choices import PathwayTypeChoices
+
+# Menu labels for the pathway types whose plural is not the label plus "s".
+_TYPE_PLURALS = {"direct_buried": "Direct Buried", "submarine": "Submarine"}
 
 
 def _model_buttons(model_name):
@@ -22,6 +29,31 @@ def _model_buttons(model_name):
     )
 
 
+def _with_type(link, pathway_type):
+    """The URL of `link` preset to one pathway type."""
+    return format_lazy("{}?pathway_type={}", reverse_lazy(link), pathway_type)
+
+
+def _pathway_type_item(pathway_type, label):
+    """A quick link opening the pathway list filtered to one type, with an add button for that type."""
+    add = PluginMenuButton(
+        link="plugins:netbox_pathways:pathway_add",
+        title="Add",
+        icon_class="mdi mdi-plus-thick",
+        color=ButtonColorChoices.GREEN,
+        permissions=["netbox_pathways.add_pathway"],
+    )
+    add.url = _with_type(add.link, pathway_type)
+    item = PluginMenuItem(
+        link="plugins:netbox_pathways:pathway_list",
+        link_text=_TYPE_PLURALS.get(pathway_type, f"{label}s"),
+        permissions=["netbox_pathways.view_pathway"],
+        buttons=(add,),
+    )
+    item.url = _with_type(item.link, pathway_type)
+    return item
+
+
 menu = PluginMenu(
     label="Pathways",
     icon_class="mdi mdi-map-marker-path",
@@ -36,34 +68,10 @@ menu = PluginMenu(
                     buttons=_model_buttons("structure"),
                 ),
                 PluginMenuItem(
-                    link="plugins:netbox_pathways:conduit_list",
-                    link_text="Conduits",
-                    permissions=["netbox_pathways.view_conduit"],
-                    buttons=_model_buttons("conduit"),
-                ),
-                PluginMenuItem(
-                    link="plugins:netbox_pathways:aerialspan_list",
-                    link_text="Aerial Spans",
-                    permissions=["netbox_pathways.view_aerialspan"],
-                    buttons=_model_buttons("aerialspan"),
-                ),
-                PluginMenuItem(
-                    link="plugins:netbox_pathways:directburied_list",
-                    link_text="Direct Buried",
-                    permissions=["netbox_pathways.view_directburied"],
-                    buttons=_model_buttons("directburied"),
-                ),
-                PluginMenuItem(
-                    link="plugins:netbox_pathways:innerduct_list",
-                    link_text="Innerducts",
-                    permissions=["netbox_pathways.view_innerduct"],
-                    buttons=_model_buttons("innerduct"),
-                ),
-                PluginMenuItem(
-                    link="plugins:netbox_pathways:conduitbank_list",
-                    link_text="Conduit Banks",
-                    permissions=["netbox_pathways.view_conduitbank"],
-                    buttons=_model_buttons("conduitbank"),
+                    link="plugins:netbox_pathways:pathway_list",
+                    link_text="Pathways",
+                    permissions=["netbox_pathways.view_pathway"],
+                    buttons=_model_buttons("pathway"),
                 ),
                 PluginMenuItem(
                     link="plugins:netbox_pathways:conduitjunction_list",
@@ -72,6 +80,10 @@ menu = PluginMenu(
                     buttons=_model_buttons("conduitjunction"),
                 ),
             ),
+        ),
+        (
+            "Pathway Types",
+            tuple(_pathway_type_item(value, label) for value, label in dict(PathwayTypeChoices).items()),
         ),
         (
             "Cable Routing",

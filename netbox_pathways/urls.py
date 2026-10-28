@@ -22,99 +22,20 @@ urlpatterns = [
             ]
         ),
     ),
-    # Pathways (all types)
+    # Pathways (every type)
     path("pathways/", views.PathwayListView.as_view(), name="pathway_list"),
+    path("pathways/add/", views.PathwayEditView.as_view(), name="pathway_add"),
+    path("pathways/import/", views.PathwayBulkImportView.as_view(), name="pathway_bulk_import"),
+    path("pathways/edit/", views.PathwayBulkEditView.as_view(), name="pathway_bulk_edit"),
+    path("pathways/delete/", views.PathwayBulkDeleteView.as_view(), name="pathway_bulk_delete"),
     path(
         "pathways/<int:pk>/",
         include(
             [
                 path("", views.PathwayView.as_view(), name="pathway"),
+                path("edit/", views.PathwayEditView.as_view(), name="pathway_edit"),
+                path("delete/", views.PathwayDeleteView.as_view(), name="pathway_delete"),
                 *get_model_urls("netbox_pathways", "pathway"),
-            ]
-        ),
-    ),
-    # Conduits
-    path("conduits/", views.ConduitListView.as_view(), name="conduit_list"),
-    path("conduits/add/", views.ConduitEditView.as_view(), name="conduit_add"),
-    path("conduits/import/", views.ConduitBulkImportView.as_view(), name="conduit_bulk_import"),
-    path("conduits/edit/", views.ConduitBulkEditView.as_view(), name="conduit_bulk_edit"),
-    path("conduits/delete/", views.ConduitBulkDeleteView.as_view(), name="conduit_bulk_delete"),
-    path(
-        "conduits/<int:pk>/",
-        include(
-            [
-                path("", views.ConduitView.as_view(), name="conduit"),
-                path("edit/", views.ConduitEditView.as_view(), name="conduit_edit"),
-                path("delete/", views.ConduitDeleteView.as_view(), name="conduit_delete"),
-                *get_model_urls("netbox_pathways", "conduit"),
-            ]
-        ),
-    ),
-    # Aerial Spans
-    path("aerial-spans/", views.AerialSpanListView.as_view(), name="aerialspan_list"),
-    path("aerial-spans/add/", views.AerialSpanEditView.as_view(), name="aerialspan_add"),
-    path("aerial-spans/import/", views.AerialSpanBulkImportView.as_view(), name="aerialspan_bulk_import"),
-    path("aerial-spans/edit/", views.AerialSpanBulkEditView.as_view(), name="aerialspan_bulk_edit"),
-    path("aerial-spans/delete/", views.AerialSpanBulkDeleteView.as_view(), name="aerialspan_bulk_delete"),
-    path(
-        "aerial-spans/<int:pk>/",
-        include(
-            [
-                path("", views.AerialSpanView.as_view(), name="aerialspan"),
-                path("edit/", views.AerialSpanEditView.as_view(), name="aerialspan_edit"),
-                path("delete/", views.AerialSpanDeleteView.as_view(), name="aerialspan_delete"),
-                *get_model_urls("netbox_pathways", "aerialspan"),
-            ]
-        ),
-    ),
-    # Direct Buried
-    path("direct-buried/", views.DirectBuriedListView.as_view(), name="directburied_list"),
-    path("direct-buried/add/", views.DirectBuriedEditView.as_view(), name="directburied_add"),
-    path("direct-buried/import/", views.DirectBuriedBulkImportView.as_view(), name="directburied_bulk_import"),
-    path("direct-buried/edit/", views.DirectBuriedBulkEditView.as_view(), name="directburied_bulk_edit"),
-    path("direct-buried/delete/", views.DirectBuriedBulkDeleteView.as_view(), name="directburied_bulk_delete"),
-    path(
-        "direct-buried/<int:pk>/",
-        include(
-            [
-                path("", views.DirectBuriedView.as_view(), name="directburied"),
-                path("edit/", views.DirectBuriedEditView.as_view(), name="directburied_edit"),
-                path("delete/", views.DirectBuriedDeleteView.as_view(), name="directburied_delete"),
-                *get_model_urls("netbox_pathways", "directburied"),
-            ]
-        ),
-    ),
-    # Innerducts
-    path("innerducts/", views.InnerductListView.as_view(), name="innerduct_list"),
-    path("innerducts/add/", views.InnerductEditView.as_view(), name="innerduct_add"),
-    path("innerducts/import/", views.InnerductBulkImportView.as_view(), name="innerduct_bulk_import"),
-    path("innerducts/edit/", views.InnerductBulkEditView.as_view(), name="innerduct_bulk_edit"),
-    path("innerducts/delete/", views.InnerductBulkDeleteView.as_view(), name="innerduct_bulk_delete"),
-    path(
-        "innerducts/<int:pk>/",
-        include(
-            [
-                path("", views.InnerductView.as_view(), name="innerduct"),
-                path("edit/", views.InnerductEditView.as_view(), name="innerduct_edit"),
-                path("delete/", views.InnerductDeleteView.as_view(), name="innerduct_delete"),
-                *get_model_urls("netbox_pathways", "innerduct"),
-            ]
-        ),
-    ),
-    # Conduit Banks
-    path("conduit-banks/", views.ConduitBankListView.as_view(), name="conduitbank_list"),
-    path("conduit-banks/add/", views.ConduitBankEditView.as_view(), name="conduitbank_add"),
-    path("conduit-banks/import/", views.ConduitBankBulkImportView.as_view(), name="conduitbank_bulk_import"),
-    path("conduit-banks/edit/", views.ConduitBankBulkEditView.as_view(), name="conduitbank_bulk_edit"),
-    path("conduit-banks/delete/", views.ConduitBankBulkDeleteView.as_view(), name="conduitbank_bulk_delete"),
-    path(
-        "conduit-banks/<int:pk>/",
-        include(
-            [
-                path("", views.ConduitBankView.as_view(), name="conduitbank"),
-                path("edit/", views.ConduitBankEditView.as_view(), name="conduitbank_edit"),
-                path("delete/", views.ConduitBankDeleteView.as_view(), name="conduitbank_delete"),
-                *get_model_urls("netbox_pathways", "conduitbank"),
             ]
         ),
     ),

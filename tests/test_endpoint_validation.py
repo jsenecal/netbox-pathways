@@ -7,10 +7,6 @@ from netbox_pathways.models import ConduitJunction, Pathway, Structure
 
 SRID = get_srid()
 
-# Binding a form reverses the plugin's URLs, which import the UI views that
-# only move to the single pathway model in Task 11.
-NEEDS_UI_URLS = pytest.mark.xfail(reason="the UI views move to the single model in Task 11", strict=True)
-
 
 def _make_structure(name, geom):
     return Structure.objects.create(name=name, geometry=geom)
@@ -171,7 +167,6 @@ class TestConduitJunctionValidation:
             c.clean()
 
 
-@NEEDS_UI_URLS
 @pytest.mark.django_db
 class TestPathAutoGeneration:
     def test_blank_path_with_two_point_structures_generates_line(self):
@@ -332,7 +327,6 @@ class TestLocationEndpointValidation:
             loc.delete()
 
 
-@NEEDS_UI_URLS
 @pytest.mark.django_db
 class TestEndToEndFormSave:
     def test_conduit_bank_form_generates_and_snaps(self):

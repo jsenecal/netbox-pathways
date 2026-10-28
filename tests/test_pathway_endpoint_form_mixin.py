@@ -10,16 +10,11 @@ from netbox_pathways.models import Pathway, Structure
 
 SRID = get_srid()
 
-# Binding a form reverses the plugin's URLs, which import the UI views that
-# only move to the single pathway model in Task 11.
-NEEDS_UI_URLS = pytest.mark.xfail(reason="the UI views move to the single model in Task 11", strict=True)
-
 
 def _make_structure(name, geom):
     return Structure.objects.create(name=name, geometry=geom)
 
 
-@NEEDS_UI_URLS
 @pytest.mark.django_db
 class TestPathwayEndpointFormMixinClean:
     def test_provided_path_is_kept(self):

@@ -20,9 +20,6 @@ from netbox_pathways.navigation import menu
 
 SRID = get_srid()
 
-# Import buttons and menu links reverse the UI URLs, whose views only move
-# to the single pathway model in Task 11.
-NEEDS_UI_URLS = pytest.mark.xfail(reason="the UI views move to the single model in Task 11", strict=True)
 
 IMPORTABLE_MODELS = [
     models.Structure,
@@ -35,7 +32,6 @@ IMPORTABLE_MODELS = [
 ]
 
 
-@NEEDS_UI_URLS
 @pytest.mark.parametrize("model", IMPORTABLE_MODELS, ids=lambda m: m._meta.model_name)
 def test_bulk_import_url_resolves(model):
     """Each importable model registers the URL name the Import button reverses."""
@@ -43,7 +39,6 @@ def test_bulk_import_url_resolves(model):
     assert url.endswith("/import/")
 
 
-@NEEDS_UI_URLS
 def test_navigation_button_links_resolve():
     """Every menu item and button in the plugin menu points at a real URL name."""
     for group in menu.groups:
@@ -53,7 +48,6 @@ def test_navigation_button_links_resolve():
                 reverse(button.link)
 
 
-@NEEDS_UI_URLS
 def test_navigation_has_import_button_per_importable_model():
     """Each importable model's menu item carries an Import button."""
     buttons = set()

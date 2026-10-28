@@ -58,18 +58,9 @@ def test_form_without_a_type_shows_no_type_specific_fields():
     assert not {"parent", "material", "size", "sag"} & fields
 
 
-@pytest.fixture
-def bound_form_urls(monkeypatch):
-    # Binding a dynamic field reverses the plugin's UI URLs, which only move to
-    # the single pathway model in Task 11; stub the lookup until then.
-    from utilities.forms.fields import dynamic
-
-    monkeypatch.setattr(dynamic, "get_action_url", lambda *args, **kwargs: "/")
-
-
 @pytest.mark.django_db
 @pytest.mark.parametrize("new_type", ["aerial", "submarine"])
-def test_retyping_a_parented_pathway_reports_the_parent(bound_form_urls, new_type):
+def test_retyping_a_parented_pathway_reports_the_parent(new_type):
     """A conduit in a bank retyped to a parentless type gets a parent error, not a crash."""
     s1 = Structure.objects.create(name="RT-S1", geometry=Point(0, 0, srid=SRID))
     s2 = Structure.objects.create(name="RT-S2", geometry=Point(100, 100, srid=SRID))

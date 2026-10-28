@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.gis.db.models.functions import Length
 from django.db import transaction
-from django.db.models import Count, Exists, F, OuterRef, Subquery, Sum
+from django.db.models import Count, Exists, F, OuterRef, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -33,6 +33,7 @@ from netbox_pathways.registry import registry as map_layer_registry
 from . import anchors, filterforms, filtersets, forms, models, tables
 from .choices import PlannedRouteStatusChoices
 from .graph import PathwayGraph, _endpoint_nodes
+from .pathway_types import DRAWN_TYPES, allowed_child_types
 from .ui import panels
 
 
@@ -171,97 +172,59 @@ class StructureCreateSiteView(LoginRequiredMixin, View):
         return redirect(f"{edit_url}?return_url={structure.get_absolute_url()}")
 
 
-@register_model_view(models.Structure, "conduit_banks")
-class StructureConduitBanksView(generic.ObjectChildrenView):
-    queryset = models.Structure.objects.all()
-    child_model = models.ConduitBank
-    table = tables.ConduitBankTable
-    filterset = filtersets.ConduitBankFilterSet
-    tab = ViewTab(
-        label="Conduit Banks",
-        badge=lambda obj: models.ConduitBank.objects.touching(obj).count(),
-    )
-
-    def get_children(self, request, parent):
-        return models.ConduitBank.objects.touching(parent).annotate(conduit_count=Count("conduits"))
-
-
-@register_model_view(models.Structure, "conduits")
-class StructureConduitsView(generic.ObjectChildrenView):
-    queryset = models.Structure.objects.all()
-    child_model = models.Conduit
-    table = tables.ConduitTable
-    filterset = filtersets.ConduitFilterSet
-    tab = ViewTab(
-        label="Conduits",
-        badge=lambda obj: models.Conduit.objects.touching(obj).count(),
-        hide_if_empty=True,
-    )
-
-    def get_children(self, request, parent):
-        return models.Conduit.objects.touching(parent).annotate(
-            cables_routed=Count("cable_segments"),
-            in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        )
-
-
-@register_model_view(models.Structure, "aerial_spans")
-class StructureAerialSpansView(generic.ObjectChildrenView):
-    queryset = models.Structure.objects.all()
-    child_model = models.AerialSpan
-    table = tables.AerialSpanTable
-    filterset = filtersets.AerialSpanFilterSet
-    tab = ViewTab(
-        label="Aerial Spans",
-        badge=lambda obj: models.AerialSpan.objects.touching(obj).count(),
-        hide_if_empty=True,
-    )
-
-    def get_children(self, request, parent):
-        return models.AerialSpan.objects.touching(parent).annotate(
-            cables_routed=Count("cable_segments"),
-            in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        )
-
-
-@register_model_view(models.Structure, "direct_buried")
-class StructureDirectBuriedView(generic.ObjectChildrenView):
-    queryset = models.Structure.objects.all()
-    child_model = models.DirectBuried
-    table = tables.DirectBuriedTable
-    filterset = filtersets.DirectBuriedFilterSet
-    tab = ViewTab(
-        label="Direct Buried",
-        badge=lambda obj: models.DirectBuried.objects.touching(obj).count(),
-        hide_if_empty=True,
-    )
-
-    def get_children(self, request, parent):
-        return models.DirectBuried.objects.touching(parent).annotate(
-            cables_routed=Count("cable_segments"),
-            in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        )
-
-
-# --- Pathway (base) ---
-
-
-class PathwayListView(generic.ObjectListView):
-    queryset = models.Pathway.objects.select_related(
-        "start_structure",
-        "end_structure",
-        "start_location",
-        "end_location",
-        "tenant",
-    ).annotate(
+def _with_route_usage(queryset):
+    """Annotate pathways with how many cable segments run through them."""
+    return queryset.annotate(
         cables_routed=Count("cable_segments"),
         in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        _geo_length=Length("geometry"),
     )
+
+
+@register_model_view(models.Structure, "pathways")
+class StructurePathwaysView(generic.ObjectChildrenView):
+    """Every pathway ending at this structure; `?pathway_type=` narrows it to one type."""
+
+    queryset = models.Structure.objects.all()
+    child_model = models.Pathway
     table = tables.PathwayTable
     filterset = filtersets.PathwayFilterSet
     filterset_form = filterforms.PathwayFilterForm
-    actions = (BulkExport,)
+    tab = ViewTab(
+        label="Pathways",
+        badge=lambda obj: models.Pathway.objects.touching(obj).count(),
+        hide_if_empty=True,
+    )
+
+    def get_children(self, request, parent):
+        return _with_route_usage(
+            models.Pathway.objects.restrict(request.user, "view").touching(parent).select_related("parent")
+        )
+
+
+# --- Pathway ---
+
+
+def _only_child_type(pathway):
+    """The one type `pathway` may contain, to preset the add-child form; "" when there is a choice."""
+    child_types = allowed_child_types(pathway.pathway_type)
+    return next(iter(child_types)) if len(child_types) == 1 else ""
+
+
+class PathwayListView(generic.ObjectListView):
+    queryset = _with_route_usage(
+        models.Pathway.objects.select_related(
+            "parent",
+            "parent__tenant",
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+            "tenant",
+        )
+    ).annotate(_geo_length=Length("geometry"))
+    table = tables.PathwayTable
+    filterset = filtersets.PathwayFilterSet
+    filterset_form = filterforms.PathwayFilterForm
 
 
 class PathwayView(generic.ObjectView):
@@ -270,64 +233,34 @@ class PathwayView(generic.ObjectView):
     layout = layout.SimpleLayout(
         left_panels=[
             panels.PathwayPanel(),
+            panels.PathwayTypePanel(),
             TagsPanel(),
             CustomFieldsPanel(),
             CommentsPanel(),
         ],
         bottom_panels=[
+            panels.HideIfEmptyObjectsTablePanel(
+                model="netbox_pathways.Pathway",
+                title="Children",
+                filters={"parent_id": lambda ctx: ctx["object"].pk},
+                include_columns=["position"],
+                exclude_columns=["parent"],
+                empty_check=lambda ctx: bool(allowed_child_types(ctx["object"].pathway_type)),
+                actions=[
+                    ui_actions.AddObject(
+                        "netbox_pathways.Pathway",
+                        url_params={
+                            "parent": lambda ctx: ctx["object"].pk,
+                            "pathway_type": lambda ctx: _only_child_type(ctx["object"]),
+                        },
+                    ),
+                ],
+            ),
             ObjectsTablePanel(
                 model="netbox_pathways.PathwayLocation",
                 title="Waypoints",
                 filters={"pathway_id": lambda ctx: ctx["object"].pk},
             ),
-        ],
-    )
-
-
-# --- Conduit ---
-
-
-class ConduitListView(generic.ObjectListView):
-    queryset = models.Conduit.objects.select_related(
-        "start_structure",
-        "end_structure",
-        "start_location",
-        "end_location",
-        "conduit_bank",
-        "conduit_bank__tenant",
-        "tenant",
-    ).annotate(
-        cables_routed=Count("cable_segments"),
-        in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        _geo_length=Length("geometry"),
-    )
-    table = tables.ConduitTable
-    filterset_form = filterforms.ConduitFilterForm
-    filterset = filtersets.ConduitFilterSet
-
-
-class ConduitView(generic.ObjectView):
-    queryset = models.Conduit.objects.all()
-    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.ConduitPanel(),
-            TagsPanel(),
-            CustomFieldsPanel(),
-            CommentsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                model="netbox_pathways.Innerduct",
-                title="Innerducts",
-                filters={"parent_conduit_id": lambda ctx: ctx["object"].pk},
-                actions=[
-                    ui_actions.AddObject(
-                        "netbox_pathways.Innerduct",
-                        url_params={"parent_conduit": lambda ctx: ctx["object"].pk},
-                    ),
-                ],
-            ),
             ObjectsTablePanel(
                 model="netbox_pathways.CableSegment",
                 title="Cable Segments",
@@ -337,314 +270,52 @@ class ConduitView(generic.ObjectView):
     )
 
 
-class ConduitEditView(generic.ObjectEditView):
-    queryset = models.Conduit.objects.all()
-    form = forms.ConduitForm
+@register_model_view(models.Pathway, "children")
+class PathwayChildrenView(generic.ObjectChildrenView):
+    """Everything inside this pathway, at any depth (the ltree subtree)."""
 
-
-class ConduitDeleteView(generic.ObjectDeleteView):
-    queryset = models.Conduit.objects.all()
-
-
-class ConduitBulkImportView(generic.BulkImportView):
-    queryset = models.Conduit.objects.all()
-    model_form = forms.ConduitImportForm
-
-
-class ConduitBulkEditView(generic.BulkEditView):
-    queryset = models.Conduit.objects.all()
-    filterset = filtersets.ConduitFilterSet
-    table = tables.ConduitTable
-    form = forms.ConduitBulkEditForm
-
-
-class ConduitBulkDeleteView(generic.BulkDeleteView):
-    queryset = models.Conduit.objects.all()
-    table = tables.ConduitTable
-
-
-@register_model_view(models.Conduit, "innerducts")
-class ConduitInnerductsView(generic.ObjectChildrenView):
-    queryset = models.Conduit.objects.all()
-    child_model = models.Innerduct
-    table = tables.InnerductTable
-    filterset = filtersets.InnerductFilterSet
+    queryset = models.Pathway.objects.all()
+    child_model = models.Pathway
+    table = tables.PathwayTable
+    filterset = filtersets.PathwayFilterSet
+    filterset_form = filterforms.PathwayFilterForm
     tab = ViewTab(
-        label="Innerducts",
-        badge=lambda obj: obj.innerducts.count(),
+        label="Contents",
+        badge=lambda obj: obj.get_descendants().count(),
+        hide_if_empty=True,
     )
 
     def get_children(self, request, parent):
-        return parent.innerducts.annotate(
-            cables_routed=Count("cable_segments"),
-            in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
+        return _with_route_usage(
+            parent.get_descendants().restrict(request.user, "view").select_related("parent", "parent__tenant")
         )
 
 
-# --- Aerial Span ---
+class PathwayEditView(generic.ObjectEditView):
+    queryset = models.Pathway.objects.all()
+    form = forms.PathwayForm
 
 
-class AerialSpanListView(generic.ObjectListView):
-    queryset = models.AerialSpan.objects.select_related(
-        "start_structure",
-        "end_structure",
-        "start_location",
-        "end_location",
-        "tenant",
-    ).annotate(
-        cables_routed=Count("cable_segments"),
-        _geo_length=Length("geometry"),
-        in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-    )
-    table = tables.AerialSpanTable
-    filterset = filtersets.AerialSpanFilterSet
-    filterset_form = filterforms.AerialSpanFilterForm
+class PathwayDeleteView(generic.ObjectDeleteView):
+    queryset = models.Pathway.objects.all()
 
 
-class AerialSpanView(generic.ObjectView):
-    queryset = models.AerialSpan.objects.all()
-    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.AerialSpanPanel(),
-            TagsPanel(),
-            CustomFieldsPanel(),
-            CommentsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                model="netbox_pathways.CableSegment",
-                title="Cable Segments",
-                filters={"pathway_id": lambda ctx: ctx["object"].pk},
-            ),
-        ],
-    )
+class PathwayBulkImportView(generic.BulkImportView):
+    queryset = models.Pathway.objects.all()
+    model_form = forms.PathwayImportForm
 
 
-class AerialSpanEditView(generic.ObjectEditView):
-    queryset = models.AerialSpan.objects.all()
-    form = forms.AerialSpanForm
+class PathwayBulkEditView(generic.BulkEditView):
+    queryset = models.Pathway.objects.all()
+    filterset = filtersets.PathwayFilterSet
+    table = tables.PathwayTable
+    form = forms.PathwayBulkEditForm
 
 
-class AerialSpanDeleteView(generic.ObjectDeleteView):
-    queryset = models.AerialSpan.objects.all()
-
-
-class AerialSpanBulkImportView(generic.BulkImportView):
-    queryset = models.AerialSpan.objects.all()
-    model_form = forms.AerialSpanImportForm
-
-
-class AerialSpanBulkEditView(generic.BulkEditView):
-    queryset = models.AerialSpan.objects.all()
-    filterset = filtersets.AerialSpanFilterSet
-    table = tables.AerialSpanTable
-    form = forms.AerialSpanBulkEditForm
-
-
-class AerialSpanBulkDeleteView(generic.BulkDeleteView):
-    queryset = models.AerialSpan.objects.all()
-    table = tables.AerialSpanTable
-
-
-# --- Direct Buried ---
-
-
-class DirectBuriedListView(generic.ObjectListView):
-    queryset = models.DirectBuried.objects.select_related(
-        "start_structure",
-        "end_structure",
-        "start_location",
-        "end_location",
-        "tenant",
-    ).annotate(
-        cables_routed=Count("cable_segments"),
-        in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        _geo_length=Length("geometry"),
-    )
-    table = tables.DirectBuriedTable
-    filterset = filtersets.DirectBuriedFilterSet
-    filterset_form = filterforms.DirectBuriedFilterForm
-    actions = (AddObject, BulkImport, BulkExport, BulkEdit, BulkDelete)
-
-
-class DirectBuriedView(generic.ObjectView):
-    queryset = models.DirectBuried.objects.all()
-    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.DirectBuriedPanel(),
-            TagsPanel(),
-            CustomFieldsPanel(),
-            CommentsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                model="netbox_pathways.CableSegment",
-                title="Cable Segments",
-                filters={"pathway_id": lambda ctx: ctx["object"].pk},
-            ),
-        ],
-    )
-
-
-class DirectBuriedEditView(generic.ObjectEditView):
-    queryset = models.DirectBuried.objects.all()
-    form = forms.DirectBuriedForm
-
-
-class DirectBuriedDeleteView(generic.ObjectDeleteView):
-    queryset = models.DirectBuried.objects.all()
-
-
-class DirectBuriedBulkImportView(generic.BulkImportView):
-    queryset = models.DirectBuried.objects.all()
-    model_form = forms.DirectBuriedImportForm
-
-
-class DirectBuriedBulkEditView(generic.BulkEditView):
-    queryset = models.DirectBuried.objects.all()
-    filterset = filtersets.DirectBuriedFilterSet
-    table = tables.DirectBuriedTable
-    form = forms.DirectBuriedBulkEditForm
-
-
-class DirectBuriedBulkDeleteView(generic.BulkDeleteView):
-    queryset = models.DirectBuried.objects.all()
-    table = tables.DirectBuriedTable
-
-
-# --- Innerduct ---
-
-
-class InnerductListView(generic.ObjectListView):
-    queryset = models.Innerduct.objects.select_related(
-        "parent_conduit",
-        "tenant",
-        "parent_conduit__tenant",
-        "parent_conduit__conduit_bank__tenant",
-    ).annotate(
-        cables_routed=Count("cable_segments"),
-        in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        _geo_length=Length("geometry"),
-    )
-    table = tables.InnerductTable
-    filterset = filtersets.InnerductFilterSet
-    filterset_form = filterforms.InnerductFilterForm
-    actions = (AddObject, BulkImport, BulkExport, BulkEdit, BulkDelete)
-
-
-class InnerductView(generic.ObjectView):
-    queryset = models.Innerduct.objects.all()
-    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.InnerductPanel(),
-            TagsPanel(),
-            CustomFieldsPanel(),
-            CommentsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                model="netbox_pathways.CableSegment",
-                title="Cable Segments",
-                filters={"pathway_id": lambda ctx: ctx["object"].pk},
-            ),
-        ],
-    )
-
-
-class InnerductEditView(generic.ObjectEditView):
-    queryset = models.Innerduct.objects.all()
-    form = forms.InnerductForm
-
-
-class InnerductDeleteView(generic.ObjectDeleteView):
-    queryset = models.Innerduct.objects.all()
-
-
-class InnerductBulkImportView(generic.BulkImportView):
-    queryset = models.Innerduct.objects.all()
-    model_form = forms.InnerductImportForm
-
-
-class InnerductBulkEditView(generic.BulkEditView):
-    queryset = models.Innerduct.objects.all()
-    filterset = filtersets.InnerductFilterSet
-    table = tables.InnerductTable
-    form = forms.InnerductBulkEditForm
-
-
-class InnerductBulkDeleteView(generic.BulkDeleteView):
-    queryset = models.Innerduct.objects.all()
-    table = tables.InnerductTable
-
-
-# --- Conduit Bank ---
-
-
-class ConduitBankListView(generic.ObjectListView):
-    queryset = models.ConduitBank.objects.select_related("start_structure", "end_structure", "tenant").annotate(
-        conduit_count=Count("conduits"),
-        _geo_length=Length("geometry"),
-    )
-    table = tables.ConduitBankTable
-    filterset = filtersets.ConduitBankFilterSet
-    filterset_form = filterforms.ConduitBankFilterForm
-
-
-class ConduitBankView(generic.ObjectView):
-    queryset = models.ConduitBank.objects.all()
-    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.ConduitBankPanel(),
-            TagsPanel(),
-            CustomFieldsPanel(),
-            CommentsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                model="netbox_pathways.Conduit",
-                title="Conduits",
-                filters={"conduit_bank_id": lambda ctx: ctx["object"].pk},
-                include_columns=["bank_position"],
-                exclude_columns=["conduit_bank"],
-                actions=[
-                    ui_actions.AddObject(
-                        "netbox_pathways.Conduit",
-                        url_params={"conduit_bank": lambda ctx: ctx["object"].pk},
-                    ),
-                ],
-            ),
-        ],
-    )
-
-
-class ConduitBankEditView(generic.ObjectEditView):
-    queryset = models.ConduitBank.objects.all()
-    form = forms.ConduitBankForm
-
-
-class ConduitBankDeleteView(generic.ObjectDeleteView):
-    queryset = models.ConduitBank.objects.all()
-
-
-class ConduitBankBulkImportView(generic.BulkImportView):
-    queryset = models.ConduitBank.objects.all()
-    model_form = forms.ConduitBankImportForm
-
-
-class ConduitBankBulkEditView(generic.BulkEditView):
-    queryset = models.ConduitBank.objects.annotate(conduit_count=Count("conduits"))
-    filterset = filtersets.ConduitBankFilterSet
-    table = tables.ConduitBankTable
-    form = forms.ConduitBankBulkEditForm
-
-
-class ConduitBankBulkDeleteView(generic.BulkDeleteView):
-    queryset = models.ConduitBank.objects.annotate(conduit_count=Count("conduits"))
-    table = tables.ConduitBankTable
+class PathwayBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.Pathway.objects.all()
+    filterset = filtersets.PathwayFilterSet
+    table = tables.PathwayTable
 
 
 # --- Conduit Junction ---
@@ -1768,26 +1439,17 @@ class MapView(LoginRequiredMixin, View):
         except (ValueError, AttributeError):
             return None
 
-        model_map = {
-            "structure": (models.Structure, "geometry"),
-            "conduit": (models.Conduit, "geometry"),
-            "conduit_bank": (models.ConduitBank, "geometry"),
-            "aerial": (models.AerialSpan, "geometry"),
-            "direct_buried": (models.DirectBuried, "geometry"),
-        }
-        entry = model_map.get(ftype)
-        if not entry:
+        if ftype == "structure":
+            queryset = models.Structure.objects.filter(pk=fid)
+        elif ftype in DRAWN_TYPES:
+            queryset = models.Pathway.objects.filter(pk=fid, pathway_type=ftype)
+        else:
             return None
 
-        model_cls, geom_field = entry
         try:
-            result = (
-                model_cls.objects.filter(pk=fid)
-                .annotate(
-                    _geo=Transform(geom_field, 4326),
-                )
-                .aggregate(bbox=Extent("_geo"))
-            )
+            result = queryset.annotate(
+                _geo=Transform("geometry", 4326),
+            ).aggregate(bbox=Extent("_geo"))
             bbox = result.get("bbox")
             if bbox:
                 return bbox  # (west, south, east, north)
@@ -2107,15 +1769,7 @@ class CableRoutingAddSegmentView(CableRoutingMixin, LoginRequiredMixin, Permissi
         reference instead of one query param per candidate node -- a site can
         hold thousands of structures.
         """
-        # Junction endpoints live on Conduit, and _endpoint_nodes() reads them
-        # from these annotations (same subquery pattern as routing.py).
-        conduit_qs = models.Conduit.objects.filter(pathway_ptr_id=OuterRef("pathway_id"))
-        segments = list(
-            models.CableSegment.objects.route_of(cable).annotate(
-                _start_junction_id=Subquery(conduit_qs.values("start_junction_id")[:1]),
-                _end_junction_id=Subquery(conduit_qs.values("end_junction_id")[:1]),
-            )
-        )
+        segments = list(models.CableSegment.objects.route_of(cable))
 
         previous = None
         if after_sequence is not None:
@@ -2124,8 +1778,6 @@ class CableRoutingAddSegmentView(CableRoutingMixin, LoginRequiredMixin, Permissi
             previous = segments[-1]
 
         if previous is not None and previous.pathway:
-            previous.pathway._start_junction_id = previous._start_junction_id
-            previous.pathway._end_junction_id = previous._end_junction_id
             return tuple(node for node in _endpoint_nodes(previous.pathway) if node), False
 
         return anchors.cable_end_nodes(cable, "A").nodes, True

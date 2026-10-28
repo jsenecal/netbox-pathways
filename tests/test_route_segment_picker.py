@@ -171,18 +171,20 @@ class TestAddSegmentPicker:
         queryset did not add, so both the structure and the location were null
         and the picker silently widened to every pathway at the tap.
         """
-        from netbox_pathways.models import CableSegment, Conduit, ConduitJunction
+        from netbox_pathways.models import CableSegment, ConduitJunction
 
         s0 = Structure.objects.create(name="RP-j0", site=site, geometry=Point(0, 0, srid=SRID))
         s1 = Structure.objects.create(name="RP-j1", site=site, geometry=Point(100, 0, srid=SRID))
         s2 = Structure.objects.create(name="RP-j2", site=site, geometry=Point(50, 50, srid=SRID))
-        trunk = Conduit.objects.create(
+        trunk = Pathway.objects.create(
+            pathway_type="conduit",
             label="RP-trunk",
             geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=s0,
             end_structure=s1,
         )
-        stub = Conduit.objects.create(
+        stub = Pathway.objects.create(
+            pathway_type="conduit",
             label="RP-stub",
             geometry=LineString((50, 50), (50, 50), srid=SRID),
             start_structure=s2,
@@ -195,14 +197,15 @@ class TestAddSegmentPicker:
             towards_structure=s1,
             position_on_trunk=0.5,
         )
-        branch = Conduit.objects.create(
+        branch = Pathway.objects.create(
+            pathway_type="conduit",
             label="RP-branch",
             geometry=LineString((50, 0), (50, 50), srid=SRID),
             start_structure=s2,
             end_junction=junction,
         )
         cable = build_cable_with_terminations(label="RP-cable-junction", site=site)
-        CableSegment.objects.create(cable=cable, pathway=branch.pathway_ptr, sequence=1)
+        CableSegment.objects.create(cable=cable, pathway=branch, sequence=1)
 
         form = _get_form(admin_user, cable).context_data["form"]
         assert f"junction:{junction.pk}" in _static_params(form)

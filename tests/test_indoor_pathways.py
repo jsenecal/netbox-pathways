@@ -16,10 +16,6 @@ from netbox_pathways.models import ConduitJunction, Pathway, Structure
 
 SRID = get_srid()
 
-# Binding a form reverses the plugin's URLs, which import the UI views that
-# only move to the single pathway model in Task 11.
-NEEDS_UI_URLS = pytest.mark.xfail(reason="the UI views move to the single model in Task 11", strict=True)
-
 
 @pytest.fixture
 def locations(db):
@@ -83,7 +79,6 @@ class TestIndoorPathwayModelValidation:
         assert "geometry" in exc.value.message_dict
 
 
-@NEEDS_UI_URLS
 @pytest.mark.django_db
 class TestIndoorPathwayForms:
     def test_conduit_form_between_two_locations_is_valid(self, locations):
