@@ -70,12 +70,13 @@ def _permission(name, object_types, constraints=None, actions=("view",)):
 
 
 def test_rewrite_constraints_renames_and_scopes():
-    assert rewrite_constraints({"conduit_bank__label": "B1"}, ["conduit"]) == {
+    assert rewrite_constraints({"conduit_bank__label": "B1", "bank_position": "A1"}, ["conduit"]) == {
         "parent__label": "B1",
+        "position": "A1",
         "pathway_type__in": ["conduit"],
     }
     assert rewrite_constraints(
-        [{"parent_conduit": 4}, {"bank_position": "A1", "path__isnull": False}, {"pathway_ptr_id__in": [1]}],
+        [{"parent_conduit": 4}, {"position": "A1", "path__isnull": False}, {"pathway_ptr_id__in": [1]}],
         ["innerduct"],
     ) == [
         {"parent": 4, "pathway_type__in": ["innerduct"]},
@@ -111,6 +112,44 @@ def test_rewrite_constraints_narrows_an_existing_type_filter():
 def test_rewrite_constraints_rejects_unknown_field(constraints):
     with pytest.raises(UntranslatableConstraint):
         rewrite_constraints(constraints, ["conduit"])
+
+
+@pytest.mark.parametrize(
+    ("constraints", "types"),
+    [
+        ({"warning_tape": False}, ["conduit"]),
+        ({"parent__isnull": True}, ["aerial"]),
+        ({"conduit_bank__isnull": True}, ["aerial"]),
+        ({"position": "A1"}, ["conduit"]),
+        ({"conduit_bank__material": "pvc"}, ["conduit"]),
+        ({"material": "pvc"}, ["conduit", "innerduct"]),
+    ],
+)
+def test_rewrite_constraints_rejects_a_field_the_subtype_lacked(constraints, types):
+    """The key raised FieldError on the 0.4 subtype; on the flat table it would match the field's default."""
+    with pytest.raises(UntranslatableConstraint, match="did not have"):
+        rewrite_constraints(constraints, types)
+
+
+def test_rewrite_constraints_follows_legacy_relations_to_their_subtype():
+    assert rewrite_constraints({"innerducts__color": "ff0000"}, ["conduit"]) == {
+        "children__color": "ff0000",
+        "pathway_type__in": ["conduit"],
+    }
+    assert rewrite_constraints({"conduits__material": "pvc"}, ["conduit_bank"]) == {
+        "children__material": "pvc",
+        "pathway_type__in": ["conduit_bank"],
+    }
+
+
+def test_rewrite_constraints_merges_keys_that_meet_with_one_value():
+    assert rewrite_constraints({"pathway_ptr": 5, "id": 5}, ["conduit"]) == {"id": 5, "pathway_type__in": ["conduit"]}
+
+
+def test_rewrite_constraints_rejects_keys_that_meet_with_different_values():
+    """Keeping either value would drop the other condition and widen the grant."""
+    with pytest.raises(UntranslatableConstraint, match="'pathway_ptr' and 'id' both become 'id'"):
+        rewrite_constraints({"pathway_ptr": 5, "id": 6}, ["conduit"])
 
 
 @pytest.mark.django_db
@@ -303,6 +342,9 @@ def test_pathway_permission_on_old_geometry_name_is_rewritten(legacy, pathway_ct
         ("pathway", [{"label": "x"}, {"innerduct__parent_conduit": 1}]),
         ("cablesegment", {"pathway__aerialspan__sag__gt": 1}),
         ("cablesegment", {"pathway__nonexistent": 1}),
+        ("pathway", {"material": "pvc"}),
+        ("cablesegment", {"pathway__warning_tape": False}),
+        ("conduitjunction", {"trunk_conduit__pathway_ptr": 5, "trunk_conduit__id": 6}),
     ],
 )
 @pytest.mark.django_db
@@ -334,6 +376,9 @@ def test_permission_needing_different_rewrites_per_type_aborts(legacy, pathway_c
 def test_permission_not_reaching_pathways_is_left_alone(legacy, pathway_ct):
     site_ct = ContentType.objects.get(app_label="dcim", model="site")
     scoped = _permission("Tenant sites", [site_ct], constraints={"tenant__slug": "t1"})
+    junction_ct = ContentType.objects.get(app_label="netbox_pathways", model="conduitjunction")
+    # The trunk was a conduit, which had a material.
+    trunks = _permission("PVC trunks", [junction_ct], constraints={"trunk_conduit__material": "pvc"})
     broken = _permission("Broken sites", [site_ct], constraints={"bogus": 1})
     # An uninstalled plugin leaves content types with no model behind.
     stale_ct = ContentType.objects.create(app_label="ct_uninstalled", model="widget")
@@ -341,8 +386,9 @@ def test_permission_not_reaching_pathways_is_left_alone(legacy, pathway_ct):
 
     convert_object_permissions(APPS, _ids(legacy), pathway_ct.pk)
 
-    for perm in (scoped, broken, stale):
+    for perm in (scoped, broken, stale, trunks):
         perm.refresh_from_db()
+    assert trunks.constraints == {"trunk_conduit__material": "pvc"}
     assert scoped.constraints == {"tenant__slug": "t1"}
     assert broken.constraints == {"bogus": 1}
     assert stale.constraints == {"path__isnull": False}
