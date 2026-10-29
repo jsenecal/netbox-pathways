@@ -5,7 +5,7 @@ from dcim.models import Cable, Location, Site
 from django import forms
 from django.contrib.gis.forms.widgets import BaseGeometryWidget
 from django.contrib.gis.geos import LineString
-from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
+from django.core.exceptions import ValidationError
 from django.utils.safestring import mark_safe
 from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelForm, NetBoxModelImportForm
 from tenancy.models import Tenant
@@ -643,26 +643,6 @@ class PathwayImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
         if hex_code is None:
             raise forms.ValidationError(f'"{color}" is not a known color name or hex code')
         return hex_code
-
-    def add_error(self, field, error):
-        """Report an error on a column this row does not carry against the row.
-
-        On an update NetBox's bulk import drops the fields the CSV has no
-        column for, but Pathway.clean() still names the field at fault (a
-        retype that leaves a parent the new type cannot have faults
-        `parent`). Django refuses an error on a field the form lacks.
-        """
-        if field is None and hasattr(error, "error_dict"):
-            errors = {}
-            for name, messages in error.error_dict.items():
-                if name == NON_FIELD_ERRORS or name in self.fields:
-                    errors.setdefault(name, []).extend(messages)
-                else:
-                    errors.setdefault(NON_FIELD_ERRORS, []).extend(
-                        ValidationError(f"{name}: {text}") for message in messages for text in message.messages
-                    )
-            error = ValidationError(errors)
-        super().add_error(field, error)
 
     class Meta:
         model = Pathway

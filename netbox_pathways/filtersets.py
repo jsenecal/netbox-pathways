@@ -346,8 +346,6 @@ class PathwayFilterSet(OccupiedFilterMixin, TenancyFilterSet, NetBoxModelFilterS
 
     def filter_geo_length(self, queryset, name, value):
         """Range-filter on PostGIS `ST_Length(geometry)`, not a Python-side length."""
-        if value is None:
-            return queryset
         lookup = "_geo_length__gte" if name.endswith("__gte") else "_geo_length__lte"
         return queryset.with_geo_length().filter(**{lookup: value})
 

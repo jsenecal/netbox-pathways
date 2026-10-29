@@ -290,3 +290,23 @@ def test_route_geometry_is_none_when_no_ancestor_has_one(db):
 
     assert duct.route_geometry is None
     assert Pathway.objects.with_route_geometry().get(pk=duct.pk).route_geometry is None
+
+
+@pytest.mark.django_db
+def test_route_geometry_is_looked_up_once_per_parent(ends, django_assert_num_queries):
+    bank = build("conduit_bank", ends)
+    duct = build("innerduct", ends, parent=build("conduit", ends, parent=bank))
+    duct = Pathway.objects.get(pk=duct.pk)
+
+    assert duct.route_geometry.equals(bank.geometry)
+    with django_assert_num_queries(0):
+        assert duct.route_geometry.equals(bank.geometry)
+
+
+@pytest.mark.django_db
+def test_clean_of_an_unknown_type_reports_only_the_choice(db):
+    """An untyped or retired-type row left by the upgrade fails on its type, not on rules it has none of."""
+    pathway = Pathway(pathway_type="microduct", label="PH-Unknown")
+    with pytest.raises(ValidationError) as excinfo:
+        pathway.full_clean()
+    assert set(excinfo.value.message_dict) == {"pathway_type"}

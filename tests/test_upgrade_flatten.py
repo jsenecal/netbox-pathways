@@ -14,7 +14,7 @@ from django.contrib.gis.geos import Point
 from users.models import ObjectPermission
 
 from netbox_pathways.models import CableSegment, ConduitJunction, Pathway
-from netbox_pathways.upgrade import LEGACY_SUBTYPES, delete_microducts
+from netbox_pathways.upgrade import LEGACY_SUBTYPES, delete_microducts, uncopy_subtype_rows
 from tests.helpers import SRID
 
 BEFORE_FLATTEN = "0027_rename_pathway_path_geometry"
@@ -143,3 +143,14 @@ def test_flatten_reverses_into_subtype_rows(migrate_to):
     assert (old_conduit.conduit_bank_id, old_conduit.bank_position, old_conduit.depth) == (bank.pk, "B2", 0.9)
     old_duct = old["innerduct"].objects.get(pk=duct.pk)
     assert (old_duct.parent_conduit_id, old_duct.size) == (conduit.pk, "25mm")
+
+
+@pytest.mark.django_db
+def test_reverse_refuses_a_parent_the_subtype_tables_cannot_hold():
+    """Reversing the flatten would drop an innerduct's tray parent; it stops instead."""
+    raceway = Pathway.objects.create(pathway_type="raceway", label="UR-RW")
+    tray = Pathway.objects.create(pathway_type="tray", label="UR-TR", parent=raceway)
+    duct = Pathway.objects.create(pathway_type="innerduct", label="UR-TD", parent=tray)
+
+    with pytest.raises(RuntimeError, match=rf"pathways .*\b{duct.pk}\b"):
+        uncopy_subtype_rows(django.apps.apps, None)

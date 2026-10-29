@@ -442,11 +442,9 @@ class Command(BaseCommand):
                     length=parent.length,
                 )
             )
-        created = []
-        for idc in innerducts:
-            idc.save()
-            created.append(idc)
-        return created
+        for innerduct in innerducts:
+            innerduct.save()
+        return innerducts
 
     def _create_conduit_junctions(self, conduits, structures):
         junctions = []
