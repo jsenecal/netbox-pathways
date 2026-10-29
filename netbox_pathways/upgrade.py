@@ -325,12 +325,13 @@ def rewrite_constraints(constraints, pathway_types, *, pathway_model=None):
     return _scope_to_types(constraints, pathway_types, pathway_model)
 
 
-def _m2m_columns(field):
-    """(owner attname, target attname) on the through table of an M2M field."""
-    through = field.remote_field.through._meta
+def _m2m_through(field):
+    """(through model, owner attname, target attname) of an M2M field."""
+    through = field.remote_field.through
     return (
-        through.get_field(field.m2m_field_name()).attname,
-        through.get_field(field.m2m_reverse_field_name()).attname,
+        through,
+        through._meta.get_field(field.m2m_field_name()).attname,
+        through._meta.get_field(field.m2m_reverse_field_name()).attname,
     )
 
 
@@ -346,9 +347,7 @@ def _plan_conversions(apps, legacy_ct_ids, errors):
     """[(permission, scoped constraints)] for every permission on a subtype content type."""
     ObjectPermission = apps.get_model("users", "ObjectPermission")
     Pathway = apps.get_model("netbox_pathways", "Pathway")
-    field = ObjectPermission._meta.get_field("object_types")
-    through = field.remote_field.through
-    owner_col, type_col = _m2m_columns(field)
+    through, owner_col, type_col = _m2m_through(ObjectPermission._meta.get_field("object_types"))
     legacy_types = _legacy_types_by_ct(apps, legacy_ct_ids)
 
     planned = []
@@ -378,9 +377,7 @@ def _plan_in_place_rewrites(apps, legacy_ct_ids, errors):
     """
     ObjectPermission = apps.get_model("users", "ObjectPermission")
     ContentType = apps.get_model("contenttypes", "ContentType")
-    field = ObjectPermission._meta.get_field("object_types")
-    through = field.remote_field.through
-    owner_col, type_col = _m2m_columns(field)
+    through, owner_col, type_col = _m2m_through(ObjectPermission._meta.get_field("object_types"))
 
     planned = []
     for perm in ObjectPermission.objects.filter(constraints__isnull=False).order_by("pk"):
@@ -438,9 +435,7 @@ def convert_object_permissions(apps, legacy_ct_ids, pathway_ct_id):
         )
 
     ObjectPermission = apps.get_model("users", "ObjectPermission")
-    field = ObjectPermission._meta.get_field("object_types")
-    through = field.remote_field.through
-    owner_col, type_col = _m2m_columns(field)
+    through, owner_col, type_col = _m2m_through(ObjectPermission._meta.get_field("object_types"))
     name_length = ObjectPermission._meta.get_field("name").max_length - len(PERMISSION_SUFFIX)
     for perm, constraints in conversions:
         converted = ObjectPermission.objects.create(
@@ -488,8 +483,7 @@ def _repoint_fk(model, field, legacy_ct_ids, pathway_ct_id):
 
 def _repoint_m2m(field, legacy_ct_ids, pathway_ct_id):
     """Replace the subtype content types with `pathway` on one M2M, once per owner."""
-    through = field.remote_field.through
-    owner_col, type_col = _m2m_columns(field)
+    through, owner_col, type_col = _m2m_through(field)
     legacy_rows = through.objects.filter(**{f"{type_col}__in": legacy_ct_ids})
     owners = set(legacy_rows.values_list(owner_col, flat=True))
     if owners:
@@ -561,9 +555,7 @@ def relax_custom_fields(apps, legacy_ct_ids, pathway_ct_id):
     """
     CustomField = apps.get_model("extras", "CustomField")
     Pathway = apps.get_model("netbox_pathways", "Pathway")
-    field = CustomField._meta.get_field("object_types")
-    through = field.remote_field.through
-    owner_col, type_col = _m2m_columns(field)
+    through, owner_col, type_col = _m2m_through(CustomField._meta.get_field("object_types"))
     legacy = set(legacy_ct_ids)
 
     fields = list(CustomField.objects.filter(object_types__in=legacy).distinct().order_by("name"))

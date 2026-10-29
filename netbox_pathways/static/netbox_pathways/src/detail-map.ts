@@ -27,7 +27,7 @@
  * }
  */
 
-import { bindModalScrollbarGutter } from './map-utils';
+import { bindModalScrollbarGutter, PATHWAY_COLORS } from './map-utils';
 import { lineStyle } from './line-style';
 
 (function () {
@@ -270,12 +270,6 @@ import { lineStyle } from './line-style';
         'Equipment Room':     '<rect x="3" y="3" width="14" height="14" rx="4" fill="none" stroke-width="2.5"/>',
         'Telecom Closet':     '<rect x="3" y="3" width="10" height="10" rx="1" transform="rotate(45 10 10)"/>',
         'Riser Room':         '<rect x="3.5" y="3.5" width="9" height="9" rx="1" fill="none" stroke-width="2.5" transform="rotate(45 10 10)"/>',
-    };
-
-    const PATHWAY_COLORS: Record<string, string> = {
-        'Conduit': '#795548', 'Aerial Span': '#1565c0', 'Direct Buried': '#616161',
-        'Innerduct': '#e65100', 'Microduct': '#6a1b9a', 'Cable Tray': '#2e7d32',
-        'Raceway': '#00838f', 'Submarine': '#1a237e',
     };
 
     function _structureIcon(type: string, size = 20): L.DivIcon {

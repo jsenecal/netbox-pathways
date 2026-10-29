@@ -33,11 +33,12 @@ from .landing import attaches, end_point, is_area, landing_on, reference_point, 
 from .pathway_types import (
     DRAWN_TYPES,
     PATHWAY_TYPES,
-    TYPE_SPECIFIC_FIELDS,
+    TYPE_SPECIFIC_FIELDS_ORDERED,
+    UNROUTABLE_TYPES,
     allowed_child_types,
     inapplicable_fields,
+    spec_or_untyped,
 )
-from .pathway_types import spec as type_spec
 
 ENDPOINT_TOLERANCE = 1.0
 
@@ -358,6 +359,10 @@ class PathwayQuerySet(LtreeQuerySet):
         """
         return self.filter(pathway_type__in=DRAWN_TYPES, parent__isnull=True)
 
+    def routable(self):
+        """Pathways cables can be routed through: every type but containers such as banks."""
+        return self.exclude(pathway_type__in=UNROUTABLE_TYPES)
+
 
 # Pathway types that never have a parent, and those that always do. Sorted so
 # the database constraints built from them deconstruct identically every run.
@@ -573,7 +578,7 @@ class Pathway(LtreeModel, NetBoxModel):
         "installed_by",
         "installation_date",
         "commissioned_date",
-        *sorted(TYPE_SPECIFIC_FIELDS - {"position"}),
+        *(name for name in TYPE_SPECIFIC_FIELDS_ORDERED if name != "position"),
     )
 
     class Meta:
@@ -616,14 +621,13 @@ class Pathway(LtreeModel, NetBoxModel):
 
     @property
     def spec(self):
-        """This pathway's PathwayTypeSpec; KeyError for an unknown type."""
-        return type_spec(self.pathway_type)
+        """This pathway's PathwayTypeSpec; UNTYPED for an unknown or blank type."""
+        return spec_or_untyped(self.pathway_type)
 
     @property
     def endpoint_kinds(self):
         """What one pathway side may name; exactly one of them per side."""
-        known = PATHWAY_TYPES.get(self.pathway_type)
-        return known.endpoint_kinds if known else ("structure", "location")
+        return self.spec.endpoint_kinds
 
     @property
     def start_endpoint(self):
@@ -788,7 +792,7 @@ class Pathway(LtreeModel, NetBoxModel):
         # Inherit before validation so the endpoint checks and geometry
         # snapping see the effective endpoints.
         self._inherit_endpoints_from_parent()
-        if self.pathway_type == "conduit":
+        if self.spec.endpoints_required:
             self.check_endpoints_present()
         # Ambiguous sides first: straighten() would silently prefer the structure.
         self.check_one_endpoint_kind()
@@ -841,9 +845,7 @@ class Pathway(LtreeModel, NetBoxModel):
                     "remove the junctions on this pathway first."
                 )
         if self.pk:
-            children = Pathway.objects.filter(parent_id=self.pk).exclude(
-                pathway_type__in=allowed_child_types(self.pathway_type)
-            )
+            children = self.get_children().exclude(pathway_type__in=allowed_child_types(self.pathway_type))
             stranded = sorted({child.get_pathway_type_display() for child in children})
             if stranded:
                 errors["pathway_type"] = (

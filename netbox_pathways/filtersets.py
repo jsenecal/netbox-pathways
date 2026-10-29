@@ -35,7 +35,7 @@ from .models import (
     Structure,
     touching_q,
 )
-from .pathway_types import TYPE_SPECIFIC_FIELDS
+from .pathway_types import TYPE_SPECIFIC_FIELDS_ORDERED
 
 NODE_REF_RE = re.compile(rf"^(?:{'|'.join(NODE_KINDS)}):[0-9]+$")
 CABLE_END_REF_RE = re.compile(r"^[0-9]+:[AB]$")
@@ -317,7 +317,7 @@ class PathwayFilterSet(OccupiedFilterMixin, TenancyFilterSet, NetBoxModelFilterS
             "id",
             "installation_date",
             "commissioned_date",
-            *sorted(TYPE_SPECIFIC_FIELDS - {"start_junction", "end_junction"}),
+            *(name for name in TYPE_SPECIFIC_FIELDS_ORDERED if name not in {"start_junction", "end_junction"}),
         ]
 
     def filter_ancestor(self, queryset, name, value):

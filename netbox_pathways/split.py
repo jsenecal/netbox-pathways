@@ -104,23 +104,12 @@ class SplitPlan:
     warnings: list = field(default_factory=list)
 
 
-def _children_of(pathway):
-    """The pathways directly inside `pathway`, in a stable order."""
-    return list(Pathway.objects.filter(parent_id=pathway.pk).order_by("pk"))
-
-
 def _contained(original):
     """Every pathway inside `original`, at any depth, each after its parent.
 
     They follow `original`'s route, so they cascade with it.
     """
-    contained = []
-    queue = [original]
-    while queue:
-        children = _children_of(queue.pop(0))
-        contained.extend(children)
-        queue.extend(children)
-    return contained
+    return list(original.get_descendants())
 
 
 def _check_splittable(original):
@@ -285,7 +274,7 @@ def _cascade(original, children, cuts, out):
     per-hop copy of `original`. Contained copies carry no own geometry (the
     parent owns the route).
     """
-    for contained in _children_of(original):
+    for contained in original.get_children():
         copies = _create_children(contained, cuts, None, parents=children)
         out.append((contained, copies))
         _cascade(contained, copies, cuts, out)

@@ -17,6 +17,7 @@ import {
     getCookie as _getCookie,
     haversine as _haversine,
     layerCenter as _layerCenter,
+    pathwayStyle,
     STRUCTURE_COLORS,
 } from './map-utils';
 import { StatusPrefs, type StatusChoice } from './status-prefs';
@@ -465,15 +466,15 @@ export function containerEndpoint(pathwayType: string): string {
 
 export const PATHWAY_CONFIGS: PathwayConfig[] = [
     { endpoint: containerEndpoint('conduit_bank'), layerKey: 'conduitBanks', featureType: 'conduit_bank',
-      style: { color: '#ad1457', weight: 5, opacity: 0.8, dashArray: '' }, infoKey: 'conduit_banks' },
+      style: pathwayStyle('conduit_bank'), infoKey: 'conduit_banks' },
     { endpoint: containerEndpoint('conduit'), layerKey: 'conduits', featureType: 'conduit',
-      style: { color: '#f57c00', weight: 3, opacity: 0.7, dashArray: '5 5' }, infoKey: 'conduits' },
+      style: pathwayStyle('conduit'), infoKey: 'conduits' },
     { endpoint: containerEndpoint('aerial'), layerKey: 'aerialSpans', featureType: 'aerial',
-      style: { color: '#1565c0', weight: 3, opacity: 0.7, dashArray: '10 5' }, infoKey: 'aerial_spans' },
+      style: pathwayStyle('aerial'), infoKey: 'aerial_spans' },
     { endpoint: containerEndpoint('direct_buried'), layerKey: 'directBuried', featureType: 'direct_buried',
-      style: { color: '#616161', weight: 3, opacity: 0.7, dashArray: '2 4' }, infoKey: 'direct_buried' },
+      style: pathwayStyle('direct_buried'), infoKey: 'direct_buried' },
     { endpoint: containerEndpoint('submarine'), layerKey: 'submarine', featureType: 'submarine',
-      style: { color: '#1a237e', weight: 3, opacity: 0.7, dashArray: '6 2 2 2' }, infoKey: 'submarine' },
+      style: pathwayStyle('submarine'), infoKey: 'submarine' },
     { endpoint: 'circuits/', layerKey: 'circuits', featureType: 'circuit',
       style: { color: '#d32f2f', weight: 3, opacity: 0.8, dashArray: '8 6' }, infoKey: 'circuits' },
 ];

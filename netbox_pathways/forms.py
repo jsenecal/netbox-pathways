@@ -48,6 +48,7 @@ from .filterforms import (
     PlannedRouteFilterForm,  # noqa: F401
     SiteGeometryFilterForm,  # noqa: F401
     StructureFilterForm,  # noqa: F401
+    type_fieldsets,
 )
 from .geo import get_srid, to_leaflet
 from .models import (
@@ -60,7 +61,7 @@ from .models import (
     SiteGeometry,
     Structure,
 )
-from .pathway_types import PATHWAY_TYPES, TYPE_SPECIFIC_FIELDS, inapplicable_fields
+from .pathway_types import TYPE_SPECIFIC_FIELDS_ORDERED, inapplicable_fields, spec_or_untyped
 
 _IMPORT_GEOMETRY_HELP = (
     "GeoJSON, WKT (POINT/LINESTRING), DMS (hemisphere letters optional; lat-first "
@@ -173,8 +174,7 @@ class PathwayGeometryFallbackMixin:
         return self.instance.pathway_type
 
     def _derives_geometry(self):
-        rules = PATHWAY_TYPES.get(self.selected_pathway_type())
-        return bool(rules and rules.derives_geometry)
+        return spec_or_untyped(self.selected_pathway_type()).derives_geometry
 
     def _effective(self, name):
         """The value `name` will hold once this form is saved.
@@ -458,30 +458,9 @@ _COMMON_PATHWAY_FIELDS = (
 )
 _ENDPOINT_FIELDS = ("start_structure", "end_structure", "start_location", "end_location")
 _LIFECYCLE_FIELDS = ("installed_by", "installation_date", "commissioned_date")
-# Every type-specific column once, in pathway_types.py order.
-_TYPE_FIELDS = tuple(dict.fromkeys(name for rules in PATHWAY_TYPES.values() for name in rules.fields))
 # Type-specific columns shown in a shared fieldset rather than the type's own.
 _SHARED_FIELDSET_FIELDS = frozenset({"position", "start_face", "end_face", "start_junction", "end_junction"})
-# An innerduct is pulled into a duct that is already there, so it does not
-# take its parent's installer and dates; anything else is built with its parent.
-_NO_LIFECYCLE_PREFILL = frozenset({"innerduct"})
 _TYPE_LABELS = dict(PathwayTypeChoices)
-
-
-def _type_fieldsets(names):
-    """One fieldset per pathway type, holding that type's fields from `names`.
-
-    A field shared by several types is shown once, under the first type in
-    pathway_types.py that has it.
-    """
-    placed = set()
-    fieldsets = []
-    for pathway_type, rules in PATHWAY_TYPES.items():
-        own = [name for name in rules.fields if name in names and name not in placed]
-        placed.update(own)
-        if own:
-            fieldsets.append(FieldSet(*own, name=_TYPE_LABELS[pathway_type]))
-    return fieldsets
 
 
 def _pathway_fieldsets(pathway_type, fields):
@@ -497,8 +476,8 @@ def _pathway_fieldsets(pathway_type, fields):
     fieldsets.append(FieldSet(*_ENDPOINT_FIELDS, *present("start_face", "end_face"), name="Endpoints"))
     if junctions := present("start_junction", "end_junction"):
         fieldsets.append(FieldSet(*junctions, name="Junctions"))
-    rules = PATHWAY_TYPES.get(pathway_type)
-    if rules and (attributes := [name for name in rules.fields if name not in _SHARED_FIELDSET_FIELDS]):
+    rules = spec_or_untyped(pathway_type)
+    if attributes := [name for name in rules.fields if name not in _SHARED_FIELDSET_FIELDS]:
         fieldsets.append(FieldSet(*attributes, name=_TYPE_LABELS[pathway_type]))
     fieldsets.append(FieldSet("geometry", name="Geometry"))
     fieldsets.append(FieldSet("tags", name="Details"))
@@ -564,7 +543,7 @@ class PathwayForm(PathwayEndpointFormMixin, NetBoxModelForm):
 
     class Meta:
         model = Pathway
-        fields = [*_COMMON_PATHWAY_FIELDS, *_TYPE_FIELDS, "tags"]
+        fields = [*_COMMON_PATHWAY_FIELDS, *TYPE_SPECIFIC_FIELDS_ORDERED, "tags"]
         widgets = {
             "pathway_type": HTMXSelect(),
             "geometry": PathwaysMapWidget(),
@@ -573,12 +552,12 @@ class PathwayForm(PathwayEndpointFormMixin, NetBoxModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         pathway_type = self.selected_pathway_type()
-        rules = PATHWAY_TYPES.get(pathway_type)
-        hidden = set(inapplicable_fields(pathway_type)) if rules else set(TYPE_SPECIFIC_FIELDS)
+        rules = spec_or_untyped(pathway_type)
+        hidden = set(inapplicable_fields(pathway_type))
         # A pathway retyped to a type that cannot have a parent keeps the
         # field while it still has one, so the containment error has a field
         # to land on and the user can clear the parent there.
-        if rules is None or not (rules.parents or self.instance.parent_id):
+        if not (rules.parents or self.instance.parent_id):
             hidden.add("parent")
         for name in hidden:
             del self.fields[name]
@@ -603,17 +582,16 @@ class PathwayForm(PathwayEndpointFormMixin, NetBoxModelForm):
         """Fill a new pathway's blank fields from the parent named in the initial data.
 
         The endpoints, the type-specific fields both types have (except the
-        slot, `position`) and, unless excluded above, the lifecycle fields.
-        Tenant and geometry are never copied. The parent is looked up in the
+        slot, `position`) and, when the type inherits_parent_lifecycle, the
+        lifecycle fields. Tenant and geometry are never copied. The parent is looked up in the
         parent field's queryset, so only a pathway the user may view is read.
         """
         parent = _resolve_initial_parent(self, "parent")
         if parent is None:
             return
-        parent_rules = PATHWAY_TYPES.get(parent.pathway_type)
-        shared = [name for name in parent_rules.fields if name in self.fields] if parent_rules else []
+        shared = [name for name in parent.spec.fields if name in self.fields]
         names = [*_ENDPOINT_FIELDS, *(name for name in shared if name != "position")]
-        if pathway_type not in _NO_LIFECYCLE_PREFILL:
+        if spec_or_untyped(pathway_type).inherits_parent_lifecycle:
             names += _LIFECYCLE_FIELDS
         _prefill_initial_from_parent(self, parent, names)
 
@@ -688,7 +666,7 @@ class PathwayImportForm(PathwayGeometryFallbackMixin, NetBoxModelImportForm):
 
     class Meta:
         model = Pathway
-        fields = [*_COMMON_PATHWAY_FIELDS, *_TYPE_FIELDS]
+        fields = [*_COMMON_PATHWAY_FIELDS, *TYPE_SPECIFIC_FIELDS_ORDERED]
 
 
 class PathwayBulkEditForm(NetBoxModelBulkEditForm):
@@ -720,7 +698,7 @@ class PathwayBulkEditForm(NetBoxModelBulkEditForm):
     fieldsets = (
         FieldSet("status", "tenant", "parent", name="Pathway"),
         FieldSet("installed_by", "commissioned_date", name="Lifecycle"),
-        *_type_fieldsets(
+        *type_fieldsets(
             {
                 "start_face",
                 "end_face",

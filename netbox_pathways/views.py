@@ -34,7 +34,8 @@ from . import anchors, filterforms, filtersets, forms, models, tables
 from .choices import PlannedRouteStatusChoices
 from .geo import to_leaflet
 from .graph import PathwayGraph, _endpoint_nodes
-from .pathway_types import DRAWN_TYPES_ORDERED, PATHWAY_TYPES, allowed_child_types
+from .map_config import base_map_config, tile_map_config
+from .pathway_types import PATHWAY_TYPES, UNROUTABLE_TYPES, allowed_child_types
 from .ui import panels
 
 
@@ -931,11 +932,10 @@ class RoutePlannerView(LoginRequiredMixin, View):
         map_config = NetBoxPathwaysConfig._map_config or {}
 
         pathways_config = {
-            "apiBase": "/api/plugins/pathways/geo/",
+            **base_map_config(),
             "baseLayers": map_config.get("baseLayers", []),
             "maxZoom": map_config.get("maxZoom", 22),
             "minZoom": map_config.get("minZoom", 1),
-            "drawnTypes": list(DRAWN_TYPES_ORDERED),
         }
 
         # Compute data extent for initial bounds
@@ -1292,7 +1292,7 @@ class RoutePlannerConstraintView(LoginRequiredMixin, View):
             from . import choices as choice_module
 
             choices_cls = getattr(choice_module, cfg["choices_class"])
-            ctx["choices"] = [c for c in choices_cls.CHOICES if c[0] != "conduit_bank"]
+            ctx["choices"] = [c for c in choices_cls.CHOICES if c[0] not in UNROUTABLE_TYPES]
         elif cfg["kind"] == "model":
             qs_factory = self.MODEL_MAP.get(cfg["model"])
             if qs_factory:
@@ -1459,22 +1459,17 @@ class MapView(LoginRequiredMixin, View):
 
         plugin_cfg = settings.PLUGINS_CONFIG.get("netbox_pathways", {})
 
-        api_base = reverse("plugins-api:netbox_pathways-api:api-root")
-        geo_base = f"{api_base}geo/"
-
+        base = base_map_config()
         pathways_config = {
-            "maxNativeZoom": plugin_cfg.get("map_max_native_zoom", 19),
-            "skipInfoZoom": plugin_cfg.get("map_skip_info_zoom", 17),
+            # drawnTypes: the legend lists only what the map draws.
+            **base,
+            **tile_map_config(),
             "structurePolygonZoom": plugin_cfg.get("map_structure_polygon_zoom", 18),
-            "apiBase": geo_base,
-            "overlays": plugin_cfg.get("map_overlays", []),
             "baseLayers": plugin_cfg.get("map_base_layers", []),
-            "externalLayers": [layer.to_json(api_base=geo_base) for layer in map_layer_registry.all()],
+            "externalLayers": [layer.to_json(api_base=base["apiBase"]) for layer in map_layer_registry.all()],
             # The hide-inactive config panel needs these at page load; /info
             # also carries them but is skipped entirely at high zoom.
             "statuses": _available_statuses(),
-            # The legend lists only what the map draws.
-            "drawnTypes": list(DRAWN_TYPES_ORDERED),
         }
 
         # Compute extent from data; fall back to config or defaults

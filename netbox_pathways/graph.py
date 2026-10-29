@@ -89,7 +89,7 @@ class PathwayGraph:
         # Fast path: raw tuples, no model instances, no joins for geo
         base_qs = pathway_qs if pathway_qs is not None else models.Pathway.objects.all()
         rows = (
-            base_qs.exclude(pathway_type="conduit_bank")  # banks are containers, not routable
+            base_qs.routable()
             .exclude(start_structure__isnull=True, start_location__isnull=True)
             .exclude(end_structure__isnull=True, end_location__isnull=True)
             .values_list(
@@ -164,9 +164,7 @@ class PathwayGraph:
         instance = cls()
 
         qs = (
-            models.Pathway.objects.exclude(
-                pathway_type="conduit_bank",  # banks are containers, not routable
-            )
+            models.Pathway.objects.routable()
             .select_related(
                 "start_structure",
                 "end_structure",

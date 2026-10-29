@@ -28,7 +28,7 @@ from ..models import (
     SiteGeometry,
     Structure,
 )
-from ..pathway_types import PATHWAY_TYPES
+from ..pathway_types import TYPE_SPECIFIC_FIELDS_ORDERED
 
 
 class StructureSerializer(NetBoxModelSerializer):
@@ -107,9 +107,6 @@ class PathwayAnchorsMixin(drf_serializers.Serializer):
     end_anchor = StructureSerializer(nested=True, read_only=True)
 
 
-# Every type-specific column, grouped by the first type that uses it.
-PATHWAY_TYPE_FIELDS = tuple(dict.fromkeys(f for type_spec in PATHWAY_TYPES.values() for f in type_spec.fields))
-
 PATHWAY_BRIEF_FIELDS = ("id", "url", "display_url", "display", "label", "pathway_type")
 
 
@@ -171,7 +168,7 @@ class PathwaySerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
             "end_location",
             "start_anchor",
             "end_anchor",
-            *PATHWAY_TYPE_FIELDS,
+            *TYPE_SPECIFIC_FIELDS_ORDERED,
             "attachment_height",
             "tenant",
             "installed_by",

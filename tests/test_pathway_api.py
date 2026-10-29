@@ -2,19 +2,17 @@
 
 import pytest
 from django.urls import NoReverseMatch, reverse
-from rest_framework.test import APIClient
 
 from netbox_pathways.models import Pathway
 from tests.helpers import make_aerial_span, make_conduit, make_pole
+from tests.request_helpers import api_client_for
 
 PATHWAY_LIST = "plugins-api:netbox_pathways-api:pathway-list"
 
 
 @pytest.fixture
 def api_client(admin_user):
-    client = APIClient()
-    client.force_authenticate(user=admin_user)
-    return client
+    return api_client_for(admin_user)
 
 
 def test_api_rejects_disallowed_parent(api_client):

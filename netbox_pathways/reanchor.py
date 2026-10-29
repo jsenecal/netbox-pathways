@@ -21,16 +21,9 @@ from django.db.models import Q
 
 from .attachment import refresh_anchors
 from .landing import attaches, end_point, landing_on, relocate, translate, with_end
-from .pathway_types import PATHWAY_TYPES
 from .registry import LOCATION_IDENTITY_ACCESSOR
 
 SIDES = ("start", "end")
-
-
-def _derives_geometry(pathway):
-    """Whether the pathway's type rebuilds its geometry from its ends (aerial spans)."""
-    known = PATHWAY_TYPES.get(pathway.pathway_type)
-    return bool(known and known.derives_geometry)
 
 
 def _rewrite(pathway, placements):
@@ -42,7 +35,7 @@ def _rewrite(pathway, placements):
     pathway.snapshot()
     for side, point in placements.items():
         pathway.geometry = with_end(pathway.geometry, side, point)
-    if _derives_geometry(pathway):
+    if pathway.spec.derives_geometry:
         try:
             pathway.straighten()
         except ValidationError:
@@ -138,7 +131,7 @@ def find_drift(pathways):
 
     found = []
     for pathway in with_anchors_loaded(pathways, with_path=False):
-        is_aerial = _derives_geometry(pathway)
+        is_aerial = pathway.spec.derives_geometry
         problems = []
         repairable = True
         try:

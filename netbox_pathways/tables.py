@@ -12,6 +12,7 @@ from .models import (
     SiteGeometry,
     Structure,
 )
+from .pathway_types import TYPE_SPECIFIC_FIELDS_ORDERED
 
 _LINKED_RECORD = '<a href="{{ record.get_absolute_url }}">{{ record }}</a>'
 
@@ -131,32 +132,8 @@ class PathwayTable(NetBoxTable):
             "in_use",
             "installation_date",
             "commissioned_date",
-            "start_face",
-            "end_face",
-            "configuration",
-            "total_conduits",
-            "height",
-            "width",
-            "encasement_type",
-            "material",
-            "inner_diameter",
-            "outer_diameter",
-            "depth",
-            "start_junction",
-            "end_junction",
-            "aerial_type",
-            "start_attachment_height",
-            "end_attachment_height",
-            "sag",
-            "messenger_size",
-            "wind_loading",
-            "ice_loading",
-            "burial_depth",
-            "warning_tape",
-            "tracer_wire",
-            "armor_type",
-            "size",
-            "color",
+            # "position" is shown next to "parent" above.
+            *(name for name in TYPE_SPECIFIC_FIELDS_ORDERED if name != "position"),
             "actions",
         )
         default_columns = (

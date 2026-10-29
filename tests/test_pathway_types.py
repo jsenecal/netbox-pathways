@@ -7,9 +7,12 @@ from netbox_pathways.pathway_types import (
     DRAWN_TYPES,
     PATHWAY_TYPES,
     TYPE_SPECIFIC_FIELDS,
+    UNROUTABLE_TYPES,
+    UNTYPED,
     allowed_child_types,
     inapplicable_fields,
     spec,
+    spec_or_untyped,
 )
 
 
@@ -57,3 +60,14 @@ def test_inapplicable_fields_for_innerduct():
 def test_spec_rejects_unknown_type():
     with pytest.raises(KeyError):
         spec("microduct")
+
+
+def test_untyped_lookup_has_no_fields():
+    """An untyped pathway left by the upgrade renders with no type fields instead of raising."""
+    assert spec_or_untyped("") is UNTYPED
+    assert spec_or_untyped("microduct") is UNTYPED
+    assert inapplicable_fields("") == TYPE_SPECIFIC_FIELDS
+
+
+def test_only_banks_are_unroutable():
+    assert UNROUTABLE_TYPES == {"conduit_bank"}

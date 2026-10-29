@@ -88,17 +88,22 @@ TYPE_FILTERS = (
 )
 
 
-def type_fieldsets():
-    """One fieldset per pathway type, holding the filters that apply to it.
+def type_fieldsets(names):
+    """One fieldset per pathway type, holding that type's fields from `names`.
 
-    Grouping follows pathway_types.py, so the form never restates which
-    field belongs to which type.
+    Grouping follows pathway_types.py, so a form never restates which field
+    belongs to which type. A field shared by several types is shown once,
+    under the first type in pathway_types.py that has it.
     """
-    labels = {value: label for value, label, *_ in PathwayTypeChoices.CHOICES}
+    labels = dict(PathwayTypeChoices)
+    placed = set()
+    fieldsets = []
     for pathway_type, type_spec in PATHWAY_TYPES.items():
-        names = [name for name in type_spec.fields if name in TYPE_FILTERS]
-        if names:
-            yield FieldSet(*names, name=labels[pathway_type])
+        own = [name for name in type_spec.fields if name in names and name not in placed]
+        placed.update(own)
+        if own:
+            fieldsets.append(FieldSet(*own, name=labels[pathway_type]))
+    return fieldsets
 
 
 class PathwayFilterForm(NetBoxModelFilterSetForm):
@@ -116,7 +121,7 @@ class PathwayFilterForm(NetBoxModelFilterSetForm):
             "end_face",
             name="Endpoints",
         ),
-        *type_fieldsets(),
+        *type_fieldsets(TYPE_FILTERS),
         FieldSet("tenant_id", "installed_by_id", name="Tenant"),
     )
     status = forms.MultipleChoiceField(choices=PathwayStatusChoices, required=False)

@@ -436,11 +436,7 @@ def _info_layers(user):
 # ['map_thresholds'][<layer_key>] = {...} -- shallow per-layer merge.
 DEFAULT_MAP_THRESHOLDS = {
     "structures": {"cluster": 200, "hide": 5000},
-    "conduit_banks": {"hide": 500},
-    "conduits": {"hide": 500},
-    "aerial_spans": {"hide": 500},
-    "direct_buried": {"hide": 500},
-    "submarine": {"hide": 500},
+    **{PATHWAY_LAYER_KEYS[t]: {"hide": 500} for t in DRAWN_TYPES_ORDERED},
     "circuits": {"hide": 500},
 }
 

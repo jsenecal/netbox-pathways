@@ -1,11 +1,10 @@
 from django.db.models import Q
 from django.templatetags.static import static
-from django.urls import reverse
 from netbox.plugins.templates import PluginTemplateExtension
 
 from . import models
+from .map_config import base_map_config, tile_map_config
 from .map_data import add_structure, pathway_line
-from .pathway_types import DRAWN_TYPES_ORDERED
 
 
 def _leaflet_head():
@@ -44,20 +43,12 @@ class LeafletHeadExtension(PluginTemplateExtension):
     def head(self):
         import json
 
-        from django.conf import settings
-
         from . import NetBoxPathwaysConfig
 
-        plugin_cfg = settings.PLUGINS_CONFIG.get("netbox_pathways", {})
-
-        api_base = reverse("plugins-api:netbox_pathways-api:api-root")
         config = {
             **NetBoxPathwaysConfig._map_config,
-            "maxNativeZoom": plugin_cfg.get("map_max_native_zoom", 19),
-            "skipInfoZoom": plugin_cfg.get("map_skip_info_zoom", 17),
-            "apiBase": f"{api_base}geo/",
-            "overlays": plugin_cfg.get("map_overlays", []),
-            "drawnTypes": list(DRAWN_TYPES_ORDERED),
+            **tile_map_config(),
+            **base_map_config(),
         }
 
         detail_js = static("netbox_pathways/dist/detail-map.min.js")

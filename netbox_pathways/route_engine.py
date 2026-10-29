@@ -101,7 +101,7 @@ def _build_filtered_queryset(
     include_inactive=False,
 ):
     """Build a Pathway queryset with hard constraints applied as SQL filters."""
-    qs = models.Pathway.objects.exclude(pathway_type="conduit_bank")
+    qs = models.Pathway.objects.routable()
 
     if not include_inactive:
         inactive = ["retired", "decommissioning"]

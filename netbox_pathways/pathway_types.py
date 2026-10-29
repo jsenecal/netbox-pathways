@@ -29,6 +29,12 @@ class PathwayTypeSpec:
     derives_geometry: bool = False
     # Kinds of object a start/end endpoint may reference.
     endpoint_kinds: tuple[str, ...] = ("structure", "location")
+    # Both ends must name an endpoint (structure, location or junction).
+    endpoints_required: bool = False
+    # Cables are routed through it; a container (a bank) is not routable.
+    routable: bool = True
+    # A new child of this type copies its parent's installer and dates.
+    inherits_parent_lifecycle: bool = True
 
 
 PATHWAY_TYPES: dict[str, PathwayTypeSpec] = {
@@ -43,6 +49,7 @@ PATHWAY_TYPES: dict[str, PathwayTypeSpec] = {
             "encasement_type",
         ),
         drawn=True,
+        routable=False,
     ),
     "conduit": PathwayTypeSpec(
         fields=(
@@ -59,6 +66,7 @@ PATHWAY_TYPES: dict[str, PathwayTypeSpec] = {
         parents=frozenset({"conduit_bank", "raceway"}),
         drawn=True,
         endpoint_kinds=("structure", "location", "junction"),
+        endpoints_required=True,
     ),
     "aerial": PathwayTypeSpec(
         fields=(
@@ -81,6 +89,8 @@ PATHWAY_TYPES: dict[str, PathwayTypeSpec] = {
         fields=("size", "color", "position"),
         parents=frozenset({"conduit", "innerduct", "direct_buried", "tray"}),
         parent_required=True,
+        # Pulled into a duct that is already there, not built with it.
+        inherits_parent_lifecycle=False,
     ),
     "tray": PathwayTypeSpec(
         fields=(),
@@ -90,7 +100,14 @@ PATHWAY_TYPES: dict[str, PathwayTypeSpec] = {
     "submarine": PathwayTypeSpec(fields=(), drawn=True),
 }
 
-TYPE_SPECIFIC_FIELDS: frozenset[str] = frozenset(f for s in PATHWAY_TYPES.values() for f in s.fields)
+# Every type-specific field once, in the order PATHWAY_TYPES first names it.
+TYPE_SPECIFIC_FIELDS_ORDERED: tuple[str, ...] = tuple(
+    dict.fromkeys(f for s in PATHWAY_TYPES.values() for f in s.fields)
+)
+
+TYPE_SPECIFIC_FIELDS: frozenset[str] = frozenset(TYPE_SPECIFIC_FIELDS_ORDERED)
+
+UNROUTABLE_TYPES: frozenset[str] = frozenset(t for t, s in PATHWAY_TYPES.items() if not s.routable)
 
 # The drawn types in a stable display order, for the map legend and layers.
 DRAWN_TYPES_ORDERED: tuple[str, ...] = tuple(t for t, s in PATHWAY_TYPES.items() if s.drawn)
@@ -98,9 +115,22 @@ DRAWN_TYPES_ORDERED: tuple[str, ...] = tuple(t for t, s in PATHWAY_TYPES.items()
 DRAWN_TYPES: frozenset[str] = frozenset(DRAWN_TYPES_ORDERED)
 
 
+# Stands in for an unknown or blank type: no fields, no parents, defaults otherwise.
+UNTYPED = PathwayTypeSpec(fields=())
+
+
 def spec(pathway_type: str) -> PathwayTypeSpec:
     """Return the spec for ``pathway_type``; raises KeyError if unknown."""
     return PATHWAY_TYPES[pathway_type]
+
+
+def spec_or_untyped(pathway_type: str | None) -> PathwayTypeSpec:
+    """Return the spec for ``pathway_type``, or UNTYPED when it is unknown or blank.
+
+    The upgrade leaves some pathways untyped for the operator to retype, so
+    forms, panels and helpers that render them must not raise.
+    """
+    return PATHWAY_TYPES.get(pathway_type, UNTYPED)
 
 
 def allowed_child_types(pathway_type: str) -> frozenset[str]:
@@ -114,5 +144,5 @@ def allowed_child_types(pathway_type: str) -> frozenset[str]:
 
 
 def inapplicable_fields(pathway_type: str) -> frozenset[str]:
-    """Return the type-specific fields that do not apply to ``pathway_type``."""
-    return TYPE_SPECIFIC_FIELDS - frozenset(spec(pathway_type).fields)
+    """Return the type-specific fields that do not apply to ``pathway_type`` (all of them when untyped)."""
+    return TYPE_SPECIFIC_FIELDS - frozenset(spec_or_untyped(pathway_type).fields)

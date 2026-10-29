@@ -3,7 +3,7 @@ from netbox.ui import attrs
 from netbox.ui.panels import ObjectAttributesPanel, ObjectsTablePanel
 
 from ..choices import PathwayTypeChoices
-from ..pathway_types import PATHWAY_TYPES
+from ..pathway_types import PATHWAY_TYPES, spec_or_untyped
 
 
 class HideIfEmptyObjectsTablePanel(ObjectsTablePanel):
@@ -119,10 +119,10 @@ class PathwayTypePanel(ObjectAttributesPanel):
         # `only`.
         ctx = super(ObjectAttributesPanel, self).get_context(context)
         obj = ctx["object"]
-        rules = PATHWAY_TYPES.get(getattr(obj, "pathway_type", None))
-        names = set(rules.fields) if rules else set()
+        pathway_type = getattr(obj, "pathway_type", None)
+        names = set(spec_or_untyped(pathway_type).fields)
         names |= {name for name, source in self._derived.items() if source in names}
-        if rules:
+        if pathway_type in PATHWAY_TYPES:
             ctx["title"] = dict(PathwayTypeChoices)[obj.pathway_type]
         ctx["attrs"] = [
             {
