@@ -5,9 +5,9 @@ from dcim.models import Location, Site
 from django.contrib.gis.db.models.functions import Transform
 from rest_framework.test import APIRequestFactory
 
-from netbox_pathways.api.geo import ConduitGeoSerializer
-from netbox_pathways.api.serializers import ConduitSerializer
-from netbox_pathways.models import Conduit, SiteGeometry
+from netbox_pathways.api.geo import PathwayGeoSerializer
+from netbox_pathways.api.serializers import PathwaySerializer
+from netbox_pathways.models import Pathway, SiteGeometry
 from tests.helpers import make_building, make_conduit, make_pole
 
 
@@ -24,12 +24,12 @@ def room_conduit(db):
 def test_rest_serializer_nests_the_resolved_anchor(room_conduit):
     building, conduit = room_conduit
     request = APIRequestFactory().get("/")
-    data = ConduitSerializer(conduit, context={"request": request}).data
+    data = PathwaySerializer(conduit, context={"request": request}).data
     assert data["start_anchor"]["id"] == building.pk
 
 
 def test_geojson_properties_carry_anchor_ids(room_conduit):
     building, conduit = room_conduit
     # The geo viewsets annotate the WGS84 geometry; do the same here.
-    feature = Conduit.objects.annotate(geo_4326=Transform("path", 4326)).get(pk=conduit.pk)
-    assert ConduitGeoSerializer(feature).data["properties"]["start_anchor"] == building.pk
+    feature = Pathway.objects.annotate(geo_4326=Transform("geometry", 4326)).get(pk=conduit.pk)
+    assert PathwayGeoSerializer(feature).data["properties"]["start_anchor"] == building.pk

@@ -49,11 +49,11 @@ class TestResolveGeoColumn:
         assert "location" in label.lower()
 
     def test_unsupported_fk_raises(self):
-        from netbox_pathways.models import Conduit
+        from netbox_pathways.models import Pathway
 
-        # Conduit.conduit_bank is a FK to ConduitBank — not in SUPPORTED_GEO_MODELS
+        # Pathway.parent is a FK to Pathway, which is not in SUPPORTED_GEO_MODELS
         with pytest.raises(ValueError, match="not in SUPPORTED_GEO_MODELS"):
-            _resolve_geo_column(Conduit, "conduit_bank")
+            _resolve_geo_column(Pathway, "parent")
 
 
 def test_location_identity_accessor_matches_model():
@@ -90,10 +90,10 @@ class TestResolveGeometryExpression:
         ]
 
     def test_unresolvable_tuple_entry_raises(self):
-        from netbox_pathways.models import Conduit
+        from netbox_pathways.models import Pathway
 
         with pytest.raises(ValueError, match="not in SUPPORTED_GEO_MODELS"):
-            resolve_geometry_expression(Conduit, ("start_location", "conduit_bank"))
+            resolve_geometry_expression(Pathway, ("start_location", "parent"))
 
 
 class TestBuildProperties:
@@ -171,21 +171,22 @@ class TestExternalLayerGeoView:
         from django.contrib.gis.geos import LineString, Point
 
         from netbox_pathways.geo import get_srid
-        from netbox_pathways.models import Conduit, Structure
+        from netbox_pathways.models import Pathway, Structure
 
         srid = get_srid()
         s1 = Structure.objects.create(name="EXT-S1", geometry=Point(0, 0, srid=srid))
         s2 = Structure.objects.create(name="EXT-S2", geometry=Point(100, 100, srid=srid))
-        return Conduit.objects.create(
+        return Pathway.objects.create(
+            pathway_type="conduit",
             label="EXT-C1",
             start_structure=s1,
             end_structure=s2,
-            path=LineString((0, 0), (100, 100), srid=srid),
+            geometry=LineString((0, 0), (100, 100), srid=srid),
         )
 
     @pytest.fixture
     def ext_layer(self, conduit):
-        from netbox_pathways.models import Conduit
+        from netbox_pathways.models import Pathway
 
         registry.register(
             MapLayerRegistration(
@@ -193,7 +194,7 @@ class TestExternalLayerGeoView:
                 label="External Test",
                 geometry_type="Point",
                 source="reference",
-                queryset=lambda request: Conduit.objects.all(),
+                queryset=lambda request: Pathway.objects.filter(pathway_type="conduit"),
                 geometry_field="start_structure",
                 feature_fields=["label"],
                 style=LayerStyle(color="#000"),
@@ -244,7 +245,7 @@ class TestLocationGeometryResolution:
         from django.contrib.gis.geos import LineString, Point
 
         from netbox_pathways.geo import get_srid
-        from netbox_pathways.models import Conduit, Structure
+        from netbox_pathways.models import Pathway, Structure
 
         srid = get_srid()
         site = Site.objects.create(name="Geo-Site", slug="geo-site")
@@ -254,23 +255,25 @@ class TestLocationGeometryResolution:
         identity = Structure.objects.create(
             name="LOC-HH7", geometry=Point(10, 20, srid=srid), site=site, location=loc_with
         )
-        c_with = Conduit.objects.create(
+        c_with = Pathway.objects.create(
+            pathway_type="conduit",
             label="LOC-C1",
             start_structure=anchor,
             end_location=loc_with,
-            path=LineString((0, 0), (10, 20), srid=srid),
+            geometry=LineString((0, 0), (10, 20), srid=srid),
         )
-        c_without = Conduit.objects.create(
+        c_without = Pathway.objects.create(
+            pathway_type="conduit",
             label="LOC-C2",
             start_structure=anchor,
             end_location=loc_without,
-            path=LineString((0, 0), (5, 5), srid=srid),
+            geometry=LineString((0, 0), (5, 5), srid=srid),
         )
         return c_with, c_without, identity
 
     @pytest.fixture
     def loc_layer(self):
-        from netbox_pathways.models import Conduit
+        from netbox_pathways.models import Pathway
 
         registry.register(
             MapLayerRegistration(
@@ -278,7 +281,7 @@ class TestLocationGeometryResolution:
                 label="Location Test",
                 geometry_type="Point",
                 source="reference",
-                queryset=lambda request: Conduit.objects.all(),
+                queryset=lambda request: Pathway.objects.filter(pathway_type="conduit"),
                 geometry_field="end_location",
                 feature_fields=["label"],
                 style=LayerStyle(color="#000"),
@@ -301,7 +304,7 @@ class TestLocationGeometryResolution:
 
     @pytest.fixture
     def loc_fallback_layer(self):
-        from netbox_pathways.models import Conduit
+        from netbox_pathways.models import Pathway
 
         registry.register(
             MapLayerRegistration(
@@ -309,7 +312,7 @@ class TestLocationGeometryResolution:
                 label="Location Fallback",
                 geometry_type="Point",
                 source="reference",
-                queryset=lambda request: Conduit.objects.all(),
+                queryset=lambda request: Pathway.objects.filter(pathway_type="conduit"),
                 geometry_field=("end_location", "start_structure"),
                 feature_fields=["label"],
                 style=LayerStyle(color="#000"),

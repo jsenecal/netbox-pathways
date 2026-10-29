@@ -3,7 +3,6 @@
 import pytest
 from dcim.models import Site
 from django.contrib.gis.geos import LineString, Point
-from rest_framework.test import APIClient
 
 from netbox_pathways.geo import (
     LEAFLET_SRID,
@@ -13,7 +12,9 @@ from netbox_pathways.geo import (
     point_to_lonlat,
     to_leaflet,
 )
-from netbox_pathways.models import AerialSpan, CableSegment, Conduit, ConduitBank, DirectBuried, Structure
+from netbox_pathways.models import CableSegment, Pathway, Structure
+
+from .request_helpers import api_client_for, parse_json_script, render_map, user_with_view_permission
 
 # ---------------------------------------------------------------------------
 # geo.py utility functions
@@ -105,11 +106,12 @@ def structures(srid, site):
 @pytest.fixture
 def conduits(structures, srid):
     return [
-        Conduit.objects.create(
+        Pathway.objects.create(
+            pathway_type="conduit",
             label=f"Geo-C{i}",
             start_structure=structures[i],
             end_structure=structures[i + 1],
-            path=LineString(
+            geometry=LineString(
                 (i * 100, i * 100),
                 ((i + 1) * 100, (i + 1) * 100),
                 srid=srid,
@@ -122,33 +124,36 @@ def conduits(structures, srid):
 
 @pytest.fixture
 def aerial_span(structures, srid):
-    return AerialSpan.objects.create(
+    return Pathway.objects.create(
+        pathway_type="aerial",
         label="Geo-A1",
         start_structure=structures[0],
         end_structure=structures[1],
-        path=LineString((100, 100), (200, 200), srid=srid),
+        geometry=LineString((100, 100), (200, 200), srid=srid),
         length=50,
     )
 
 
 @pytest.fixture
 def direct_buried(structures, srid):
-    return DirectBuried.objects.create(
+    return Pathway.objects.create(
+        pathway_type="direct_buried",
         label="Geo-DB1",
         start_structure=structures[1],
         end_structure=structures[2],
-        path=LineString((200, 200), (300, 300), srid=srid),
+        geometry=LineString((200, 200), (300, 300), srid=srid),
         length=75,
     )
 
 
 @pytest.fixture
 def conduit_bank(structures, srid):
-    return ConduitBank.objects.create(
+    return Pathway.objects.create(
+        pathway_type="conduit_bank",
         label="Geo-CB1",
         start_structure=structures[0],
         end_structure=structures[2],
-        path=LineString((100, 100), (300, 300), srid=srid),
+        geometry=LineString((100, 100), (300, 300), srid=srid),
         length=200,
     )
 
@@ -164,14 +169,8 @@ def occupied_conduit(conduits, _disable_routability_signal):
 
 
 @pytest.fixture
-def api_client():
-    from django.contrib.auth import get_user_model
-
-    user_model = get_user_model()
-    user = user_model.objects.create_user(username="geotest", password="geotest", is_superuser=True)  # noqa: S106
-    client = APIClient()
-    client.force_authenticate(user=user)
-    return client
+def api_client(admin_user):
+    return api_client_for(admin_user)
 
 
 # ---------------------------------------------------------------------------
@@ -318,7 +317,7 @@ class TestExcludeStatus:
         conduits[1].status = "abandoned"
         conduits[1].save()
         resp = api_client.get(
-            "/api/plugins/pathways/geo/conduits/?exclude_status=retired&exclude_status=abandoned",
+            "/api/plugins/pathways/geo/pathways/?pathway_type=conduit&exclude_status=retired&exclude_status=abandoned",
             format="json",
         )
         assert resp.json()["features"] == []
@@ -330,7 +329,7 @@ class TestExcludeStatus:
         conduits[1].status = "abandoned"
         conduits[1].save()
         resp = api_client.get(
-            "/api/plugins/pathways/geo/conduits/?exclude_status=retired,abandoned",
+            "/api/plugins/pathways/geo/pathways/?pathway_type=conduit&exclude_status=retired,abandoned",
             format="json",
         )
         assert resp.json()["features"] == []
@@ -338,9 +337,9 @@ class TestExcludeStatus:
     def test_exclude_status_changes_etag(self, api_client, conduits):
         conduits[0].status = "retired"
         conduits[0].save()
-        plain = api_client.get("/api/plugins/pathways/geo/conduits/", format="json")
+        plain = api_client.get("/api/plugins/pathways/geo/pathways/?pathway_type=conduit", format="json")
         excluded = api_client.get(
-            "/api/plugins/pathways/geo/conduits/?exclude_status=retired",
+            "/api/plugins/pathways/geo/pathways/?pathway_type=conduit&exclude_status=retired",
             format="json",
         )
         assert plain["ETag"] != excluded["ETag"]
@@ -432,7 +431,15 @@ class TestMapInfoAPI:
         data = resp.json()
         assert "counts" in data
         counts = data["counts"]
-        for key in ("structures", "conduit_banks", "conduits", "aerial_spans", "direct_buried", "circuits"):
+        for key in (
+            "structures",
+            "conduit_banks",
+            "conduits",
+            "aerial_spans",
+            "direct_buried",
+            "submarine",
+            "circuits",
+        ):
             assert key in counts
             assert isinstance(counts[key], int)
 
@@ -480,11 +487,12 @@ class TestMapInfoAPI:
 
     def test_excludes_banked_conduits(self, api_client, conduit_bank, srid):
         # A conduit that lives inside a bank should not be counted in "conduits"
-        Conduit.objects.create(
+        Pathway.objects.create(
+            pathway_type="conduit",
             label="In-bank",
-            conduit_bank=conduit_bank,
-            bank_position="A1",
-            path=LineString((100, 100), (300, 300), srid=srid),
+            parent=conduit_bank,
+            position="A1",
+            geometry=LineString((100, 100), (300, 300), srid=srid),
             length=200,
         )
         resp = api_client.get(self.URL, format="json")
@@ -505,7 +513,7 @@ class TestMapInfoAPI:
         assert "thresholds" in data
         t = data["thresholds"]
         assert t["structures"] == {"cluster": 200, "hide": 5000}
-        for key in ("conduit_banks", "conduits", "aerial_spans", "direct_buried", "circuits"):
+        for key in ("conduit_banks", "conduits", "aerial_spans", "direct_buried", "submarine", "circuits"):
             assert t[key] == {"hide": 500}
 
     def test_plugin_config_threshold_override(self, api_client, structures, settings):
@@ -525,7 +533,6 @@ class TestMapInfoAPI:
         assert t["conduits"] == {"hide": 500}
 
     def test_external_reference_layer_counted(self, api_client, conduits):
-        from netbox_pathways.models import Conduit
         from netbox_pathways.registry import LayerStyle, MapLayerRegistration, registry
 
         # Reference-mode layer: queryset of Conduits, geometry via start_structure FK
@@ -535,7 +542,7 @@ class TestMapInfoAPI:
                 label="External Ref",
                 geometry_type="Point",
                 source="reference",
-                queryset=lambda r: Conduit.objects.all(),
+                queryset=lambda r: Pathway.objects.filter(pathway_type="conduit"),
                 geometry_field="start_structure",
                 style=LayerStyle(color="#000"),
                 max_features=42,
@@ -558,7 +565,7 @@ class TestMapInfoAPI:
         from django.contrib.gis.geos import LineString, Point
 
         from netbox_pathways.geo import get_srid, to_leaflet
-        from netbox_pathways.models import Conduit, Structure
+        from netbox_pathways.models import Structure
         from netbox_pathways.registry import LayerStyle, MapLayerRegistration, registry
 
         srid = get_srid()
@@ -566,11 +573,12 @@ class TestMapInfoAPI:
         loc = Location.objects.create(name="Info-HH", slug="info-hh", site=site)
         anchor = Structure.objects.create(name="INFO-S0", geometry=Point(0, 0, srid=srid))
         identity = Structure.objects.create(name="INFO-HH", geometry=Point(10, 20, srid=srid), site=site, location=loc)
-        Conduit.objects.create(
+        Pathway.objects.create(
+            pathway_type="conduit",
             label="INFO-C1",
             start_structure=anchor,
             end_location=loc,
-            path=LineString((0, 0), (10, 20), srid=srid),
+            geometry=LineString((0, 0), (10, 20), srid=srid),
         )
 
         registry.register(
@@ -579,7 +587,7 @@ class TestMapInfoAPI:
                 label="External Tuple",
                 geometry_type="Point",
                 source="reference",
-                queryset=lambda r: Conduit.objects.filter(label="INFO-C1"),
+                queryset=lambda r: Pathway.objects.filter(label="INFO-C1"),
                 geometry_field=("end_location", "start_structure"),
                 style=LayerStyle(color="#000"),
             )
@@ -618,7 +626,7 @@ class TestMapInfoAPI:
 
 
 # ---------------------------------------------------------------------------
-# MapView — _data_extent and _resolve_feature_extent
+# MapView -- _data_extent, _resolve_selection and _feature_extent
 # ---------------------------------------------------------------------------
 
 
@@ -642,48 +650,29 @@ class TestMapViewExtent:
         view = MapView()
         view._data_extent()  # should not crash on empty DB
 
-    def test_resolve_feature_extent_structure(self, structures):
+    def test_resolve_selection_structure(self, structures, admin_user):
         from netbox_pathways.views import MapView
 
         s = structures[0]
-        extent = MapView._resolve_feature_extent(f"structure-{s.pk}")
-        assert extent is not None
-        west, south, east, north = extent
-        assert -180 <= west <= 180
-        assert -90 <= south <= 90
+        assert MapView._resolve_selection(f"structure-{s.pk}", admin_user) == s
 
-    def test_resolve_feature_extent_conduit(self, conduits):
+    @pytest.mark.parametrize("param", ["unknown-123", "noid", "structure-999999", None])
+    def test_resolve_selection_unresolvable(self, param, admin_user):
         from netbox_pathways.views import MapView
 
-        c = conduits[0]
-        extent = MapView._resolve_feature_extent(f"conduit-{c.pk}")
-        assert extent is not None
+        assert MapView._resolve_selection(param, admin_user) is None
 
-    def test_resolve_feature_extent_conduit_bank(self, conduit_bank):
+    def test_feature_extent_structure_is_wgs84(self, structures):
         from netbox_pathways.views import MapView
 
-        extent = MapView._resolve_feature_extent(f"conduit_bank-{conduit_bank.pk}")
-        assert extent is not None
+        west, south, east, north = MapView._feature_extent(structures[0])
+        assert -180 <= west <= east <= 180
+        assert -90 <= south <= north <= 90
 
-    def test_resolve_feature_extent_invalid_type(self):
+    def test_feature_extent_conduit(self, conduits):
         from netbox_pathways.views import MapView
 
-        assert MapView._resolve_feature_extent("unknown-123") is None
-
-    def test_resolve_feature_extent_invalid_format(self):
-        from netbox_pathways.views import MapView
-
-        assert MapView._resolve_feature_extent("noid") is None
-
-    def test_resolve_feature_extent_missing_pk(self):
-        from netbox_pathways.views import MapView
-
-        assert MapView._resolve_feature_extent("structure-999999") is None
-
-    def test_resolve_feature_extent_none(self):
-        from netbox_pathways.views import MapView
-
-        assert MapView._resolve_feature_extent(None) is None
+        assert MapView._feature_extent(conduits[0]) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -693,43 +682,15 @@ class TestMapViewExtent:
 
 @pytest.mark.django_db
 class TestMapViewSelect:
-    def test_select_param_sets_bounds(self, structures):
+    def test_select_param_sets_bounds(self, structures, admin_user):
+        content = render_map(f"select=structure-{structures[0].pk}", user=admin_user)
+        assert parse_json_script(content, "pathways-map-init")["bounds"] is not None
 
-        from django.test import RequestFactory
-
-        from netbox_pathways.views import MapView
-
-        factory = RequestFactory()
-        s = structures[0]
-        request = factory.get(f"/plugins/pathways/map/?select=structure-{s.pk}")
-        from django.contrib.auth.models import AnonymousUser
-
-        request.user = AnonymousUser()
-
-        view = MapView()
-        response = view.get(request)
-        assert response.status_code == 200
-        content = response.content.decode()
-        # Should contain map_bounds JSON (not empty)
-        assert "map_bounds" not in content or "[[" in content
-
-    def test_select_param_invalid_uses_fallback(self):
-        from unittest.mock import patch
-
-        from django.test import RequestFactory
-
-        from netbox_pathways.views import MapView
-
-        factory = RequestFactory()
-        request = factory.get("/plugins/pathways/map/?select=bad-999")
-        from django.contrib.auth.models import AnonymousUser
-
-        request.user = AnonymousUser()
-
-        view = MapView()
-        with patch.object(view, "_data_extent", return_value=None):
-            response = view.get(request)
-        assert response.status_code == 200
+    def test_select_param_invalid_uses_fallback(self, admin_user):
+        content = render_map("select=bad-999", user=admin_user)
+        config = parse_json_script(content, "pathways-map-init")
+        assert config["select"] == "bad-999"
+        assert config["bounds"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -764,24 +725,8 @@ def tenant_structures(srid, site):
 @pytest.fixture
 def constrained_client(tenant_structures):
     """API client for a user whose Structure view permission is constrained to tenant A."""
-    from django.contrib.auth import get_user_model
-    from django.contrib.contenttypes.models import ContentType
-    from users.models import ObjectPermission
-
-    user_model = get_user_model()
-    user = user_model.objects.create_user(username="geo-constrained", password="x")  # noqa: S106
-    perm = ObjectPermission.objects.create(
-        name="geo-perm-test",
-        enabled=True,
-        actions=["view"],
-        constraints={"tenant__slug": "geo-tenant-a"},
-    )
-    perm.object_types.set([ContentType.objects.get_for_model(Structure)])
-    perm.users.add(user)
-    client = APIClient()
-    # Re-fetch so no stale permission cache rides along on the user instance
-    client.force_authenticate(user=user_model.objects.get(pk=user.pk))
-    return client
+    user = user_with_view_permission("geo-constrained", Structure, {"tenant__slug": "geo-tenant-a"})
+    return api_client_for(user)
 
 
 @pytest.mark.django_db

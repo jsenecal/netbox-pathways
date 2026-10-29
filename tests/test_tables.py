@@ -12,6 +12,7 @@ from netbox.tables import NetBoxTable
 from utilities.views import get_action_url
 
 from netbox_pathways import tables
+from netbox_pathways.pathway_types import TYPE_SPECIFIC_FIELDS
 
 ACTION_TABLES = [
     cls
@@ -25,3 +26,8 @@ def test_row_actions_resolve(table):
     model = table._meta.model
     for action in table.base_columns["actions"].actions:
         get_action_url(model, action=action, kwargs={"pk": 1})
+
+
+def test_pathway_table_has_a_column_for_every_type_specific_field():
+    """One table lists every pathway type, so each type's own fields must be selectable columns."""
+    assert TYPE_SPECIFIC_FIELDS <= set(tables.PathwayTable.base_columns)

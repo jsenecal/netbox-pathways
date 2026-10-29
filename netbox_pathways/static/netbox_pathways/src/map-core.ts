@@ -122,6 +122,33 @@ export function createZoomHint(map: L.Map): HTMLDivElement {
  * file -- no user/network input is involved. This is the same trust model as
  * structureIcon() which also builds innerHTML from these constants.
  */
+/**
+ * Fill a legend section with one line swatch per pathway type, in order.
+ *
+ * The map draws only containers (see the server's ``drawnTypes``), so the
+ * legend lists exactly those; innerducts, trays and raceways never appear.
+ */
+export function renderPathwayLegend(section: HTMLElement, pathTypes: readonly string[]): void {
+    for (const ptype of pathTypes) {
+        const color = PATHWAY_COLORS[ptype] || '#616161';
+        const dash = PATHWAY_DASH[ptype] || '';
+        const item = document.createElement('div');
+        item.className = 'pw-legend-item';
+        const swatch = document.createElement('span');
+        swatch.className = 'pw-legend-swatch';
+        _setStaticSvg(swatch,
+            '<svg viewBox="0 0 24 6" width="20" height="6">' +
+            '<line x1="0" y1="3" x2="24" y2="3" stroke="' + color +
+            '" stroke-width="3"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') +
+            '/></svg>');
+        const label = document.createElement('span');
+        label.className = 'pw-legend-label';
+        label.textContent = _titleCase(ptype);
+        item.append(swatch, label);
+        section.appendChild(item);
+    }
+}
+
 function _setStaticSvg(el: HTMLElement, svg: string): void {
     el.innerHTML = svg; // eslint-disable-line no-unsanitized/property -- trusted compile-time SVG constants only
 }
@@ -174,22 +201,7 @@ export function createLegend(map: L.Map): void {
             const pathTitle = L.DomUtil.create('div', 'pw-legend-section-title', pathSec);
             pathTitle.textContent = 'Pathways';
 
-            const pathTypes = ['conduit', 'conduit_bank', 'aerial', 'direct_buried',
-                'innerduct', 'microduct', 'tray', 'raceway', 'submarine'];
-            for (let i = 0; i < pathTypes.length; i++) {
-                const ptype = pathTypes[i];
-                const color = PATHWAY_COLORS[ptype] || '#616161';
-                const dash = PATHWAY_DASH[ptype] || '';
-                const item = L.DomUtil.create('div', 'pw-legend-item', pathSec);
-                const swatch = L.DomUtil.create('span', 'pw-legend-swatch', item);
-                _setStaticSvg(swatch,
-                    '<svg viewBox="0 0 24 6" width="20" height="6">' +
-                    '<line x1="0" y1="3" x2="24" y2="3" stroke="' + color +
-                    '" stroke-width="3"' + (dash ? ' stroke-dasharray="' + dash + '"' : '') +
-                    '/></svg>');
-                const label = L.DomUtil.create('span', 'pw-legend-label', item);
-                label.textContent = _titleCase(ptype);
-            }
+            renderPathwayLegend(pathSec, CFG.drawnTypes || []);
 
             // Toggle collapse
             header.addEventListener('click', function () {

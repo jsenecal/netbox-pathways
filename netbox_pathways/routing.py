@@ -6,8 +6,6 @@ connected — each consecutive pair of pathways must share a common endpoint
 (Structure, Location, or ConduitJunction).
 """
 
-from django.db.models import OuterRef, Subquery
-
 from . import models
 from .graph import _endpoint_nodes
 
@@ -28,14 +26,7 @@ def validate_cable_route(cable_id):
             judges (None when the cable has no segments).
         segments: the CableSegments in route order, as validated.
     """
-    # Annotate conduit junction endpoints via subquery (same pattern as graph.py)
-    conduit_qs = models.Conduit.objects.filter(pathway_ptr_id=OuterRef("pathway_id"))
-    segments = list(
-        models.CableSegment.objects.route_of(cable_id).annotate(
-            _start_junction_id=Subquery(conduit_qs.values("start_junction_id")[:1]),
-            _end_junction_id=Subquery(conduit_qs.values("end_junction_id")[:1]),
-        )
-    )
+    segments = list(models.CableSegment.objects.route_of(cable_id))
 
     segment_count = len(segments)
     if segment_count == 0:
@@ -53,12 +44,6 @@ def validate_cable_route(cable_id):
         if cur.pathway is None or nxt.pathway is None:
             gaps.append(_null_gap(cur, nxt))
             continue
-
-        # Transfer junction annotations to pathway objects for _endpoint_nodes
-        cur.pathway._start_junction_id = cur._start_junction_id
-        cur.pathway._end_junction_id = cur._end_junction_id
-        nxt.pathway._start_junction_id = nxt._start_junction_id
-        nxt.pathway._end_junction_id = nxt._end_junction_id
 
         cur_start, cur_end = _endpoint_nodes(cur.pathway)
         nxt_start, nxt_end = _endpoint_nodes(nxt.pathway)
@@ -133,8 +118,6 @@ def _end_statuses(cable_id, segments):
         if segment.pathway is None:
             statuses[key] = "mismatch"
             continue
-        segment.pathway._start_junction_id = segment._start_junction_id
-        segment.pathway._end_junction_id = segment._end_junction_id
         endpoints = {node for node in _endpoint_nodes(segment.pathway) if node}
         statuses[key] = "ok" if endpoints & candidates else "mismatch"
 

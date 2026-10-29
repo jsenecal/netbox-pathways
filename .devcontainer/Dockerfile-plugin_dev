@@ -5,6 +5,8 @@ FROM ghcr.io/netbox-community/netbox:${NETBOX_VARIANT}
 VOLUME [ "/etc/netbox/scripts" ]
 
 ARG NETBOX_INITIALIZERS_VARIANT=4.7.*
+# netbox-branching 1.2.x is the release line for NetBox 4.7
+ARG NETBOX_BRANCHING_VARIANT=1.2.*
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Install APT packages (including GIS libraries for PostGIS support)
@@ -59,6 +61,8 @@ RUN curl "https://raw.githubusercontent.com/oh-my-fish/oh-my-fish/master/bin/ins
 RUN mkdir -p ~/.npm && npm config set prefix ~/.npm && npm install -g @anthropic-ai/claude-code
 
 RUN /usr/local/bin/uv pip install netbox-initializers==$NETBOX_INITIALIZERS_VARIANT
+
+RUN /usr/local/bin/uv pip install netboxlabs-netbox-branching==$NETBOX_BRANCHING_VARIANT
 
 RUN uv pip install --no-cache-dir -e /opt/netbox-pathways
 

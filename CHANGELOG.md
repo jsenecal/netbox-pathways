@@ -7,9 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+This is a breaking release. Read **Upgrading** below before running the
+migrations on a 0.4.x database.
+
+### Removed
+
+- The per-type pathway models `ConduitBank`, `Conduit`, `AerialSpan`, `DirectBuried` and `Innerduct` (multi-table inheritance children of `Pathway`). Every pathway is now one row of the single `Pathway` model (#103, #177).
+- The per-type UI URLs `/plugins/pathways/conduit-banks/`, `/conduits/`, `/aerial-spans/`, `/direct-buried/` and `/innerducts/`, with no redirects (#172).
+- The per-type REST endpoints `/api/plugins/pathways/conduit-banks/`, `conduits/`, `aerial-spans/`, `direct-buried/` and `innerducts/`, and the per-type GeoJSON endpoints `geo/conduit-banks/`, `geo/conduits/`, `geo/aerial-spans/` and `geo/direct-buried/`, with no aliases (#177).
+- The per-type GraphQL queries (`conduit`, `conduit_list`, `conduit_bank`, ...), filtersets and filter forms; one `pathway` type and filter remain.
+- The `conduit_bank` and `parent_conduit` fields (replaced by `parent`) and `bank_position` (replaced by `position`), with no compatibility aliases on the model or the API.
+- The `microduct` pathway type. A microduct is an innerduct (distinguished by `size`); a stand-alone microduct bundle is a direct buried pathway with innerduct children. Existing microduct rows are deleted by the upgrade.
+
+### Changed
+
+- **One pathway model with an ltree hierarchy.** `Pathway` is a NetBox `LtreeModel` with a single `parent` link and a type-driven field set, so netbox-branching can provision, edit and merge pathways (#103, #177). A single type-metadata table (`pathway_types.py`) drives the form, model validation, serializer, filters, map and legend.
+- **Pathway geometry is named `geometry`, not `path`**, everywhere public: REST, GeoJSON, GraphQL, filters, CSV import and export templates. `LtreeModel` owns the `path` column for the hierarchy. `CircuitGeometry.path` is unchanged.
+- **Containment rule.** Conduit banks contain conduits; raceways contain conduits and cable trays; trays, conduits, direct buried pathways and innerducts contain innerducts; aerial spans and submarine routes contain nothing. Conduits and trays may be top-level; innerducts always have a parent; every other type is always top-level. The rule lives in `Pathway.clean()` and database check constraints, so it also applies to CSV import, the REST API and branch merges. Changing a pathway's type is allowed when its parent and children still fit; fields that do not apply to the new type are cleared (#173).
+- **Deleting a pathway with children is blocked.** `parent` is `on_delete=PROTECT`: the UI shows NetBox's protected-object message and the REST API returns `409 Conflict` until the children are reassigned or removed. This replaces the bank's `SET_NULL` and the conduit's `CASCADE` onto its innerducts.
+- **One UI and API surface.** All types are listed, shown, added, edited, imported and deleted under `/plugins/pathways/pathways/` and `/api/plugins/pathways/pathways/`. The add/edit form has a type picker that re-renders the form with that type's fields; the parent selector offers only allowed parent types. The detail page shows a type panel, a Children panel with an Add button preset to the parent, and a Contents tab with the whole subtree. Structures get one Pathways tab in place of the four per-type tabs.
+- **The map draws only containers** (#166): top-level conduit banks, conduits, aerial spans, direct buried and submarine pathways. Innerducts, trays, raceways and anything with a parent are never drawn. The Map button, `?select=` and map search resolve a pathway to its outermost drawn ancestor-or-self, and select nothing when there is none (a conduit in a raceway). Search matches a container through any child the user may view and shows it as `Bank (via Duct)`. The legend lists exactly the drawn types. The QGIS project generator and detail-page map overlays follow the same rule.
+- Any child inherits unset endpoints from its parent and follows its parent's geometry; the tenant shown for a pathway without one is its nearest ancestor's (generalising bank to conduit and conduit to innerduct).
+- Conduit positions are unique per parent among conduits (as before for banks); innerduct positions are not unique, and innerduct `size` is optional.
+- `split_pathway` cascades everything inside the split pathway at any depth (innerducts in a direct buried pathway included) and refuses any pathway with a parent.
+- `ConduitJunction.trunk_conduit` and `branch_conduit` point at `Pathway`, limited to conduits.
+
+### Added
+
+- Every pathway type, including submarine, cable tray and raceway, can be created and edited from the UI, and the navigation menu has a quick link per type that opens the list or the add form preset with `?pathway_type=` (#172).
+- Submarine pathways get a map layer, color, dash pattern and `/info` count.
+- Pathway filters `parent_id`, `ancestor_id` (everything inside a pathway, at any depth) and `descendant_id` (every pathway containing it), plus a filter for every type-specific field.
+- `?containers=true` on `geo/pathways/` keeps only what the map draws; `?q=` there also matches a container through a matching descendant and reports it in `search_match`.
+- Branching support: a netbox-branching resolver for the cable-segment lashing table, map extents computed on the connection the router picks (so branch-only data counts), and a SRID system check scoped to the current schema (#103). The plugin devcontainer installs netbox-branching for manual testing.
+
 ### Fixed
 
-- The generic Pathways list (`/plugins/pathways/pathways/`) no longer returns HTTP 500 (`NoReverseMatch: pathway_edit`). Its rows offered edit and delete buttons for the base pathway model, which has no such views; they now carry only the map button. Edit and delete pathways from the list or detail page of their concrete type (conduits, aerial spans, ...) (#167).
+- The generic Pathways list (`/plugins/pathways/pathways/`) no longer returns HTTP 500 (`NoReverseMatch: pathway_edit`) (#167). It is now the list for every pathway type, with edit and delete row actions.
+- `installed_by_id` filters every pathway type (#175).
+- `import_geodata` imports features again on Django 6; every row failed with "property 'coord_dim' of 'LineString' object has no setter".
+- The "Show on Map" button selects the drawn container a pathway runs in, and is hidden when nothing is drawn for it (a tray, or a conduit in a raceway).
+- Planned routes and route-planner results draw a pathway without geometry of its own (an innerduct) along its container instead of leaving it off the map.
+
+### Upgrading
+
+Back up the database first. The migrations (0027-0031) rewrite pathway data in place, and print what they changed or removed; keep the `manage.py migrate` output.
+
+**Removed URLs and endpoints, and their replacements**
+
+| Removed | Use instead |
+|---------|-------------|
+| `/plugins/pathways/conduit-banks/` (and `conduits/`, `aerial-spans/`, `direct-buried/`, `innerducts/`) | `/plugins/pathways/pathways/?pathway_type=conduit_bank` (`conduit`, `aerial`, `direct_buried`, `innerduct`); object pages are `/plugins/pathways/pathways/<id>/` with the same ids |
+| `/api/plugins/pathways/conduit-banks/` (and `conduits/`, `aerial-spans/`, `direct-buried/`, `innerducts/`) | `/api/plugins/pathways/pathways/?pathway_type=<type>`; create with `pathway_type` set |
+| `/api/plugins/pathways/geo/conduit-banks/` (and `geo/conduits/`, `geo/aerial-spans/`, `geo/direct-buried/`) | `/api/plugins/pathways/geo/pathways/?pathway_type=<type>`, adding `&containers=true` for what the map draws |
+| GraphQL `conduit`, `conduit_bank`, `aerial_span`, `direct_buried`, `innerduct` and their `_list` queries | `pathway` / `pathway_list`, filtered on `pathway_type` |
+
+Primary keys are kept, so pathway ids in scripts, cable segments, waypoints and planned routes stay valid.
+
+**Renamed fields**
+
+| 0.4.x | 0.5.0 |
+|-------|-------|
+| `path` (pathway geometry) | `geometry` |
+| `conduit_bank`, `conduit_bank_id` | `parent`, `parent_id` |
+| `parent_conduit`, `parent_conduit_id` | `parent`, `parent_id` (or `ancestor_id` for any depth) |
+| `bank_position`, innerduct `position` | `position` |
+
+Update API clients, CSV import files, export templates and saved filters that name the old fields. Object permission constraints are rewritten by the migration (below); nothing else is.
+
+**Deleting pathways with children is now blocked.** Scripts that deleted a bank and relied on its conduits being detached, or deleted a conduit and relied on its innerducts going with it, must now reassign or delete the children first; the API answers `409 Conflict` otherwise.
+
+**Object permissions.** For every permission that named one of the five former subtypes, the migration creates a new permission named `<original name> (pathways)` on the `pathway` object type with the same actions, users, groups and enabled flag, and its constraints ANDed with `pathway_type__in=[...]` for the types it covered. A user who could only view conduits can still view exactly the conduits. The subtype object types are removed from the original permission, which is deleted if nothing else is left on it; the pathway object type is never added to an existing permission, so its constraints never widen to its other object types. Constraint keys naming removed fields are rewritten (`conduit_bank`/`parent_conduit` to `parent`, `bank_position` to `position`, `path` to `geometry`, `pathway_ptr` to `id`), including constraints on other models that reach a pathway (for example `pathway__path__isnull` on cable segments). A constraint that cannot be translated (one through a removed subtype accessor such as `conduit__material`) stops the migration with every such permission listed; fix or remove those constraints and run `migrate` again. To restrict a new permission to some types, constrain it on `pathway_type`, for example `{"pathway_type": "conduit"}`.
+
+**Custom fields, tags and history.** Change log, tags, journal entries, image attachments, bookmarks, subscriptions, custom field and export template assignments, saved filters and event rules on the subtype object types move to `pathway`; rows that duplicated a reference to the same pathway are dropped and counted in the output. Custom fields, export templates and saved filters now apply to every pathway type. A `unique` custom field whose values repeat across the merged pathways loses `unique`, and a `required` custom field that applied to only some former subtypes loses `required`; each is printed as `custom field '<name>': cleared ...`. Review them after the upgrade.
+
+**Deleted `microduct` rows.** Pathways of the retired `microduct` type (reachable only through the API) are deleted; the output prints `deleted N pathway(s) of the retired 'microduct' type`. Cable segments routed through them are kept with no pathway. Re-create them as innerducts (size set) inside a conduit or direct buried pathway if needed.
+
+**Bare and untyped rows.** The 0.4.x generic pathway endpoint could store a bare pathway with no subtype row but any type, e.g. a `conduit` that was never in the conduit table. Kept as is, it would become visible to users whose permission covered only real conduits, and a bare `innerduct` has no parent to copy. So the migration clears the type of every such row (keeping its waypoints and cable segments) and prints `cleared the type of N pathway(s) with no subtype row; set a type on each: <pks>`. Open each listed pathway and give it a type (and a parent, for an innerduct). Rows whose type was already blank are kept as they are; they must be given a type on their next edit. Existing conduits with no start or end are migrated as they are, without validation; their next edit requires both ends.
+
+**Companion plugins.** netbox-pathways-qgis must be upgraded with this release (its collections read the removed subtype models). netbox-arcfm-import breaks until it is updated separately for the single pathway model.
 
 ## [0.4.0] - 2026-10-27
 

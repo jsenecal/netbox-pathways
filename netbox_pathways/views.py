@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.gis.db.models.functions import Length
 from django.db import transaction
-from django.db.models import Count, Exists, F, OuterRef, Subquery, Sum
+from django.db.models import Count, Exists, F, OuterRef, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -32,17 +32,11 @@ from netbox_pathways.registry import registry as map_layer_registry
 
 from . import anchors, filterforms, filtersets, forms, models, tables
 from .choices import PlannedRouteStatusChoices
+from .geo import linestring_to_coords, to_leaflet
 from .graph import PathwayGraph, _endpoint_nodes
+from .map_config import base_map_config, tile_map_config
+from .pathway_types import PATHWAY_TYPES, UNROUTABLE_TYPES, allowed_child_types
 from .ui import panels
-
-
-def _map_url_for(obj):
-    """Build a map URL that centres on and selects this object."""
-    if hasattr(obj, "pathway_type") and obj.pathway_type:
-        feature_type = obj.pathway_type
-    else:
-        feature_type = "structure"
-    return reverse("plugins:netbox_pathways:map") + f"?select={feature_type}-{obj.pk}"
 
 
 class ViewInMap(ObjectAction):
@@ -51,7 +45,33 @@ class ViewInMap(ObjectAction):
 
     @classmethod
     def get_url(cls, obj):
-        return _map_url_for(obj)
+        """The map, centred on the drawn feature standing for `obj`; None (no button) when nothing is drawn."""
+        container = obj.map_container
+        if container is None:
+            return None
+        return reverse("plugins:netbox_pathways:map") + f"?select={container.map_select_id}"
+
+
+def _ordered_route_pathways(pathway_ids):
+    """The pathways of a route, in route order, each with its route geometry loaded."""
+    pathways = (
+        models.Pathway.objects.filter(pk__in=pathway_ids)
+        .with_route_geometry()
+        .select_related("start_structure", "end_structure")
+    )
+    by_pk = {pw.pk: pw for pw in pathways}
+    return [by_pk[pid] for pid in pathway_ids if pid in by_pk]
+
+
+def _route_pathway_entry(pw):
+    """One pathway of a route for the route map: a pathway inside another draws along its container."""
+    return {
+        "pk": pw.pk,
+        "label": str(pw),
+        "type": pw.get_pathway_type_display() if pw.pathway_type else "",
+        "pathway_type": pw.pathway_type or "",
+        "coords": linestring_to_coords(pw.route_geometry),
+    }
 
 
 # --- Structure ---
@@ -171,97 +191,59 @@ class StructureCreateSiteView(LoginRequiredMixin, View):
         return redirect(f"{edit_url}?return_url={structure.get_absolute_url()}")
 
 
-@register_model_view(models.Structure, "conduit_banks")
-class StructureConduitBanksView(generic.ObjectChildrenView):
-    queryset = models.Structure.objects.all()
-    child_model = models.ConduitBank
-    table = tables.ConduitBankTable
-    filterset = filtersets.ConduitBankFilterSet
-    tab = ViewTab(
-        label="Conduit Banks",
-        badge=lambda obj: models.ConduitBank.objects.touching(obj).count(),
-    )
-
-    def get_children(self, request, parent):
-        return models.ConduitBank.objects.touching(parent).annotate(conduit_count=Count("conduits"))
-
-
-@register_model_view(models.Structure, "conduits")
-class StructureConduitsView(generic.ObjectChildrenView):
-    queryset = models.Structure.objects.all()
-    child_model = models.Conduit
-    table = tables.ConduitTable
-    filterset = filtersets.ConduitFilterSet
-    tab = ViewTab(
-        label="Conduits",
-        badge=lambda obj: models.Conduit.objects.touching(obj).count(),
-        hide_if_empty=True,
-    )
-
-    def get_children(self, request, parent):
-        return models.Conduit.objects.touching(parent).annotate(
-            cables_routed=Count("cable_segments"),
-            in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        )
-
-
-@register_model_view(models.Structure, "aerial_spans")
-class StructureAerialSpansView(generic.ObjectChildrenView):
-    queryset = models.Structure.objects.all()
-    child_model = models.AerialSpan
-    table = tables.AerialSpanTable
-    filterset = filtersets.AerialSpanFilterSet
-    tab = ViewTab(
-        label="Aerial Spans",
-        badge=lambda obj: models.AerialSpan.objects.touching(obj).count(),
-        hide_if_empty=True,
-    )
-
-    def get_children(self, request, parent):
-        return models.AerialSpan.objects.touching(parent).annotate(
-            cables_routed=Count("cable_segments"),
-            in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        )
-
-
-@register_model_view(models.Structure, "direct_buried")
-class StructureDirectBuriedView(generic.ObjectChildrenView):
-    queryset = models.Structure.objects.all()
-    child_model = models.DirectBuried
-    table = tables.DirectBuriedTable
-    filterset = filtersets.DirectBuriedFilterSet
-    tab = ViewTab(
-        label="Direct Buried",
-        badge=lambda obj: models.DirectBuried.objects.touching(obj).count(),
-        hide_if_empty=True,
-    )
-
-    def get_children(self, request, parent):
-        return models.DirectBuried.objects.touching(parent).annotate(
-            cables_routed=Count("cable_segments"),
-            in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        )
-
-
-# --- Pathway (base) ---
-
-
-class PathwayListView(generic.ObjectListView):
-    queryset = models.Pathway.objects.select_related(
-        "start_structure",
-        "end_structure",
-        "start_location",
-        "end_location",
-        "tenant",
-    ).annotate(
+def _with_route_usage(queryset):
+    """Annotate pathways with how many cable segments run through them."""
+    return queryset.annotate(
         cables_routed=Count("cable_segments"),
         in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        _geo_length=Length("path"),
     )
+
+
+@register_model_view(models.Structure, "pathways")
+class StructurePathwaysView(generic.ObjectChildrenView):
+    """Every pathway ending at this structure; `?pathway_type=` narrows it to one type."""
+
+    queryset = models.Structure.objects.all()
+    child_model = models.Pathway
     table = tables.PathwayTable
     filterset = filtersets.PathwayFilterSet
     filterset_form = filterforms.PathwayFilterForm
-    actions = (BulkExport,)
+    tab = ViewTab(
+        label="Pathways",
+        badge=lambda obj: models.Pathway.objects.touching(obj).count(),
+        hide_if_empty=True,
+    )
+
+    def get_children(self, request, parent):
+        return _with_route_usage(
+            models.Pathway.objects.restrict(request.user, "view").touching(parent).select_related("parent")
+        )
+
+
+# --- Pathway ---
+
+
+def _only_child_type(pathway):
+    """The one type `pathway` may contain, to preset the add-child form; "" when there is a choice."""
+    child_types = allowed_child_types(pathway.pathway_type)
+    return next(iter(child_types)) if len(child_types) == 1 else ""
+
+
+class PathwayListView(generic.ObjectListView):
+    queryset = _with_route_usage(
+        models.Pathway.objects.select_related(
+            "parent",
+            "parent__tenant",
+            "start_structure",
+            "end_structure",
+            "start_location",
+            "end_location",
+            "tenant",
+        )
+    ).annotate(_geo_length=Length("geometry"))
+    table = tables.PathwayTable
+    filterset = filtersets.PathwayFilterSet
+    filterset_form = filterforms.PathwayFilterForm
 
 
 class PathwayView(generic.ObjectView):
@@ -270,64 +252,34 @@ class PathwayView(generic.ObjectView):
     layout = layout.SimpleLayout(
         left_panels=[
             panels.PathwayPanel(),
+            panels.PathwayTypePanel(),
             TagsPanel(),
             CustomFieldsPanel(),
             CommentsPanel(),
         ],
         bottom_panels=[
+            panels.HideIfEmptyObjectsTablePanel(
+                model="netbox_pathways.Pathway",
+                title="Children",
+                filters={"parent_id": lambda ctx: ctx["object"].pk},
+                include_columns=["position"],
+                exclude_columns=["parent"],
+                empty_check=lambda ctx: bool(allowed_child_types(ctx["object"].pathway_type)),
+                actions=[
+                    ui_actions.AddObject(
+                        "netbox_pathways.Pathway",
+                        url_params={
+                            "parent": lambda ctx: ctx["object"].pk,
+                            "pathway_type": lambda ctx: _only_child_type(ctx["object"]),
+                        },
+                    ),
+                ],
+            ),
             ObjectsTablePanel(
                 model="netbox_pathways.PathwayLocation",
                 title="Waypoints",
                 filters={"pathway_id": lambda ctx: ctx["object"].pk},
             ),
-        ],
-    )
-
-
-# --- Conduit ---
-
-
-class ConduitListView(generic.ObjectListView):
-    queryset = models.Conduit.objects.select_related(
-        "start_structure",
-        "end_structure",
-        "start_location",
-        "end_location",
-        "conduit_bank",
-        "conduit_bank__tenant",
-        "tenant",
-    ).annotate(
-        cables_routed=Count("cable_segments"),
-        in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        _geo_length=Length("path"),
-    )
-    table = tables.ConduitTable
-    filterset_form = filterforms.ConduitFilterForm
-    filterset = filtersets.ConduitFilterSet
-
-
-class ConduitView(generic.ObjectView):
-    queryset = models.Conduit.objects.all()
-    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.ConduitPanel(),
-            TagsPanel(),
-            CustomFieldsPanel(),
-            CommentsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                model="netbox_pathways.Innerduct",
-                title="Innerducts",
-                filters={"parent_conduit_id": lambda ctx: ctx["object"].pk},
-                actions=[
-                    ui_actions.AddObject(
-                        "netbox_pathways.Innerduct",
-                        url_params={"parent_conduit": lambda ctx: ctx["object"].pk},
-                    ),
-                ],
-            ),
             ObjectsTablePanel(
                 model="netbox_pathways.CableSegment",
                 title="Cable Segments",
@@ -337,314 +289,52 @@ class ConduitView(generic.ObjectView):
     )
 
 
-class ConduitEditView(generic.ObjectEditView):
-    queryset = models.Conduit.objects.all()
-    form = forms.ConduitForm
+@register_model_view(models.Pathway, "children")
+class PathwayChildrenView(generic.ObjectChildrenView):
+    """Everything inside this pathway, at any depth (the ltree subtree)."""
 
-
-class ConduitDeleteView(generic.ObjectDeleteView):
-    queryset = models.Conduit.objects.all()
-
-
-class ConduitBulkImportView(generic.BulkImportView):
-    queryset = models.Conduit.objects.all()
-    model_form = forms.ConduitImportForm
-
-
-class ConduitBulkEditView(generic.BulkEditView):
-    queryset = models.Conduit.objects.all()
-    filterset = filtersets.ConduitFilterSet
-    table = tables.ConduitTable
-    form = forms.ConduitBulkEditForm
-
-
-class ConduitBulkDeleteView(generic.BulkDeleteView):
-    queryset = models.Conduit.objects.all()
-    table = tables.ConduitTable
-
-
-@register_model_view(models.Conduit, "innerducts")
-class ConduitInnerductsView(generic.ObjectChildrenView):
-    queryset = models.Conduit.objects.all()
-    child_model = models.Innerduct
-    table = tables.InnerductTable
-    filterset = filtersets.InnerductFilterSet
+    queryset = models.Pathway.objects.all()
+    child_model = models.Pathway
+    table = tables.PathwayTable
+    filterset = filtersets.PathwayFilterSet
+    filterset_form = filterforms.PathwayFilterForm
     tab = ViewTab(
-        label="Innerducts",
-        badge=lambda obj: obj.innerducts.count(),
+        label="Contents",
+        badge=lambda obj: obj.get_descendants().count(),
+        hide_if_empty=True,
     )
 
     def get_children(self, request, parent):
-        return parent.innerducts.annotate(
-            cables_routed=Count("cable_segments"),
-            in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
+        return _with_route_usage(
+            parent.get_descendants().restrict(request.user, "view").select_related("parent", "parent__tenant")
         )
 
 
-# --- Aerial Span ---
+class PathwayEditView(generic.ObjectEditView):
+    queryset = models.Pathway.objects.all()
+    form = forms.PathwayForm
 
 
-class AerialSpanListView(generic.ObjectListView):
-    queryset = models.AerialSpan.objects.select_related(
-        "start_structure",
-        "end_structure",
-        "start_location",
-        "end_location",
-        "tenant",
-    ).annotate(
-        cables_routed=Count("cable_segments"),
-        _geo_length=Length("path"),
-        in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-    )
-    table = tables.AerialSpanTable
-    filterset = filtersets.AerialSpanFilterSet
-    filterset_form = filterforms.AerialSpanFilterForm
+class PathwayDeleteView(generic.ObjectDeleteView):
+    queryset = models.Pathway.objects.all()
 
 
-class AerialSpanView(generic.ObjectView):
-    queryset = models.AerialSpan.objects.all()
-    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.AerialSpanPanel(),
-            TagsPanel(),
-            CustomFieldsPanel(),
-            CommentsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                model="netbox_pathways.CableSegment",
-                title="Cable Segments",
-                filters={"pathway_id": lambda ctx: ctx["object"].pk},
-            ),
-        ],
-    )
+class PathwayBulkImportView(generic.BulkImportView):
+    queryset = models.Pathway.objects.all()
+    model_form = forms.PathwayImportForm
 
 
-class AerialSpanEditView(generic.ObjectEditView):
-    queryset = models.AerialSpan.objects.all()
-    form = forms.AerialSpanForm
+class PathwayBulkEditView(generic.BulkEditView):
+    queryset = models.Pathway.objects.all()
+    filterset = filtersets.PathwayFilterSet
+    table = tables.PathwayTable
+    form = forms.PathwayBulkEditForm
 
 
-class AerialSpanDeleteView(generic.ObjectDeleteView):
-    queryset = models.AerialSpan.objects.all()
-
-
-class AerialSpanBulkImportView(generic.BulkImportView):
-    queryset = models.AerialSpan.objects.all()
-    model_form = forms.AerialSpanImportForm
-
-
-class AerialSpanBulkEditView(generic.BulkEditView):
-    queryset = models.AerialSpan.objects.all()
-    filterset = filtersets.AerialSpanFilterSet
-    table = tables.AerialSpanTable
-    form = forms.AerialSpanBulkEditForm
-
-
-class AerialSpanBulkDeleteView(generic.BulkDeleteView):
-    queryset = models.AerialSpan.objects.all()
-    table = tables.AerialSpanTable
-
-
-# --- Direct Buried ---
-
-
-class DirectBuriedListView(generic.ObjectListView):
-    queryset = models.DirectBuried.objects.select_related(
-        "start_structure",
-        "end_structure",
-        "start_location",
-        "end_location",
-        "tenant",
-    ).annotate(
-        cables_routed=Count("cable_segments"),
-        in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        _geo_length=Length("path"),
-    )
-    table = tables.DirectBuriedTable
-    filterset = filtersets.DirectBuriedFilterSet
-    filterset_form = filterforms.DirectBuriedFilterForm
-    actions = (AddObject, BulkImport, BulkExport, BulkEdit, BulkDelete)
-
-
-class DirectBuriedView(generic.ObjectView):
-    queryset = models.DirectBuried.objects.all()
-    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.DirectBuriedPanel(),
-            TagsPanel(),
-            CustomFieldsPanel(),
-            CommentsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                model="netbox_pathways.CableSegment",
-                title="Cable Segments",
-                filters={"pathway_id": lambda ctx: ctx["object"].pk},
-            ),
-        ],
-    )
-
-
-class DirectBuriedEditView(generic.ObjectEditView):
-    queryset = models.DirectBuried.objects.all()
-    form = forms.DirectBuriedForm
-
-
-class DirectBuriedDeleteView(generic.ObjectDeleteView):
-    queryset = models.DirectBuried.objects.all()
-
-
-class DirectBuriedBulkImportView(generic.BulkImportView):
-    queryset = models.DirectBuried.objects.all()
-    model_form = forms.DirectBuriedImportForm
-
-
-class DirectBuriedBulkEditView(generic.BulkEditView):
-    queryset = models.DirectBuried.objects.all()
-    filterset = filtersets.DirectBuriedFilterSet
-    table = tables.DirectBuriedTable
-    form = forms.DirectBuriedBulkEditForm
-
-
-class DirectBuriedBulkDeleteView(generic.BulkDeleteView):
-    queryset = models.DirectBuried.objects.all()
-    table = tables.DirectBuriedTable
-
-
-# --- Innerduct ---
-
-
-class InnerductListView(generic.ObjectListView):
-    queryset = models.Innerduct.objects.select_related(
-        "parent_conduit",
-        "tenant",
-        "parent_conduit__tenant",
-        "parent_conduit__conduit_bank__tenant",
-    ).annotate(
-        cables_routed=Count("cable_segments"),
-        in_use=Exists(models.CableSegment.objects.filter(pathway=OuterRef("pk"))),
-        _geo_length=Length("path"),
-    )
-    table = tables.InnerductTable
-    filterset = filtersets.InnerductFilterSet
-    filterset_form = filterforms.InnerductFilterForm
-    actions = (AddObject, BulkImport, BulkExport, BulkEdit, BulkDelete)
-
-
-class InnerductView(generic.ObjectView):
-    queryset = models.Innerduct.objects.all()
-    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.InnerductPanel(),
-            TagsPanel(),
-            CustomFieldsPanel(),
-            CommentsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                model="netbox_pathways.CableSegment",
-                title="Cable Segments",
-                filters={"pathway_id": lambda ctx: ctx["object"].pk},
-            ),
-        ],
-    )
-
-
-class InnerductEditView(generic.ObjectEditView):
-    queryset = models.Innerduct.objects.all()
-    form = forms.InnerductForm
-
-
-class InnerductDeleteView(generic.ObjectDeleteView):
-    queryset = models.Innerduct.objects.all()
-
-
-class InnerductBulkImportView(generic.BulkImportView):
-    queryset = models.Innerduct.objects.all()
-    model_form = forms.InnerductImportForm
-
-
-class InnerductBulkEditView(generic.BulkEditView):
-    queryset = models.Innerduct.objects.all()
-    filterset = filtersets.InnerductFilterSet
-    table = tables.InnerductTable
-    form = forms.InnerductBulkEditForm
-
-
-class InnerductBulkDeleteView(generic.BulkDeleteView):
-    queryset = models.Innerduct.objects.all()
-    table = tables.InnerductTable
-
-
-# --- Conduit Bank ---
-
-
-class ConduitBankListView(generic.ObjectListView):
-    queryset = models.ConduitBank.objects.select_related("start_structure", "end_structure", "tenant").annotate(
-        conduit_count=Count("conduits"),
-        _geo_length=Length("path"),
-    )
-    table = tables.ConduitBankTable
-    filterset = filtersets.ConduitBankFilterSet
-    filterset_form = filterforms.ConduitBankFilterForm
-
-
-class ConduitBankView(generic.ObjectView):
-    queryset = models.ConduitBank.objects.all()
-    actions = (ViewInMap, CloneObject, EditObject, DeleteObject)
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.ConduitBankPanel(),
-            TagsPanel(),
-            CustomFieldsPanel(),
-            CommentsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                model="netbox_pathways.Conduit",
-                title="Conduits",
-                filters={"conduit_bank_id": lambda ctx: ctx["object"].pk},
-                include_columns=["bank_position"],
-                exclude_columns=["conduit_bank"],
-                actions=[
-                    ui_actions.AddObject(
-                        "netbox_pathways.Conduit",
-                        url_params={"conduit_bank": lambda ctx: ctx["object"].pk},
-                    ),
-                ],
-            ),
-        ],
-    )
-
-
-class ConduitBankEditView(generic.ObjectEditView):
-    queryset = models.ConduitBank.objects.all()
-    form = forms.ConduitBankForm
-
-
-class ConduitBankDeleteView(generic.ObjectDeleteView):
-    queryset = models.ConduitBank.objects.all()
-
-
-class ConduitBankBulkImportView(generic.BulkImportView):
-    queryset = models.ConduitBank.objects.all()
-    model_form = forms.ConduitBankImportForm
-
-
-class ConduitBankBulkEditView(generic.BulkEditView):
-    queryset = models.ConduitBank.objects.annotate(conduit_count=Count("conduits"))
-    filterset = filtersets.ConduitBankFilterSet
-    table = tables.ConduitBankTable
-    form = forms.ConduitBankBulkEditForm
-
-
-class ConduitBankBulkDeleteView(generic.BulkDeleteView):
-    queryset = models.ConduitBank.objects.annotate(conduit_count=Count("conduits"))
-    table = tables.ConduitBankTable
+class PathwayBulkDeleteView(generic.BulkDeleteView):
+    queryset = models.Pathway.objects.all()
+    filterset = filtersets.PathwayFilterSet
+    table = tables.PathwayTable
 
 
 # --- Conduit Junction ---
@@ -950,31 +640,19 @@ class PlannedRouteView(generic.ObjectView):
     def get_extra_context(self, request, instance):
         import json
 
-        from .geo import linestring_to_coords, point_to_latlon
+        from .geo import point_to_latlon
 
         ctx = super().get_extra_context(request, instance)
 
         if instance.pathway_ids:
-            pathways = models.Pathway.objects.filter(
-                pk__in=instance.pathway_ids,
-            ).select_related("start_structure", "end_structure")
-            pw_map = {pw.pk: pw for pw in pathways}
-            ordered = [pw_map[pid] for pid in instance.pathway_ids if pid in pw_map]
+            ordered = _ordered_route_pathways(instance.pathway_ids)
             ctx["pathways"] = ordered
 
             # Build route geometry for map rendering
             route_geometry = {"pathways": [], "structures": []}
             structure_pks = set()
             for pw in ordered:
-                coords = linestring_to_coords(pw.path) if pw.path else []
-                route_geometry["pathways"].append(
-                    {
-                        "pk": pw.pk,
-                        "label": str(pw),
-                        "pathway_type": pw.pathway_type or "",
-                        "coords": coords,
-                    }
-                )
+                route_geometry["pathways"].append(_route_pathway_entry(pw))
                 if pw.start_structure_id:
                     structure_pks.add(pw.start_structure_id)
                 if pw.end_structure_id:
@@ -1263,7 +941,7 @@ class RoutePlannerView(LoginRequiredMixin, View):
         map_config = NetBoxPathwaysConfig._map_config or {}
 
         pathways_config = {
-            "apiBase": "/api/plugins/pathways/geo/",
+            **base_map_config(),
             "baseLayers": map_config.get("baseLayers", []),
             "maxZoom": map_config.get("maxZoom", 22),
             "minZoom": map_config.get("minZoom", 1),
@@ -1338,7 +1016,7 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
     def post(self, request):
         import json
 
-        from .geo import linestring_to_coords, point_to_latlon
+        from .geo import point_to_latlon
         from .route_engine import find_route
 
         start_pk = request.POST.get("start_structure")
@@ -1386,11 +1064,7 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
         route_geometry = {"pathways": [], "start": None, "end": None}
         if result:
             cost, pathway_ids = result
-            pathways = models.Pathway.objects.filter(
-                pk__in=pathway_ids,
-            ).select_related("start_structure", "end_structure")
-            pw_map = {pw.pk: pw for pw in pathways}
-            ordered = [pw_map[pid] for pid in pathway_ids if pid in pw_map]
+            ordered = _ordered_route_pathways(pathway_ids)
             routes.append(
                 {
                     "cost": cost,
@@ -1404,16 +1078,7 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
             # Collect all structures along the route
             structure_pks = set()
             for pw in ordered:
-                coords = linestring_to_coords(pw.path) if pw.path else []
-                route_geometry["pathways"].append(
-                    {
-                        "pk": pw.pk,
-                        "label": str(pw),
-                        "type": pw.get_pathway_type_display() if pw.pathway_type else "",
-                        "pathway_type": pw.pathway_type or "",
-                        "coords": coords,
-                    }
-                )
+                route_geometry["pathways"].append(_route_pathway_entry(pw))
                 if pw.start_structure_id:
                     structure_pks.add(pw.start_structure_id)
                 if pw.end_structure_id:
@@ -1465,7 +1130,7 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
                     hops.append({"kind": "structure", **struct_map[entry_pk]})
 
                 # Add the pathway
-                mid = linestring_to_coords(pw.path)
+                mid = linestring_to_coords(pw.route_geometry)
                 pw_geo = None
                 if mid:
                     mid_idx = len(mid) // 2
@@ -1623,7 +1288,7 @@ class RoutePlannerConstraintView(LoginRequiredMixin, View):
             from . import choices as choice_module
 
             choices_cls = getattr(choice_module, cfg["choices_class"])
-            ctx["choices"] = [c for c in choices_cls.CHOICES if c[0] != "conduit_bank"]
+            ctx["choices"] = [c for c in choices_cls.CHOICES if c[0] not in UNROUTABLE_TYPES]
         elif cfg["kind"] == "model":
             qs_factory = self.MODEL_MAP.get(cfg["model"])
             if qs_factory:
@@ -1682,12 +1347,15 @@ class MapView(LoginRequiredMixin, View):
         Uses a two-pass approach for structures: first compute a rough
         centroid, then re-compute the extent excluding points that are
         far from the median (> 2 degrees), which filters GPS outliers.
+
+        The raw SQL runs on the connection the database router picks, so an
+        active netbox-branching branch sees its own structures and pathways.
         """
-        from django.db import connection
+        from django.db import connections, router
 
         bbox = None
 
-        with connection.cursor() as cursor:
+        with connections[router.db_for_read(models.Structure)].cursor() as cursor:
             # Structures — trimmed extent to reject outliers. Geometries may be
             # any type (polygon footprints), and ST_X/ST_Y only accept
             # points, so trim on each row's centroid; extents still use the
@@ -1718,9 +1386,9 @@ class MapView(LoginRequiredMixin, View):
 
             # Pathways
             cursor.execute("""
-                SELECT ST_Extent(ST_Transform(path, 4326))
+                SELECT ST_Extent(ST_Transform(geometry, 4326))
                 FROM netbox_pathways_pathway
-                WHERE path IS NOT NULL
+                WHERE geometry IS NOT NULL
             """)
             row = cursor.fetchone()
             if row and row[0]:
@@ -1751,46 +1419,34 @@ class MapView(LoginRequiredMixin, View):
             return None
 
     @staticmethod
-    def _resolve_feature_extent(select_param):
-        """Resolve WGS84 bounding box from a select param like 'structure-123'.
+    def _resolve_selection(select_param, user):
+        """Return the drawn object a select param like 'structure-123' stands for.
 
-        Returns (west, south, east, north) or None.
+        A pathway resolves to its map container, since only containers are
+        drawn; None when nothing matches, when the pathway has no drawn
+        container (a conduit in a raceway), or when the user may not view
+        the selected object or its container.
         """
-        from django.contrib.gis.db.models import Extent
-        from django.contrib.gis.db.models.functions import Transform
-
         try:
             ftype, fid = select_param.rsplit("-", 1)
             fid = int(fid)
         except (ValueError, AttributeError):
             return None
-
-        model_map = {
-            "structure": (models.Structure, "geometry"),
-            "conduit": (models.Conduit, "path"),
-            "conduit_bank": (models.ConduitBank, "path"),
-            "aerial": (models.AerialSpan, "path"),
-            "direct_buried": (models.DirectBuried, "path"),
-        }
-        entry = model_map.get(ftype)
-        if not entry:
+        if ftype == "structure":
+            return models.Structure.objects.restrict(user, "view").filter(pk=fid).first()
+        if ftype not in PATHWAY_TYPES:
             return None
+        viewable = models.Pathway.objects.restrict(user, "view")
+        obj = viewable.filter(pk=fid, pathway_type=ftype).first()
+        container = obj.map_container if obj else None
+        if container is None or (container != obj and not viewable.filter(pk=container.pk).exists()):
+            return None
+        return container
 
-        model_cls, geom_field = entry
-        try:
-            result = (
-                model_cls.objects.filter(pk=fid)
-                .annotate(
-                    _geo=Transform(geom_field, 4326),
-                )
-                .aggregate(bbox=Extent("_geo"))
-            )
-            bbox = result.get("bbox")
-            if bbox:
-                return bbox  # (west, south, east, north)
-        except Exception:  # noqa: S110
-            pass
-        return None
+    @staticmethod
+    def _feature_extent(obj):
+        """WGS84 (west, south, east, north) of an object's geometry, or None."""
+        return to_leaflet(obj.geometry).extent if obj.geometry else None
 
     def get(self, request):
         from django.conf import settings
@@ -1799,17 +1455,14 @@ class MapView(LoginRequiredMixin, View):
 
         plugin_cfg = settings.PLUGINS_CONFIG.get("netbox_pathways", {})
 
-        api_base = reverse("plugins-api:netbox_pathways-api:api-root")
-        geo_base = f"{api_base}geo/"
-
+        base = base_map_config()
         pathways_config = {
-            "maxNativeZoom": plugin_cfg.get("map_max_native_zoom", 19),
-            "skipInfoZoom": plugin_cfg.get("map_skip_info_zoom", 17),
+            # drawnTypes: the legend lists only what the map draws.
+            **base,
+            **tile_map_config(),
             "structurePolygonZoom": plugin_cfg.get("map_structure_polygon_zoom", 18),
-            "apiBase": geo_base,
-            "overlays": plugin_cfg.get("map_overlays", []),
             "baseLayers": plugin_cfg.get("map_base_layers", []),
-            "externalLayers": [layer.to_json(api_base=geo_base) for layer in map_layer_registry.all()],
+            "externalLayers": [layer.to_json(api_base=base["apiBase"]) for layer in map_layer_registry.all()],
             # The hide-inactive config panel needs these at page load; /info
             # also carries them but is skipped entirely at high zoom.
             "statuses": _available_statuses(),
@@ -1821,7 +1474,9 @@ class MapView(LoginRequiredMixin, View):
         default_lon = plugin_cfg.get("map_center_lon", -73.5673)
         default_zoom = plugin_cfg.get("map_zoom", 10)
 
-        selected_feature = request.GET.get("select", "")
+        select_param = request.GET.get("select", "")
+        selected = self._resolve_selection(select_param, request.user) if select_param else None
+        selected_feature = selected.map_select_id if selected else select_param
 
         # Viewport precedence: explicit lat/lon params, then the selected
         # feature's bbox, then the data extent, then the configured default.
@@ -1838,7 +1493,7 @@ class MapView(LoginRequiredMixin, View):
             ]
             zoom = self._safe_int(request.GET.get("zoom"), default_zoom)
         else:
-            box = self._resolve_feature_extent(selected_feature) if selected_feature else None
+            box = self._feature_extent(selected) if selected else None
             if box:
                 zoom = 18  # fallback if fitBounds is not used
             else:
@@ -2052,7 +1707,12 @@ class CableRouteMapView(generic.ObjectView):
     template_name = "netbox_pathways/cable_route_map_tab.html"
     tab = ViewTab(
         label="Map",
-        badge=lambda obj: obj.pathway_segments.filter(pathway__path__isnull=False).count() or None,
+        badge=lambda obj: (
+            obj.pathway_segments.filter(
+                pathway__in=models.Pathway.objects.with_route_geometry().filter(_route_geometry__isnull=False)
+            ).count()
+            or None
+        ),
         hide_if_empty=True,
     )
 
@@ -2104,15 +1764,7 @@ class CableRoutingAddSegmentView(CableRoutingMixin, LoginRequiredMixin, Permissi
         reference instead of one query param per candidate node -- a site can
         hold thousands of structures.
         """
-        # Junction endpoints live on Conduit, and _endpoint_nodes() reads them
-        # from these annotations (same subquery pattern as routing.py).
-        conduit_qs = models.Conduit.objects.filter(pathway_ptr_id=OuterRef("pathway_id"))
-        segments = list(
-            models.CableSegment.objects.route_of(cable).annotate(
-                _start_junction_id=Subquery(conduit_qs.values("start_junction_id")[:1]),
-                _end_junction_id=Subquery(conduit_qs.values("end_junction_id")[:1]),
-            )
-        )
+        segments = list(models.CableSegment.objects.route_of(cable))
 
         previous = None
         if after_sequence is not None:
@@ -2121,8 +1773,6 @@ class CableRoutingAddSegmentView(CableRoutingMixin, LoginRequiredMixin, Permissi
             previous = segments[-1]
 
         if previous is not None and previous.pathway:
-            previous.pathway._start_junction_id = previous._start_junction_id
-            previous.pathway._end_junction_id = previous._end_junction_id
             return tuple(node for node in _endpoint_nodes(previous.pathway) if node), False
 
         return anchors.cable_end_nodes(cable, "A").nodes, True

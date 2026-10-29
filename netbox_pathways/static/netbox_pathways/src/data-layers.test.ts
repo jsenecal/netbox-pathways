@@ -330,3 +330,79 @@ describe('collapseAreasToPoints', () => {
         expect(data.features[0].geometry.type).toBe('Polygon');
     });
 });
+
+// ---------------------------------------------------------------------------
+// Pathway layers draw map containers only (issues #166, #172)
+// ---------------------------------------------------------------------------
+
+import { PATHWAY_CONFIGS, loadDataLayers, serverSearch } from './data-layers';
+import type { DataLayerGroups } from './data-layers';
+import type { ServerSearchResult } from './types/features';
+
+function query(url: string): URLSearchParams {
+    return new URL(url, 'http://netbox.example').searchParams;
+}
+
+describe('pathway layer requests', () => {
+    beforeEach(() => {
+        localStorage.clear();
+    });
+
+    it('each drawn type is its own containers-only layer', () => {
+        const pathwayLayers = PATHWAY_CONFIGS.filter(cfg => cfg.featureType !== 'circuit');
+        expect(pathwayLayers.map(cfg => cfg.featureType)).toEqual(
+            ['conduit_bank', 'conduit', 'aerial', 'direct_buried', 'submarine'],
+        );
+        for (const cfg of pathwayLayers) {
+            const params = query(cfg.endpoint);
+            expect(params.get('pathway_type')).toBe(cfg.featureType);
+            expect(params.get('containers')).toBe('true');
+        }
+    });
+
+    it('requests the submarine layer with containers=true', () => {
+        const urls: string[] = [];
+        stubFetchCollecting(urls);
+        const groups = new Proxy({}, { get: () => ({ clearLayers: vi.fn() }) }) as unknown as DataLayerGroups;
+        const bounds = { getWest: () => -1, getSouth: () => -1, getEast: () => 1, getNorth: () => 1 };
+        const map = { getZoom: () => 15, getBounds: () => bounds, hasLayer: () => true } as unknown as L.Map;
+
+        loadDataLayers(map, groups, { clusterMode: 'off', layers: { submarine: 'render' } }, null, {});
+
+        expect(urls).toHaveLength(1);
+        const url = new URL(urls[0], 'http://netbox.example');
+        expect(url.pathname).toMatch(/\/geo\/pathways\/$/);
+        expect(url.searchParams.get('pathway_type')).toBe('submarine');
+        expect(url.searchParams.get('containers')).toBe('true');
+        expect(url.searchParams.get('format')).toBe('json');
+        expect(url.searchParams.get('bbox')).not.toBeNull();
+    });
+});
+
+describe('serverSearch', () => {
+    beforeEach(() => {
+        vi.stubGlobal('L', { latLng: (lat: number, lng: number) => ({ lat, lng }) });
+    });
+
+    it('searches pathways as map containers and names the matching child', async () => {
+        const urls: string[] = [];
+        stubFetchCollecting(urls, {
+            type: 'FeatureCollection',
+            features: [{
+                type: 'Feature', id: 7,
+                geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] },
+                properties: { label: 'Bank 1', pathway_type: 'conduit_bank', search_match: 'Duct 7' },
+            }],
+        });
+        let results: ServerSearchResult[] = [];
+
+        await serverSearch('Duct 7', r => { results = r; });
+
+        const pathwayUrls = urls.filter(u => u.includes('/geo/pathways/'));
+        expect(pathwayUrls).toHaveLength(1);
+        expect(query(pathwayUrls[0]).get('containers')).toBe('true');
+        expect(query(pathwayUrls[0]).get('q')).toBe('Duct 7');
+        const hit = results.find(r => r.featureType === 'conduit_bank');
+        expect(hit).toMatchObject({ name: 'Bank 1', typeKey: 'conduit_bank', matchedChild: 'Duct 7' });
+    });
+});

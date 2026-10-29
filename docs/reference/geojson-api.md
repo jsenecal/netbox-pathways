@@ -7,10 +7,9 @@ Read-only GeoJSON endpoints for GIS client consumption. All endpoints require au
 | Endpoint | Geometry | Description |
 |----------|----------|-------------|
 | `GET /api/plugins/pathways/geo/structures/` | Point | All structures |
-| `GET /api/plugins/pathways/geo/pathways/` | LineString | All pathways |
-| `GET /api/plugins/pathways/geo/conduits/` | LineString | Conduits only |
-| `GET /api/plugins/pathways/geo/aerial-spans/` | LineString | Aerial spans only |
-| `GET /api/plugins/pathways/geo/direct-buried/` | LineString | Direct buried only |
+| `GET /api/plugins/pathways/geo/pathways/` | LineString | Every pathway type; filter with `?pathway_type=` |
+| `GET /api/plugins/pathways/geo/circuits/` | LineString | Circuit geometries |
+| `GET /api/plugins/pathways/geo/info/` | -- | Per-layer feature counts and thresholds for the map |
 | `GET /api/plugins/pathways/geo/external/<name>/` | Varies | External plugin layer |
 
 ## Authentication
@@ -55,31 +54,25 @@ All endpoints return GeoJSON FeatureCollections:
 | `id` | integer | Structure ID |
 | `name` | string | Structure name |
 | `structure_type` | string | Type identifier |
-| `site` | string | Site name |
-| `elevation` | float | Elevation in meters |
-| `installation_date` | string | ISO date |
+| `site_name` | string | Site name |
 
 ### Pathways
+
+The feature geometry is the pathway's own `geometry`. Pathways without one
+(indoor pathways, and children that follow their parent's route) are left
+out. Properties:
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `id` | integer | Pathway ID |
-| `name` | string | Pathway name |
-| `pathway_type` | string | Type identifier |
-| `start_structure` | string | Start structure name |
-| `end_structure` | string | End structure name |
-| `length` | float | Length in meters |
+| `label` | string | Pathway label |
+| `pathway_type` | string | Type identifier (`conduit_bank`, `conduit`, `aerial`, ...) |
+| `geo_length` | float | Drawn length in meters |
+| `start_anchor` / `end_anchor` | integer | Structure each end belongs to |
+| `search_match` | string | With `?q=`: label of the child the search matched through, or null when the pathway matched itself |
 
-### Conduits
-
-Includes all Pathway properties plus:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `material` | string | Conduit material |
-| `inner_diameter` | float | Inner diameter (mm) |
-| `outer_diameter` | float | Outer diameter (mm) |
-| `depth` | float | Burial depth (m) |
+Type-specific attributes (material, aerial type, ...) are not in the GeoJSON
+properties; read them from `/api/plugins/pathways/pathways/<id>/`.
 
 ### External Layers (Reference Mode)
 
@@ -139,6 +132,24 @@ filter UIs:
 ]
 ```
 
+### Map Containers
+
+`geo/pathways/` returns every pathway that has its own geometry. `?containers=true`
+keeps only the pathways the map draws: top-level pathways of a drawn type
+(conduit bank, conduit, aerial span, direct buried, submarine).
+`?containers=false` keeps everything else. The map requests one layer per
+drawn type:
+
+```
+/api/plugins/pathways/geo/pathways/?pathway_type=conduit_bank&containers=true
+```
+
+### Search
+
+`?q=` on `geo/pathways/` matches a pathway on its own fields, or through any
+descendant the user may view that matches; the matching descendant's label is
+returned in `search_match`.
+
 ### Standard Filters
 
 All standard model filters are supported:
@@ -146,7 +157,9 @@ All standard model filters are supported:
 ```
 ?site_id=1
 ?structure_type=manhole
-?material=pvc
+?pathway_type=conduit&material=pvc
+?parent_id=12
+?ancestor_id=12
 ```
 
 ## Result Limits

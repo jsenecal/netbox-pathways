@@ -8,11 +8,11 @@ NetBox pages (template_content.py) and the cable Map tab (route_map.py).
 from .geo import linestring_to_coords, point_to_latlon, to_leaflet
 
 PATHWAY_COLORS = {
+    "conduit_bank": "purple",
     "conduit": "brown",
     "aerial": "blue",
     "direct_buried": "gray",
     "innerduct": "orange",
-    "microduct": "purple",
     "tray": "green",
     "raceway": "cyan",
     "submarine": "navy",
@@ -34,12 +34,17 @@ STRUCTURE_COLORS = {
 }
 
 
-def pathway_line(pathway):
-    """Build a line dict from a Pathway instance."""
-    if not pathway.path:
+def pathway_line(pathway, geometry=None):
+    """Build a line dict from a Pathway instance.
+
+    `geometry` overrides the pathway's own, e.g. its route_geometry for a
+    pathway that runs along its container.
+    """
+    geometry = geometry or pathway.geometry
+    if not geometry:
         return None
     return {
-        "coords": linestring_to_coords(pathway.path),
+        "coords": linestring_to_coords(geometry),
         "name": str(pathway),
         "color": PATHWAY_COLORS.get(pathway.pathway_type, "gray"),
         "url": pathway.get_absolute_url(),

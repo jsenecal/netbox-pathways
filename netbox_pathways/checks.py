@@ -25,13 +25,19 @@ CHECK_ID = "netbox_pathways.E001"
 
 
 def _introspect_column_srids(connection, app_label):
-    """Return {(table, column): srid} for geometry columns in the app's tables."""
+    """Return {(table, column): srid} for geometry columns in the app's tables.
+
+    Only the current schema is read: netbox-branching keeps a full copy of
+    every table in each branch schema, and those same-named rows would
+    otherwise overwrite the main schema's entries.
+    """
     if connection.vendor != "postgresql":
         return {}
     try:
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT f_table_name, f_geometry_column, srid FROM geometry_columns WHERE f_table_name LIKE %s",
+                "SELECT f_table_name, f_geometry_column, srid FROM geometry_columns "
+                "WHERE f_table_name LIKE %s AND f_table_schema = current_schema()",
                 [f"{app_label}_%"],
             )
             return {(row[0], row[1]): row[2] for row in cursor.fetchall()}

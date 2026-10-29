@@ -52,38 +52,73 @@ curl -X POST \
      "$NETBOX/api/plugins/pathways/structures/"
 ```
 
-## Conduits
+## Pathways
+
+Every pathway type is served by one endpoint, `/api/plugins/pathways/pathways/`.
+`pathway_type` is required on create; `parent` places a pathway inside
+another one, subject to the containment rule (see
+[Pathways](../user-guide/pathways.md#hierarchy)).
 
 ### List Conduits
 
 ```bash
 curl -H "Authorization: Token $TOKEN" \
-     "$NETBOX/api/plugins/pathways/conduits/"
+     "$NETBOX/api/plugins/pathways/pathways/?pathway_type=conduit"
 ```
 
 ### Filter by Material
 
 ```bash
 curl -H "Authorization: Token $TOKEN" \
-     "$NETBOX/api/plugins/pathways/conduits/?material=pvc"
+     "$NETBOX/api/plugins/pathways/pathways/?pathway_type=conduit&material=pvc"
 ```
 
-### Create a Conduit
+### Create a Conduit Bank and a Conduit in It
 
 ```bash
 curl -X POST \
      -H "Authorization: Token $TOKEN" \
      -H "Content-Type: application/json" \
      -d '{
-       "name": "C-101",
+       "pathway_type": "conduit_bank",
+       "label": "DB-101",
        "start_structure": 1,
        "end_structure": 2,
-       "path": "LINESTRING(-73.5 45.5, -73.4 45.6)",
+       "geometry": "LINESTRING(-73.5 45.5, -73.4 45.6)",
+       "configuration": "2x3",
+       "total_conduits": 6
+     }' \
+     "$NETBOX/api/plugins/pathways/pathways/"
+
+# The conduit follows the bank's route and inherits its endpoints
+curl -X POST \
+     -H "Authorization: Token $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "pathway_type": "conduit",
+       "label": "C-101",
+       "parent": 10,
+       "position": "A1",
        "material": "pvc",
        "inner_diameter": 100
      }' \
-     "$NETBOX/api/plugins/pathways/conduits/"
+     "$NETBOX/api/plugins/pathways/pathways/"
 ```
+
+### Everything Inside a Pathway
+
+```bash
+# Direct children
+curl -H "Authorization: Token $TOKEN" \
+     "$NETBOX/api/plugins/pathways/pathways/?parent_id=10"
+
+# Every descendant, at any depth
+curl -H "Authorization: Token $TOKEN" \
+     "$NETBOX/api/plugins/pathways/pathways/?ancestor_id=10"
+```
+
+Deleting a pathway that still has children returns `409 Conflict`; delete or
+reassign the children first.
 
 ## Cable Segments
 

@@ -122,7 +122,7 @@ has been loaded, you must:
     ```
 
 4. Repeat for every geometry column on every pathways model
-   (`structure.geometry`, `pathway.path`, `sitegeometry.geometry`,
+   (`structure.geometry`, `pathway.geometry`, `sitegeometry.geometry`,
    `circuitgeometry.path`).
 5. Update `PLUGINS_CONFIG['netbox_pathways']['srid']` to `NEW_SRID` and restart
    NetBox.

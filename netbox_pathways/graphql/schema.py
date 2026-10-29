@@ -4,14 +4,9 @@ import strawberry
 import strawberry_django
 
 from .types import (
-    AerialSpanType,
     CableSegmentType,
     CircuitGeometryType,
-    ConduitBankType,
     ConduitJunctionType,
-    ConduitType,
-    DirectBuriedType,
-    InnerductType,
     PathwayLocationType,
     PathwayType,
     PlannedRouteType,
@@ -33,23 +28,8 @@ class NetBoxPathwaysQuery:
     circuit_geometry: CircuitGeometryType = strawberry_django.field()
     circuit_geometry_list: list[CircuitGeometryType] = strawberry_django.field()
 
-    conduit_bank: ConduitBankType = strawberry_django.field()
-    conduit_bank_list: list[ConduitBankType] = strawberry_django.field()
-
     pathway: PathwayType = strawberry_django.field()
     pathway_list: list[PathwayType] = strawberry_django.field()
-
-    conduit: ConduitType = strawberry_django.field()
-    conduit_list: list[ConduitType] = strawberry_django.field()
-
-    aerial_span: AerialSpanType = strawberry_django.field()
-    aerial_span_list: list[AerialSpanType] = strawberry_django.field()
-
-    direct_buried: DirectBuriedType = strawberry_django.field()
-    direct_buried_list: list[DirectBuriedType] = strawberry_django.field()
-
-    innerduct: InnerductType = strawberry_django.field()
-    innerduct_list: list[InnerductType] = strawberry_django.field()
 
     conduit_junction: ConduitJunctionType = strawberry_django.field()
     conduit_junction_list: list[ConduitJunctionType] = strawberry_django.field()

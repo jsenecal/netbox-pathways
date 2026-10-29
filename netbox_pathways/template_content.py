@@ -1,9 +1,9 @@
 from django.db.models import Q
 from django.templatetags.static import static
-from django.urls import reverse
 from netbox.plugins.templates import PluginTemplateExtension
 
 from . import models
+from .map_config import base_map_config, tile_map_config
 from .map_data import add_structure, pathway_line
 
 
@@ -43,19 +43,12 @@ class LeafletHeadExtension(PluginTemplateExtension):
     def head(self):
         import json
 
-        from django.conf import settings
-
         from . import NetBoxPathwaysConfig
 
-        plugin_cfg = settings.PLUGINS_CONFIG.get("netbox_pathways", {})
-
-        api_base = reverse("plugins-api:netbox_pathways-api:api-root")
         config = {
             **NetBoxPathwaysConfig._map_config,
-            "maxNativeZoom": plugin_cfg.get("map_max_native_zoom", 19),
-            "skipInfoZoom": plugin_cfg.get("map_skip_info_zoom", 17),
-            "apiBase": f"{api_base}geo/",
-            "overlays": plugin_cfg.get("map_overlays", []),
+            **tile_map_config(),
+            **base_map_config(),
         }
 
         detail_js = static("netbox_pathways/dist/detail-map.min.js")
@@ -64,16 +57,11 @@ class LeafletHeadExtension(PluginTemplateExtension):
 
 
 class PluginModelMapExtension(PluginTemplateExtension):
-    """Map panel on plugin model detail pages (Structure, Pathway subtypes, etc.)."""
+    """Map panel on plugin model detail pages (Structure, Pathway, ConduitJunction)."""
 
     models = [
         "netbox_pathways.structure",
         "netbox_pathways.pathway",
-        "netbox_pathways.conduit",
-        "netbox_pathways.aerialspan",
-        "netbox_pathways.directburied",
-        "netbox_pathways.innerduct",
-        "netbox_pathways.conduitbank",
         "netbox_pathways.conduitjunction",
     ]
 
@@ -99,14 +87,6 @@ class PluginModelMapExtension(PluginTemplateExtension):
         if isinstance(obj, models.Structure):
             add_structure(data, obj)
 
-        elif isinstance(obj, models.ConduitBank):
-            line = pathway_line(obj)
-            if line:
-                data["lines"].append(line)
-            for struct in (obj.start_structure, obj.end_structure):
-                if struct:
-                    add_structure(data, struct, color="orange")
-
         elif isinstance(obj, models.ConduitJunction):
             # Show the trunk conduit line for context
             if obj.trunk_conduit_id:
@@ -126,15 +106,15 @@ class PluginModelMapExtension(PluginTemplateExtension):
                 )
 
         elif isinstance(obj, models.Pathway):
-            # Pathway base or any MTI subtype (Conduit, AerialSpan, etc.)
-            line = pathway_line(obj)
+            line = pathway_line(obj, obj.route_geometry)
             if line:
                 data["lines"].append(line)
-            # Start/end structure markers
+            # Start/end structure markers; a bank marks both ends alike.
+            bank = obj.pathway_type == "conduit_bank"
             if obj.start_structure_id:
-                add_structure(data, obj.start_structure, color="green")
+                add_structure(data, obj.start_structure, color="orange" if bank else "green")
             if obj.end_structure_id:
-                add_structure(data, obj.end_structure, color="red")
+                add_structure(data, obj.end_structure, color="orange" if bank else "red")
 
         if not data["points"] and not data["lines"] and not data["polygons"]:
             return None
@@ -204,7 +184,7 @@ class CoreModelMapExtension(PluginTemplateExtension):
             ).only(
                 "label",
                 "pathway_type",
-                "path",
+                "geometry",
             )[:500]
             for p in pathways:
                 line = pathway_line(p)
@@ -242,7 +222,7 @@ class CoreModelMapExtension(PluginTemplateExtension):
                 .only(
                     "label",
                     "pathway_type",
-                    "path",
+                    "geometry",
                     "start_structure_id",
                     "end_structure_id",
                     "start_structure__name",

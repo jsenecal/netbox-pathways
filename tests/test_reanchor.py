@@ -4,7 +4,7 @@ import pytest
 from dcim.models import Location, Site
 from django.contrib.gis.geos import LineString, Point
 
-from netbox_pathways.models import Conduit, ConduitJunction, Pathway, Structure
+from netbox_pathways.models import ConduitJunction, Pathway, Structure
 from tests.helpers import SRID, coords, make_aerial_span, make_building, make_conduit, make_pole, square
 
 
@@ -57,7 +57,7 @@ class TestReanchorOnStructureSave:
     def test_branch_conduit_follows_its_junction_on_the_moved_trunk(self):
         s1, s2, s3 = make_pole("S1", 0, 0), make_pole("S2", 100, 0), make_pole("S3", 50, 50)
         trunk = make_conduit([(0, 0), (100, 0)], start_structure=s1, end_structure=s2)
-        branch = Conduit(path=LineString((50, 0), (50, 50), srid=SRID), end_structure=s3)
+        branch = Pathway(pathway_type="conduit", geometry=LineString((50, 0), (50, 50), srid=SRID), end_structure=s3)
         branch.save()
         junction = ConduitJunction.objects.create(
             trunk_conduit=trunk, branch_conduit=branch, towards_structure=s2, position_on_trunk=0.5
@@ -114,10 +114,10 @@ class TestReanchorEdgeCases:
 
     def test_moving_the_support_of_a_legacy_detached_span_moves_its_attached_end(self):
         """A span saved without clean() may lack an end; its attached end still follows."""
-        from netbox_pathways.models import AerialSpan
+        from netbox_pathways.models import Pathway
 
         pole = make_pole("LD-P1", 0, 0)
-        span = AerialSpan(start_structure=pole, path=LineString((0, 0), (30, 0), srid=SRID))
+        span = Pathway(pathway_type="aerial", start_structure=pole, geometry=LineString((0, 0), (30, 0), srid=SRID))
         span.save()
 
         _move(pole, Point(0, 5, srid=SRID))

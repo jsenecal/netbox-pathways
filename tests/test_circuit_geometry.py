@@ -33,3 +33,17 @@ class TestCircuitGeometry:
     def test_str_representation(self, circuit, line):
         cg = CircuitGeometry.objects.create(circuit=circuit, path=line)
         assert "TEST-001" in str(cg)
+
+
+def test_rest_serializer_keeps_path_field():
+    """CircuitGeometry keeps its ``path`` column through the Pathway rename.
+
+    The Pathway ``path`` -> ``geometry`` rename must not reach the circuit
+    serializer: a stale field name makes DRF raise ImproperlyConfigured when
+    the fields are built, which 500s every circuit-geometry endpoint.
+    """
+    from netbox_pathways.api.serializers import CircuitGeometrySerializer
+
+    fields = CircuitGeometrySerializer().fields
+    assert "path" in fields
+    assert "geometry" not in fields

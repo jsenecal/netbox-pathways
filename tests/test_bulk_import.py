@@ -10,7 +10,7 @@ the ``length`` field.
 
 import pytest
 from dcim.models import Location, Site
-from django.contrib.gis.geos import Point
+from django.contrib.gis.geos import LineString, Point
 from django.urls import reverse
 from utilities.views import get_viewname
 
@@ -20,13 +20,10 @@ from netbox_pathways.navigation import menu
 
 SRID = get_srid()
 
+
 IMPORTABLE_MODELS = [
     models.Structure,
-    models.Conduit,
-    models.AerialSpan,
-    models.DirectBuried,
-    models.Innerduct,
-    models.ConduitBank,
+    models.Pathway,
     models.ConduitJunction,
     models.CableSegment,
     models.PlannedRoute,
@@ -85,12 +82,13 @@ def structures(db):
 def test_conduitbank_import_form_accepts_length(structures):
     """`length` is importable on conduit banks, matching the GUI add form."""
     s1, s2 = structures
-    form = forms.ConduitBankImportForm(
+    form = forms.PathwayImportForm(
         data={
+            "pathway_type": "conduit_bank",
             "label": "CB import",
             "start_structure": s1.name,
             "end_structure": s2.name,
-            "path": "LINESTRING(-73.5 45.5, -73.501 45.5)",
+            "geometry": "LINESTRING(-73.5 45.5, -73.501 45.5)",
             "length": "123.4",
         }
     )
@@ -104,8 +102,9 @@ def test_directburied_import_form_accepts_location_endpoints():
     site = Site.objects.create(name="Import Site", slug="import-site")
     loc_a = Location.objects.create(site=site, name="Import Room A", slug="import-room-a")
     loc_b = Location.objects.create(site=site, name="Import Room B", slug="import-room-b")
-    form = forms.DirectBuriedImportForm(
+    form = forms.PathwayImportForm(
         data={
+            "pathway_type": "direct_buried",
             "label": "DB import",
             "start_location": loc_a.name,
             "end_location": loc_b.name,
@@ -169,19 +168,88 @@ def test_import_form_covers_all_editable_model_fields(form_cls):
 
 
 @pytest.mark.django_db
-def test_conduit_import_form_accepts_bank_and_position(structures):
-    """Conduit rows can carry bank membership by bank label (issue #58 follow-up)."""
+def test_conduit_import_form_accepts_parent_and_position(structures):
+    """Conduit rows can carry bank membership by parent ID (issue #58 follow-up)."""
     s1, s2 = structures
-    bank = models.ConduitBank.objects.create(label="CB58", start_structure=s1, end_structure=s2)
-    form = forms.ConduitImportForm(
+    bank = models.Pathway(pathway_type="conduit_bank", label="CB58", start_structure=s1, end_structure=s2)
+    bank.save()
+    form = forms.PathwayImportForm(
         data={
+            "pathway_type": "conduit",
             "label": "C58",
             "start_structure": s1.name,
             "end_structure": s2.name,
-            "conduit_bank": bank.label,
-            "bank_position": "A1",
+            "parent": bank.pk,
+            "position": "A1",
         }
     )
     assert form.is_valid(), form.errors
-    assert form.instance.conduit_bank == bank
-    assert form.instance.bank_position == "A1"
+    assert form.instance.parent == bank
+    assert form.instance.position == "A1"
+
+
+@pytest.mark.django_db
+def test_import_form_takes_every_pathway_type(structures):
+    """One import form creates any type, including those that had no import before (#172)."""
+    s1, s2 = structures
+    form = forms.PathwayImportForm(
+        data={
+            "pathway_type": "submarine",
+            "label": "SUB import",
+            "start_structure": s1.name,
+            "end_structure": s2.name,
+            "geometry": "LINESTRING(-73.5 45.5, -73.501 45.5)",
+        }
+    )
+    assert form.is_valid(), form.errors
+    assert form.save().pathway_type == "submarine"
+
+
+def _update_form(instance, record):
+    """An update row built the way NetBox's bulk import builds one.
+
+    The view drops every form field the CSV has no column for, so only the
+    columns in `record` are validated and saved.
+    """
+    form = forms.PathwayImportForm(data=record, instance=instance)
+    for name in [name for name in form.fields if name not in record]:
+        del form.fields[name]
+    return form
+
+
+@pytest.fixture
+def banked_conduit(structures):
+    s1, s2 = structures
+    bank = models.Pathway(
+        pathway_type="conduit_bank",
+        label="CB-UPD",
+        start_structure=s1,
+        end_structure=s2,
+        geometry=LineString(s1.geometry.coords, s2.geometry.coords, srid=SRID),
+    )
+    bank.save()
+    conduit = models.Pathway(pathway_type="conduit", label="C-UPD", parent=bank, start_structure=s1, end_structure=s2)
+    conduit.save()
+    return conduit
+
+
+@pytest.mark.django_db
+class TestUpdateWithoutGeometryColumn:
+    """Update rows that leave out the geometry column (a 500 before)."""
+
+    def test_unrelated_column_validates(self, banked_conduit):
+        form = _update_form(banked_conduit, {"label": "renamed"})
+        assert form.is_valid(), form.errors
+        assert form.save().label == "renamed"
+
+    def test_unparenting_derives_geometry_from_stored_endpoints(self, banked_conduit):
+        form = _update_form(banked_conduit, {"parent": ""})
+        assert form.is_valid(), form.errors
+        saved = form.save()
+        assert saved.parent is None
+        assert saved.geometry is not None
+
+    def test_retype_error_on_an_omitted_column_is_reported_on_the_row(self, banked_conduit):
+        form = _update_form(banked_conduit, {"pathway_type": "direct_buried"})
+        assert not form.is_valid()
+        assert any("parent" in message for message in form.non_field_errors())

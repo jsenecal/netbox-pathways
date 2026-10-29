@@ -15,13 +15,8 @@ from tenancy.models import Tenant
 
 from netbox_pathways.geo import get_srid
 from netbox_pathways.models import (
-    AerialSpan,
     CableSegment,
-    Conduit,
-    ConduitBank,
     ConduitJunction,
-    DirectBuried,
-    Innerduct,
     Pathway,
     PathwayLocation,
     SiteGeometry,
@@ -170,7 +165,7 @@ class Command(BaseCommand):
         direct_buried = self._create_direct_buried(structures, tenants)
 
         self.stdout.write("Creating innerducts (500)...")
-        self._create_innerducts(conduits)
+        self._create_innerducts(conduits + direct_buried)
 
         self.stdout.write("Creating conduit junctions (200)...")
         self._create_conduit_junctions(conduits, structures)
@@ -202,11 +197,10 @@ class Command(BaseCommand):
         CableSegment.objects.all().delete()
         PathwayLocation.objects.all().delete()
         ConduitJunction.objects.all().delete()
-        Innerduct.objects.all().delete()
-        DirectBuried.objects.all().delete()
-        AerialSpan.objects.all().delete()
-        Conduit.objects.all().delete()
-        ConduitBank.objects.all().delete()
+        # A pathway's parent is protected while it has children: peel the
+        # hierarchy from the leaves up.
+        while Pathway.objects.exists():
+            Pathway.objects.filter(children__isnull=True).delete()
         SiteGeometry.objects.all().delete()
         Structure.objects.all().delete()
         # Clean up sample prerequisite data
@@ -299,9 +293,10 @@ class Command(BaseCommand):
                 rows, cols = config.split("x")
                 total = int(rows) * int(cols)
             banks.append(
-                ConduitBank(
+                Pathway(
+                    pathway_type="conduit_bank",
                     label=f"Bank-{i + 1:04d}",
-                    path=_line_between(s1.geometry, s2.geometry),
+                    geometry=_line_between(s1.geometry, s2.geometry),
                     start_structure=s1,
                     end_structure=s2,
                     start_face=random.choice(faces),
@@ -315,7 +310,10 @@ class Command(BaseCommand):
                     else None,
                 )
             )
-        return ConduitBank.objects.bulk_create(banks)
+        # save() one by one, not bulk_create(): save() stores the derived anchors.
+        for bank in banks:
+            bank.save()
+        return banks
 
     def _create_conduits(self, structures, banks, tenants):
         conduits = []
@@ -337,9 +335,10 @@ class Command(BaseCommand):
                     bank = None  # no free position, skip bank assignment
             mat = random.choice(CONDUIT_MATERIALS)
             conduits.append(
-                Conduit(
+                Pathway(
+                    pathway_type="conduit",
                     label=f"CDT-{i + 1:04d}",
-                    path=path,
+                    geometry=path,
                     start_structure=s1,
                     end_structure=s2,
                     tenant=random.choice(tenants) if random.random() < 0.5 else None,
@@ -348,8 +347,8 @@ class Command(BaseCommand):
                     outer_diameter=round(random.uniform(30, 170), 1),
                     depth=round(random.uniform(0.5, 3.0), 2) if random.random() < 0.7 else None,
                     length=round(random.uniform(20, 2000), 1),
-                    conduit_bank=bank,
-                    bank_position=bank_pos,
+                    parent=bank,
+                    position=bank_pos,
                     installation_date=f"{random.randint(1995, 2025)}-{random.randint(1, 12):02d}-{random.randint(1, 28):02d}"
                     if random.random() < 0.5
                     else None,
@@ -370,9 +369,10 @@ class Command(BaseCommand):
             s1, s2 = random.sample(pole_structures, 2)
             path = _line_between(s1.geometry, s2.geometry)
             spans.append(
-                AerialSpan(
+                Pathway(
+                    pathway_type="aerial",
                     label=f"AER-{i + 1:04d}",
-                    path=path,
+                    geometry=path,
                     start_structure=s1,
                     end_structure=s2,
                     tenant=random.choice(tenants) if random.random() < 0.4 else None,
@@ -401,9 +401,10 @@ class Command(BaseCommand):
             s1, s2 = random.sample(structures, 2)
             path = _line_between(s1.geometry, s2.geometry)
             dbs.append(
-                DirectBuried(
+                Pathway(
+                    pathway_type="direct_buried",
                     label=f"DB-{i + 1:04d}",
-                    path=path,
+                    geometry=path,
                     start_structure=s1,
                     end_structure=s2,
                     tenant=random.choice(tenants) if random.random() < 0.4 else None,
@@ -425,26 +426,25 @@ class Command(BaseCommand):
             created.append(d)
         return created
 
-    def _create_innerducts(self, conduits):
+    def _create_innerducts(self, parents):
+        # Innerducts follow their parent's route, so they carry no geometry.
         innerducts = []
         for i in range(500):
-            parent = random.choice(conduits)
+            parent = random.choice(parents)
             innerducts.append(
-                Innerduct(
+                Pathway(
+                    pathway_type="innerduct",
                     label=f"ID-{i + 1:04d}",
-                    path=parent.path,
-                    parent_conduit=parent,
+                    parent=parent,
                     size=random.choice(INNERDUCT_SIZES),
                     color=random.choice(INNERDUCT_COLORS),
                     position=f"{random.randint(1, 4)}" if random.random() < 0.6 else "",
                     length=parent.length,
                 )
             )
-        created = []
-        for idc in innerducts:
-            idc.save()
-            created.append(idc)
-        return created
+        for innerduct in innerducts:
+            innerduct.save()
+        return innerducts
 
     def _create_conduit_junctions(self, conduits, structures):
         junctions = []
@@ -547,11 +547,15 @@ class Command(BaseCommand):
 
     def _print_counts(self):
         self.stdout.write(f"  Structures:         {Structure.objects.count()}")
-        self.stdout.write(f"  Conduit Banks:      {ConduitBank.objects.count()}")
-        self.stdout.write(f"  Conduits:           {Conduit.objects.count()}")
-        self.stdout.write(f"  Aerial Spans:       {AerialSpan.objects.count()}")
-        self.stdout.write(f"  Direct Buried:      {DirectBuried.objects.count()}")
-        self.stdout.write(f"  Innerducts:         {Innerduct.objects.count()}")
+        for pathway_type, heading in (
+            ("conduit_bank", "Conduit Banks"),
+            ("conduit", "Conduits"),
+            ("aerial", "Aerial Spans"),
+            ("direct_buried", "Direct Buried"),
+            ("innerduct", "Innerducts"),
+        ):
+            count = Pathway.objects.filter(pathway_type=pathway_type).count()
+            self.stdout.write(f"  {heading + ':':<20}{count}")
         self.stdout.write(f"  Conduit Junctions:  {ConduitJunction.objects.count()}")
         self.stdout.write(f"  Cables:             {Cable.objects.filter(label__startswith='CBL-SAMPLE-').count()}")
         self.stdout.write(f"  Cable Segments:     {CableSegment.objects.count()}")

@@ -65,7 +65,6 @@ class PathwayTypeChoices(ChoiceSet):
         ("aerial", "Aerial Span", "blue"),
         ("direct_buried", "Direct Buried", "gray"),
         ("innerduct", "Innerduct", "orange"),
-        ("microduct", "Microduct", "purple"),
         ("tray", "Cable Tray", "green"),
         ("raceway", "Raceway", "cyan"),
         ("submarine", "Submarine", "navy"),

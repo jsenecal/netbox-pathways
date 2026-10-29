@@ -4,7 +4,7 @@ from django.contrib.gis.geos import LineString, Point
 from django.core.exceptions import ValidationError
 
 from netbox_pathways.geo import get_srid
-from netbox_pathways.models import CableSegment, Conduit, Structure
+from netbox_pathways.models import CableSegment, Pathway, Structure
 
 
 @pytest.mark.django_db
@@ -27,21 +27,23 @@ class TestCableSegmentSequence:
     @pytest.fixture
     def pathway(self, structures):
         srid = get_srid()
-        return Conduit.objects.create(
+        return Pathway.objects.create(
+            pathway_type="conduit",
             label="C-1",
             start_structure=structures[0],
             end_structure=structures[1],
-            path=LineString((0, 0), (1, 1), srid=srid),
+            geometry=LineString((0, 0), (1, 1), srid=srid),
         )
 
     @pytest.fixture
     def pathway2(self, structures):
         srid = get_srid()
-        return Conduit.objects.create(
+        return Pathway.objects.create(
+            pathway_type="conduit",
             label="C-2",
             start_structure=structures[1],
             end_structure=structures[2],
-            path=LineString((1, 1), (2, 2), srid=srid),
+            geometry=LineString((1, 1), (2, 2), srid=srid),
         )
 
     @pytest.fixture
@@ -82,11 +84,12 @@ class TestCableSegmentRoutability:
     @pytest.fixture
     def pathway(self, structures):
         srid = get_srid()
-        return Conduit.objects.create(
+        return Pathway.objects.create(
+            pathway_type="conduit",
             label="C-RT-1",
             start_structure=structures[0],
             end_structure=structures[1],
-            path=LineString((0, 0), (1, 1), srid=srid),
+            geometry=LineString((0, 0), (1, 1), srid=srid),
         )
 
     def test_cable_without_terminations_fails_clean(self, pathway):

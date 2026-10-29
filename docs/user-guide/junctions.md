@@ -46,7 +46,7 @@ conduit endpoint is one and only one of:
 - a `start_location` / `end_location`, or
 - a `start_junction` / `end_junction`.
 
-`Conduit.clean()` enforces "exactly one" on each side. The junction's
+`Pathway.clean()` enforces "exactly one" on each side. The junction's
 location is computed from the trunk's geometry at
 `position_on_trunk` (using `LineString.interpolate_normalized`), and the
 branch's path is snapped to that point within 1 metre tolerance.
@@ -67,7 +67,7 @@ positions slightly (for example `0.499` vs `0.501`). In practice this is
 rarely needed.
 
 The junction's geographic location is derived, not stored. If the trunk's
-`path` geometry is moved, the junction follows.
+`geometry` is moved, the junction follows.
 
 ## Constraints At A Glance
 

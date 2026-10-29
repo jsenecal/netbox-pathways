@@ -8,36 +8,43 @@ Usage:
 
 import uuid
 import xml.etree.ElementTree as ET
+from urllib.parse import urlencode
 from xml.dom import minidom
 
 from django.core.management.base import BaseCommand
 
+from netbox_pathways.choices import PathwayTypeChoices
+from netbox_pathways.pathway_types import DRAWN_TYPES
+
+GEO_API = "/api/plugins/pathways/geo/"
+
 GEO_LAYERS = [
     {
         "name": "Structures",
-        "endpoint": "/api/plugins/pathways/geo/structures/",
+        "endpoint": f"{GEO_API}structures/",
+        "params": {},
         "geometry": "Point",
     },
     {
         "name": "Pathways (All)",
-        "endpoint": "/api/plugins/pathways/geo/pathways/",
+        "endpoint": f"{GEO_API}pathways/",
+        "params": {},
         "geometry": "LineString",
     },
-    {
-        "name": "Conduits",
-        "endpoint": "/api/plugins/pathways/geo/conduits/",
-        "geometry": "LineString",
-    },
-    {
-        "name": "Aerial Spans",
-        "endpoint": "/api/plugins/pathways/geo/aerial-spans/",
-        "geometry": "LineString",
-    },
-    {
-        "name": "Direct Buried",
-        "endpoint": "/api/plugins/pathways/geo/direct-buried/",
-        "geometry": "LineString",
-    },
+    # One layer per type the map draws, in choice order; every type is served
+    # by the single pathways endpoint filtered on pathway_type. Like the web
+    # map, each layer holds map containers only, so a conduit in a bank is
+    # drawn once, as its bank.
+    *(
+        {
+            "name": label,
+            "endpoint": f"{GEO_API}pathways/",
+            "params": {"pathway_type": value, "containers": "true"},
+            "geometry": "LineString",
+        }
+        for value, label in PathwayTypeChoices
+        if value in DRAWN_TYPES
+    ),
 ]
 
 
@@ -104,7 +111,8 @@ class Command(BaseCommand):
             layer_id = f"pathways_{layer_def['name'].lower().replace(' ', '_').replace('(', '').replace(')', '')}_{uuid.uuid4().hex[:8]}"
             layer_ids.append((layer_id, layer_def["name"]))
 
-            url = f"{base_url}{layer_def['endpoint']}?format=json&limit=0"
+            query = urlencode({**layer_def["params"], "format": "json", "limit": 0})
+            url = f"{base_url}{layer_def['endpoint']}?{query}"
             # QGIS GeoJSON URL source with auth header
             uri = f"url={url}&authcfg=&http-header:Authorization=Token {token}"
 

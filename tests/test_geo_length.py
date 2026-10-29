@@ -1,7 +1,7 @@
 """Tests for `Pathway.geo_length` -- PostGIS-side ST_Length computation.
 
 These tests deliberately prove that the length is computed by PostGIS in SQL,
-not in Python. A naive `self.path.length` implementation would still pass
+not in Python. A naive `self.geometry.length` implementation would still pass
 "value matches" assertions because GeoDjango's LineString carries a Python-side
 length too -- so the contract is verified by inspecting the SQL that's
 emitted, not just the numeric value.
@@ -13,15 +13,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
 from netbox_pathways.geo import get_srid
-from netbox_pathways.models import (
-    AerialSpan,
-    Conduit,
-    ConduitBank,
-    DirectBuried,
-    Innerduct,
-    Pathway,
-    Structure,
-)
+from netbox_pathways.models import Pathway, Structure
 
 
 @pytest.fixture
@@ -43,11 +35,12 @@ def structures(db, srid):
 
 @pytest.fixture
 def conduit(structures, srid):
-    return Conduit.objects.create(
+    return Pathway.objects.create(
+        pathway_type="conduit",
         label="GL-C1",
         start_structure=structures[0],
         end_structure=structures[1],
-        path=LineString((0.0, 0.0), (1000.0, 0.0), srid=srid),
+        geometry=LineString((0.0, 0.0), (1000.0, 0.0), srid=srid),
     )
 
 
@@ -125,11 +118,12 @@ class TestGeoLengthRounding:
     @pytest.fixture
     def diagonal_conduit(self, structures, srid):
         # sqrt(1000^2 + 1000^2) = 1414.2135623730951 m
-        return Conduit.objects.create(
+        return Pathway.objects.create(
+            pathway_type="conduit",
             label="GL-diag",
             start_structure=structures[0],
             end_structure=structures[1],
-            path=LineString((0.0, 0.0), (1000.0, 1000.0), srid=srid),
+            geometry=LineString((0.0, 0.0), (1000.0, 1000.0), srid=srid),
         )
 
     def test_default_rounds_to_centimetres(self, diagonal_conduit):
@@ -157,11 +151,12 @@ class TestGeoLengthFilterSet:
     """
 
     def _make_conduit(self, structures, srid, label, length_m):
-        return Conduit.objects.create(
+        return Pathway.objects.create(
+            pathway_type="conduit",
             label=label,
             start_structure=structures[0],
             end_structure=structures[1],
-            path=LineString((0.0, 0.0), (length_m, 0.0), srid=srid),
+            geometry=LineString((0.0, 0.0), (length_m, 0.0), srid=srid),
         )
 
     def test_filter_gte_emits_st_length_sql(self, structures, srid):
@@ -187,28 +182,3 @@ class TestGeoLengthFilterSet:
         fs = PathwayFilterSet({"geo_length__gte": "1000"}, queryset=qs)
         labels = list(fs.qs.values_list("label", flat=True))
         assert labels == [long_pw.label]
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize("model_cls", [Conduit, AerialSpan, DirectBuried, Innerduct, ConduitBank])
-class TestSubclassManagerInheritsWithGeoLength:
-    """`with_geo_length()` must be available on every concrete Pathway subclass,
-    so list views and external callers can annotate without dropping to the
-    base `Pathway.objects`. This is what lets PostGIS-side sorting work in the
-    subclass-specific list views.
-    """
-
-    def test_subclass_manager_exposes_with_geo_length(self, db, model_cls):
-        assert hasattr(model_cls.objects, "with_geo_length"), (
-            f"{model_cls.__name__}.objects must expose with_geo_length() so "
-            "list views and filters can annotate at the DB level"
-        )
-
-    def test_subclass_annotation_emits_st_length(self, db, model_cls):
-        with CaptureQueriesContext(connection) as ctx:
-            list(model_cls.objects.with_geo_length().values("pk", "_geo_length"))
-        sql_joined = " ".join(q["sql"] for q in ctx.captured_queries).upper()
-        assert "ST_LENGTH(" in sql_joined, (
-            f"{model_cls.__name__}.objects.with_geo_length() must compute via "
-            f"PostGIS ST_Length; emitted SQL: {sql_joined}"
-        )

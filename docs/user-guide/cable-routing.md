@@ -95,7 +95,7 @@ Conduit banks organize the conduit openings on a structure. This is essential fo
 
 ### Bank Positions
 
-Conduits assigned to a bank get a **Bank Position** using a grid notation:
+Conduits placed in a bank (their `parent`) get a **Position** using a grid notation:
 
 - Row letter + column number: `A1`, `A2`, `B1`, `B2`, etc.
 - Row A is the top row, column 1 is the leftmost

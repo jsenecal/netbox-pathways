@@ -269,6 +269,29 @@ describe('Sidebar (normal mode)', () => {
         });
     });
 
+    describe('setServerResults', () => {
+        function serverLabels() {
+            return Array.from(document.querySelectorAll('.pw-server-result .pw-list-label'))
+                .map(el => el.textContent);
+        }
+
+        it('names the undrawn child a container was found through', () => {
+            Sidebar.setServerResults([{
+                name: 'Bank 1', featureType: 'conduit_bank', typeKey: 'conduit_bank',
+                latlng: { lat: 45.5, lng: -73.5 } as any, matchedChild: 'Duct 7',
+            }]);
+            expect(serverLabels()).toEqual(['Bank 1 (via Duct 7)']);
+        });
+
+        it('shows a direct match by its own name', () => {
+            Sidebar.setServerResults([{
+                name: 'Bank 1', featureType: 'conduit_bank', typeKey: 'conduit_bank',
+                latlng: { lat: 45.5, lng: -73.5 } as any,
+            }]);
+            expect(serverLabels()).toEqual(['Bank 1']);
+        });
+    });
+
     describe('Escape key', () => {
         it('returns from detail to list', () => {
             Sidebar.showDetail(makeEntry());
@@ -548,4 +571,38 @@ describe('Polygon structure features', () => {
         expect((entry.layer as any).setStyle).toHaveBeenCalled();
         expect(map.flyTo).toHaveBeenCalled();
     });
+});
+
+// ---------------------------------------------------------------------------
+// Every pathway type is served by the single pathways resource; the per-type
+// REST and UI URLs are gone (refs #177).
+// ---------------------------------------------------------------------------
+
+describe('Pathway detail URLs', () => {
+    beforeEach(() => {
+        buildDOM(false);
+        mockDeps();
+        Sidebar.init(createMockMap() as any, false);
+    });
+
+    it.each(['conduit_bank', 'conduit', 'aerial', 'direct_buried', 'submarine'])(
+        'fetches and links %s features through pathways/<id>/',
+        async (featureType) => {
+            const fetchMock = vi.fn(async (_url: string) => ({
+                ok: true,
+                status: 200,
+                headers: { get: () => '' },
+                json: async () => ({ id: 42, label: 'P42' }),
+            }));
+            vi.stubGlobal('fetch', fetchMock);
+
+            Sidebar.showDetail(makeEntry({ featureType: featureType as any, props: { id: 42, name: 'P42' } }));
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(fetchMock.mock.calls[0][0]).toBe('/api/plugins/pathways/pathways/42/');
+            const link = document.querySelector('#pw-detail-body a.btn') as HTMLAnchorElement | null;
+            expect(link!.getAttribute('href')).toBe('/plugins/pathways/pathways/42/');
+        },
+    );
 });

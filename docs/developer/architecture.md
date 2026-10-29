@@ -50,58 +50,96 @@ netbox_pathways/
         └── generate_qgis_project.py
 ```
 
+Two modules carry the pathway type rules and the upgrade: `pathway_types.py`
+(per-type metadata, below) and `upgrade.py` (the tested helpers the 0.5.0 data
+migrations call).
+
 ## Data Model
 
-### Multi-Table Inheritance
+### One Pathway Model
 
-Pathways use Django's multi-table inheritance. The `Pathway` base model holds shared fields (name, path geometry, endpoints, tenant), and each subtype adds its own table with specialized fields.
+Every pathway type is a row of one concrete `Pathway` model, a NetBox
+`LtreeModel` and `NetBoxModel`. There is no multi-table inheritance and no
+proxy model, following NetBox core (`Interface.type`, `Cable.type`): the
+`pathway_type` field selects the type, and the type-specific columns are
+nullable or blank columns on the same table. A single table is also what
+netbox-branching needs to provision, edit and merge pathways.
 
 ```mermaid
 classDiagram
     class Pathway {
-        +name: str
+        +label: str
         +pathway_type: str
-        +path: LineString
-        +start_structure: FK
-        +end_structure: FK
-        +start_location: FK
-        +end_location: FK
-        +length: float
-    }
-    class Conduit {
-        +material: str
-        +inner_diameter: float
-        +outer_diameter: float
-        +depth: float
-        +conduit_bank: FK
-        +bank_position: str
-    }
-    class AerialSpan {
-        +aerial_type: str
-        +start_attachment_height: float
-        +end_attachment_height: float
-        +attachment_height: float (derived)
-        +sag: float
-        +messenger_size: str
-    }
-    class DirectBuried {
-        +burial_depth: float
-        +warning_tape: bool
-        +tracer_wire: bool
-    }
-    class Innerduct {
-        +parent_conduit: FK
-        +size: str
-        +color: str
+        +parent: FK Pathway (PROTECT)
+        +path: ltree (hierarchy)
+        +geometry: LineString
         +position: str
+        +start_structure / end_structure: FK
+        +start_location / end_location: FK
+        +start_junction / end_junction: FK
+        +length: float
+        +type-specific columns
     }
-    Pathway <|-- Conduit
-    Pathway <|-- AerialSpan
-    Pathway <|-- DirectBuried
-    Pathway <|-- Innerduct
+    Pathway "0..1" <-- "*" Pathway : parent
+    Pathway <-- ConduitJunction : trunk / branch
+    Pathway <-- CableSegment : routes
 ```
 
-The `pathway_type` field is automatically set in `save()` based on the child class.
+`LtreeModel` hard-codes an ltree column named `path` (its trigger SQL uses
+the column name literally), so the route geometry is named `geometry`,
+matching `Structure.geometry`. Ancestors and descendants are single ltree
+queries (`get_ancestors()`, `get_descendants()`, the `path__descendant`
+lookup), and the database triggers re-path a whole subtree when a pathway
+moves under a new parent.
+
+### Type Metadata
+
+`pathway_types.py` is the single source of per-type rules. `PATHWAY_TYPES`
+maps each `pathway_type` to a `PathwayTypeSpec`:
+
+| Attribute | Meaning |
+|-----------|---------|
+| `fields` | Type-specific columns that apply (drives the form's field set, the bulk-edit and filter fieldsets, and clears inapplicable fields on save) |
+| `parents` | Types this type may sit inside |
+| `parent_required` | The type cannot exist without a parent (innerduct) |
+| `drawn` | Drawn on the map when top-level; also drives the legend, map layers, `/info` counts and QGIS layers |
+| `derives_geometry` | Geometry is built from the endpoints (aerial spans are straight lines between supports) |
+| `endpoint_kinds` | What a start/end may reference (conduits add `junction`) |
+
+The model, form, serializer, filterset, map, legend and QGIS project all read
+this table; none restates it. Pure data with no Django imports, so
+migrations can load it too.
+
+### Rules in the Model
+
+Every type rule lives in `Pathway.clean()` or a database constraint, never
+only in a form or serializer, because netbox-branching merges rebuild objects
+and call `full_clean()`:
+
+- `check_containment()`: the parent's type is allowed, a required parent is
+  present, and existing children (and conduit junctions) still fit the
+  current type, so a type change cannot strand children.
+- Check constraints `pathway_parent_required` and `pathway_parent_forbidden`
+  keyed on `pathway_type`, and `unique_conduit_position_in_parent` for
+  `(parent, position)` among conduits.
+- `parent` is `on_delete=PROTECT`: a pathway with children cannot be deleted.
+- A child inherits unset endpoints from its parent; `effective_tenant` and
+  the geometry fallback walk up the ancestors.
+- `map_container` is the outermost drawn ancestor-or-self (`None` when there
+  is none); `Pathway.objects.map_containers()` is the queryset form the map
+  layers use.
+
+### Upgrade Path
+
+Migrations 0027-0031 move 0.4.x data onto the single model: rename the
+geometry column, add the flat columns and the hierarchy, copy the old subtype
+rows (setting `parent` from the bank/parent-conduit links), delete
+`microduct` rows, drop the subtype tables, install the ltree triggers, and
+repoint every content-type reference (change log, tags, journal entries,
+bookmarks, custom fields, export templates, saved filters, event rules) to
+`pathway`. Object permissions on a subtype become a new pathway permission
+scoped by `pathway_type`. The data steps call functions in `upgrade.py`, which
+are unit tested.
 
 ### Geographic Fields
 
@@ -110,7 +148,8 @@ All geographic fields use PostGIS via `django.contrib.gis`:
 | Model | Field | Geometry Type |
 |-------|-------|---------------|
 | Structure | `geometry` | Point or Polygon |
-| Pathway | `path` | LineString |
+| Pathway | `geometry` | LineString |
+| CircuitGeometry | `path` | LineString |
 | SiteGeometry | `geometry` | Point or Polygon |
 | CableSegment | `enter_point`, `exit_point`, `slack_loop_location` | Point |
 
@@ -131,17 +170,18 @@ Views use the NetBox layout system:
 
 DRF ViewSets registered via `NetBoxRouter` at `/api/plugins/pathways/`:
 
-- CRUD for all models (structures, conduits, aerial-spans, etc.)
+- CRUD for all models (structures, pathways, junctions, cable segments, etc.); every pathway type is served by `pathways/`
 - Standard NetBox filtering, pagination, and permissions
 
 ### GeoJSON Endpoints
 
 Read-only GeoJSON FeatureCollections at `/api/plugins/pathways/geo/`:
 
-- `geo/structures/` — Point features
-- `geo/pathways/` — LineString features
-- `geo/conduits/`, `geo/aerial-spans/`, `geo/direct-buried/` — Type-specific
-- `geo/external/<layer_name>/` — External plugin layers (reference mode)
+- `geo/structures/` -- Point features
+- `geo/pathways/` -- LineString features for every pathway type; `?pathway_type=` selects a type and `?containers=true` keeps only what the map draws
+- `geo/circuits/` -- Circuit geometries
+- `geo/info/` -- Per-layer feature counts for map gating
+- `geo/external/<layer_name>/` -- External plugin layers (reference mode)
 
 ### Traversal Endpoints
 

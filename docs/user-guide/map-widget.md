@@ -15,11 +15,7 @@ how the widget interacts with the rest of the form.
 | Model            | Geometry field        | Geometry type                 |
 |------------------|-----------------------|-------------------------------|
 | Structure        | `geometry`            | Point or Polygon              |
-| ConduitBank      | `path`                | LineString                    |
-| Conduit          | `path`                | LineString                    |
-| AerialSpan       | `path`                | LineString                    |
-| DirectBuried     | `path`                | LineString                    |
-| Innerduct        | `path`                | LineString                    |
+| Pathway (every type) | `geometry`        | LineString                    |
 | SiteGeometry     | `geometry`            | Point or Polygon              |
 | CircuitGeometry  | `path`                | LineString                    |
 
@@ -58,7 +54,7 @@ field's geometry type.
 
 ## Snapping And Tolerance
 
-When you draw or edit a `path`, the plugin's `Pathway.clean()` method
+When you draw or edit a pathway `geometry`, the plugin's `Pathway.clean()` method
 checks each endpoint against the related Structure or Junction:
 
 - For Point structures, the path endpoint must be within
@@ -191,9 +187,9 @@ layer is off.
 
 The same forgiving parser is wired into the bulk-import forms for
 `Structure` (column name `geometry`), `SiteGeometry` (column name
-`geometry`), and the LineString models `Conduit`, `AerialSpan`,
-`DirectBuried`, `Innerduct`, `ConduitBank`, and `CircuitGeometry`
-(column name `path`). Spreadsheets can supply any of the textarea
+`geometry`), and the LineString models `Pathway` (column name
+`geometry`) and `CircuitGeometry` (column name `path`). Spreadsheets can
+supply any of the textarea
 formats:
 
 - GeoJSON Geometry, Feature, or FeatureCollection
@@ -203,7 +199,7 @@ formats:
 - Decimal `lat, lon` pairs in Google Maps order
 
 Coordinates are interpreted as WGS84 and reprojected to the configured
-storage SRID at save time. The `path` column may be left empty: rows
+storage SRID at save time. The pathway `geometry` column may be left empty: rows
 whose endpoints are both structures get a straight-line path between
 the two structures auto-generated at import time (the same fallback the
 interactive form applies), and location-to-location (indoor) rows need

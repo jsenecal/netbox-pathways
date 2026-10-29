@@ -74,7 +74,7 @@ class TestRouteEndFlag:
         pathway = Pathway.objects.create(
             label="RR-F1",
             pathway_type="conduit",
-            path=LineString((0, 0), (100, 0), srid=SRID),
+            geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=anchor,
         )
         cable = build_cable_with_terminations(label="RR-flag-ok-cable", site=site)
@@ -86,7 +86,7 @@ class TestRouteEndFlag:
         pathway = Pathway.objects.create(
             label="RR-F2",
             pathway_type="conduit",
-            path=LineString((0, 0), (100, 0), srid=SRID),
+            geometry=LineString((0, 0), (100, 0), srid=SRID),
             start_structure=anchor,
         )
         cable = build_cable_with_terminations(label="RR-flag-un-cable", site=site, site_b=bare_site)
@@ -100,7 +100,7 @@ class TestRouteEndFlag:
         pathway = Pathway.objects.create(
             label="RR-F3",
             pathway_type="conduit",
-            path=LineString((500, 0), (600, 0), srid=SRID),
+            geometry=LineString((500, 0), (600, 0), srid=SRID),
             start_structure=elsewhere,
         )
         cable = build_cable_with_terminations(label="RR-flag-mm-cable", site=site, site_b=bare_site)

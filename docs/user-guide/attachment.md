@@ -78,8 +78,7 @@ is rejected, because it would be ambiguous where the pathway ends.
 **Membership.** A structure's pathways are the pathways with an end
 belonging to it:
 
-- the Conduit Banks, Conduits, Aerial Spans and Direct Buried tabs and their
-  counts on the structure page;
+- the Pathways tab and its count on the structure page;
 - the *Connected structures* panel (structures at the far end of those
   pathways);
 - the REST API: `no_pathways` on structures, the `has_pathways` and

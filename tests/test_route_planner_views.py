@@ -1,5 +1,6 @@
 """Tests for route-planner view helpers."""
 
+import json
 from unittest.mock import patch
 
 import pytest
@@ -10,10 +11,13 @@ from netbox_pathways.geo import get_srid
 from netbox_pathways.models import Pathway, PlannedRoute, Structure
 from netbox_pathways.views import (
     MapView,
+    PlannedRouteView,
     RoutePlannerConstraintView,
     RoutePlannerFindView,
     RoutePlannerSaveView,
     RoutePlannerView,
+    _ordered_route_pathways,
+    _route_pathway_entry,
 )
 from tests.test_map_view import parse_json_script
 
@@ -96,7 +100,7 @@ class TestRoutePlannerFindView:
         pw = Pathway.objects.create(
             label="P1",
             pathway_type="conduit",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
@@ -134,7 +138,7 @@ class TestRoutePlannerSaveView:
         pw = Pathway.objects.create(
             label="P1",
             pathway_type="conduit",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
@@ -259,3 +263,32 @@ class TestRoutePlannerMapConfig:
         config = parse_json_script(content, "pathways-map-init")
         assert config["center"] == [45.5, -73.55]
         assert config["bounds"] == [[45.4, -73.6], [45.6, -73.5]]
+
+
+@pytest.mark.django_db
+class TestRoutePathways:
+    def test_route_keeps_its_order_and_draws_an_innerduct_along_its_container(self):
+        line = LineString((0, 0), (100, 0), srid=SRID)
+        conduit = Pathway.objects.create(pathway_type="conduit", label="RP-C", geometry=line)
+        duct = Pathway.objects.create(pathway_type="innerduct", label="RP-D", parent=conduit)
+
+        ordered = _ordered_route_pathways([duct.pk, conduit.pk])
+
+        assert ordered == [duct, conduit]
+        entry = _route_pathway_entry(ordered[0])
+        assert entry["pathway_type"] == "innerduct"
+        assert entry["coords"] == _route_pathway_entry(ordered[1])["coords"] != []
+
+    def test_planned_route_map_draws_an_innerduct_along_its_container(self, admin_user):
+        line = LineString((0, 0), (100, 0), srid=SRID)
+        conduit = Pathway.objects.create(pathway_type="conduit", label="PR-C", geometry=line)
+        duct = Pathway.objects.create(pathway_type="innerduct", label="PR-D", parent=conduit)
+        plan = PlannedRoute.objects.create(name="PR-Plan", pathway_ids=[duct.pk])
+        request = RequestFactory().get("/")
+        request.user = admin_user
+
+        ctx = PlannedRouteView().get_extra_context(request, plan)
+
+        assert ctx["pathways"] == [duct]
+        (entry,) = json.loads(ctx["route_geometry_json"])["pathways"]
+        assert entry["coords"] == _route_pathway_entry(conduit)["coords"]

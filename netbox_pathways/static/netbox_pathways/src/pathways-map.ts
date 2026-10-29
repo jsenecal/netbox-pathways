@@ -111,7 +111,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
 
     const PREFS_KEY = 'pathways_map_layers';
     const DEFAULT_LAYERS: Record<string, boolean> = {
-        'Structures': true, 'Conduit Banks': true, 'Conduits': true, 'Aerial Spans': false, 'Direct Buried': false, 'Circuit Routes': false,
+        'Structures': true, 'Conduit Banks': true, 'Conduits': true, 'Aerial Spans': false, 'Direct Buried': false, 'Submarine': false, 'Circuit Routes': false,
     };
 
     function _loadPrefs(): Record<string, boolean> | null {
@@ -137,6 +137,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         'Conduits': dataLayers.conduits,
         'Aerial Spans': dataLayers.aerialSpans,
         'Direct Buried': dataLayers.directBuried,
+        'Submarine': dataLayers.submarine,
         'Circuit Routes': dataLayers.circuits,
     };
 
@@ -168,6 +169,7 @@ function initializePathwaysMap(elementId: string, config: MapInitConfig): void {
         'Conduits': 'conduits',
         'Aerial Spans': 'aerial_spans',
         'Direct Buried': 'direct_buried',
+        'Submarine': 'submarine',
         'Circuit Routes': 'circuits',
     };
     for (const [extName] of externalGroups) {

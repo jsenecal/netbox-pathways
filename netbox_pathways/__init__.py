@@ -103,9 +103,11 @@ class NetBoxPathwaysConfig(PluginConfig):
         from django.core.checks import register
 
         from . import signals  # noqa: F401
+        from .branching import register_branching_resolvers
         from .checks import check_geometry_column_srids
 
         register(check_geometry_column_srids)
+        register_branching_resolvers()
 
         logger.info("%s plugin loaded", self.name)
 

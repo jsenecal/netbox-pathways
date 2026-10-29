@@ -2,7 +2,7 @@ from circuits.api.serializers_.circuits import CircuitSerializer
 from dcim.api.serializers_.cables import CableSerializer
 from dcim.api.serializers_.sites import LocationSerializer, SiteSerializer
 from netbox.api.fields import ChoiceField
-from netbox.api.serializers import NetBoxModelSerializer
+from netbox.api.serializers import NetBoxModelSerializer, WritableNestedSerializer
 from rest_framework import serializers as drf_serializers
 from tenancy.api.serializers_.tenants import TenantSerializer
 
@@ -19,20 +19,16 @@ from ..choices import (
     StructureTypeChoices,
 )
 from ..models import (
-    AerialSpan,
     CableSegment,
     CircuitGeometry,
-    Conduit,
-    ConduitBank,
     ConduitJunction,
-    DirectBuried,
-    Innerduct,
     Pathway,
     PathwayLocation,
     PlannedRoute,
     SiteGeometry,
     Structure,
 )
+from ..pathway_types import TYPE_SPECIFIC_FIELDS_ORDERED
 
 
 class StructureSerializer(NetBoxModelSerializer):
@@ -111,60 +107,33 @@ class PathwayAnchorsMixin(drf_serializers.Serializer):
     end_anchor = StructureSerializer(nested=True, read_only=True)
 
 
-class ConduitBankSerializer(NetBoxModelSerializer):
-    url = drf_serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_pathways-api:conduitbank-detail",
-    )
-    status = ChoiceField(choices=PathwayStatusChoices, required=False)
-    start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
-    end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
-    start_face = ChoiceField(choices=BankFaceChoices, required=False, allow_blank=True)
-    end_face = ChoiceField(choices=BankFaceChoices, required=False, allow_blank=True)
-    configuration = ChoiceField(choices=ConduitBankConfigChoices, required=False, allow_blank=True)
-    encasement_type = ChoiceField(choices=EncasementTypeChoices, required=False, allow_blank=True)
-    tenant = TenantSerializer(nested=True, required=False, allow_null=True)
-    installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
-    geo_length = drf_serializers.FloatField(read_only=True)
+PATHWAY_BRIEF_FIELDS = ("id", "url", "display_url", "display", "label", "pathway_type")
+
+
+class NestedPathwaySerializer(WritableNestedSerializer):
+    """A pathway's parent: the brief pathway representation, writable by pk."""
+
+    pathway_type = ChoiceField(choices=PathwayTypeChoices, read_only=True)
 
     class Meta:
-        model = ConduitBank
-        fields = [
-            "id",
-            "url",
-            "display_url",
-            "display",
-            "label",
-            "status",
-            "start_structure",
-            "end_structure",
-            "start_face",
-            "end_face",
-            "tenant",
-            "installed_by",
-            "path",
-            "length",
-            "geo_length",
-            "configuration",
-            "total_conduits",
-            "height",
-            "width",
-            "encasement_type",
-            "installation_date",
-            "commissioned_date",
-            "comments",
-            "tags",
-            "created",
-            "last_updated",
-        ]
-        brief_fields = ("id", "url", "display_url", "display", "label")
+        model = Pathway
+        fields = PATHWAY_BRIEF_FIELDS
 
 
 class PathwaySerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
+    """Every pathway type through one endpoint.
+
+    Fields that do not apply to the pathway's type are cleared on save, and
+    the type rules (containment, required endpoints, geometry) are enforced
+    by ``Pathway.clean()``, which NetBox's serializer validation runs.
+    """
+
     url = drf_serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_pathways-api:pathway-detail",
     )
     status = ChoiceField(choices=PathwayStatusChoices, required=False)
-    pathway_type = ChoiceField(choices=PathwayTypeChoices, required=False, allow_blank=True)
+    pathway_type = ChoiceField(choices=PathwayTypeChoices)
+    parent = NestedPathwaySerializer(required=False, allow_null=True, default=None)
     start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
     end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
     start_location = LocationSerializer(nested=True, required=False, allow_null=True)
@@ -173,6 +142,13 @@ class PathwaySerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
     installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
     cables_routed = drf_serializers.IntegerField(read_only=True)
     geo_length = drf_serializers.FloatField(read_only=True)
+    start_face = ChoiceField(choices=BankFaceChoices, required=False, allow_blank=True)
+    end_face = ChoiceField(choices=BankFaceChoices, required=False, allow_blank=True)
+    configuration = ChoiceField(choices=ConduitBankConfigChoices, required=False, allow_blank=True)
+    encasement_type = ChoiceField(choices=EncasementTypeChoices, required=False, allow_blank=True)
+    material = ChoiceField(choices=ConduitMaterialChoices, required=False, allow_blank=True)
+    aerial_type = ChoiceField(choices=AerialTypeChoices, required=False, allow_blank=True)
+    attachment_height = drf_serializers.FloatField(read_only=True)
 
     class Meta:
         model = Pathway
@@ -184,125 +160,16 @@ class PathwaySerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
             "label",
             "status",
             "pathway_type",
-            "path",
+            "parent",
+            "geometry",
             "start_structure",
             "end_structure",
             "start_location",
             "end_location",
             "start_anchor",
             "end_anchor",
-            "tenant",
-            "installed_by",
-            "length",
-            "geo_length",
-            "cables_routed",
-            "installation_date",
-            "commissioned_date",
-            "comments",
-            "tags",
-            "created",
-            "last_updated",
-        ]
-        brief_fields = ("id", "url", "display_url", "display", "label", "pathway_type")
-
-
-class ConduitSerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
-    url = drf_serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_pathways-api:conduit-detail",
-    )
-    status = ChoiceField(choices=PathwayStatusChoices, required=False)
-    material = ChoiceField(choices=ConduitMaterialChoices, required=False, allow_blank=True)
-    start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
-    end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
-    start_location = LocationSerializer(nested=True, required=False, allow_null=True)
-    end_location = LocationSerializer(nested=True, required=False, allow_null=True)
-    conduit_bank = ConduitBankSerializer(nested=True, required=False, allow_null=True)
-    tenant = TenantSerializer(nested=True, required=False, allow_null=True)
-    installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
-    cables_routed = drf_serializers.IntegerField(read_only=True)
-    geo_length = drf_serializers.FloatField(read_only=True)
-
-    class Meta:
-        model = Conduit
-        fields = [
-            "id",
-            "url",
-            "display_url",
-            "display",
-            "label",
-            "status",
-            "pathway_type",
-            "path",
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "start_anchor",
-            "end_anchor",
-            "material",
-            "inner_diameter",
-            "outer_diameter",
-            "depth",
-            "conduit_bank",
-            "bank_position",
-            "start_junction",
-            "end_junction",
-            "tenant",
-            "installed_by",
-            "length",
-            "geo_length",
-            "cables_routed",
-            "installation_date",
-            "commissioned_date",
-            "comments",
-            "tags",
-            "created",
-            "last_updated",
-        ]
-        brief_fields = ("id", "url", "display_url", "display", "label", "material")
-
-
-class AerialSpanSerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
-    url = drf_serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_pathways-api:aerialspan-detail",
-    )
-    status = ChoiceField(choices=PathwayStatusChoices, required=False)
-    aerial_type = ChoiceField(choices=AerialTypeChoices, required=False, allow_blank=True)
-    attachment_height = drf_serializers.FloatField(read_only=True)
-    start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
-    end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
-    start_location = LocationSerializer(nested=True, required=False, allow_null=True)
-    end_location = LocationSerializer(nested=True, required=False, allow_null=True)
-    tenant = TenantSerializer(nested=True, required=False, allow_null=True)
-    installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
-    cables_routed = drf_serializers.IntegerField(read_only=True)
-    geo_length = drf_serializers.FloatField(read_only=True)
-
-    class Meta:
-        model = AerialSpan
-        fields = [
-            "id",
-            "url",
-            "display_url",
-            "display",
-            "label",
-            "status",
-            "pathway_type",
-            "path",
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "start_anchor",
-            "end_anchor",
-            "aerial_type",
-            "start_attachment_height",
-            "end_attachment_height",
+            *TYPE_SPECIFIC_FIELDS_ORDERED,
             "attachment_height",
-            "sag",
-            "messenger_size",
-            "wind_loading",
-            "ice_loading",
             "tenant",
             "installed_by",
             "length",
@@ -315,116 +182,15 @@ class AerialSpanSerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
             "created",
             "last_updated",
         ]
-        brief_fields = ("id", "url", "display_url", "display", "label", "aerial_type")
-
-
-class DirectBuriedSerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
-    url = drf_serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_pathways-api:directburied-detail",
-    )
-    status = ChoiceField(choices=PathwayStatusChoices, required=False)
-    start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
-    end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
-    start_location = LocationSerializer(nested=True, required=False, allow_null=True)
-    end_location = LocationSerializer(nested=True, required=False, allow_null=True)
-    tenant = TenantSerializer(nested=True, required=False, allow_null=True)
-    installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
-    cables_routed = drf_serializers.IntegerField(read_only=True)
-    geo_length = drf_serializers.FloatField(read_only=True)
-
-    class Meta:
-        model = DirectBuried
-        fields = [
-            "id",
-            "url",
-            "display_url",
-            "display",
-            "label",
-            "status",
-            "pathway_type",
-            "path",
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "start_anchor",
-            "end_anchor",
-            "burial_depth",
-            "warning_tape",
-            "tracer_wire",
-            "armor_type",
-            "tenant",
-            "installed_by",
-            "length",
-            "geo_length",
-            "cables_routed",
-            "installation_date",
-            "commissioned_date",
-            "comments",
-            "tags",
-            "created",
-            "last_updated",
-        ]
-        brief_fields = ("id", "url", "display_url", "display", "label")
-
-
-class InnerductSerializer(PathwayAnchorsMixin, NetBoxModelSerializer):
-    url = drf_serializers.HyperlinkedIdentityField(
-        view_name="plugins-api:netbox_pathways-api:innerduct-detail",
-    )
-    status = ChoiceField(choices=PathwayStatusChoices, required=False)
-    start_structure = StructureSerializer(nested=True, required=False, allow_null=True)
-    end_structure = StructureSerializer(nested=True, required=False, allow_null=True)
-    start_location = LocationSerializer(nested=True, required=False, allow_null=True)
-    end_location = LocationSerializer(nested=True, required=False, allow_null=True)
-    parent_conduit = ConduitSerializer(nested=True, required=False, allow_null=True)
-    tenant = TenantSerializer(nested=True, required=False, allow_null=True)
-    installed_by = TenantSerializer(nested=True, required=False, allow_null=True)
-    cables_routed = drf_serializers.IntegerField(read_only=True)
-    geo_length = drf_serializers.FloatField(read_only=True)
-
-    class Meta:
-        model = Innerduct
-        fields = [
-            "id",
-            "url",
-            "display_url",
-            "display",
-            "label",
-            "status",
-            "pathway_type",
-            "path",
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "start_anchor",
-            "end_anchor",
-            "parent_conduit",
-            "size",
-            "color",
-            "position",
-            "tenant",
-            "installed_by",
-            "length",
-            "geo_length",
-            "cables_routed",
-            "installation_date",
-            "commissioned_date",
-            "comments",
-            "tags",
-            "created",
-            "last_updated",
-        ]
-        brief_fields = ("id", "url", "display_url", "display", "label", "size")
+        brief_fields = PATHWAY_BRIEF_FIELDS
 
 
 class ConduitJunctionSerializer(NetBoxModelSerializer):
     url = drf_serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_pathways-api:conduitjunction-detail",
     )
-    trunk_conduit = ConduitSerializer(nested=True, required=False, allow_null=True)
-    branch_conduit = ConduitSerializer(nested=True, required=False, allow_null=True)
+    trunk_conduit = PathwaySerializer(nested=True, required=False, allow_null=True)
+    branch_conduit = PathwaySerializer(nested=True, required=False, allow_null=True)
     towards_structure = StructureSerializer(nested=True, required=False, allow_null=True)
 
     class Meta:

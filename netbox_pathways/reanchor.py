@@ -32,12 +32,10 @@ def _rewrite(pathway, placements):
     A legacy aerial span with a detached end cannot be straightened; its
     anchored end still moves, which is the best that can be done for it.
     """
-    from .models import AerialSpan
-
     pathway.snapshot()
     for side, point in placements.items():
-        pathway.path = with_end(pathway.path, side, point)
-    if isinstance(pathway, AerialSpan):
+        pathway.geometry = with_end(pathway.geometry, side, point)
+    if pathway.spec.derives_geometry:
         try:
             pathway.straighten()
         except ValidationError:
@@ -49,50 +47,40 @@ def pathways_anchored_to(structure):
     """Pathways with a path whose start or end resolves to `structure`."""
     from .models import Pathway
 
-    return Pathway.objects.touching(structure).filter(path__isnull=False)
+    return Pathway.objects.touching(structure).filter(geometry__isnull=False)
 
 
-def concrete_pathways(pathways, with_path=True):
-    """Pathways (with a path, unless `with_path` is False) as subclass instances, anchors preloaded.
+def with_anchors_loaded(pathways, with_path=True):
+    """`pathways` (with a geometry, unless `with_path` is False) in pk order, anchors preloaded.
 
-    One query per pathway type instead of several per pathway: the endpoint
-    structures, location identity structures and junction trunks that
-    anchor resolution walks are fetched with select_related.
+    One query instead of several per pathway: the endpoint structures,
+    location identity structures and junction trunks that anchor
+    resolution walks are fetched with select_related.
     """
-    from .models import PATHWAY_TYPE_MODELS, Conduit, Pathway
-
     if with_path:
-        pathways = pathways.filter(path__isnull=False)
-    pks = pathways.values("pk")
-    anchors = (
+        pathways = pathways.filter(geometry__isnull=False)
+    return pathways.select_related(
         "start_structure",
         "end_structure",
         f"start_location__{LOCATION_IDENTITY_ACCESSOR}",
         f"end_location__{LOCATION_IDENTITY_ACCESSOR}",
-    )
-    junctions = ("start_junction__trunk_conduit", "end_junction__trunk_conduit")
-    querysets = [
-        model.objects.filter(pk__in=pks).select_related(*anchors, *(junctions if model is Conduit else ()))
-        for model in PATHWAY_TYPE_MODELS.values()
-    ]
-    querysets.append(
-        Pathway.objects.filter(pk__in=pks).exclude(pathway_type__in=PATHWAY_TYPE_MODELS).select_related(*anchors)
-    )
-    return sorted((pathway for queryset in querysets for pathway in queryset), key=lambda pathway: pathway.pk)
+        "start_junction__trunk_conduit",
+        "end_junction__trunk_conduit",
+    ).order_by("pk")
 
 
 def reanchor_structure(structure, old_geom):
     """Move every pathway end anchored to `structure` from `old_geom` to its geometry."""
     with transaction.atomic():
         moved = []
-        for pathway in concrete_pathways(pathways_anchored_to(structure)):
+        for pathway in with_anchors_loaded(pathways_anchored_to(structure)):
             placements = {}
             for side in SIDES:
                 if getattr(pathway.anchor_structure(side), "pk", None) != structure.pk:
                     continue
                 # Indoor ends keep their place in the footprint; others follow the outline.
                 move = translate if pathway.is_indoor_end(side, old_geom) else relocate
-                placements[side] = move(old_geom, structure.geometry, end_point(pathway.path, side))
+                placements[side] = move(old_geom, structure.geometry, end_point(pathway.geometry, side))
             _rewrite(pathway, placements)
             moved.append(pathway)
         _cascade_junctions(moved)
@@ -104,17 +92,19 @@ def _cascade_junctions(moved):
     A branch that moves may itself be a trunk for further junctions, so the
     walk continues until no junction is left to visit.
     """
-    from .models import Conduit, ConduitJunction
+    from .models import ConduitJunction, Pathway
 
     visited = set()
-    queue = [pathway for pathway in moved if isinstance(pathway, Conduit)]
+    queue = [pathway for pathway in moved if pathway.pathway_type == "conduit"]
     while queue:
         trunk = queue.pop()
         for junction in ConduitJunction.objects.filter(trunk_conduit=trunk).exclude(pk__in=visited):
             visited.add(junction.pk)
             junction.trunk_conduit = trunk
             target = junction.derived_geometry
-            branches = Conduit.objects.filter(Q(start_junction=junction) | Q(end_junction=junction), path__isnull=False)
+            branches = Pathway.objects.filter(
+                Q(start_junction=junction) | Q(end_junction=junction), pathway_type="conduit", geometry__isnull=False
+            )
             for branch in branches:
                 _rewrite(
                     branch, {side: target for side in SIDES if getattr(branch, f"{side}_junction_id") == junction.pk}
@@ -137,11 +127,11 @@ class Drift:
 
 def find_drift(pathways):
     """Drift for each pathway in `pathways` that has a problem, in order."""
-    from .models import ENDPOINT_TOLERANCE, AerialSpan
+    from .models import ENDPOINT_TOLERANCE
 
     found = []
-    for pathway in concrete_pathways(pathways, with_path=False):
-        is_aerial = isinstance(pathway, AerialSpan)
+    for pathway in with_anchors_loaded(pathways, with_path=False):
+        is_aerial = pathway.spec.derives_geometry
         problems = []
         repairable = True
         try:
@@ -152,7 +142,7 @@ def find_drift(pathways):
             repairable = False
         if pathway.resolved_anchor_ids() != (pathway.start_anchor_id, pathway.end_anchor_id):
             problems.append("stored anchors are stale")
-        if pathway.path is None:
+        if pathway.geometry is None:
             if problems:
                 found.append(Drift(pathway, problems, repairable))
             continue
@@ -163,11 +153,11 @@ def find_drift(pathways):
                     problems.append(f"{side} vertex is not attached to a structure")
                     repairable = False
                 continue
-            end = end_point(pathway.path, side)
+            end = end_point(pathway.geometry, side)
             if not attaches(geom, end, ENDPOINT_TOLERANCE):
                 distance = landing_on(geom, end).distance(end)
                 problems.append(f"{side} vertex is {distance:.2f} from its anchor")
-        vertices = len(pathway.path.coords)
+        vertices = len(pathway.geometry.coords)
         if is_aerial and vertices > 2:
             problems.append(f"aerial span has {vertices} vertices, not 2")
         if problems:
@@ -184,14 +174,14 @@ def repair(pathway):
     """
     from .models import Pathway
 
-    if pathway.path is None:
+    if pathway.geometry is None:
         refresh_anchors(Pathway.objects.filter(pk=pathway.pk))
         return
     placements = {}
     for side in SIDES:
         geom, _kind = pathway.anchor_geometry(side)
         if geom is not None and not pathway.is_indoor_end(side, geom):
-            placements[side] = landing_on(geom, end_point(pathway.path, side))
+            placements[side] = landing_on(geom, end_point(pathway.geometry, side))
     # save() inside _rewrite() also stores fresh anchors.
     _rewrite(pathway, placements)
     _cascade_junctions([pathway])

@@ -11,7 +11,7 @@ from dcim.models import Location, Site
 from django.contrib.gis.geos import LineString
 from django.core.management import call_command
 
-from netbox_pathways.models import DirectBuried, SiteGeometry
+from netbox_pathways.models import Pathway, SiteGeometry
 from tests.helpers import SRID, coords, make_building, square
 
 
@@ -27,7 +27,12 @@ def building(db):
 
 
 def _indoor_tray(room_101, room_102):
-    tray = DirectBuried(start_location=room_101, end_location=room_102, path=LineString((10, 10), (40, 30), srid=SRID))
+    tray = Pathway(
+        pathway_type="direct_buried",
+        start_location=room_101,
+        end_location=room_102,
+        geometry=LineString((10, 10), (40, 30), srid=SRID),
+    )
     tray.full_clean()
     tray.save()
     return tray
@@ -40,14 +45,18 @@ def test_indoor_ends_stay_where_drawn(building):
 
 def test_location_end_just_outside_the_footprint_snaps_onto_the_outline(building):
     _b, room_101, _room_102 = building
-    run = DirectBuried(start_location=room_101, path=LineString((50.5, 25), (200, 25), srid=SRID))
+    run = Pathway(
+        pathway_type="direct_buried", start_location=room_101, geometry=LineString((50.5, 25), (200, 25), srid=SRID)
+    )
     run.full_clean()
     assert coords(run)[0] == (50.0, 25.0)
 
 
 def test_end_naming_the_building_directly_still_snaps_onto_the_outline(building):
     structure, _room_101, _room_102 = building
-    run = DirectBuried(start_structure=structure, path=LineString((10, 25), (200, 25), srid=SRID))
+    run = Pathway(
+        pathway_type="direct_buried", start_structure=structure, geometry=LineString((10, 25), (200, 25), srid=SRID)
+    )
     run.full_clean()
     assert coords(run)[0] == (0.0, 25.0)
 

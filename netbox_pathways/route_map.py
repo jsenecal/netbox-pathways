@@ -43,7 +43,8 @@ def cable_route_geo(cable):
 
     drawn = {}
     for ordinal, segment in enumerate(segments, 1):
-        line = pathway_line(segment.pathway) if segment.pathway else None
+        geometry = segment.pathway.route_geometry if segment.pathway else None
+        line = pathway_line(segment.pathway, geometry) if geometry else None
         if line is None:
             continue
         line["key"] = segment_key(segment.pk)
@@ -53,7 +54,7 @@ def cable_route_geo(cable):
         elif route["valid"]:
             line["color"] = COMPLETE_COLOR
         data["lines"].append(line)
-        drawn[segment.pk] = segment.pathway.path
+        drawn[segment.pk] = geometry
 
     for gap in route["gaps"]:
         after, before = drawn.get(gap["after_segment_id"]), drawn.get(gap["before_segment_id"])

@@ -2,6 +2,9 @@ from django.utils.translation import gettext_lazy as _
 from netbox.ui import attrs
 from netbox.ui.panels import ObjectAttributesPanel, ObjectsTablePanel
 
+from ..choices import PathwayTypeChoices
+from ..pathway_types import PATHWAY_TYPES, spec_or_untyped
+
 
 class HideIfEmptyObjectsTablePanel(ObjectsTablePanel):
     """ObjectsTablePanel that hides itself when no rows would render.
@@ -46,9 +49,12 @@ class StructurePanel(ObjectAttributesPanel):
 
 
 class PathwayPanel(ObjectAttributesPanel):
+    """The attributes every pathway has, whatever its type."""
+
     label = attrs.TextAttr("label", label=_("Label"))
     status = attrs.ChoiceAttr("status", label=_("Status"))
     pathway_type = attrs.ChoiceAttr("pathway_type", label=_("Type"))
+    parent = attrs.NestedObjectAttr("parent", linkify=True, label=_("Parent"))
     start_structure = attrs.RelatedObjectAttr("start_structure", linkify=True, label=_("Start structure"))
     end_structure = attrs.RelatedObjectAttr("end_structure", linkify=True, label=_("End structure"))
     start_location = attrs.RelatedObjectAttr("start_location", linkify=True, label=_("Start location"))
@@ -62,35 +68,32 @@ class PathwayPanel(ObjectAttributesPanel):
     commissioned_date = attrs.TextAttr("commissioned_date", label=_("Commissioned date"))
 
 
-class ConduitPanel(ObjectAttributesPanel):
-    label = attrs.TextAttr("label", label=_("Label"))
-    status = attrs.ChoiceAttr("status", label=_("Status"))
+class PathwayTypePanel(ObjectAttributesPanel):
+    """The type-specific attributes of a pathway, limited to the ones its type has.
+
+    Declares every type-specific attribute once; which of them a given
+    pathway shows comes from its type's spec in pathway_types.py. Types with
+    no attributes of their own render no panel.
+    """
+
+    start_face = attrs.ChoiceAttr("start_face", label=_("Start face"))
+    end_face = attrs.ChoiceAttr("end_face", label=_("End face"))
+    position = attrs.TextAttr("position", label=_("Position in parent"))
+    # Conduit bank
+    configuration = attrs.ChoiceAttr("configuration", label=_("Configuration"))
+    total_conduits = attrs.NumericAttr("total_conduits", label=_("Designed capacity"))
+    height = attrs.NumericAttr("height", label=_("Height (rows)"))
+    width = attrs.NumericAttr("width", label=_("Width (columns)"))
+    encasement_type = attrs.ChoiceAttr("encasement_type", label=_("Encasement type"))
+    # Conduit
     material = attrs.ChoiceAttr("material", label=_("Material"))
-    start_structure = attrs.RelatedObjectAttr("start_structure", linkify=True, label=_("Start structure"))
-    end_structure = attrs.RelatedObjectAttr("end_structure", linkify=True, label=_("End structure"))
-    start_location = attrs.RelatedObjectAttr("start_location", linkify=True, label=_("Start location"))
-    end_location = attrs.RelatedObjectAttr("end_location", linkify=True, label=_("End location"))
-    conduit_bank = attrs.RelatedObjectAttr("conduit_bank", linkify=True, label=_("Conduit bank"))
-    bank_position = attrs.TextAttr("bank_position", label=_("Bank position"))
     inner_diameter = attrs.NumericAttr("inner_diameter", label=_("Inner diameter (mm)"))
     outer_diameter = attrs.NumericAttr("outer_diameter", label=_("Outer diameter (mm)"))
     depth = attrs.NumericAttr("depth", label=_("Depth (m)"))
-    length = attrs.NumericAttr("length", label=_("Length (m, as-built)"))
-    geo_length = attrs.NumericAttr("geo_length", label=_("Geo length (m, drawn)"))
-    installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
-
-    installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
-    commissioned_date = attrs.TextAttr("commissioned_date", label=_("Commissioned date"))
-
-
-class AerialSpanPanel(ObjectAttributesPanel):
-    label = attrs.TextAttr("label", label=_("Label"))
-    status = attrs.ChoiceAttr("status", label=_("Status"))
+    start_junction = attrs.RelatedObjectAttr("start_junction", linkify=True, label=_("Start junction"))
+    end_junction = attrs.RelatedObjectAttr("end_junction", linkify=True, label=_("End junction"))
+    # Aerial span
     aerial_type = attrs.ChoiceAttr("aerial_type", label=_("Aerial type"))
-    start_structure = attrs.RelatedObjectAttr("start_structure", linkify=True, label=_("Start structure"))
-    end_structure = attrs.RelatedObjectAttr("end_structure", linkify=True, label=_("End structure"))
-    start_location = attrs.RelatedObjectAttr("start_location", linkify=True, label=_("Start location"))
-    end_location = attrs.RelatedObjectAttr("end_location", linkify=True, label=_("End location"))
     start_attachment_height = attrs.NumericAttr("start_attachment_height", label=_("Start attachment height (m)"))
     end_attachment_height = attrs.NumericAttr("end_attachment_height", label=_("End attachment height (m)"))
     attachment_height = attrs.NumericAttr("attachment_height", label=_("Attachment height (mean, m)"))
@@ -98,66 +101,44 @@ class AerialSpanPanel(ObjectAttributesPanel):
     messenger_size = attrs.TextAttr("messenger_size", label=_("Messenger size"))
     wind_loading = attrs.TextAttr("wind_loading", label=_("Wind loading"))
     ice_loading = attrs.TextAttr("ice_loading", label=_("Ice loading"))
-    length = attrs.NumericAttr("length", label=_("Length (m, as-built)"))
-    geo_length = attrs.NumericAttr("geo_length", label=_("Geo length (m, drawn)"))
-    installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
-
-    installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
-    commissioned_date = attrs.TextAttr("commissioned_date", label=_("Commissioned date"))
-
-
-class DirectBuriedPanel(ObjectAttributesPanel):
-    label = attrs.TextAttr("label", label=_("Label"))
-    status = attrs.ChoiceAttr("status", label=_("Status"))
-    start_structure = attrs.RelatedObjectAttr("start_structure", linkify=True, label=_("Start structure"))
-    end_structure = attrs.RelatedObjectAttr("end_structure", linkify=True, label=_("End structure"))
-    start_location = attrs.RelatedObjectAttr("start_location", linkify=True, label=_("Start location"))
-    end_location = attrs.RelatedObjectAttr("end_location", linkify=True, label=_("End location"))
+    # Direct buried
     burial_depth = attrs.NumericAttr("burial_depth", label=_("Burial depth (m)"))
     warning_tape = attrs.BooleanAttr("warning_tape", label=_("Warning tape"))
     tracer_wire = attrs.BooleanAttr("tracer_wire", label=_("Tracer wire"))
     armor_type = attrs.TextAttr("armor_type", label=_("Armor type"))
-    length = attrs.NumericAttr("length", label=_("Length (m, as-built)"))
-    geo_length = attrs.NumericAttr("geo_length", label=_("Geo length (m, drawn)"))
-    installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
-
-    installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
-    commissioned_date = attrs.TextAttr("commissioned_date", label=_("Commissioned date"))
-
-
-class InnerductPanel(ObjectAttributesPanel):
-    label = attrs.TextAttr("label", label=_("Label"))
-    status = attrs.ChoiceAttr("status", label=_("Status"))
-    parent_conduit = attrs.RelatedObjectAttr("parent_conduit", linkify=True, label=_("Parent conduit"))
+    # Innerduct
     size = attrs.TextAttr("size", label=_("Size"))
     color = attrs.ColorAttr("color", label=_("Color"))
-    position = attrs.TextAttr("position", label=_("Position"))
-    length = attrs.NumericAttr("length", label=_("Length (m, as-built)"))
-    geo_length = attrs.NumericAttr("geo_length", label=_("Geo length (m, drawn)"))
-    installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
 
-    installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
-    commissioned_date = attrs.TextAttr("commissioned_date", label=_("Commissioned date"))
+    # Computed attributes, shown when the field they are computed from applies.
+    _derived = {"attachment_height": "start_attachment_height"}
 
+    def get_context(self, context):
+        # The layout holds one panel instance for every request, so the
+        # attributes to show are worked out per call rather than stored in
+        # `only`.
+        ctx = super(ObjectAttributesPanel, self).get_context(context)
+        obj = ctx["object"]
+        pathway_type = getattr(obj, "pathway_type", None)
+        names = set(spec_or_untyped(pathway_type).fields)
+        names |= {name for name, source in self._derived.items() if source in names}
+        if pathway_type in PATHWAY_TYPES:
+            ctx["title"] = dict(PathwayTypeChoices)[obj.pathway_type]
+        ctx["attrs"] = [
+            {
+                "label": attr.label or self._name_to_label(name),
+                "value": attr.render(
+                    obj,
+                    {"name": name, "perms": ctx["perms"], "preferences": context.get("preferences", {})},
+                ),
+            }
+            for name, attr in self._attrs.items()
+            if name in names
+        ]
+        return ctx
 
-class ConduitBankPanel(ObjectAttributesPanel):
-    label = attrs.TextAttr("label", label=_("Label"))
-    status = attrs.ChoiceAttr("status", label=_("Status"))
-    start_structure = attrs.RelatedObjectAttr("start_structure", linkify=True, label=_("Start structure"))
-    start_face = attrs.ChoiceAttr("start_face", label=_("Start face"))
-    end_structure = attrs.RelatedObjectAttr("end_structure", linkify=True, label=_("End structure"))
-    end_face = attrs.ChoiceAttr("end_face", label=_("End face"))
-    tenant = attrs.RelatedObjectAttr("tenant", linkify=True, label=_("Tenant"))
-    installed_by = attrs.RelatedObjectAttr("installed_by", linkify=True, label=_("Installed by"))
-    configuration = attrs.ChoiceAttr("configuration", label=_("Configuration"))
-    total_conduits = attrs.NumericAttr("total_conduits", label=_("Designed capacity"))
-    height = attrs.NumericAttr("height", label=_("Height (rows)"))
-    width = attrs.NumericAttr("width", label=_("Width (columns)"))
-    encasement_type = attrs.ChoiceAttr("encasement_type", label=_("Encasement type"))
-    length = attrs.NumericAttr("length", label=_("Length (m, as-built)"))
-    geo_length = attrs.NumericAttr("geo_length", label=_("Geo length (m, drawn)"))
-    installation_date = attrs.TextAttr("installation_date", label=_("Installation date"))
-    commissioned_date = attrs.TextAttr("commissioned_date", label=_("Commissioned date"))
+    def should_render(self, context):
+        return bool(context["attrs"])
 
 
 class ConduitJunctionPanel(ObjectAttributesPanel):

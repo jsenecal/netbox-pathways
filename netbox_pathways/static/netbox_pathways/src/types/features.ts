@@ -13,7 +13,9 @@ export interface GeoJSONProperties {
 }
 
 // Native layer types (used internally for styling/detail lookups)
-export const NATIVE_TYPES = ['structure', 'conduit_bank', 'conduit', 'aerial', 'direct_buried', 'circuit'] as const;
+export const NATIVE_TYPES = [
+  'structure', 'conduit_bank', 'conduit', 'aerial', 'direct_buried', 'submarine', 'circuit',
+] as const;
 export type NativeFeatureType = typeof NATIVE_TYPES[number];
 
 // Any feature type — includes external layer names
@@ -32,6 +34,8 @@ export interface ServerSearchResult {
   typeKey: string;
   latlng: L.LatLng;
   url?: string;
+  /** Label of the undrawn child (innerduct, conduit in a bank) the search matched */
+  matchedChild?: string;
 }
 
 export type DetailFieldDef = [string, string] | [string, string, string];

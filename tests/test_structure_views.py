@@ -1,16 +1,14 @@
-"""A structure page's pathway tabs and connected-structures panel."""
+"""A structure page's pathways tab and connected-structures panel."""
 
 import pytest
+from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
 from django.contrib.gis.geos import LineString
+from django.test import RequestFactory
+from users.models import ObjectPermission
 
-from netbox_pathways.models import AerialSpan, ConduitBank, DirectBuried
-from netbox_pathways.views import (
-    StructureAerialSpansView,
-    StructureConduitBanksView,
-    StructureConduitsView,
-    StructureDirectBuriedView,
-    StructureView,
-)
+from netbox_pathways.models import Pathway
+from netbox_pathways.views import StructurePathwaysView, StructureView
 from tests.helpers import SRID, make_conduit, make_pole
 
 
@@ -19,26 +17,45 @@ def poles(db):
     return make_pole("SV-S1", 0, 0), make_pole("SV-S2", 100, 0), make_pole("SV-S3", 0, 100)
 
 
-def _line():
-    return LineString((0, 0), (100, 0), srid=SRID)
+def _request(user):
+    request = RequestFactory().get("/")
+    request.user = user
+    return request
 
 
-@pytest.mark.parametrize(
-    "view, build",
-    [
-        (StructureConduitBanksView, lambda a, b: ConduitBank(path=_line(), start_structure=a, end_structure=b).save()),
-        (StructureConduitsView, lambda a, b: make_conduit([(0, 0), (100, 0)], start_structure=a, end_structure=b)),
-        (StructureAerialSpansView, lambda a, b: AerialSpan(path=_line(), start_structure=a, end_structure=b).save()),
-        (StructureDirectBuriedView, lambda a, b: DirectBuried(path=_line(), start_structure=a, end_structure=b).save()),
-    ],
-)
-def test_tab_lists_and_counts_the_structures_pathways_of_that_type(poles, view, build):
+def _pathway(pathway_type, a, b):
+    return Pathway.objects.create(
+        pathway_type=pathway_type,
+        geometry=LineString((0, 0), (100, 0), srid=SRID),
+        start_structure=a,
+        end_structure=b,
+    )
+
+
+def test_tab_lists_and_counts_every_pathway_at_the_structure(poles, admin_user):
     s1, s2, s3 = poles
-    build(s1, s2)
-    build(s2, s1)
+    _pathway("conduit_bank", s1, s2)
+    _pathway("aerial", s2, s1)
+    _pathway("submarine", s2, s3)
 
-    assert (view.tab.badge(s1), view.tab.badge(s3)) == (2, 0)
-    assert len(view().get_children(None, s1)) == 2
+    assert (StructurePathwaysView.tab.badge(s1), StructurePathwaysView.tab.badge(s3)) == (2, 1)
+    children = StructurePathwaysView().get_children(_request(admin_user), s1)
+    assert sorted(children.values_list("pathway_type", flat=True)) == ["aerial", "conduit_bank"]
+
+
+def test_tab_lists_only_pathways_the_user_may_view(poles):
+    """A user allowed to view only aerial spans sees only those on the tab."""
+    s1, s2, _ = poles
+    _pathway("conduit_bank", s1, s2)
+    span = _pathway("aerial", s1, s2)
+    user = get_user_model().objects.create_user(username="sv-aerial-only")
+    permission = ObjectPermission.objects.create(
+        name="sv-aerial-only", actions=["view"], constraints={"pathway_type": "aerial"}
+    )
+    permission.object_types.add(ContentType.objects.get_for_model(Pathway))
+    permission.users.add(user)
+
+    assert list(StructurePathwaysView().get_children(_request(user), s1)) == [span]
 
 
 def test_connected_structures_panel_lists_far_ends(poles):

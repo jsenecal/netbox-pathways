@@ -22,33 +22,40 @@ Structures represent physical locations where cables enter, exit, or transition 
 
 Pathways connect structures. Create a conduit between your two structures.
 
-1. Navigate to **Plugins > Pathways > Conduits**
-2. Click **Add**
-3. Fill in the fields:
-    - **Name**: e.g., `C-001`
+1. Navigate to **Plugins > Pathways > Pathways** and click **Add** (or use the
+   **Add** button next to **Conduits** in the menu, which presets the type)
+2. Fill in the fields:
+    - **Pathway Type**: Conduit (the form then shows the conduit fields)
+    - **Label**: e.g., `C-001`
     - **Start Structure**: Select your first structure
     - **End Structure**: Select your second structure
-    - **Path**: Draw the route on the map
+    - **Geometry**: Draw the route on the map
     - **Material**: e.g., PVC
     - **Inner Diameter**: e.g., `100` mm
-4. Save
+3. Save
 
-You can also create **Aerial Spans**, **Direct Buried** routes, or **Innerducts** following the same pattern.
+Aerial spans, direct buried pathways and submarine routes are created the
+same way, with their own pathway type.
 
 ## Step 3: Create a Conduit Bank
 
-If your structure has a wall with multiple conduit openings (common in manholes), create a conduit bank.
+When several conduits share one trench or encasement between two structures,
+model them as a conduit bank with conduits inside it.
 
-1. Navigate to **Plugins > Pathways > Conduit Banks**
-2. Click **Add**
-3. Fill in:
-    - **Name**: e.g., `MH-001 North Wall`
-    - **Structure**: Select the structure
+1. Add a pathway with **Pathway Type** set to Conduit Bank
+2. Fill in:
+    - **Label**: e.g., `DB-001`
+    - **Start / End Structure**: The two structures the bank runs between
+    - **Geometry**: Draw the bank's route
     - **Configuration**: e.g., 2x3 (2 rows, 3 columns)
     - **Total Conduits**: `6`
-4. Save
+3. Save
+4. On the bank's detail page, use **Add** in the **Children** panel to add
+   each conduit. The type and parent are preset; set a **Position** (e.g.,
+   `A1`, `B2`). The conduit inherits the bank's endpoints and route.
 
-Then edit your conduits to assign them a **Conduit Bank** and **Bank Position** (e.g., `A1`, `B2`).
+Innerducts are added the same way from a conduit's (or direct buried
+pathway's) Children panel.
 
 ## Step 4: Route a Cable
 
@@ -83,7 +90,8 @@ Once cable segments are configured:
 
 ## Next Steps
 
-- [Concepts](../user-guide/concepts.md) — Understand the data model in depth
-- [Interactive Map](../user-guide/interactive-map.md) — Full map feature reference
-- [QGIS Integration](../user-guide/qgis-integration.md) — Connect GIS tools to your data
-- [API Examples](../developer/api-examples.md) — Automate with the REST API
+- [Concepts](../user-guide/concepts.md) -- Understand the data model in depth
+- [Pathways](../user-guide/pathways.md) -- Pathway types and the containment rule
+- [Interactive Map](../user-guide/interactive-map.md) -- Full map feature reference
+- [QGIS Integration](../user-guide/qgis-integration.md) -- Connect GIS tools to your data
+- [API Examples](../developer/api-examples.md) -- Automate with the REST API

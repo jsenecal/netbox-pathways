@@ -3,27 +3,22 @@ from dcim.models import Cable
 from netbox.tables import NetBoxTable, columns
 
 from .models import (
-    AerialSpan,
     CableSegment,
     CircuitGeometry,
-    Conduit,
-    ConduitBank,
     ConduitJunction,
-    DirectBuried,
-    Innerduct,
     Pathway,
     PathwayLocation,
     PlannedRoute,
     SiteGeometry,
     Structure,
 )
+from .pathway_types import TYPE_SPECIFIC_FIELDS_ORDERED
 
 _LINKED_RECORD = '<a href="{{ record.get_absolute_url }}">{{ record }}</a>'
 
 _MAP_BUTTON = (
-    "<a href=\"{% url 'plugins:netbox_pathways:map' %}?select="
-    "{% if record.pathway_type %}{{ record.pathway_type }}{% else %}structure{% endif %}"
-    '-{{ record.pk }}" class="btn btn-sm btn-primary me-1" title="Show on Map">'
+    "<a href=\"{% url 'plugins:netbox_pathways:map' %}?select={{ record.map_select_id }}\" "
+    'class="btn btn-sm btn-primary me-1" title="Show on Map">'
     '<i class="mdi mdi-map-marker-radius"></i></a>'
 )
 
@@ -73,6 +68,12 @@ class StructureTable(NetBoxTable):
 
 
 class PathwayTable(NetBoxTable):
+    """Every pathway type in one table.
+
+    Carries the columns of every type; a column whose field does not apply
+    to a row's type is simply blank for that row.
+    """
+
     pathway = tables.TemplateColumn(
         template_code=_LINKED_RECORD,
         verbose_name="Pathway",
@@ -80,16 +81,33 @@ class PathwayTable(NetBoxTable):
     )
     status = columns.ChoiceFieldColumn()
     pathway_type = columns.ChoiceFieldColumn()
+    parent = tables.Column(linkify=True)
     start_structure = tables.Column(linkify=True)
     end_structure = tables.Column(linkify=True)
     start_location = tables.Column(linkify=True)
     end_location = tables.Column(linkify=True)
-    tenant = tables.Column(linkify=True)
+    tenant = tables.TemplateColumn(
+        template_code=_TENANT_COLUMN,
+        verbose_name="Tenant",
+        order_by="tenant",
+    )
     installed_by = tables.Column(linkify=True, verbose_name="Installed by")
     geo_length = tables.Column(verbose_name="Geo length (m)", order_by="_geo_length")
     cables_routed = tables.Column(verbose_name="Cables", orderable=True)
     in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
-    actions = columns.ActionsColumn(actions=(), extra_buttons=_MAP_BUTTON)
+    # Type-specific columns
+    start_face = columns.ChoiceFieldColumn()
+    end_face = columns.ChoiceFieldColumn()
+    configuration = columns.ChoiceFieldColumn()
+    encasement_type = columns.ChoiceFieldColumn()
+    material = columns.ChoiceFieldColumn()
+    start_junction = tables.Column(linkify=True)
+    end_junction = tables.Column(linkify=True)
+    aerial_type = columns.ChoiceFieldColumn()
+    warning_tape = columns.BooleanColumn()
+    tracer_wire = columns.BooleanColumn()
+    color = columns.ColorColumn()
+    actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
 
     class Meta(NetBoxTable.Meta):
         model = Pathway
@@ -100,6 +118,8 @@ class PathwayTable(NetBoxTable):
             "label",
             "status",
             "pathway_type",
+            "parent",
+            "position",
             "start_structure",
             "end_structure",
             "start_location",
@@ -112,283 +132,19 @@ class PathwayTable(NetBoxTable):
             "in_use",
             "installation_date",
             "commissioned_date",
+            # "position" is shown next to "parent" above.
+            *(name for name in TYPE_SPECIFIC_FIELDS_ORDERED if name != "position"),
             "actions",
         )
         default_columns = (
             "pathway",
             "status",
             "pathway_type",
+            "parent",
             "start_structure",
             "end_structure",
             "in_use",
             "cables_routed",
-        )
-
-
-class ConduitTable(NetBoxTable):
-    conduit = tables.TemplateColumn(
-        template_code=_LINKED_RECORD,
-        verbose_name="Conduit",
-        order_by="pk",
-    )
-    status = columns.ChoiceFieldColumn()
-    material = columns.ChoiceFieldColumn()
-    start_structure = tables.Column(linkify=True)
-    end_structure = tables.Column(linkify=True)
-    start_location = tables.Column(linkify=True)
-    end_location = tables.Column(linkify=True)
-    conduit_bank = tables.Column(linkify=True)
-    tenant = tables.TemplateColumn(
-        template_code=_TENANT_COLUMN,
-        verbose_name="Tenant",
-        order_by="tenant",
-    )
-    installed_by = tables.Column(linkify=True, verbose_name="Installed by")
-    geo_length = tables.Column(verbose_name="Geo length (m)", order_by="_geo_length")
-    cables_routed = tables.Column(verbose_name="Cables", orderable=True)
-    in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
-    actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
-
-    class Meta(NetBoxTable.Meta):
-        model = Conduit
-        fields = (
-            "pk",
-            "id",
-            "conduit",
-            "label",
-            "status",
-            "material",
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "conduit_bank",
-            "tenant",
-            "bank_position",
-            "length",
-            "geo_length",
-            "cables_routed",
-            "in_use",
-            "installed_by",
-            "installation_date",
-            "commissioned_date",
-            "actions",
-        )
-        default_columns = (
-            "conduit",
-            "status",
-            "material",
-            "start_structure",
-            "end_structure",
-            "conduit_bank",
-            "in_use",
-            "cables_routed",
-        )
-
-
-class AerialSpanTable(NetBoxTable):
-    aerial_span = tables.TemplateColumn(
-        template_code=_LINKED_RECORD,
-        verbose_name="Aerial Span",
-        order_by="pk",
-    )
-    status = columns.ChoiceFieldColumn()
-    aerial_type = columns.ChoiceFieldColumn()
-    start_structure = tables.Column(linkify=True)
-    end_structure = tables.Column(linkify=True)
-    start_location = tables.Column(linkify=True)
-    end_location = tables.Column(linkify=True)
-    installed_by = tables.Column(linkify=True, verbose_name="Installed by")
-    geo_length = tables.Column(verbose_name="Geo length (m)", order_by="_geo_length")
-    cables_routed = tables.Column(verbose_name="Cables", orderable=True)
-    in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
-    actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
-
-    class Meta(NetBoxTable.Meta):
-        model = AerialSpan
-        fields = (
-            "pk",
-            "id",
-            "aerial_span",
-            "label",
-            "status",
-            "aerial_type",
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "start_attachment_height",
-            "end_attachment_height",
-            "length",
-            "geo_length",
-            "cables_routed",
-            "in_use",
-            "installed_by",
-            "installation_date",
-            "commissioned_date",
-            "actions",
-        )
-        default_columns = (
-            "aerial_span",
-            "status",
-            "aerial_type",
-            "start_structure",
-            "end_structure",
-            "in_use",
-            "cables_routed",
-        )
-
-
-class DirectBuriedTable(NetBoxTable):
-    direct_buried = tables.TemplateColumn(
-        template_code=_LINKED_RECORD,
-        verbose_name="Direct Buried",
-        order_by="pk",
-    )
-    status = columns.ChoiceFieldColumn()
-    start_structure = tables.Column(linkify=True)
-    end_structure = tables.Column(linkify=True)
-    start_location = tables.Column(linkify=True)
-    end_location = tables.Column(linkify=True)
-    installed_by = tables.Column(linkify=True, verbose_name="Installed by")
-    geo_length = tables.Column(verbose_name="Geo length (m)", order_by="_geo_length")
-    cables_routed = tables.Column(verbose_name="Cables", orderable=True)
-    in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
-    actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
-
-    class Meta(NetBoxTable.Meta):
-        model = DirectBuried
-        fields = (
-            "pk",
-            "id",
-            "direct_buried",
-            "label",
-            "status",
-            "start_structure",
-            "end_structure",
-            "start_location",
-            "end_location",
-            "burial_depth",
-            "warning_tape",
-            "tracer_wire",
-            "length",
-            "geo_length",
-            "cables_routed",
-            "in_use",
-            "installed_by",
-            "installation_date",
-            "commissioned_date",
-            "actions",
-        )
-        default_columns = (
-            "direct_buried",
-            "status",
-            "start_structure",
-            "end_structure",
-            "burial_depth",
-            "in_use",
-            "cables_routed",
-        )
-
-
-class InnerductTable(NetBoxTable):
-    innerduct = tables.TemplateColumn(
-        template_code=_LINKED_RECORD,
-        verbose_name="Innerduct",
-        order_by="pk",
-    )
-    status = columns.ChoiceFieldColumn()
-    parent_conduit = tables.Column(linkify=True)
-    tenant = tables.TemplateColumn(
-        template_code=_TENANT_COLUMN,
-        verbose_name="Tenant",
-        order_by="tenant",
-    )
-    color = columns.ColorColumn()
-    installed_by = tables.Column(linkify=True, verbose_name="Installed by")
-    cables_routed = tables.Column(verbose_name="Cables", orderable=True)
-    in_use = columns.BooleanColumn(verbose_name="In Use", orderable=True)
-    actions = columns.ActionsColumn(actions=("edit", "delete"))
-
-    class Meta(NetBoxTable.Meta):
-        model = Innerduct
-        fields = (
-            "pk",
-            "id",
-            "innerduct",
-            "label",
-            "status",
-            "parent_conduit",
-            "tenant",
-            "size",
-            "color",
-            "position",
-            "cables_routed",
-            "in_use",
-            "installed_by",
-            "installation_date",
-            "commissioned_date",
-            "actions",
-        )
-        default_columns = ("innerduct", "status", "parent_conduit", "size", "color", "in_use", "cables_routed")
-
-
-class ConduitBankTable(NetBoxTable):
-    conduit_bank = tables.TemplateColumn(
-        template_code=_LINKED_RECORD,
-        verbose_name="Conduit Bank",
-        order_by="pk",
-    )
-    status = columns.ChoiceFieldColumn()
-    start_structure = tables.Column(linkify=True)
-    end_structure = tables.Column(linkify=True)
-    start_face = columns.ChoiceFieldColumn()
-    end_face = columns.ChoiceFieldColumn()
-    tenant = tables.Column(linkify=True)
-    installed_by = tables.Column(linkify=True, verbose_name="Installed by")
-    configuration = columns.ChoiceFieldColumn()
-    encasement_type = columns.ChoiceFieldColumn()
-    conduit_count = tables.Column(
-        verbose_name="Conduits",
-        orderable=True,
-    )
-    geo_length = tables.Column(verbose_name="Geo length (m)", order_by="_geo_length")
-    actions = columns.ActionsColumn(actions=("edit", "delete"), extra_buttons=_MAP_BUTTON)
-
-    class Meta(NetBoxTable.Meta):
-        model = ConduitBank
-        fields = (
-            "pk",
-            "id",
-            "conduit_bank",
-            "label",
-            "status",
-            "start_structure",
-            "end_structure",
-            "start_face",
-            "end_face",
-            "tenant",
-            "installed_by",
-            "configuration",
-            "total_conduits",
-            "height",
-            "width",
-            "conduit_count",
-            "encasement_type",
-            "length",
-            "geo_length",
-            "installation_date",
-            "commissioned_date",
-            "actions",
-        )
-        default_columns = (
-            "conduit_bank",
-            "status",
-            "start_structure",
-            "end_structure",
-            "configuration",
-            "conduit_count",
-            "length",
         )
 
 

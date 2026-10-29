@@ -11,8 +11,8 @@ import pytest
 from dcim.models import Location, Site
 from django.contrib.gis.geos import LineString, Point, Polygon
 
-from netbox_pathways.geo import get_srid
-from netbox_pathways.models import Conduit, Structure
+from netbox_pathways.geo import get_srid, linestring_to_coords
+from netbox_pathways.models import Pathway, Structure
 from netbox_pathways.template_content import CoreModelMapExtension, PluginModelMapExtension
 
 SRID = get_srid()
@@ -38,7 +38,7 @@ def _structure(name, x, y, **kwargs):
 
 
 def _conduit(**kwargs):
-    c = Conduit(**kwargs)
+    c = Pathway(pathway_type="conduit", **kwargs)
     c.pathway_type = "conduit"
     c.save()
     return c
@@ -84,7 +84,7 @@ class TestLocationGeoData:
         far = _structure("FAR", 100, 100, site=site)
         _conduit(
             label="C-out",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_location=room,
             end_structure=far,
         )
@@ -100,7 +100,7 @@ class TestLocationGeoData:
         both = _structure("BOTH", 100, 100, site=site, location=room)
         _conduit(
             label="C-both",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_location=room,
             end_structure=both,
         )
@@ -116,7 +116,7 @@ class TestLocationGeoData:
         for label in ("C-1", "C-2"):
             _conduit(
                 label=label,
-                path=LineString((0, 0), (100, 100), srid=SRID),
+                geometry=LineString((0, 0), (100, 100), srid=SRID),
                 start_location=room,
                 end_structure=shared,
             )
@@ -143,7 +143,7 @@ class TestMutedContextMarkers:
         far = _structure("FAR", 100, 100, site=site)
         _conduit(
             label="C-out",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_location=room,
             end_structure=far,
         )
@@ -164,7 +164,7 @@ class TestMutedContextMarkers:
         both = _structure("BOTH", 100, 100, site=site, location=room)
         _conduit(
             label="C-both",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_location=room,
             end_structure=both,
         )
@@ -206,7 +206,7 @@ class TestLocationGeoDataRollsUpTheTree:
         far = _structure("FAR-2", 100, 100, site=site)
         _conduit(
             label="C-child",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_location=child,
             end_structure=far,
         )
@@ -277,7 +277,7 @@ class TestPolygonStructures:
         far = self._footprint("V-FAR", site=site)
         _conduit(
             label="C-poly",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_location=room,
             end_structure=far,
         )
@@ -301,7 +301,7 @@ class TestPluginModelDetailMaps:
         s2 = _structure("PW-B", 100, 100, site=site)
         conduit = _conduit(
             label="C-detail",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
@@ -312,14 +312,27 @@ class TestPluginModelDetailMaps:
         colors = {p["name"]: p["color"] for p in data["points"]}
         assert colors == {"PW-A": "green", "PW-B": "red"}
 
+    def test_innerduct_page_draws_the_line_of_its_container(self, site):
+        bank = Pathway.objects.create(
+            pathway_type="conduit_bank", label="CB-host", geometry=LineString((0, 0), (100, 100), srid=SRID)
+        )
+        conduit = Pathway.objects.create(pathway_type="conduit", label="C-banked", parent=bank)
+        duct = Pathway.objects.create(pathway_type="innerduct", label="I-banked", parent=conduit)
+
+        data = self._plugin_ext()._get_geo_data(duct)
+
+        assert [line["coords"] for line in data["lines"]] == [linestring_to_coords(bank.geometry)]
+        assert data["lines"][0]["url"] == duct.get_absolute_url()
+
     def test_conduit_bank_page_shows_line_and_orange_endpoints(self, site):
-        from netbox_pathways.models import ConduitBank
+        from netbox_pathways.models import Pathway
 
         s1 = _structure("CB-A", 0, 0, site=site)
         s2 = _structure("CB-B", 100, 100, site=site)
-        bank = ConduitBank.objects.create(
+        bank = Pathway.objects.create(
+            pathway_type="conduit_bank",
             label="CB-detail",
-            path=LineString((0, 0), (100, 100), srid=SRID),
+            geometry=LineString((0, 0), (100, 100), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
@@ -337,13 +350,13 @@ class TestPluginModelDetailMaps:
         s2 = _structure("JX-B", 1000, 0, site=site)
         trunk = _conduit(
             label="JX-trunk",
-            path=LineString((0, 0), (1000, 0), srid=SRID),
+            geometry=LineString((0, 0), (1000, 0), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
         branch = _conduit(
             label="JX-branch",
-            path=LineString((500, 100), (500, 500), srid=SRID),
+            geometry=LineString((500, 100), (500, 500), srid=SRID),
             start_structure=s1,
             end_structure=s2,
         )
@@ -394,7 +407,7 @@ class TestSiteGeoData:
             label="Site-C1",
             start_structure=inside,
             end_structure=outside,
-            path=LineString((0, 0), (100, 0), srid=SRID),
+            geometry=LineString((0, 0), (100, 0), srid=SRID),
         )
 
         data = _extension()._get_geo_data(site)

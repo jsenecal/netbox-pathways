@@ -7,9 +7,7 @@ structure -- including ends naming a location inside the structure's site.
 import pytest
 from dcim.models import Cable, Location, Site
 
-from netbox_pathways.filtersets import StructureFilterSet
-from netbox_pathways.models import CableSegment, Conduit, Pathway, SiteGeometry, Structure
-from netbox_pathways.split import find_candidates
+from netbox_pathways.models import CableSegment, Pathway, SiteGeometry, Structure
 from tests.helpers import make_building, make_conduit, make_pole
 
 
@@ -27,7 +25,7 @@ def plant(db):
 
 
 def test_touching_includes_ends_anchored_through_a_location(plant):
-    assert set(Conduit.objects.touching(plant["B"])) == {plant["C"], plant["D"]}
+    assert set(Pathway.objects.touching(plant["B"])) == {plant["C"], plant["D"]}
 
 
 def test_touching_direct_counts_structure_fields_only(plant):
@@ -35,12 +33,16 @@ def test_touching_direct_counts_structure_fields_only(plant):
 
 
 def test_has_pathways_counts_a_structure_anchored_only_through_a_location(plant):
+    from netbox_pathways.filtersets import StructureFilterSet
+
     plant["D"].delete()
     queryset = StructureFilterSet({"has_pathways": True}, queryset=Structure.objects.all()).qs
     assert plant["B"] in queryset
 
 
 def test_occupied_counts_a_structure_anchored_only_through_a_location(plant, _disable_routability_signal):
+    from netbox_pathways.filtersets import StructureFilterSet
+
     plant["D"].delete()
     cable = Cable.objects.create(label="PQ-Cable")
     CableSegment.objects.create(cable=cable, pathway=plant["C"], sequence=1)
@@ -49,5 +51,7 @@ def test_occupied_counts_a_structure_anchored_only_through_a_location(plant, _di
 
 
 def test_split_candidates_exclude_the_pathway_anchors(plant):
+    from netbox_pathways.split import find_candidates
+
     # C starts on B's outline: B lies on the line but is C's own anchor, not a split point.
     assert plant["B"] not in [candidate.structure for candidate in find_candidates(plant["C"], tolerance=1.0)]

@@ -27,24 +27,25 @@ from django.db import connections
 from django.db import models as db_models
 
 from netbox_pathways.geo import get_srid
-from netbox_pathways.models import (
-    AerialSpan,
-    CircuitGeometry,
-    Conduit,
-    ConduitBank,
-    DirectBuried,
-    Innerduct,
-    Structure,
-)
+from netbox_pathways.models import CircuitGeometry, Pathway, Structure
 
+# Schema `model` keys and the field values each one fixes on every record it
+# creates: the pathway keys all create Pathways, told apart by pathway_type.
 MODEL_MAP = {
     "structure": Structure,
-    "conduit": Conduit,
-    "aerial_span": AerialSpan,
-    "direct_buried": DirectBuried,
-    "innerduct": Innerduct,
-    "conduit_bank": ConduitBank,
+    "conduit": Pathway,
+    "aerial_span": Pathway,
+    "direct_buried": Pathway,
+    "innerduct": Pathway,
+    "conduit_bank": Pathway,
     "circuit_geometry": CircuitGeometry,
+}
+MODEL_PRESETS = {
+    "conduit": {"pathway_type": "conduit"},
+    "aerial_span": {"pathway_type": "aerial"},
+    "direct_buried": {"pathway_type": "direct_buried"},
+    "innerduct": {"pathway_type": "innerduct"},
+    "conduit_bank": {"pathway_type": "conduit_bank"},
 }
 
 TRANSFORMS = {
@@ -95,6 +96,33 @@ def _deserialize_kwargs(row, geom_field):
     return kwargs
 
 
+# Fields a child record copies from the parent it is created with.
+_CHILD_INHERITED_FIELDS = ("tenant", "start_structure", "end_structure", "start_location", "end_location", "length")
+
+
+def _child_kwargs(child_spec, parent_kwargs, parent, geom_field):
+    """Field values for one child record created alongside `parent`.
+
+    The child takes its model key's presets (its pathway_type), the
+    parent's tenant, endpoints, length and geometry, a link to the parent,
+    and a label (or name) built from the spec's name_template.
+    """
+    child_model = MODEL_MAP[child_spec["model"]]
+    child_kwargs = dict(MODEL_PRESETS.get(child_spec["model"], {}))
+    for field in _CHILD_INHERITED_FIELDS:
+        if field in parent_kwargs:
+            child_kwargs[field] = parent_kwargs[field]
+    if geom_field in parent_kwargs:
+        child_kwargs[child_spec.get("geometry_field", geom_field)] = parent_kwargs[geom_field]
+    if parent_fk_field := child_spec.get("parent_fk_field"):
+        child_kwargs[parent_fk_field] = parent
+    if name_template := child_spec.get("name_template", ""):
+        name_field = "label" if hasattr(child_model, "label") else "name"
+        parent_name_field = "label" if "label" in parent_kwargs else "name"
+        child_kwargs[name_field] = name_template.replace("{_parent_name}", parent_kwargs.get(parent_name_field, ""))
+    return child_kwargs
+
+
 def _save_batch(model_name, batch_rows, geom_field, children_specs=None):
     """Save a batch of model instances in a forked worker process.
 
@@ -118,43 +146,10 @@ def _save_batch(model_name, batch_rows, geom_field, children_specs=None):
             saved += 1
 
             # Create child records
-            if children_specs:
-                for child_spec in children_specs:
-                    child_model = MODEL_MAP[child_spec["model"]]
-                    child_geom_field = child_spec.get("geometry_field", geom_field)
-                    child_name_tmpl = child_spec.get("name_template", "")
-                    parent_fk_field = child_spec.get("parent_fk_field")
-
-                    child_kwargs = {}
-                    # Inherit common fields from parent
-                    for field in (
-                        "tenant",
-                        "start_structure",
-                        "end_structure",
-                        "start_location",
-                        "end_location",
-                        "length",
-                    ):
-                        if field in kwargs:
-                            child_kwargs[field] = kwargs[field]
-                    # Inherit geometry
-                    if geom_field in kwargs:
-                        child_kwargs[child_geom_field] = kwargs[geom_field]
-                    # Set parent FK
-                    if parent_fk_field:
-                        child_kwargs[parent_fk_field] = obj
-                    # Set label (or name for Structure children)
-                    if child_name_tmpl:
-                        name_field = "label" if hasattr(child_model, "label") else "name"
-                        parent_name_field = "label" if "label" in kwargs else "name"
-                        child_kwargs[name_field] = child_name_tmpl.replace(
-                            "{_parent_name}",
-                            kwargs.get(parent_name_field, ""),
-                        )
-
-                    child_obj = child_model(**child_kwargs)
-                    child_obj.save()
-                    saved += 1
+            for child_spec in children_specs or ():
+                child_model = MODEL_MAP[child_spec["model"]]
+                child_model(**_child_kwargs(child_spec, kwargs, obj, geom_field)).save()
+                saved += 1
 
         except Exception as e:
             errors.append(str(e))
@@ -243,8 +238,9 @@ class Command(BaseCommand):
             if isinstance(spec, str):
                 field_specs[src] = {"to": spec}
 
-        # Resolve FK defaults
-        defaults = self._resolve_defaults(schema.get("defaults", {}), model_class)
+        # Resolve FK defaults; the model key's presets win over schema defaults.
+        presets = MODEL_PRESETS.get(model_name, {})
+        defaults = {**self._resolve_defaults(schema.get("defaults", {}), model_class), **presets}
 
         # Separate field specs into categories
         fk_specs = {}
@@ -309,8 +305,9 @@ class Command(BaseCommand):
         if children_specs:
             self._log(f"  Children: {', '.join(c['model'] for c in children_specs)}")
 
-        # Detect if bulk_create is available
-        use_bulk = not model_class._meta.parents and not children_specs
+        # bulk_create skips save(), which a Pathway needs: it derives the
+        # stored anchors and clears the fields its type does not use.
+        use_bulk = model_class is not Pathway and not children_specs
 
         # ── Phase 1: Read and transform all features ──
         limit = options.get("limit") or layer.num_feat
@@ -360,7 +357,7 @@ class Command(BaseCommand):
 
                 # Geometry — force 2D
                 ogr_geom = feature.geom
-                ogr_geom.coord_dim = 2
+                ogr_geom.set_3d(False)
                 geom = ogr_geom.geos
                 geom.srid = source_srid
                 if source_srid != storage_srid:
@@ -461,9 +458,11 @@ class Command(BaseCommand):
             for j, kwargs in enumerate(all_kwargs):
                 try:
                     lookup_val = kwargs.get(name_field, f"import-{j}")
-                    update_kwargs = {k: v for k, v in kwargs.items() if k != name_field}
+                    # Match within the model key's presets (a conduit import
+                    # updates conduits only, not a same-named aerial span).
+                    update_kwargs = {k: v for k, v in kwargs.items() if k != name_field and k not in presets}
                     _, was_created = model_class.objects.update_or_create(
-                        **{name_field: lookup_val},
+                        **{name_field: lookup_val, **presets},
                         defaults=update_kwargs,
                     )
                     if was_created:
@@ -495,7 +494,7 @@ class Command(BaseCommand):
                     self._log(f"  {created_count:,}/{total:,} ({rate:,.0f}/s)...")
 
         else:
-            # Multi-table inheritance — use multiprocessing for true parallelism
+            # One save() per record -- use multiprocessing for true parallelism
             workers = min(options["workers"], os.cpu_count() or 4)
             self._log(f"\n[Phase 2] Saving {total:,} records ({workers} worker processes)...")
 

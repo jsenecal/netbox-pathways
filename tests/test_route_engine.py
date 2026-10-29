@@ -3,7 +3,7 @@ from django.contrib.gis.geos import LineString, Point
 
 from netbox_pathways.geo import get_srid
 from netbox_pathways.graph import PathwayGraph
-from netbox_pathways.models import AerialSpan, CableSegment, Conduit, Structure
+from netbox_pathways.models import CableSegment, Pathway, Structure
 from netbox_pathways.route_engine import find_route
 from tests.conftest import build_cable_with_terminations
 
@@ -64,33 +64,37 @@ class TestRouteEngine:
             for i in range(4)
         ]
         conduits = [
-            Conduit.objects.create(
+            Pathway.objects.create(
+                pathway_type="conduit",
                 label="C-RE-01",
                 start_structure=structures[0],
                 end_structure=structures[1],
-                path=LineString((0, 0), (0.01, 0.01), srid=srid),
+                geometry=LineString((0, 0), (0.01, 0.01), srid=srid),
                 length=10,
             ),
-            Conduit.objects.create(
+            Pathway.objects.create(
+                pathway_type="conduit",
                 label="C-RE-02",
                 start_structure=structures[1],
                 end_structure=structures[2],
-                path=LineString((0.01, 0.01), (0.02, 0.02), srid=srid),
+                geometry=LineString((0.01, 0.01), (0.02, 0.02), srid=srid),
                 length=20,
             ),
-            Conduit.objects.create(
+            Pathway.objects.create(
+                pathway_type="conduit",
                 label="C-RE-04",
                 start_structure=structures[1],
                 end_structure=structures[3],
-                path=LineString((0.01, 0.01), (0.03, 0.03), srid=srid),
+                geometry=LineString((0.01, 0.01), (0.03, 0.03), srid=srid),
                 length=50,
             ),
         ]
-        aerial = AerialSpan.objects.create(
+        aerial = Pathway.objects.create(
+            pathway_type="aerial",
             label="A-RE-03",
             start_structure=structures[2],
             end_structure=structures[3],
-            path=LineString((0.02, 0.02), (0.03, 0.03), srid=srid),
+            geometry=LineString((0.02, 0.02), (0.03, 0.03), srid=srid),
             length=5,
         )
         return {"structures": structures, "conduits": conduits, "aerial": aerial}

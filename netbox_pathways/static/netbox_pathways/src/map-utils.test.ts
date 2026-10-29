@@ -332,11 +332,11 @@ describe('STRUCTURE_SHAPES', () => {
 describe('PATHWAY_COLORS', () => {
     const expectedTypes = [
         'conduit', 'conduit_bank', 'aerial', 'direct_buried',
-        'innerduct', 'microduct', 'tray', 'raceway', 'submarine',
+        'innerduct', 'tray', 'raceway', 'submarine',
     ];
 
-    it('has all 9 pathway types', () => {
-        expect(Object.keys(PATHWAY_COLORS)).toHaveLength(9);
+    it('has all 8 pathway types', () => {
+        expect(Object.keys(PATHWAY_COLORS)).toHaveLength(8);
     });
 
     it.each(expectedTypes)('has color for %s', (type) => {
