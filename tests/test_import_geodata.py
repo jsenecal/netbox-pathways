@@ -284,7 +284,8 @@ def test_update_matches_only_pathways_of_the_model_keys_type(tmp_path):
 @pytest.mark.django_db(transaction=True)
 def test_children_are_created_inside_their_parent():
     """A schema's child records take their key's type and hang from the record they came with."""
-    row = {"label": "IMP-B", "geometry": LineString((0, 0), (40, 0), srid=SRID).ewkt}
+    # Rows reach the workers with the model key's presets already merged in.
+    row = {"pathway_type": "conduit_bank", "label": "IMP-B", "geometry": LineString((0, 0), (40, 0), srid=SRID).ewkt}
     children = [{"model": "conduit", "name_template": "{_parent_name}-C1", "parent_fk_field": "parent"}]
 
     assert _save_batch("conduit_bank", [row], "geometry", children) == (2, [])
