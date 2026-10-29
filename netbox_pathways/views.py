@@ -32,16 +32,11 @@ from netbox_pathways.registry import registry as map_layer_registry
 
 from . import anchors, filterforms, filtersets, forms, models, tables
 from .choices import PlannedRouteStatusChoices
-from .geo import to_leaflet
+from .geo import linestring_to_coords, to_leaflet
 from .graph import PathwayGraph, _endpoint_nodes
 from .map_config import base_map_config, tile_map_config
 from .pathway_types import PATHWAY_TYPES, UNROUTABLE_TYPES, allowed_child_types
 from .ui import panels
-
-
-def _map_url_for(obj):
-    """Build a map URL that centres on and selects this object."""
-    return reverse("plugins:netbox_pathways:map") + f"?select={obj.map_select_id}"
 
 
 class ViewInMap(ObjectAction):
@@ -50,7 +45,33 @@ class ViewInMap(ObjectAction):
 
     @classmethod
     def get_url(cls, obj):
-        return _map_url_for(obj)
+        """The map, centred on the drawn feature standing for `obj`; None (no button) when nothing is drawn."""
+        container = obj.map_container
+        if container is None:
+            return None
+        return reverse("plugins:netbox_pathways:map") + f"?select={container.map_select_id}"
+
+
+def _ordered_route_pathways(pathway_ids):
+    """The pathways of a route, in route order, each with its route geometry loaded."""
+    pathways = (
+        models.Pathway.objects.filter(pk__in=pathway_ids)
+        .with_route_geometry()
+        .select_related("start_structure", "end_structure")
+    )
+    by_pk = {pw.pk: pw for pw in pathways}
+    return [by_pk[pid] for pid in pathway_ids if pid in by_pk]
+
+
+def _route_pathway_entry(pw):
+    """One pathway of a route for the route map: a pathway inside another draws along its container."""
+    return {
+        "pk": pw.pk,
+        "label": str(pw),
+        "type": pw.get_pathway_type_display() if pw.pathway_type else "",
+        "pathway_type": pw.pathway_type or "",
+        "coords": linestring_to_coords(pw.route_geometry),
+    }
 
 
 # --- Structure ---
@@ -619,31 +640,19 @@ class PlannedRouteView(generic.ObjectView):
     def get_extra_context(self, request, instance):
         import json
 
-        from .geo import linestring_to_coords, point_to_latlon
+        from .geo import point_to_latlon
 
         ctx = super().get_extra_context(request, instance)
 
         if instance.pathway_ids:
-            pathways = models.Pathway.objects.filter(
-                pk__in=instance.pathway_ids,
-            ).select_related("start_structure", "end_structure")
-            pw_map = {pw.pk: pw for pw in pathways}
-            ordered = [pw_map[pid] for pid in instance.pathway_ids if pid in pw_map]
+            ordered = _ordered_route_pathways(instance.pathway_ids)
             ctx["pathways"] = ordered
 
             # Build route geometry for map rendering
             route_geometry = {"pathways": [], "structures": []}
             structure_pks = set()
             for pw in ordered:
-                coords = linestring_to_coords(pw.geometry) if pw.geometry else []
-                route_geometry["pathways"].append(
-                    {
-                        "pk": pw.pk,
-                        "label": str(pw),
-                        "pathway_type": pw.pathway_type or "",
-                        "coords": coords,
-                    }
-                )
+                route_geometry["pathways"].append(_route_pathway_entry(pw))
                 if pw.start_structure_id:
                     structure_pks.add(pw.start_structure_id)
                 if pw.end_structure_id:
@@ -1007,7 +1016,7 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
     def post(self, request):
         import json
 
-        from .geo import linestring_to_coords, point_to_latlon
+        from .geo import point_to_latlon
         from .route_engine import find_route
 
         start_pk = request.POST.get("start_structure")
@@ -1055,11 +1064,7 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
         route_geometry = {"pathways": [], "start": None, "end": None}
         if result:
             cost, pathway_ids = result
-            pathways = models.Pathway.objects.filter(
-                pk__in=pathway_ids,
-            ).select_related("start_structure", "end_structure")
-            pw_map = {pw.pk: pw for pw in pathways}
-            ordered = [pw_map[pid] for pid in pathway_ids if pid in pw_map]
+            ordered = _ordered_route_pathways(pathway_ids)
             routes.append(
                 {
                     "cost": cost,
@@ -1073,16 +1078,7 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
             # Collect all structures along the route
             structure_pks = set()
             for pw in ordered:
-                coords = linestring_to_coords(pw.geometry) if pw.geometry else []
-                route_geometry["pathways"].append(
-                    {
-                        "pk": pw.pk,
-                        "label": str(pw),
-                        "type": pw.get_pathway_type_display() if pw.pathway_type else "",
-                        "pathway_type": pw.pathway_type or "",
-                        "coords": coords,
-                    }
-                )
+                route_geometry["pathways"].append(_route_pathway_entry(pw))
                 if pw.start_structure_id:
                     structure_pks.add(pw.start_structure_id)
                 if pw.end_structure_id:
@@ -1134,7 +1130,7 @@ class RoutePlannerFindView(LoginRequiredMixin, View):
                     hops.append({"kind": "structure", **struct_map[entry_pk]})
 
                 # Add the pathway
-                mid = linestring_to_coords(pw.geometry)
+                mid = linestring_to_coords(pw.route_geometry)
                 pw_geo = None
                 if mid:
                     mid_idx = len(mid) // 2

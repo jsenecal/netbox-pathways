@@ -44,6 +44,9 @@ migrations on a 0.4.x database.
 
 - The generic Pathways list (`/plugins/pathways/pathways/`) no longer returns HTTP 500 (`NoReverseMatch: pathway_edit`) (#167). It is now the list for every pathway type, with edit and delete row actions.
 - `installed_by_id` filters every pathway type (#175).
+- `import_geodata` imports features again on Django 6; every row failed with "property 'coord_dim' of 'LineString' object has no setter".
+- The "Show on Map" button selects the drawn container a pathway runs in, and is hidden when nothing is drawn for it (a tray, or a conduit in a raceway).
+- Planned routes and route-planner results draw a pathway without geometry of its own (an innerduct) along its container instead of leaving it off the map.
 
 ### Upgrading
 

@@ -96,6 +96,33 @@ def _deserialize_kwargs(row, geom_field):
     return kwargs
 
 
+# Fields a child record copies from the parent it is created with.
+_CHILD_INHERITED_FIELDS = ("tenant", "start_structure", "end_structure", "start_location", "end_location", "length")
+
+
+def _child_kwargs(child_spec, parent_kwargs, parent, geom_field):
+    """Field values for one child record created alongside `parent`.
+
+    The child takes its model key's presets (its pathway_type), the
+    parent's tenant, endpoints, length and geometry, a link to the parent,
+    and a label (or name) built from the spec's name_template.
+    """
+    child_model = MODEL_MAP[child_spec["model"]]
+    child_kwargs = dict(MODEL_PRESETS.get(child_spec["model"], {}))
+    for field in _CHILD_INHERITED_FIELDS:
+        if field in parent_kwargs:
+            child_kwargs[field] = parent_kwargs[field]
+    if geom_field in parent_kwargs:
+        child_kwargs[child_spec.get("geometry_field", geom_field)] = parent_kwargs[geom_field]
+    if parent_fk_field := child_spec.get("parent_fk_field"):
+        child_kwargs[parent_fk_field] = parent
+    if name_template := child_spec.get("name_template", ""):
+        name_field = "label" if hasattr(child_model, "label") else "name"
+        parent_name_field = "label" if "label" in parent_kwargs else "name"
+        child_kwargs[name_field] = name_template.replace("{_parent_name}", parent_kwargs.get(parent_name_field, ""))
+    return child_kwargs
+
+
 def _save_batch(model_name, batch_rows, geom_field, children_specs=None):
     """Save a batch of model instances in a forked worker process.
 
@@ -119,43 +146,10 @@ def _save_batch(model_name, batch_rows, geom_field, children_specs=None):
             saved += 1
 
             # Create child records
-            if children_specs:
-                for child_spec in children_specs:
-                    child_model = MODEL_MAP[child_spec["model"]]
-                    child_geom_field = child_spec.get("geometry_field", geom_field)
-                    child_name_tmpl = child_spec.get("name_template", "")
-                    parent_fk_field = child_spec.get("parent_fk_field")
-
-                    child_kwargs = dict(MODEL_PRESETS.get(child_spec["model"], {}))
-                    # Inherit common fields from parent
-                    for field in (
-                        "tenant",
-                        "start_structure",
-                        "end_structure",
-                        "start_location",
-                        "end_location",
-                        "length",
-                    ):
-                        if field in kwargs:
-                            child_kwargs[field] = kwargs[field]
-                    # Inherit geometry
-                    if geom_field in kwargs:
-                        child_kwargs[child_geom_field] = kwargs[geom_field]
-                    # Set parent FK
-                    if parent_fk_field:
-                        child_kwargs[parent_fk_field] = obj
-                    # Set label (or name for Structure children)
-                    if child_name_tmpl:
-                        name_field = "label" if hasattr(child_model, "label") else "name"
-                        parent_name_field = "label" if "label" in kwargs else "name"
-                        child_kwargs[name_field] = child_name_tmpl.replace(
-                            "{_parent_name}",
-                            kwargs.get(parent_name_field, ""),
-                        )
-
-                    child_obj = child_model(**child_kwargs)
-                    child_obj.save()
-                    saved += 1
+            for child_spec in children_specs or ():
+                child_model = MODEL_MAP[child_spec["model"]]
+                child_model(**_child_kwargs(child_spec, kwargs, obj, geom_field)).save()
+                saved += 1
 
         except Exception as e:
             errors.append(str(e))
@@ -363,7 +357,7 @@ class Command(BaseCommand):
 
                 # Geometry — force 2D
                 ogr_geom = feature.geom
-                ogr_geom.coord_dim = 2
+                ogr_geom.set_3d(False)
                 geom = ogr_geom.geos
                 geom.srid = source_srid
                 if source_srid != storage_srid:

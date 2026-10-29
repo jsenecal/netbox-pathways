@@ -11,7 +11,7 @@ from django.contrib.gis.geos import LineString, Point
 
 from netbox_pathways.geo import get_srid
 from netbox_pathways.models import Pathway, Structure
-from netbox_pathways.views import MapView
+from netbox_pathways.views import MapView, ViewInMap
 
 from .request_helpers import api_client_for, parse_json_script, render_map, user_with_view_permission
 
@@ -155,6 +155,9 @@ class TestGeoChildSearch:
             "Cont-Buried": "Cont-Duct-Buried"
         }
 
+    def test_blank_query_matches_every_container_without_hints(self, plant, admin_user):
+        assert _search(api_client_for(admin_user), "conduit", "   ") == {"Cont-Loose": None}
+
     def test_own_label_match_carries_no_child_hint(self, plant, admin_user):
         assert _search(api_client_for(admin_user), "conduit_bank", "Cont-Bank") == {"Cont-Bank": None}
 
@@ -162,3 +165,16 @@ class TestGeoChildSearch:
         """Review focus: map search never reveals a child the user cannot view."""
         client = api_client_for(user_with_view_permission("cont-no-ducts", Pathway, {"pathway_type": "conduit"}))
         assert _search(client, "conduit", "Cont-Duct-Loose") == {}
+
+
+class TestMapButton:
+    def test_child_opens_the_map_on_its_container(self, plant):
+        assert ViewInMap.get_url(plant["banked_duct"]).endswith(f"?select=conduit_bank-{plant['bank'].pk}")
+
+    def test_structure_opens_the_map_on_itself(self, plant):
+        structure = plant["structure"]
+        assert ViewInMap.get_url(structure).endswith(f"?select={structure.map_select_id}")
+
+    def test_no_button_when_nothing_is_drawn(self, plant):
+        """A conduit in a raceway has no drawn container, so the Map button is hidden."""
+        assert ViewInMap.get_url(plant["raceway_conduit"]) is None

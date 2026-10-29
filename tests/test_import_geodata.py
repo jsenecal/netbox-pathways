@@ -1,12 +1,20 @@
 import datetime
+import json
+from io import StringIO
 
 import pytest
+import yaml
+from django.contrib.gis.geos import LineString
+from django.core.management import call_command
 
 from netbox_pathways.management.commands.import_geodata import (
     TRANSFORMS,
     Command,
     _matches_null_value,
+    _save_batch,
 )
+from netbox_pathways.models import Pathway
+from tests.helpers import SRID, coords
 
 
 class TestMatchesNullValue:
@@ -232,3 +240,55 @@ class TestLoadSchema:
         schema_path.write_text("model: [unterminated\n")
         with pytest.raises(CommandError, match="Invalid YAML"):
             self._cmd()._load_schema(str(schema_path))
+
+
+def _write_lines(tmp_path, features):
+    """A GeoJSON file of {label: [(x, y), ...]} lines in the plugin SRID."""
+    path = tmp_path / "lines.geojson"
+    path.write_text(
+        json.dumps(
+            {
+                "type": "FeatureCollection",
+                "features": [
+                    {
+                        "type": "Feature",
+                        "properties": {"name": label},
+                        "geometry": {"type": "LineString", "coordinates": points},
+                    }
+                    for label, points in features.items()
+                ],
+            }
+        )
+    )
+    return path
+
+
+@pytest.mark.django_db
+def test_update_matches_only_pathways_of_the_model_keys_type(tmp_path):
+    """--update with model ``conduit`` updates the conduit, never a same-labelled pathway of another type."""
+    old = LineString((0, 0), (10, 0), srid=SRID)
+    conduit = Pathway.objects.create(pathway_type="conduit", label="IMP-1", geometry=old)
+    buried = Pathway.objects.create(pathway_type="direct_buried", label="IMP-1", geometry=old)
+    source = _write_lines(tmp_path, {"IMP-1": [(0, 0), (50, 0)], "IMP-2": [(0, 5), (50, 5)]})
+    schema = tmp_path / "schema.yaml"
+    schema.write_text(yaml.safe_dump({"model": "conduit", "source_srid": SRID, "fields": {"name": "label"}}))
+
+    out = StringIO()
+    call_command("import_geodata", str(source), "--schema", str(schema), "--update", stdout=out)
+
+    assert coords(conduit, refresh=True) == [(0, 0), (50, 0)]
+    assert coords(buried, refresh=True) == [(0, 0), (10, 0)]
+    assert Pathway.objects.get(label="IMP-2").pathway_type == "conduit"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_children_are_created_inside_their_parent():
+    """A schema's child records take their key's type and hang from the record they came with."""
+    row = {"label": "IMP-B", "geometry": LineString((0, 0), (40, 0), srid=SRID).ewkt}
+    children = [{"model": "conduit", "name_template": "{_parent_name}-C1", "parent_fk_field": "parent"}]
+
+    assert _save_batch("conduit_bank", [row], "geometry", children) == (2, [])
+
+    child = Pathway.objects.get(label="IMP-B-C1")
+    assert child.pathway_type == "conduit"
+    assert (child.parent.label, child.parent.pathway_type) == ("IMP-B", "conduit_bank")

@@ -14,6 +14,8 @@ from netbox_pathways.views import (
     RoutePlannerFindView,
     RoutePlannerSaveView,
     RoutePlannerView,
+    _ordered_route_pathways,
+    _route_pathway_entry,
 )
 from tests.test_map_view import parse_json_script
 
@@ -259,3 +261,18 @@ class TestRoutePlannerMapConfig:
         config = parse_json_script(content, "pathways-map-init")
         assert config["center"] == [45.5, -73.55]
         assert config["bounds"] == [[45.4, -73.6], [45.6, -73.5]]
+
+
+@pytest.mark.django_db
+class TestRoutePathways:
+    def test_route_keeps_its_order_and_draws_an_innerduct_along_its_container(self):
+        line = LineString((0, 0), (100, 0), srid=SRID)
+        conduit = Pathway.objects.create(pathway_type="conduit", label="RP-C", geometry=line)
+        duct = Pathway.objects.create(pathway_type="innerduct", label="RP-D", parent=conduit)
+
+        ordered = _ordered_route_pathways([duct.pk, conduit.pk])
+
+        assert ordered == [duct, conduit]
+        entry = _route_pathway_entry(ordered[0])
+        assert entry["pathway_type"] == "innerduct"
+        assert entry["coords"] == _route_pathway_entry(ordered[1])["coords"] != []
