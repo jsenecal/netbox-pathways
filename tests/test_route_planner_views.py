@@ -1,5 +1,6 @@
 """Tests for route-planner view helpers."""
 
+import json
 from unittest.mock import patch
 
 import pytest
@@ -10,6 +11,7 @@ from netbox_pathways.geo import get_srid
 from netbox_pathways.models import Pathway, PlannedRoute, Structure
 from netbox_pathways.views import (
     MapView,
+    PlannedRouteView,
     RoutePlannerConstraintView,
     RoutePlannerFindView,
     RoutePlannerSaveView,
@@ -276,3 +278,17 @@ class TestRoutePathways:
         entry = _route_pathway_entry(ordered[0])
         assert entry["pathway_type"] == "innerduct"
         assert entry["coords"] == _route_pathway_entry(ordered[1])["coords"] != []
+
+    def test_planned_route_map_draws_an_innerduct_along_its_container(self, admin_user):
+        line = LineString((0, 0), (100, 0), srid=SRID)
+        conduit = Pathway.objects.create(pathway_type="conduit", label="PR-C", geometry=line)
+        duct = Pathway.objects.create(pathway_type="innerduct", label="PR-D", parent=conduit)
+        plan = PlannedRoute.objects.create(name="PR-Plan", pathway_ids=[duct.pk])
+        request = RequestFactory().get("/")
+        request.user = admin_user
+
+        ctx = PlannedRouteView().get_extra_context(request, plan)
+
+        assert ctx["pathways"] == [duct]
+        (entry,) = json.loads(ctx["route_geometry_json"])["pathways"]
+        assert entry["coords"] == _route_pathway_entry(conduit)["coords"]

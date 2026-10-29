@@ -260,8 +260,6 @@ class PathwayGeoFilterSet(filtersets.PathwayFilterSet):
         return containers if value else queryset.exclude(pk__in=containers.values("pk"))
 
     def search(self, queryset, name, value):
-        if not value.strip():
-            return queryset
         own = super().search(queryset, name, value).values("pk")
         # Restricted, so a search cannot probe labels the user may not view
         children = super().search(models.Pathway.objects.restrict(self.request.user, "view"), name, value)

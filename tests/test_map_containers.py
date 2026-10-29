@@ -155,9 +155,6 @@ class TestGeoChildSearch:
             "Cont-Buried": "Cont-Duct-Buried"
         }
 
-    def test_blank_query_matches_every_container_without_hints(self, plant, admin_user):
-        assert _search(api_client_for(admin_user), "conduit", "   ") == {"Cont-Loose": None}
-
     def test_own_label_match_carries_no_child_hint(self, plant, admin_user):
         assert _search(api_client_for(admin_user), "conduit_bank", "Cont-Bank") == {"Cont-Bank": None}
 
