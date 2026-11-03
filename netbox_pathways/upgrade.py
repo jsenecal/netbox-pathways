@@ -204,6 +204,54 @@ PARENT_LINK_NAMES = ("pathway_ptr", "pathway_ptr_id")
 # through one of them is refused rather than guessed at.
 CHILD_ACCESSOR_NAMES = frozenset(LEGACY_SUBTYPES)
 
+# The subtype-only names each 0.4 model answered to: its own columns and the
+# reverse accessors other models gave it, plus `path`, the 0.4 base geometry
+# every subtype inherited. "pathway" is the 0.4 base itself.
+LEGACY_REVERSE_ACCESSORS: dict[str, tuple[str, ...]] = {
+    "conduitbank": ("conduits",),
+    "conduit": ("innerducts", "junction_as_branch", "junctions_on_trunk"),
+}
+LEGACY_NAMES: dict[str, frozenset[str]] = {
+    "pathway": frozenset({"path"}),
+    **{
+        model_name: frozenset(
+            (
+                "path",
+                *fields,
+                *LEGACY_MOVED_FIELDS.get(model_name, {}),
+                *LEGACY_REVERSE_ACCESSORS.get(model_name, ()),
+            )
+        )
+        for model_name, fields in LEGACY_RENAMED_FIELDS.items()
+    },
+}
+
+# Names the flattened pathway answers to that the 0.4 base did not. A key
+# reaching one of them from a 0.4 model that lacked it raised FieldError in
+# every permission check; on the flat table it resolves, and against a
+# default (`warning_tape=False` on a conduit) it would match every row of
+# the type, so such a key is refused rather than carried over.
+FLATTEN_ADDED_NAMES = frozenset(
+    {
+        "geometry",
+        "children",
+        *(name for fields in LEGACY_RENAMED_FIELDS.values() for name in fields),
+        *(new for moved in LEGACY_MOVED_FIELDS.values() for new in moved.values()),
+        *(name for accessors in LEGACY_REVERSE_ACCESSORS.values() for name in accessors),
+    }
+)
+
+# The 0.4 model a relation reached, where it was a subtype rather than the
+# base pathway: {(model label, legacy relation name): legacy model name}.
+LEGACY_RELATION_TARGETS: dict[tuple[str, str], str] = {
+    ("netbox_pathways.pathway", "conduit_bank"): "conduitbank",
+    ("netbox_pathways.pathway", "parent_conduit"): "conduit",
+    ("netbox_pathways.pathway", "conduits"): "conduit",
+    ("netbox_pathways.pathway", "innerducts"): "innerduct",
+    ("netbox_pathways.conduitjunction", "trunk_conduit"): "conduit",
+    ("netbox_pathways.conduitjunction", "branch_conduit"): "conduit",
+}
+
 CONTENT_TYPE_MODELS = frozenset({"contenttypes.contenttype", "core.objecttype"})
 
 # Content-type references the generic repoint leaves alone: object
@@ -233,13 +281,17 @@ def _get_field(model, name):
         return None
 
 
-def _rewrite_key(key, start_model, *, strict=True):
+def _rewrite_key(key, start_model, *, strict=True, legacy_model="pathway"):
     """Rename the legacy segments of one constraint lookup and check it resolves.
 
     Every segment until the first non-relation field must be a field (or
     `pk`) of the model reached so far; renames apply wherever that model is
     the pathway. After a field, one lookup or transform it supports ends the
     check, and what follows is kept as written.
+
+    Wherever the key is on a pathway it must also have resolved on the 0.4
+    model it was on there: `legacy_model` when it starts on one, else the one
+    each relation led to (see LEGACY_RELATION_TARGETS).
 
     With `strict=False` only the part from the first pathway on must
     resolve: a key that fails before reaching a pathway is returned as it
@@ -251,7 +303,7 @@ def _rewrite_key(key, start_model, *, strict=True):
     reached = False
     index = 0
     while index < len(segments):
-        segment = segments[index]
+        segment = original = segments[index]
         if model is not None and _is_pathway(model):
             reached = True
             if segment in CHILD_ACCESSOR_NAMES:
@@ -265,8 +317,12 @@ def _rewrite_key(key, start_model, *, strict=True):
                 segment = "id"
             elif _is_pathway(model):
                 segment = CONSTRAINT_RENAMES.get(segment, segment)
+                if segment in FLATTEN_ADDED_NAMES and original not in LEGACY_NAMES[legacy_model]:
+                    raise UntranslatableConstraint(f"{key!r}: the 0.4 {legacy_model} model did not have {original!r}")
             found = _get_field(model, segment)
             if found is not None:
+                if found.is_relation and _is_pathway(found.related_model):
+                    legacy_model = LEGACY_RELATION_TARGETS.get((model._meta.label_lower, original), "pathway")
                 out.append(segment)
                 field = found
                 model = found.related_model if found.is_relation else None
@@ -280,16 +336,40 @@ def _rewrite_key(key, start_model, *, strict=True):
     return "__".join(out)
 
 
+def _rewrite_dict(alternative, rewrite):
+    """One constraint dict with `rewrite` applied to every key.
+
+    Two keys can meet on one new name (`pathway_ptr` and `id`). With equal
+    values one is kept; with different values keeping either would drop the
+    other condition, so the dict is refused.
+    """
+    out, sources = {}, {}
+    for key, value in (alternative or {}).items():
+        new = rewrite(key)
+        if new in out and out[new] != value:
+            raise UntranslatableConstraint(f"{sources[new]!r} and {key!r} both become {new!r} with different values")
+        out[new] = value
+        sources.setdefault(new, key)
+    return out
+
+
 def _rewrite_keys(constraints, model):
     """`constraints` (a dict, a list of dicts or None) with every key rewritten from `model`."""
     if isinstance(constraints, list):
         return [_rewrite_keys(alternative, model) for alternative in constraints]
-    return {_rewrite_key(key, model, strict=False): value for key, value in (constraints or {}).items()}
+    return _rewrite_dict(constraints, lambda key: _rewrite_key(key, model, strict=False))
+
+
+def _rewrite_for_types(key, pathway_types, pathway_model):
+    """`key` rewritten from the pathway, checked against the 0.4 model of every type in `pathway_types`."""
+    legacy_models = {pathway_type: model_name for model_name, pathway_type in LEGACY_SUBTYPES.items()}
+    # The renames do not depend on the type; each call only checks the key.
+    return [_rewrite_key(key, pathway_model, legacy_model=legacy_models[t]) for t in pathway_types][0]
 
 
 def _scope_to_types(alternative, pathway_types, pathway_model):
     """One constraint dict with keys rewritten and the type filter ANDed in."""
-    scoped = {_rewrite_key(key, pathway_model): value for key, value in (alternative or {}).items()}
+    scoped = _rewrite_dict(alternative, lambda key: _rewrite_for_types(key, pathway_types, pathway_model))
     types = list(pathway_types)
     existing = scoped.pop("pathway_type__in", None)
     if existing is not None:
